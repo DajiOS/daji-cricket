@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Daji Cricket Ground — Project Overview</title>
+<style>
+  :root { --obs:#0a0c0b; --obs2:#141816; --emerald:#123b2d; --emerald-l:#e4efe9; --gold:#80622a; --champ:#c9a96b; --champ-l:#f3ead4; --bronze:#b8805c; --ink:#1b1812; --mute:#5a5446; --line:#e2d9c1; --paper:#fffdf8; --bad:#a8402f; --bad-l:#f8e1db; --ok:#1a6e48; --ok-l:#dcefe3; }
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm;
+    @bottom-left { content: "Daji Cricket Ground · Project by Daji Parivar"; font: 8pt Inter, sans-serif; color: #8a8372; }
+    @bottom-right { content: counter(page); font: 8pt Inter, sans-serif; color: #8a8372; } }
+  @page :first { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+  * { box-sizing: border-box; }
+  html { font-family: Inter, system-ui, sans-serif; font-size: 9.6pt; line-height: 1.5; color: var(--ink); }
+  body { margin: 0; background: var(--paper); }
+  h1, h2, h3 { font-family: Inter, sans-serif; color: var(--obs); line-height: 1.2; margin: 0; }
+  h2 { font-size: 16pt; margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 1.5px solid var(--champ); break-after: avoid; letter-spacing: .2px; }
+  h3 { font-size: 11.5pt; margin: 6mm 0 2mm; break-after: avoid; color: var(--emerald); }
+  p { margin: 0 0 3mm; }
+  ul { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  .page { break-before: page; }
+  .cover { height: 297mm; color: #f3eee3; padding: 30mm 24mm 24mm; position: relative; break-after: page;
+    background: radial-gradient(160mm 90mm at 85% -5%, rgba(44,122,91,.30), transparent 70%), radial-gradient(130mm 80mm at 0% 0%, rgba(184,128,92,.22), transparent 70%), var(--obs); }
+  .cover .logo { width: 118mm; margin-left: -4mm; }
+  .cover .logo img { width: 100%; display: block; }
+  .cover .tag { font-size: 10pt; letter-spacing: 3px; text-transform: uppercase; color: var(--champ); margin: 5mm 0 0; }
+  .cover h1 { color: #f3eee3; font-size: 30pt; margin: 20mm 0 3mm; letter-spacing: 2px; text-transform: uppercase; }
+  .cover .sub { font-size: 13pt; color: var(--champ); margin-bottom: 12mm; }
+  .cover .rule { width: 24mm; height: 2px; background: var(--champ); margin: 0 0 8mm; }
+  .cover .meta { position: absolute; bottom: 24mm; left: 24mm; right: 24mm; border-top: 1px solid rgba(201,169,107,.45); padding-top: 5mm; font-size: 9pt; color: #b9b3a4; display: flex; justify-content: space-between; }
+  .cover p { max-width: 130mm; font-size: 10.5pt; color: #d6d0c1; }
+  .pill { display: inline-block; padding: 0 2.2mm; border-radius: 3mm; font-size: 8pt; font-weight: 600; line-height: 5mm; white-space: nowrap; }
+  .done { background: var(--ok-l); color: #17583a; } .now { background: var(--champ-l); color: #6d5116; } .todo { background: #ece9df; color: #4d4a3e; } .warn { background: var(--bad-l); color: #8f3524; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 8.8pt; break-inside: auto; }
+  th { background: var(--obs); color: #f3eee3; text-align: left; padding: 1.8mm 2.4mm; font-weight: 600; }
+  td { padding: 1.7mm 2.4mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr { break-inside: avoid; }
+  tbody tr:nth-child(even) td { background: #faf6ec; }
+  .note { border-left: 3px solid var(--champ); background: var(--champ-l); padding: 3mm 4mm; margin: 0 0 4mm; break-inside: avoid; }
+  .good { border-left: 3px solid var(--ok); background: var(--ok-l); padding: 3mm 4mm; margin: 0 0 4mm; break-inside: avoid; }
+  .alert { border-left: 3px solid var(--bad); background: #fbeeea; padding: 3mm 4mm; margin: 0 0 4mm; break-inside: avoid; }
+  .stat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; margin: 0 0 5mm; }
+  .stat div { background: var(--obs2); color: #cfc9ba; border-radius: 2mm; padding: 3mm; border-top: 2px solid var(--champ); font-size: 8.5pt; }
+  .stat b { display: block; font-size: 16pt; color: var(--champ); }
+  figure { margin: 0 0 6mm; break-inside: avoid; text-align: center; }
+  figure svg { max-width: 100%; height: auto; }
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; align-items: start; }
+  .swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2mm; font-size: 7.3pt; margin: 0 0 4mm; }
+  .swatches i { display: block; height: 11mm; border-radius: 1.5mm; border: 1px solid #cfc7b0; margin-bottom: 1mm; }
+  figcaption { font-size: 8.5pt; color: var(--mute); margin-top: 2mm; text-align: left; }
+  .wide img { width: 100%; border: 1px solid var(--line); border-radius: 2mm; display: block; }
+  .logos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin: 0 0 4mm; }
+  .logos div { border-radius: 2mm; padding: 5mm 4mm 3mm; text-align: center; font-size: 7.8pt; border: 1px solid var(--line); }
+  .logos img { width: 100%; display: block; margin-bottom: 2mm; }
+  code { font-family: 'DejaVu Sans Mono', monospace; font-size: 8.2pt; background: #f1ecdd; padding: 0 1mm; border-radius: 1mm; }
+  .kv td:first-child { width: 28%; font-weight: 600; color: var(--emerald); }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="logo"><img src="assets/wordmark-gold.svg" alt="Daji Cricket Ground"></div>
+  <div class="tag">Project by Daji Parivar</div>
+  <h1>Project overview</h1>
+  <div class="rule"></div>
+  <div class="sub">Booking platform for dajicricket.com</div>
+  <p>A website you can open and click through today, owner and staff screens, a super-admin console, Contacts, the academy and match scoring, full accounting with bank-statement import and automatic reconciliation, Ask AI, and a page that offers the software to other ground owners. Then the Wix pages, the mobile app and the server setup that remain.</p>
+  <p style="margin-top:6mm">What it does, how the rules work, a flowchart for each journey, how it is built and deployed, and — plainly — what is finished and what is not.</p>
+  <div class="meta"><span>Status as of 14 October 2026</span><span>India · INR · IST</span></div>
+</section>
+
+<section>
+<h2>1. Summary</h2>
+<p>Daji Cricket Ground is a booking platform for cricket grounds. Customers find a ground, pick a date and time and pay an advance. Owners and staff run the grounds from a dashboard, keep their books, and keep in touch with everyone who has played. The super admin controls the global payment switch and platform settings. Your public website stays on Wix; the booking engine runs on its own server and appears inside your Wix pages.</p>
+<div class="stat">
+  <div><b>4</b>user roles</div><div><b>3</b>ways in: Wix site, iOS, Android</div><div><b>319</b>automated tests, all passing</div><div><b>181</b>API routes</div>
+</div>
+<h3>What you chose</h3>
+<table>
+  <tr><th style="width:30%">Decision</th><th>Choice</th></tr>
+  <tr><td>Scope</td><td>Customer website, mobile app and a backend API, plus owner, staff and admin screens</td></tr>
+  <tr><td>Website</td><td>Wix at <b>dajicricket.com</b>. Booking, account and accounting screens are added to Wix pages as custom elements (the same screens already run as a standalone site, section 16) loaded from <b>api.dajicricket.com</b> (section 11)</td></tr>
+  <tr><td>Mobile</td><td>Expo (React Native), one codebase for iOS and Android</td></tr>
+  <tr><td>Business model</td><td>Multiple independent ground owners; each owner sees only their own data</td></tr>
+  <tr><td>Payments</td><td>Razorpay (test mode first) and direct UPI/QR, with one global Razorpay ON/OFF switch and manual verification of UPI payments by staff</td></tr>
+  <tr><td>Backend</td><td>Node.js and TypeScript. No C#/.NET is written; .NET terms in your requests (Hangfire, Mapster, Respawn, xUnit, EF Core) were mapped to Node equivalents (section 11)</td></tr>
+  <tr><td>Look</td><td>"Obsidian &amp; Champagne": near-black with champagne-gold, taken from the copper sign at the ground. Your logo with its glow removed, flat, so it sits cleanly on the page background (section 10)</td></tr>
+  <tr><td>How it is delivered</td><td>Rebuilt in stages; a zip after each stage</td></tr>
+</table>
+<div class="good"><b>Where the code stands.</b> Built and passing 319 automated tests: the booking backend, a complete website served by the server (booking with login, gallery, live scores, academy, owner desk, accounting screens, platform page), Contacts, the academy and parent view, match scoring, the full books with PDF, Excel and CSV export, receipt attachments, bank-statement import with automatic UPI matching, recurring entries, optional two-step sign-in, daily backups, and Ask AI. <b>Not built yet:</b> the live bank feed (Yodlee), the Wix widgets, the mobile app, the server setup, and real email, SMS and WhatsApp delivery. Section 22 lists every piece with its status.</div>
+</section>
+
+<section class="page">
+<h2>2. The ground, the academy and the details people see</h2>
+<table class="kv">
+  <tr><td>Name</td><td>Daji Cricket Ground</td></tr>
+  <tr><td>Tagline</td><td>Project by Daji Parivar</td></tr>
+  <tr><td>Contact person</td><td>Hemanshu Patel</td></tr>
+  <tr><td>Phone</td><td>7567156000</td></tr>
+  <tr><td>Email</td><td>dajicricket@gmail.com</td></tr>
+  <tr><td>Where</td><td>Surat (worked out from the map location: 21.1818855° N, 72.9134859° E). Map link: <code>https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7</code></td></tr>
+  <tr><td>Academy</td><td><b>MP13 Academy</b>, associated with Daji Cricket Ground. Munaf Patel runs his academy under <b>MP13</b></td></tr>
+  <tr><td>Website</td><td>dajicricket.com</td></tr>
+</table>
+<p>The contact person, phone, email and academy details are global settings that the super admin can change, so a change is made once and follows everywhere. Each ground also holds its own Google Maps link, which the server checks is a real Google Maps address before saving it.</p>
+<h3>Where these appear</h3>
+<ul>
+  <li><b>Website and app (design preview today):</b> a Contact section with the contact person, phone, email and a Get Directions button that opens the map link; an MP13 Academy page of its own (about, how to join, coaching staff, photos, enquiry and WhatsApp buttons) with a short teaser on the home page; the tagline under the name.</li>
+  <li><b>Booking messages:</b> confirmation and reminder messages end with "Directions: &lt;map link&gt;. Questions? Call Hemanshu Patel on 7567156000." (either part is left out if it is not set). Other messages do not carry the tail.</li>
+  <li><b>Contacts updates:</b> the academy has a ready-made "Tournament and academy" update template (section 7).</li>
+</ul>
+<div class="note"><b>One assumption to confirm:</b> the city "Surat" was inferred from the map coordinates, not given by you. Tell me if the address should read differently.</div>
+</section>
+
+<section class="page">
+<h2>3. Users and what each can do</h2>
+<table>
+  <tr><th style="width:18%">Role</th><th>Can do</th><th style="width:26%">Cannot do</th></tr>
+  <tr><td><b>Customer</b></td><td>Search grounds, see availability, book and pay, cancel, use account credit, send enquiries, view history, set marketing consent per channel (email, SMS, WhatsApp)</td><td>See anyone else's data</td></tr>
+  <tr><td><b>Ground owner</b></td><td>Manage own grounds, prices, hours and blocks; see bookings, payments, customers, enquiries; Contacts and updates; Reports and the books; Ask AI; add staff and choose their permissions</td><td>See another owner's data (the API answers "not found")</td></tr>
+  <tr><td><b>Staff</b></td><td>Only what the owner grants (table below)</td><td>Anything not in their permission list</td></tr>
+  <tr><td><b>Super admin</b></td><td>Manage users, roles and permissions; the global Razorpay switch and platform settings (including the contact and academy details); platform-wide reports; audit logs. To look at one owner's books or ask Ask AI about them, the admin picks the owner first</td><td>—</td></tr>
+</table>
+<h3>Staff permissions</h3>
+<table>
+  <tr><th style="width:28%">Permission</th><th>Allows</th></tr>
+  <tr><td><code>manage_bookings</code></td><td>View and change bookings, cancel, mark no-shows, create walk-in bookings</td></tr>
+  <tr><td><code>verify_payments</code></td><td>Confirm or reject direct UPI payments; a UPI booking cannot be confirmed without this</td></tr>
+  <tr><td><code>record_payments</code></td><td>Record cash, card, UPI or bank-transfer payments taken in person; mark manual refunds paid</td></tr>
+  <tr><td><code>manage_enquiries</code></td><td>Review enquiries, add notes, send quotations, convert to bookings</td></tr>
+  <tr><td><code>manage_grounds</code></td><td>Edit ground details, prices, hours; block slots</td></tr>
+  <tr><td><code>view_customers</code></td><td>See customer records and history, and open the Contacts list and its export</td></tr>
+  <tr><td><code>send_broadcasts</code></td><td>Preview and send email, SMS or WhatsApp updates from Contacts and see their history</td></tr>
+  <tr><td><code>view_reports</code></td><td>Read the Reports tab: Profit and Loss, Balance Sheet, Future and Past schedule</td></tr>
+  <tr><td><code>manage_accounting</code></td><td>Everything in the books: accounts, transactions, categories, journals, month sign-off (also reads the reports)</td></tr>
+</table>
+<div class="note"><b>Ask AI follows the same permissions.</b> A question about money needs <code>view_reports</code> or <code>manage_accounting</code>; about bookings, <code>manage_bookings</code> or <code>view_reports</code>; about customers, <code>view_customers</code>. If you may not see it, Ask AI says which permission is missing instead of answering.</div>
+</section>
+
+<section class="page">
+<h2>4. Features</h2>
+<table style="font-size:8.3pt">
+  <tr><th style="width:11%">Ref</th><th style="width:24%">Area</th><th>What it does</th></tr>
+  <tr><td>FR-01</td><td>Ground listing and search</td><td>Name, location and map link, photos, facilities, prices and live availability by date and time</td></tr>
+  <tr><td>FR-01a</td><td>Sign-up and sign-in</td><td>Create an account with a mobile number and a one-time code (OTP), or with an email and password. First and last names start with a capital letter and can be corrected by the owner or admin. Codes are sent through an SMS provider once one is connected.</td></tr>
+  <tr><td>FR-02</td><td>Availability and booking</td><td>Pick ground, date, one or more consecutive slots. Slots are held while you pay. A booking is confirmed only after payment is verified. Double booking is blocked in the database itself, not just in the screens</td></tr>
+  <tr><td>FR-02a</td><td>Ways to play</td><td>The customer picks a ball (red, white or tennis) and a match length, such as T20 (3.5 hours), 40 overs (7 hours) or a 4-hour match (9-1, 1-5). Sessions run back to back from opening time; the whole session is held and priced as one booking.</td></tr>
+  <tr><td>FR-02c</td><td>Price list</td><td>Each ground has an editable price list for the leather ball, the tennis ball and practice sessions: fixed sessions (e.g. 10 am to 6 pm for one price), by-the-hour prices (e.g. 7 pm to 3 am), two-day tournaments, closed days (every Monday) and a "call for custom days" message. Owners and the super admin edit it in plain screens with a week-at-a-glance preview.</td></tr>
+  <tr><td>FR-02d</td><td>Part-sessions today</td><td>A fixed session that has already started today is still sold if the hours left are free, for that share of the price rounded up to the next ₹50 (for example a ₹7,000 day session with 5 of 8 hours left costs ₹4,400). A booking blocks only its own hours, so a two-day tournament leaves the late-night slots open.</td></tr>
+  <tr><td>FR-02e</td><td>Owner approval</td><td>Every online booking waits for an owner to approve it. The deposit holds the slot and the customer sees "Pending approval" in their dashboard until it is approved. Owners see a "Waiting for your approval" list with Approve and Decline.</td></tr>
+  <tr><td>FR-02f</td><td>Cancelling and refunds</td><td>A customer who cancels in time chooses: refund to the original payment method of 50% of what was paid, or the full amount as account credit for future bookings. When the ground cancels, the owner must write an explanation; the customer then chooses a full refund, the full amount as credit, or another slot.</td></tr>
+  <tr><td>FR-02h</td><td>Promo codes</td><td>Owners and the super admin build discount codes: typed by hand or generated (including one-time codes). Each takes a percentage (with a cap) or a rupee amount off, with optional minimum, dates and use limits. Customers enter the code when booking and see the saving before they pay.</td></tr>
+  <tr><td>FR-02i</td><td>Booking window and closed days</td><td>The owner or super admin sets the first day customers can book (14 Nov 2026) and a closing day (1 Jun 2027), and can switch off single days for the ground, practice nets or academy. Staff can still book closed days by hand.</td></tr>
+  <tr><td>FR-02j</td><td>Repeating bookings</td><td>A customer can repeat a booking daily, weekly, monthly or yearly (up to 60, 52, 12 or 3 times). The first date is paid as usual and the rest are reserved and confirmed with it; closed or taken dates are skipped and listed, and unpaid repeats can be cancelled in one step.</td></tr>
+  <tr><td>FR-02k</td><td>Auto-debit</td><td>Off until the owner switches it on. A customer approves their bank once (UPI AutoPay through Razorpay) and the balance of each booking is charged a set number of hours before it starts. Failed charges are retried three times and the customer is told. Needs Recurring Payments on the Razorpay account.</td></tr>
+  <tr><td>FR-02l</td><td>Tasks with camera proof</td><td>The owner gives staff tasks. Staff close a task with photos taken on the spot; a photo is refused unless its camera time is within the last 5 minutes, so old or forwarded pictures cannot be used.</td></tr>
+  <tr><td>FR-02m</td><td>Email through Gmail</td><td>Messages go out from dajicricket@gmail.com using a Google App Password; they wait in a queue until it is set.</td></tr>
+  <tr><td>FR-02n</td><td>Coach screens in the app</td><td>Staff with the academy and matches permissions mark attendance, keep the student list, write and publish monthly report cards, and score matches ball by ball from the phone.</td></tr>
+  <tr><td>FR-02i</td><td>Terms and conditions</td><td>A terms page covers booking approval, customer cancellation, ground cancellation and weather. When the ground cancels, the owner chooses which of full refund, 50% refund or credit the customer is offered.</td></tr>
+  <tr><td>FR-03a</td><td>Roles</td><td>The software owner (super admin) sees everything and can look at any owner's bookings and accounting. An owner runs their own ground. An Admin, added by the owner, has fewer rights than the owner: day-to-day work and reading reports, but not the books, prices, promo codes, team or settings.</td></tr>
+  <tr><td>FR-03b</td><td>Desk pages and profile</td><td>Every desk tab and sub-page has its own address. A round profile button at the top right shows the person's initial or chosen picture and opens their profile (name, email, mobile, picture, password, sign out). Owners, staff and admin sign in with email or mobile number.</td></tr>
+  <tr><td>FR-03c</td><td>Services and connections</td><td>A notebook of every outside service (WhatsApp, MSG91, Razorpay, Expo, Wix, domain, hosting, Claude) with the email and phone each account was opened with, plus a Connections list that shows what each service still needs and tests it. New services plug into the same list.</td></tr>
+  <tr><td>FR-02g</td><td>Push notifications</td><td>The mobile app alerts owners and staff when a booking needs approval or a customer cancels, and alerts customers when a booking is approved or the ground cancels.</td></tr>
+  <tr><td>FR-01b</td><td>Sign-in codes</td><td>Codes are sent by WhatsApp first, with MSG91 text message as the backup.</td></tr>
+  <tr><td>FR-02b</td><td>Coaching staff</td><td>The academy lists its coaches (name, title, short bio, photo), edited by academy staff and shown on the website.</td></tr>
+  <tr><td>FR-03</td><td>Payments</td><td>Razorpay, direct UPI/QR and offline (cash, card, bank transfer). Amount, method, status, reference and who verified are stored with a history of every change</td></tr>
+  <tr><td>FR-04</td><td>Global payment switch</td><td>Super admin turns Razorpay ON or OFF once; website and apps follow immediately. OFF means UPI ID or QR with staff verification</td></tr>
+  <tr><td>FR-05</td><td>Advance and expiry</td><td>Configurable advance (fixed or percent) and hold deadlines. Unpaid holds are released only after checking for pending or late payments. Every expiry, release and status change is audited</td></tr>
+  <tr><td>FR-06</td><td>Cancellation and credit</td><td>More than 24 hours before start: free cancellation. Inside 24 hours: the paid amount becomes account credit (100 percent by default). No-show: nothing back. Every credit issue, use, adjustment and expiry is in a ledger</td></tr>
+  <tr><td>FR-07</td><td>Enquiries and quotations</td><td>Customers ask; staff follow up, send a quotation and convert to a booking or close it</td></tr>
+  <tr><td>FR-08</td><td>Customers and consent</td><td>Profiles, histories, and separate optional marketing consent for email, SMS and WhatsApp. Booking and payment messages do not depend on marketing consent</td></tr>
+  <tr><td>FR-09</td><td>Notifications</td><td>Booking, payment, hold expiry, cancellation, credit and enquiry messages are recorded and sent through a provider interface (section 14 says what is not connected)</td></tr>
+  <tr><td>FR-10</td><td>Owner and staff dashboard</td><td>Grounds, prices, hours, bookings, walk-ins, offline payments, UPI verification, enquiries, customers</td></tr>
+  <tr><td>FR-11</td><td>Super admin dashboard</td><td>Users, roles, global settings, platform reports, audit log</td></tr>
+  <tr><td>Added</td><td><b>Contacts</b></td><td>Everyone who has played, with filters; a preview-then-send email, WhatsApp or SMS update with a consent check on every person; history; one-click unsubscribe for email; CSV export (section 7)</td></tr>
+  <tr><td>Added</td><td><b>Reports</b></td><td>Profit and Loss, Balance Sheet, Trial balance, general ledger, <b>Future schedule</b> and <b>Past schedule</b>, all from one set of books, each exportable to PDF, Excel and CSV (section 8)</td></tr>
+  <tr><td>Added</td><td><b>Accounting</b></td><td>Bank and cash accounts, transactions, categories, manual journals, month-end sign-off. Statement import, receipts, reconciliation and recurring entries are built (section 18); the live bank feed is not</td></tr>
+  <tr><td>Added</td><td><b>Academy and match day</b></td><td>Batches, students, attendance, fees and progress with a parent view; live scoring ball by ball and a public Live scores page (section 17)</td></tr>
+  <tr><td>Added</td><td><b>Platform page</b></td><td>"For ground owners": the software offered to other owners, with an enquiry form and a leads list for the super admin (section 20)</td></tr>
+  <tr><td>Added</td><td><b>Ask AI</b></td><td>Type a question in plain words ("revenue for the past 37 days", "what's the account balance") and get an answer from your own books, with the exact dates used (section 9)</td></tr>
+</table>
+</section>
+
+<section class="page">
+<h2>5. Rules and the numbers behind them</h2>
+<p>The SRS leaves several decisions open (its section 10). The values below are the defaults used so the system can run; every one is a setting the super admin can change, and every one needs your confirmation before launch.</p>
+<table>
+  <tr><th style="width:30%">Decision</th><th style="width:34%">Default used</th><th>Notes</th></tr>
+  <tr><td>Advance payment</td><td>50 percent of the booking total</td><td>Fixed amount or percent, global with a per-ground override. Full payment required when the booking starts within 24 hours</td></tr>
+  <tr><td>Hold time (online)</td><td>15 minutes</td><td>Slots are held while the customer pays</td></tr>
+  <tr><td>Hold time (UPI)</td><td>15 minutes to pay and submit the UTR, then 120 minutes for staff to verify</td><td>Staff verify by matching the UTR to the bank credit</td></tr>
+  <tr><td>Grace for late payments</td><td>10 minutes, at most 2 extensions</td><td>A payment still pending at expiry extends the hold once per extension and flags the booking for staff review</td></tr>
+  <tr><td>24-hour boundary</td><td>Exclusive: exactly 24 hours before start counts as "within 24 hours"</td><td>Measured from the scheduled start</td></tr>
+  <tr><td>Credit amount on late cancellation</td><td>100 percent of what was paid</td><td>Lower it to keep a late-cancel fee; the part kept is recorded as income on the cancellation day</td></tr>
+  <tr><td>Credit expiry</td><td>90 days</td><td>Oldest-expiring credit is used first. Expired credit is written off to income in the books</td></tr>
+  <tr><td>Refunds on free cancellation</td><td>Razorpay: automatic to the original method. UPI, cash: staff pay out and record the reference</td><td>The customer may choose credit instead of a refund</td></tr>
+  <tr><td>No-show</td><td>No refund, no credit</td><td>Staff mark it after a 30 minute grace period; the advance is kept as income</td></tr>
+  <tr><td>GST</td><td>Treated as <b>inside</b> the booking price; the owner sets the percent (0 to 28) in the accounting settings</td><td>The GST inside each played booking is shown as "GST payable" and left out of income. Confirm that your prices include GST</td></tr>
+  <tr><td>Communications providers</td><td>Not chosen</td><td>Messages are recorded; real sending needs your email, SMS and WhatsApp providers</td></tr>
+  <tr><td>Privacy policy, terms, invoice format</td><td>Not written</td><td>These still need your text</td></tr>
+</table>
+<div class="note">Money is stored in whole paise and times as exact instants, so there is no rounding drift. Dates and times are shown in IST. The Indian financial year (1 April to 31 March) is used wherever a report says "this financial year".</div>
+</section>
+
+<section class="page">
+<h2>6. Journeys as flowcharts</h2>
+<h3>6.1 Booking and payment</h3>
+<figure>{{DIAGRAM:02-hold@0.64}}</figure>
+<figure>{{DIAGRAM:02-pay@0.68}}<figcaption>Same on the website and in the apps. The global switch decides Razorpay or UPI when the slots are held; a UPI booking cannot be confirmed without an authorised verifier.</figcaption></figure>
+</section>
+
+<section class="page">
+<h3 style="margin-top:0">6.2 Unpaid holds and late payments</h3>
+<p>A hold is never released just because its timer ran out: the system first looks for a pending or late payment. A late payment either re-confirms the booking or is refunded.</p>
+<figure>{{DIAGRAM:03-expiry@0.82}}<figcaption>At the deadline.</figcaption></figure>
+<figure>{{DIAGRAM:03-late@0.82}}<figcaption>After release.</figcaption></figure>
+<h3>What the sweep does</h3>
+<table>
+  <tr><th style="width:40%">Payment found at the deadline</th><th>Action</th><th style="width:16%">Booking becomes</th></tr>
+  <tr><td>Captured or verified</td><td>Confirm the booking</td><td>confirmed</td></tr>
+  <tr><td>Pending or submitted, grace and extensions left</td><td>Extend the hold by the grace period (10 minutes), flag for staff review</td><td>held, flagged</td></tr>
+  <tr><td>None, or pending with extensions used up</td><td>Release the slots, notify the customer</td><td>expired</td></tr>
+  <tr><td>Arrives later, slots still free</td><td>Re-confirm the booking</td><td>confirmed</td></tr>
+  <tr><td>Arrives later, slots taken</td><td>Refund automatically and mark the payment late</td><td>expired</td></tr>
+</table>
+</section>
+
+<section class="page">
+<h3 style="margin-top:0">6.3 Cancellation, credit and no-show</h3>
+<figure>{{DIAGRAM:04-cancellation@0.7}}<figcaption>Credit is kept in lots with their own expiry dates, so the ledger always explains the balance.</figcaption></figure>
+<div class="note"><b>No-show:</b> staff mark a booking as a no-show after the grace period. There is no refund and no credit, and the advance is kept as income.</div>
+<div class="cols2" style="margin-top:4mm">
+  <div><h3 style="margin-top:0">6.4 Enquiry to booking</h3><figure>{{DIAGRAM:05-enquiry@0.64}}</figure></div>
+  <div><h3 style="margin-top:0">6.5 Walk-in and manual booking</h3><figure>{{DIAGRAM:06-walkin@0.64}}<figcaption>No slot is held without payment: a walk-in is confirmed only once the advance is recorded.</figcaption></figure></div>
+</div>
+<h3>6.6 Status of a booking and of a payment</h3>
+<figure>{{DIAGRAM:08-booking-status@0.66}}<figcaption>Booking statuses. Every change is written to the audit log.</figcaption></figure>
+<figure>{{DIAGRAM:09-payment-status@0.66}}<figcaption>Payment statuses. Every change is also kept in the payment's own history.</figcaption></figure>
+</section>
+
+<section class="page">
+<h2>7. Contacts and updates to everyone who has played</h2>
+<p>The Contacts tab lists everyone who has played at your grounds and lets you send them an update — a closed day, rain, new timings, a price change, a new facility, a tournament or academy news — by email, WhatsApp or SMS. These are marketing-style messages to customers, so each person's own consent for each channel is checked before anything is sent.</p>
+<h3>7.1 Choosing who, and who will actually receive it</h3>
+<figure>{{DIAGRAM:12-contacts-a@0.86}}</figure>
+<h3>7.2 Sending, and what happens next</h3>
+<figure>{{DIAGRAM:12-contacts-b@0.72}}</figure>
+</section>
+
+<section class="page">
+<h3 style="margin-top:0">7.3 What the Contacts tab shows and keeps</h3>
+<table>
+  <tr><th style="width:26%">Item</th><th>Detail</th></tr>
+  <tr><td>Who counts as "played"</td><td>A booking that is completed, or confirmed and already finished. You can also list "everyone who booked" or everyone including no-shows</td></tr>
+  <tr><td>Each person</td><td>Name, phone, email, times played, slots, total paid, first and last session, grounds played at, and which channels they have agreed to</td></tr>
+  <tr><td>Filters</td><td>Ground, played between two dates, played at least N times, not played since a date, name or contact search</td></tr>
+  <tr><td>Templates</td><td>Ground closed, rain update, new timings, price change, new facility, tournament and academy. <code>{name}</code> becomes each person's first name</td></tr>
+  <tr><td>Message limits</td><td>Email: subject of at least 3 characters and a body of at least 10. WhatsApp: 10 to 900 characters. SMS: 10 to 300 characters</td></tr>
+  <tr><td>Safety checks</td><td>You must preview first and confirm the exact number of people; if the audience changed, you are asked to preview again. At most 10 updates per owner in 24 hours, so a mistake or a stolen login cannot spam the whole list. Sending the same request twice sends nothing twice</td></tr>
+  <tr><td>Audience size</td><td>Up to 5,000 people in one update</td></tr>
+  <tr><td>History</td><td>Every update: channel, text, who it was aimed at, how many were queued, and each person's status or the reason they were skipped</td></tr>
+  <tr><td>Export</td><td>The contact list as a spreadsheet file</td></tr>
+  <tr><td>Stopping</td><td>Every email carries a link to stop that channel. The link opens a confirmation button first (so mail scanners that "click" links cannot unsubscribe people by accident). Customers can also switch each channel on or off in their account</td></tr>
+</table>
+<div class="alert"><b>Known gap: "Reply STOP".</b> SMS and WhatsApp updates end with "Reply STOP to stop these messages", but nothing reads replies yet. That needs the inbound-message hook of whichever WhatsApp or SMS provider you choose. Until then, a customer who replies STOP has to be switched off by staff, or can switch it off in their account. Please keep this in mind before sending WhatsApp updates at volume.</div>
+<div class="note"><b>Nothing is actually sent yet.</b> No email, SMS or WhatsApp provider is connected, so updates are recorded as <b>queued</b>. The queueing, consent checks, limits and history are all working and tested; delivery starts when you choose providers.</div>
+</section>
+
+<section class="page">
+<h2>8. The books and Reports</h2>
+<p>Every figure in Reports comes from <b>one set of books</b> that is worked out on demand from the real records: bank and cash transactions, booking payments, refunds, account credit, the bookings themselves, and any journal entries an owner types in. Nothing is stored twice, and every entry has equal debits and credits, so the reports cannot disagree with each other: the Balance Sheet always balances (assets equal liabilities plus equity), and the Future and Past schedules tie to the Profit and Loss and the Balance Sheet.</p>
+<figure>{{DIAGRAM:10-ledger@0.64}}</figure>
+<h3>8.1 When a booking counts as income</h3>
+<p>A customer's advance is not income when it arrives: it is money held for a session not yet played. It becomes income on the play date.</p>
+<figure>{{DIAGRAM:11-income@0.7}}</figure>
+</section>
+
+<section class="page">
+<p>The Books tab is laid out like a bookkeeper's workspace: a side menu, a <b>+ New</b> menu for adding things, an overview of cards, a Bank transactions page with account cards and Pending / Posted tabs, a Books review page, and a Reports list with favourites. Every report has a Print button and an Export menu (PDF, Excel, CSV). Added reports: profit and loss by month and by quarter, customer balances with aging, audit log, general ledger.</p>
+<h3 style="margin-top:0">8.2 The five reports</h3>
+<table>
+  <tr><th style="width:22%">Report</th><th>What it shows</th></tr>
+  <tr><td><b>Profit and Loss</b></td><td>Income and expenses for a month or any dates (up to two years). <b>Accrual</b> basis by default: a session is income on the day it is played. <b>Cash</b> basis is available too. Optionally compared with the previous period. Bookings income is shown without GST; advances kept on no-shows and late cancellations, and credit that expired, are shown separately</td></tr>
+  <tr><td><b>Balance Sheet</b></td><td>As at any date: cash and bank, money online and by UPI not yet in the bank, booking balances customers owe you, equipment, then what you owe — customer advances for sessions not yet played, account credit owed to customers, refunds owed, GST payable, bills, loans — and owner equity. Unreviewed bank lines sit under "Needs attention" until categorised</td></tr>
+  <tr><td><b>Trial balance and ledger</b></td><td>Every account with its debit and credit totals, and a line-by-line ledger for any one account for any dates, with where each line came from</td></tr>
+  <tr><td><b>Future schedule</b></td><td>Confirmed bookings still to be played (a session in progress is flagged), unpaid holds, how much of the money is already held as advances, credit outstanding, and refunds owed. Grouped by day, week (Monday to Sunday) or month, and by ground. Defaults to today and the next 90 days</td></tr>
+  <tr><td><b>Past schedule</b></td><td>Sessions played and no-shows by play date, and cancellations by the day they were cancelled, with the money each earned: collected, still outstanding, advances kept, cancellations credited, refunded or kept, and credit that expired. The earned money is read from the same books, so it ties to the Profit and Loss. Defaults to the last 30 days</td></tr>
+</table>
+<ul>
+  <li><b>Exports:</b> each report downloads as a PDF, an Excel workbook (with working totals) or CSV. The schedule CSV is the plain list of sessions. Text that looks like a spreadsheet formula is neutralised so a hostile narration cannot run in Excel.</li>
+  <li><b>Limits:</b> a schedule covers at most 366 days at once; exports hold up to 20,000 rows.</li>
+  <li><b>Month sign-off:</b> a month can be signed off once it is over and every bank line in it is categorised. A signed-off month is locked; reopening needs a reason. Mistakes in a signed-off month are fixed with journal entries, which are voided rather than deleted.</li>
+  <li><b>Manual journals:</b> an owner can type in entries (depreciation, a loan, an owner's capital), but not into accounts that come from real data (bank, customer advances and credit, booking income), because a typed entry would break the tie to the real records.</li>
+  <li><b>Who sees it:</b> read with <code>view_reports</code> or <code>manage_accounting</code>; change with <code>manage_accounting</code>.</li>
+</ul>
+<div class="good"><b>Screens exist.</b> The owner desk has a Books tab with nine sub-tabs (section 18). The desk's Today tab shows only today's figures; everything older is in Books and Reports.</div>
+<h3>8.3 Bank transactions, receipts and reconciliation <span class="pill done">Built</span></h3>
+<p>Described in section 18. Statement upload (CSV and Excel), de-duplication, categorising rules, automatic UTR matching of UPI money against the bank, receipt attachments and recurring entries are working. The live bank feed through Yodlee is not.</p>
+</section>
+
+<section class="page">
+<h2>9. Ask AI</h2>
+<p>A question box inside the software for quick information you would otherwise open a report to find. Examples it understands today: <i>"What was the revenue for the past 37 days?"</i>, <i>"What's the account balance?"</i>, <i>"Profit this month compared with last month"</i>, <i>"Who owes us money?"</i>, <i>"What's booked for the next 7 days?"</i>, <i>"How many no-shows last week?"</i>, <i>"GST this financial year"</i>.</p>
+<figure>{{DIAGRAM:13-ask@0.66}}</figure>
+</section>
+
+<section class="page">
+<h3 style="margin-top:0">9.1 How it answers</h3>
+<table>
+  <tr><th style="width:26%">Point</th><th>Detail</th></tr>
+  <tr><td>Same numbers as Reports</td><td>The built-in answerer calls the same code as the Reports tab. For example the revenue for the past 37 days equals the Profit and Loss for those 37 dates, and the answer says <i>"18 Sep to 24 Oct 2026"</i> so you can see exactly what was used</td></tr>
+  <tr><td>Says what it assumed</td><td>No dates given: it says which period it used. Revenue and money received are different things and the answer says which it gave ("money received" counts cash and advances, "revenue" counts sessions played)</td></tr>
+  <tr><td>Reading dates</td><td>"Past 37 days" is 37 days ending today, including today. "Last month" is the previous calendar month; weeks run Monday to Sunday; "financial year" is April to March; day/month/year is read the Indian way; "since 1 September" runs to today; "all time" starts on the first day anything was recorded. Dates that have not happened are explained, with what is booked instead. Impossible dates (such as 31 February) are explained, not guessed</td></tr>
+  <tr><td>Topics</td><td>Revenue, expenses, profit, the whole Profit and Loss (with comparison), money received, bank and cash balances (today or on an earlier date), Balance Sheet, GST, uncategorised transactions, bookings, upcoming sessions (with who and what is still to collect), money owed, payments awaiting verification, no-shows, cancellations, utilisation, account credit, refunds, customers, and a named ground ("at the nets")</td></tr>
+  <tr><td>When it cannot read a question</td><td>It says so and shows examples; it never guesses a number</td></tr>
+  <tr><td>Open the report</td><td>Each answer says which report to open for the full picture</td></tr>
+</table>
+<h3>9.2 Optional: Claude for questions the built-in answerer cannot read</h3>
+<p>If you add an Anthropic API key, questions the built-in answerer cannot read are passed to Claude, which looks things up using a fixed set of read-only tools on your own books. This is off until you add a key. The built-in answerer is the default and never leaves the server.</p>
+<table>
+  <tr><th style="width:26%">Safeguard</th><th>Detail</th></tr>
+  <tr><td>Read-only, your books only</td><td>The tools only read; they are limited to the owner whose books are being asked about and to what the asker may see</td></tr>
+  <tr><td>No personal details leave</td><td>Customer names, phone numbers and email addresses are never sent. Email addresses and phone numbers typed into the question are replaced before sending. Sessions are identified only by booking reference</td></tr>
+  <tr><td>Amounts are checked</td><td>Every rupee amount in Claude's reply must match an amount the tools returned. If one does not, the answer is marked "not fully verified" with the amounts to double-check</td></tr>
+  <tr><td>Bounded</td><td>At most 6 look-ups per question and a time limit; if Claude fails, times out or is unreachable, the built-in answerer answers instead</td></tr>
+  <tr><td>Fair use</td><td>30 questions per person per hour (a setting); the question text (shortened) is logged for audit, the answer is not</td></tr>
+</table>
+<div class="note"><b>Not tested against the real Claude service.</b> Claude mode was tested only against a stand-in server that behaves like the published interface. Please try it once with a real key.</div>
+</section>
+
+<section class="page">
+<h2>10. Look and brand</h2>
+<p>"<b>Obsidian &amp; Champagne</b>": a near-black canvas with a faint green, champagne-gold lines and accents, warm ivory text, and bronze from the copper sign at the ground. The lettering follows the sign: a flowing brush script for "Daji" and for accent words, bold condensed capitals for "CRICKET GROUND" and headings, and a quiet sans-serif for everything you read or add up. The O in GROUND is the half-red, half-white cricket ball. An ivory (light) version of the same palette is built in for printing and for people who prefer a light screen.</p>
+<div class="wide"><img src="assets/theme-hero.jpg" alt="Booking screen in the new look"></div>
+<p style="font-size:8.5pt;color:var(--mute)">Design preview of the booking screen. The preview uses stand-in fonts because the web fonts could not be downloaded here; the real screens use the brush script and condensed capitals.</p>
+<div class="wide" style="width:86%"><img src="assets/theme-academy-contact.jpg" alt="Academy and contact sections in the new look"></div>
+<p style="font-size:8.5pt;color:var(--mute)">Academy and Contact sections: MP13 Academy (its own page) under MP13, the contact person, phone, email and the Get Directions button.</p>
+</section>
+
+<section class="page">
+<h3 style="margin-top:0">The logo</h3>
+<p>Your logo is used as the flat, clean mark with the backlit glow removed, so it sits directly on the page background with nothing around it. There are flat variants for different backgrounds; the copper one matches the sign.</p>
+<div class="logos">
+  <div style="background:#0a0c0b;color:#b9b3a4"><img src="assets/wordmark-gold.svg" alt="">Champagne gold, on dark (default on dark pages)</div>
+  <div style="background:#0a0c0b;color:#b9b3a4"><img src="assets/wordmark-copper.svg" alt="">Copper, as on the sign</div>
+  <div style="background:#fffdf8;color:#5a5446"><img src="assets/wordmark-ink.svg" alt="">Ink, for light pages and print</div>
+</div>
+<div class="note"><b>Fonts are an approximation.</b> The wordmark was traced from your drawing and the headings use a similar condensed face; the real fonts of the sign are not known. If you have the artwork files or font names from the sign painter, send them.</div>
+<h3>Palette</h3>
+<div class="swatches">
+  <div><i style="background:#0a0c0b"></i>#0a0c0b<br>Obsidian</div>
+  <div><i style="background:#141816"></i>#141816<br>Surface</div>
+  <div><i style="background:#123b2d"></i>#123b2d<br>Emerald</div>
+  <div><i style="background:#c9a96b"></i>#c9a96b<br>Champagne</div>
+  <div><i style="background:#e6d09f"></i>#e6d09f<br>Champagne light</div>
+  <div><i style="background:#b8805c"></i>#b8805c<br>Bronze</div>
+  <div><i style="background:#f3eee3"></i>#f3eee3<br>Ivory</div>
+  <div><i style="background:#df7d6e"></i>#df7d6e<br>Alert</div>
+</div>
+<ul>
+  <li><b>Type:</b> brush script for "Daji" and accent words; bold condensed capitals for headings; Inter for body text and figures.</li>
+  <li><b>Tagline:</b> "Project by Daji Parivar", under the name on the website, the app and messages.</li>
+  <li><b>One source:</b> the colours and fonts live in one file that feeds the website, the app and exported reports, so they cannot drift apart. To apply them in Wix, use the colours above; whether Wix's font library has the same fonts is not checked (font files may need uploading).</li>
+</ul>
+</section>
+
+<section class="page">
+<h2>11. How it is built, and how it works with Wix</h2>
+<figure>{{DIAGRAM:01-architecture@0.7}}</figure>
+</section>
+
+<section class="page">
+<h3 style="margin-top:0">Why the server sits outside Wix</h3>
+<p>Wix cannot run this project's Node server, and the booking guarantee (the database refuses two bookings for the same ground and slot, even if the application is wrong) and the accounting work (reading uploaded bank files, calling Yodlee) need a real database and server. So the system is split in two: Wix keeps the public pages (home, grounds, gallery, contact, academy), which Google can read, and the booking, account and accounting screens are added to Wix pages as <b>custom elements</b> loaded from <code>api.dajicricket.com</code>. The Expo app and the Razorpay webhooks talk to the same address.</p>
+<table>
+  <tr><th style="width:24%">Part</th><th>Choice</th></tr>
+  <tr><td>Backend</td><td>Node.js 22 with TypeScript, using only what ships with Node (<code>node:http</code>, <code>node:sqlite</code>, <code>node:test</code>). No outside packages, because the package registry cannot be reached from the build environment</td></tr>
+  <tr><td>Database</td><td>SQLite file with a daily backup (section 21), 39 tables. A Postgres migration set is planned for when the platform outgrows one server</td></tr>
+  <tr><td>Website</td><td>Wix pages plus custom-element widgets (booking, my account, accounting with Contacts, Reports and Ask AI), built in the new look. The screens themselves already exist as plain HTML, CSS and JavaScript served by the server, and are what the widgets will wrap</td></tr>
+  <tr><td>Mobile</td><td>Expo (React Native). Source will be written here, but Expo cannot be installed in the build environment, so the app cannot be built or run here (section 14)</td></tr>
+  <tr><td>Shared code</td><td>One package of types, money helpers and brand tokens used by the API, widgets and app, so all three agree on every field</td></tr>
+  <tr><td>Hosting</td><td>A small server running Docker and Caddy for automatic HTTPS, reachable at <code>api.dajicricket.com</code> (a DNS record added in Wix)</td></tr>
+  <tr><td>Errors</td><td>Every error has the same shape: a code, a message and, for bad input, the list of fields at fault</td></tr>
+</table>
+<h3>What Wix requires</h3>
+<table>
+  <tr><th style="width:24%">Need</th><th>Detail (from Wix's documentation)</th></tr>
+  <tr><td>Plan</td><td>Custom elements on a live site need a Premium plan, a connected custom domain and no Wix ads</td></tr>
+  <tr><td>HTTPS</td><td>Externally hosted custom elements need HTTPS for the script and the API</td></tr>
+  <tr><td>Editor and preview</td><td>In the editor and preview a custom element runs from a different address than on the live site, so the server's allow-list may need that address added. The first blocked address is logged so it can be copied in</td></tr>
+  <tr><td>SEO</td><td>Keep the real text on native Wix elements; Google may not read text inside a custom element</td></tr>
+  <tr><td>DNS</td><td>Wix Domains, Manage DNS Records: add host <code>api</code> pointing at the server. Changes can take up to 48 hours</td></tr>
+</table>
+<div style="break-inside: avoid"><h3>.NET terms mapped to Node</h3>
+<table>
+  <tr><th style="width:30%">You asked for</th><th>What is used instead</th></tr>
+  <tr><td>Hangfire nightly jobs</td><td>A scheduled sweep inside the server (hold expiry, credit expiry, reminders, recurring entries, daily backup; bank sync once Yodlee is added)</td></tr>
+  <tr><td>Mapster mapping</td><td>Plain mapper functions from database rows to API shapes</td></tr>
+  <tr><td>Respawn database reset</td><td>A test helper that resets the database before each test</td></tr>
+  <tr><td>xUnit collections</td><td>One database per test file, run in parallel processes</td></tr>
+  <tr><td>EF Core migrations</td><td>Versioned schema steps in the server; generated Postgres SQL (up and down) later</td></tr>
+</table></div>
+<p>If you later want a C# version, say so and it can be done as a separate piece.</p>
+</section>
+
+<section class="page">
+<h2>12. Data kept, and security</h2>
+<table>
+  <tr><th style="width:26%">Table</th><th>Holds</th></tr>
+  <tr><td>users</td><td>Customers, owners, staff, super admins; permissions; marketing consent per channel</td></tr>
+  <tr><td>grounds</td><td>Details, map link, facilities, hours, slot length, prices (weekday, weekend, evening surcharge), advance override</td></tr>
+  <tr><td>bookings, booking_slots</td><td>Bookings and their status; one row per held or booked slot with a unique key on ground plus slot start</td></tr>
+  <tr><td>payments, payment_events, refunds</td><td>Every payment with method and status, its full history, and every refund</td></tr>
+  <tr><td>credit_lots, credit_ledger</td><td>Credit lots with expiry, and the ledger of every change</td></tr>
+  <tr><td>enquiries, enquiry_notes, quotations</td><td>Enquiry status, contact notes and quotations</td></tr>
+  <tr><td>notifications</td><td>Every message with channel, category and whether it was sent, queued or skipped</td></tr>
+  <tr><td>broadcasts, broadcast_recipients</td><td>Each update sent from Contacts, who it was aimed at, who was queued and who was skipped and why</td></tr>
+  <tr><td>audit_log</td><td>Who did what and when: booking, payment, cancellation, credit, settings, exports, consent changes, Ask AI questions</td></tr>
+  <tr><td>settings, webhook_events</td><td>Global settings (including the contact and academy details); payment webhooks already processed (so a repeat is ignored)</td></tr>
+  <tr><td>Accounting tables</td><td>Bank and cash accounts, transactions, categories, rules, journals and their lines, month sign-offs and memos, attachments, statement imports, recurring entries; with soft delete and audit columns</td></tr>
+  <tr><td>Academy, matches, leads, mfa</td><td>Batches, students, attendance, fees, progress; matches and every ball; platform leads; authenticator secrets</td></tr>
+</table>
+<h3>Security design</h3>
+<ul>
+  <li>Passwords are hashed with scrypt; login tokens are signed and can be revoked by bumping a per-user version.</li>
+  <li>Every request checks role and permission on the server; owner data is separated by owner, and another owner's record answers "not found" rather than "forbidden".</li>
+  <li>Razorpay webhooks are signature-checked over the raw bytes and processed once; direct UPI cannot confirm a booking without an authorised verifier.</li>
+  <li>Updates to customers are consent-checked per channel, previewed, confirmed by number, capped per day and de-duplicated; unsubscribe links are signed.</li>
+  <li>Ask AI only reads, only for the owner in question, never sends personal details to Claude, and every amount in a Claude reply is checked.</li>
+  <li>Month-end locks stop quiet changes to figures that have been signed off.</li>
+  <li>Rate limits on sign-in and registration; request size limits; uniform validation errors.</li>
+  <li>Demo accounts and the fake payment gateway exist only on localhost or when explicitly turned on; the server warns loudly if demo mode is on for a real domain.</li>
+  <li>Optional two-step sign-in with an authenticator app (6-digit codes, 30-second steps) for owners, staff and the super admin.</li>
+  <li>Browser headers: HSTS for two years, no framing, no content sniffing, same-origin opener policy, strict referrer policy.</li>
+  <li>Uploaded receipts and statements are size-limited, type-checked, stored per owner and never served to another owner.</li>
+  <li>Secrets come from environment variables, never from code. The Anthropic key, Razorpay keys and the login secret are all settings.</li>
+</ul>
+<div class="note">Each of these is exercised by automated tests in this build, except where section 14 says otherwise. Section 19 lists what is still open.</div>
+</section>
+
+<section class="page">
+<h2>13. Going live on dajicricket.com</h2>
+<table>
+  <tr><th style="width:8%">#</th><th>Step</th></tr>
+  <tr><td>1</td><td>Get a small server with a fixed IP address and Docker. In <b>Wix Domains, Manage DNS Records</b>, add an <b>A record for host <code>api</code></b> pointing to that IP (Wix keeps <code>dajicricket.com</code> itself)</td></tr>
+  <tr><td>2</td><td>Set the environment: <code>PUBLIC_URL=https://dajicricket.com</code>, <code>API_URL=https://api.dajicricket.com</code>, a long random <code>JWT_SECRET</code>, <code>TRUST_PROXY=1</code>, <code>CORS_ORIGINS</code> listing <code>https://dajicricket.com</code>, <code>https://www.dajicricket.com</code> and the Wix editor address when known. Leave demo mode off</td></tr>
+  <tr><td>3</td><td>Start with Docker Compose; Caddy gets the HTTPS certificate by itself. Check <code>https://api.dajicricket.com/api/health</code> answers</td></tr>
+  <tr><td>4</td><td>Create the first super admin with the <code>create-admin</code> script (password typed at a prompt, at least 12 characters)</td></tr>
+  <tr><td>5</td><td>Wix: upgrade to a Premium plan with the domain connected; add each custom element (Add, Embed code, Custom element, Server URL <code>https://api.dajicricket.com/embed/daji-widgets.js</code>) on its own page; apply the brand colours and fonts</td></tr>
+  <tr><td>6</td><td>Razorpay: add keys in test mode; set the webhook to <code>https://api.dajicricket.com/api/webhooks/razorpay</code> with events payment.authorized, payment.captured, payment.failed, order.paid, refund.processed, refund.failed</td></tr>
+  <tr><td>7</td><td>Each owner enters their own UPI ID; the super admin sets the global Razorpay switch and checks the contact and academy details</td></tr>
+  <tr><td>8</td><td>Optional: add <code>ANTHROPIC_API_KEY</code> to switch on Claude for Ask AI (settings <code>AI_MODE</code>, <code>AI_MODEL</code>, <code>AI_LIMIT_PER_HOUR</code>, <code>AI_TIMEOUT_MS</code>)</td></tr>
+  <tr><td>9</td><td>Backups run daily at 03:15 India time (section 21). Copy the backups folder off the server as well; restore steps go in the deployment guide</td></tr>
+</table>
+<h3>Accounts you need to arrange</h3>
+<ul>
+  <li>A server (any small VPS) and control of the dajicricket.com DNS in Wix.</li>
+  <li>A Wix Premium plan with the custom domain connected (needed for custom elements on the live site).</li>
+  <li>A Razorpay account (test mode is enough to start) and a UPI ID or QR for each owner.</li>
+  <li>A Yodlee account if you want the live bank feed. Confirm with Yodlee that your plan covers your Indian banks; statement upload will work without it.</li>
+  <li>Email, SMS and WhatsApp providers, once you pick them — needed before any Contacts update is actually delivered.</li>
+  <li>Optional: an Anthropic API key, for Claude in Ask AI.</li>
+  <li>To publish the apps: an Apple Developer account and a Google Play developer account.</li>
+</ul>
+</section>
+
+<section class="page">
+<h2>14. What is verified and what is not</h2>
+<p>This is the honest list. "Verified" means it was run, not just written.</p>
+<table>
+  <tr><th style="width:36%">Item</th><th style="width:15%">Status</th><th>Detail</th></tr>
+  <tr><td>Booking, payments, cancellation, credit, expiry, enquiries, staff and roles</td><td><span class="pill done">Tested</span></td><td>319 automated tests pass in about two minutes, including permissions, owner isolation, rate limits and configuration rules</td></tr>
+  <tr><td>Contacts and updates</td><td><span class="pill done">Tested</span></td><td>Filters, consent per channel, preview, confirm count, daily limit, repeat protection, history and unsubscribe are tested. Delivery is not (no provider)</td></tr>
+  <tr><td>Books, Profit and Loss, Balance Sheet, schedules</td><td><span class="pill done">Tested</span></td><td>Tested on a scenario with played, owing, no-show, late-cancelled, free-cancelled, future and other-owner bookings: the Balance Sheet balances and the schedules tie to the Profit and Loss. Not tested on real books from your ground</td></tr>
+  <tr><td>PDF, Excel and CSV exports</td><td><span class="pill now">Partly</span></td><td>Read back by the automated tests; PDFs checked for content. Opening and recalculating the Excel files in LibreOffice or Excel has not been repeated</td></tr>
+  <tr><td>Ask AI, built-in answerer</td><td><span class="pill done">Tested</span></td><td>35 tests: dates, topics, permissions, owner isolation, rate limit, audit</td></tr>
+  <tr><td>Ask AI with Claude</td><td><span class="pill todo">Not run</span></td><td>Tested only against a stand-in server that behaves like the published interface; never against the real service</td></tr>
+  <tr><td>Website, owner desk, Books, Academy, Live scores, platform page</td><td><span class="pill done">Run</span></td><td>Opened in a real browser against the real server and clicked through, and again in the hosted preview with sample data. Contacts has no full screen yet</td></tr>
+  <tr><td>Bank-statement import and reconciliation</td><td><span class="pill now">Fixtures only</span></td><td>Tested on generated statements, not on your bank's real layout. PDF statements are deliberately not read</td></tr>
+  <tr><td>Backups, encryption at rest</td><td><span class="pill now">Tested</span></td><td>Snapshot, clean-up, encrypted snapshots, restore with the right and wrong passphrase, and sealed fields are tested. A restore on a new server has not been rehearsed</td></tr>
+  <tr><td>"Reply STOP" on SMS and WhatsApp</td><td><span class="pill warn">Gap</span></td><td>The message says it, but replies are not read yet (section 7)</td></tr>
+  <tr><td>Wix widgets</td><td><span class="pill now">Test page only</span></td><td>Nine widgets (booking, account, owner desk, scores, grounds, gallery, academy, contact, platform) were embedded in a plain page on another address and used. Not inside Wix itself; no Wix account here. </td></tr>
+  <tr><td>Wix site</td><td><span class="pill todo">Not run</span></td><td>No Wix account here: nothing has been run on a real Wix site, the editor and preview addresses are not known for certain, and Wix's font library has not been checked</td></tr>
+  <tr><td>Docker image and HTTPS through Caddy</td><td><span class="pill todo">Not run</span></td><td>There is no Docker daemon in the build environment. The files will be written and checked by reading, not by building</td></tr>
+  <tr><td>Real Razorpay</td><td><span class="pill todo">Not run</span></td><td>Only the built-in demo gateway and hand-signed webhooks can be tested here</td></tr>
+  <tr><td>Bank feed pipeline</td><td><span class="pill done">Tested</span></td><td>Pulled transactions go through the same import as a statement (no duplicates, rules, UPI matching, locked months). Tested with the demo feed and a stand-in Yodlee server that checks the signed token</td></tr>
+  <tr><td>Real Yodlee</td><td><span class="pill todo">Not run</span></td><td>No Yodlee account here. The connect-your-bank step (FastLink) is not built; the bank is linked in Yodlee and its id is entered in the books</td></tr>
+  <tr><td>Real bank statements</td><td><span class="pill todo">Not run</span></td><td>Send two or three redacted CSV or Excel statements and the column matching can be tuned. PDF statements are not read; ask your bank for CSV or Excel</td></tr>
+  <tr><td>Email, SMS, WhatsApp, push</td><td><span class="pill todo">Not connected</span></td><td>Messages are recorded with the right category and consent check; nothing is actually sent until providers are configured (broadcasts stay "queued")</td></tr>
+  <tr><td>Logo and fonts</td><td><span class="pill now">Approximate</span></td><td>The wordmark was traced from the drawing; the headings use similar fonts, not the sign painter's</td></tr>
+  <tr><td>Expo app</td><td><span class="pill todo">Not run</span></td><td>The source is written (sign in, book and pay, dashboard with the Ground/Academy toggle, Ask AI, owner desk) but Expo could not be installed here, so it was never run on a phone or simulator</td></tr>
+</table>
+</section>
+
+<section class="page">
+<h2>16. The website you can open today</h2>
+<p>Besides the API, the server now serves a <b>complete website</b> built in the Obsidian &amp; Champagne look. It runs on its own today (on your laptop or any server) and is the same set of screens that will be placed inside Wix. A hosted preview with sample data was also published so the screens can be clicked through without installing anything; nothing done there is saved.</p>
+<table>
+  <tr><th style="width:24%">Screen</th><th>What it does</th></tr>
+  <tr><td>Home and booking</td><td>Hero, ground picker, a date strip and a date box that reaches <b>up to a year ahead</b>, slot grid with live availability, price summary. Choosing slots and pressing Hold or Book now takes a visitor who is not signed in to the <b>sign-in / create account</b> page and then straight back to the booking</td></tr>
+  <tr><td>Grounds, Gallery, Academy, Contact</td><td>Ground cards with facilities and prices; a photo gallery and Instagram buttons that appear once links are added in the admin desk; the Academy section (Munaf Patel Academy, MP13); contact person, phone, email and Get Directions</td></tr>
+  <tr><td>Live scores</td><td>Public match list and scorecards, with a Watch on YouTube link beside the score (section 17)</td></tr>
+  <tr><td>My dashboard (customers)</td><td>After sign-in a customer lands here: <b>what they have spent at the ground</b>, sessions and slots played, money paid ahead for sessions not yet played, spend for each of the last 12 months, spend per ground, and their full booking history with cancel. Only money that stayed with the ground counts as spent: a cancellation counts what was kept, not what was refunded or returned as credit</td></tr>
+  <tr><td>Ask AI for customers</td><td>A question box on the dashboard that answers from the customer's <b>own</b> bookings and credit and from public ground details: next booking, what is still to pay, credit and when it expires, free slots on a day, prices, opening hours, directions, the cancellation rules and how they apply to their next booking. Built-in answerer only; it cannot make or change a booking and never sees anyone else's data</td></tr>
+  <tr><td>Academy toggle</td><td>If the account belongs to a parent, or to a student of 16 or over, the dashboard shows <b>Ground</b> and <b>Academy</b> buttons. One login can hold several children, with a button for each child (section 17)</td></tr>
+  <tr><td>Owner desk</td><td>Tabs for Today (figures for today and this month, Ask AI), Books, Academy and Matches; the admin desk also holds the website details (Instagram, gallery links), global switches, backups and the leads list (section 20)</td></tr>
+  <tr><td>Timings</td><td>Owners change opening and closing time, slot length, evening-rate start and most slots at once, per ground</td></tr>
+  <tr><td>Phones</td><td>All screens work at phone width. A menu button opens Grounds, Gallery, Academy, Contact, Sign in and Book now</td></tr>
+</table>
+<div class="note"><b>Demo accounts</b> (only while demo mode is on, never on a real domain): customer, owner, staff and admin, each with a sample password shown on the sign-in page. Demo mode also provides the fake payment gateway, so a booking can be paid end to end without Razorpay.</div>
+<div class="alert"><b>Still approximate:</b> the fonts are close, not the sign painter's; the gallery uses photo links, because there is no upload yet; the Instagram address has not been supplied; Contacts has no full screen yet (its API and export work). The look was checked in a browser at phone width, not on a physical phone.</div>
+</section>
+
+<section class="page">
+<h2>17. Academy and match day</h2>
+<h3 style="margin-top:0">17.1 Academy</h3>
+<table>
+  <tr><th style="width:24%">Part</th><th>Detail</th></tr>
+  <tr><td>Students</td><td>Profile with date of birth, batch, guardian name, phone and email, photo and video consent flags, status active or left. Kept per owner; another owner's students answer "not found"</td></tr>
+  <tr><td>Attendance and progress</td><td>Bulk attendance by day (no future days, corrections allowed); a monthly progress card with five skills the owner names (default Batting, Bowling, Fielding, Fitness, Discipline) rated 1 to 5 with a comment. A card is private until the coach <b>publishes</b> it, and can be taken back</td></tr>
+  <tr><td>Who can use it</td><td>Owner and coach. A <b>Coach</b> preset gives academy access only; front-desk staff and customers have none</td></tr>
+  <tr><td>Parent access</td><td>A parent sees a child only after <b>staff link</b> the parent's account to the child; an email match alone is not enough, because sign-up does not verify email addresses. The parent sees only published cards and the attendance count</td></tr>
+  <tr><td>Several children, one login</td><td>Staff link each child to the same account. The parent's dashboard has a button per child</td></tr>
+  <tr><td>Students of 16 and over</td><td>Staff can link a student's own account to their record, only if a date of birth is recorded and the student is 16 or older today. The student then sees the same dashboard, with their own progress under Academy. Younger students are seen only through a parent</td></tr>
+  <tr><td>Ground and Academy toggle</td><td>One login switches between the Ground view (bookings, spend) and the Academy view. The last choice is remembered on that device</td></tr>
+</table>
+<div class="note"><b>Not built:</b> photo and video upload per student. The consent flags are stored, but nothing is uploaded, so nothing can be shared by mistake. Written guardian consent, retention rules and a withdrawal process are still the academy operator's to arrange before any photo of a child is shared (section 22).</div>
+<h3>17.2 Match day</h3>
+<table>
+  <tr><th style="width:24%">Part</th><th>Detail</th></tr>
+  <tr><td>Scoring</td><td>Staff with the matches permission create a match (teams, overs, players per side) and score <b>ball by ball</b>: runs, wides, no-balls, byes, leg byes and wickets, with undo. Innings totals, the chase and the result are worked out from the balls, so a correction always re-flows</td></tr>
+  <tr><td>Public pages</td><td>The public Live scores section and full scorecards, with no sign-in</td></tr>
+  <tr><td>Video</td><td>An owner can attach a <b>YouTube Live</b> link to a match. Only real https YouTube links are accepted. The site links out to YouTube; it does not receive or record video</td></tr>
+  <tr><td>Not connected</td><td>CricHeroes: no synchronisation (it needs API access from them). Automatic stream setup is not part of the software</td></tr>
+</table>
+</section>
+
+<section class="page">
+<h2>18. Accounting additions</h2>
+<p>These complete the part that section 8 originally listed as "Next". Invoices, bills and customer or vendor balances were <b>left out on purpose</b>, as you asked.</p>
+<table>
+  <tr><th style="width:24%">Feature</th><th>What it does</th></tr>
+  <tr><td>Exports</td><td>Every report downloads as <b>PDF</b>, Excel (with working totals) or CSV</td></tr>
+  <tr><td>Receipts and documents</td><td>Attach a receipt, screenshot or deposit slip to any transaction (file size and type are checked; files are kept per owner; removing one unlinks it but keeps the stored bytes for the audit trail and backup). Attachment counts show on the list</td></tr>
+  <tr><td>Bank statement import</td><td>Upload <b>CSV or Excel</b> from your bank, pick the account and preview before importing. Columns are matched by heading across common Indian layouts; opening and closing balances are checked; running-balance gaps are flagged. <b>PDF statements are deliberately not read</b>: guessing columns from a PDF can put wrong money into your books. Ask the bank for CSV or Excel</td></tr>
+  <tr><td>No duplicates</td><td>Every line gets a fingerprint, so the same statement uploaded twice adds nothing. An import can be undone</td></tr>
+  <tr><td>Rules</td><td>"If the description contains X, categorise as Y". Rules run on import and can be re-applied</td></tr>
+  <tr><td>Automatic UPI reconciliation</td><td>After every import the software matches bank credits to UPI bookings by <b>UTR number and amount</b>, one bank line to one payment only. What matches is marked reconciled and leaves "Needs attention"; the rest stays for you with a Match and Unmatch button. The Reconcile tab shows the difference between your books and the statement</td></tr>
+  <tr><td>Recurring entries</td><td>Rent, wages or a loan instalment as a schedule (weekly, monthly, quarterly or yearly); the daily sweep posts what is due</td></tr>
+  <tr><td>Cash flow statement</td><td>Money in and out of the bank and cash accounts for a period, split into running the ground, equipment bought, and owner money and loans. It is checked against the balance sheet and says so when it ties</td></tr>
+  <tr><td>Budgets</td><td>Set a monthly amount for any income or expense line; the budget report compares it with what really happened, month by month, and marks each line On track, Over, Under or No budget</td></tr>
+  <tr><td>Moving money between accounts</td><td>Cash taken to the bank, or bank to petty cash, as one action. It is not income or expense and nets to zero in the cash flow</td></tr>
+  <tr><td>Fixed assets and depreciation</td><td>A register of the bowling machine, nets, roller and so on, with straight-line depreciation posted automatically for each finished month (signed-off months are skipped and reported). Sold or scrapped assets stop depreciating. Buying an asset is categorised as "Equipment or asset bought", so it is not counted as an expense</td></tr>
+  <tr><td>GST summary</td><td>By month: sales before GST, GST collected, GST paid, and the amount payable, matching the balance sheet. It is a working summary for you and your accountant, not a filed return</td></tr>
+  <tr><td>Screens</td><td>The owner desk Books tab has thirteen sub-tabs: Overview, Reports, Cash flow, Budget, GST, Assets, Transactions, Bank import, Reconcile, Recurring, Journals, Month-end and Setup. The new reports download as PDF, Excel or CSV</td></tr>
+</table>
+<div class="alert"><b>Be clear about what automatic means.</b> Matching happens when you <i>upload a statement</i>. A live bank feed (Yodlee or the Account Aggregator) is <b>not connected</b>, so money appears in the books only after you import. Real bank layouts were tested only on generated statements: please send two or three redacted real statements so the column matching can be tuned.</div>
+</section>
+
+<section class="page">
+<h2>19. Security: what exists and what is still open</h2>
+<table>
+  <tr><th style="width:30%">In place and tested</th><th>Detail</th></tr>
+  <tr><td>Passwords and tokens</td><td>scrypt hashing; signed tokens that can be revoked; sign-in and registration rate limits</td></tr>
+  <tr><td>Two-step sign-in</td><td>Optional authenticator-app codes (6 digits, 30-second steps) for owners, staff and the super admin</td></tr>
+  <tr><td>Access control</td><td>Every request checks role and permission on the server; owner data is separated and another owner's record answers "not found"</td></tr>
+  <tr><td>Browser protection</td><td>HSTS for two years, no framing (except the Wix page you allow), no content sniffing, same-origin opener policy, strict referrer policy, and a <b>strict content policy</b>: scripts only from the site itself and Razorpay, no inline scripts, no plug-ins</td></tr>
+  <tr><td>Encrypted two-step secrets</td><td>With <code>FIELD_KEY</code> set, authenticator secrets are stored encrypted (AES-256-GCM). Tampering is detected. Older plain values still read and are sealed when next written</td></tr>
+  <tr><td>Encrypted backups</td><td>With <code>BACKUP_PASSPHRASE</code> set, every file in a snapshot is encrypted (AES-256-GCM, key from the passphrase). A restore script decrypts it, checks the database, and refuses a wrong passphrase. Keep the passphrase away from the server</td></tr>
+  <tr><td>Payments</td><td>Razorpay webhooks signature-checked and processed once; UPI cannot confirm without a verifier</td></tr>
+  <tr><td>Files</td><td>Uploads size-limited and type-checked, stored per owner, never served to another owner</td></tr>
+  <tr><td>Audit and locks</td><td>Who did what is recorded; signed-off months are locked</td></tr>
+</table>
+<table>
+  <tr><th style="width:30%">Still open</th><th>Detail</th></tr>
+  <tr><td>HTTPS</td><td>Caddy in the Docker kit gets the certificate once DNS points at the server. Not yet run on a real server</td></tr>
+  <tr><td>Encrypted disk</td><td>Choose an encrypted disk at the hosting provider; the software encrypts the backups and the two-step secrets, not the whole database file</td></tr>
+  <tr><td>Other personal fields</td><td>Phone numbers, emails and bank details are not individually encrypted in the database; they are protected by the encrypted disk and access rules</td></tr>
+  <tr><td>Independent review</td><td>No outside security test has been done. "Highest level of encryption" is a goal reached by hosting choices plus these items, not something one setting provides</td></tr>
+</table>
+</section>
+
+<section class="page">
+<h2>20. The platform page, and a comparison with your SaaS brief</h2>
+<p>The home page footer links to <b>For ground owners</b>: a page offering the software to other owners, with a form (ground name, city, phone, email, number of grounds, message). Submissions are kept as <b>leads</b> that the super admin sees in the admin desk and moves through <i>new, contacted, demo, won, lost</i>. Pricing is agreed directly; there is no self-serve sign-up or billing.</p>
+<p>The brief you attached describes the product as a tenant-isolated SaaS MVP. Compared with this build:</p>
+<table>
+  <tr><th style="width:17%">Area</th><th style="width:27%">Your brief</th><th style="width:27%">This build</th><th>Suggested decision</th></tr>
+  <tr><td>Isolation</td><td>A separate SQLite database per tenant, resolved by host name</td><td>One database; every record carries its owner and every route checks it. Tested for each module</td><td>Keep for now. Per-tenant databases matter at many tenants, or if a customer demands it</td></tr>
+  <tr><td>Platform console</td><td>Tenants, plans, quotas, domain approval, platform audit</td><td>Leads list, global settings, audit log. No tenant provisioning, plans or quotas</td><td><b>Gap.</b> Build when the first outside owner signs. Your call on timing</td></tr>
+  <tr><td>Custom domains</td><td>DNS TXT verification, certificates by Caddy</td><td>Not built. One address, <code>api.dajicricket.com</code></td><td><b>Gap.</b> Only needed for other owners' own domains</td></tr>
+  <tr><td>Roles</td><td>Platform admin, owner, general manager, staff/coach, customer/parent</td><td>Super admin, owner, staff with chosen permissions (presets such as Coach), customer</td><td>Equivalent. A General Manager is a staff preset with most permissions</td></tr>
+  <tr><td>Two-step sign-in</td><td>Optional TOTP</td><td>Optional TOTP for owners, staff, admin</td><td>Match</td></tr>
+  <tr><td>Statement import</td><td>CSV, Excel and text-based PDF</td><td>CSV and Excel; PDF refused on purpose</td><td>Keep. Ask banks for CSV or Excel</td></tr>
+  <tr><td>Reconciliation</td><td>Duplicate check, running balance, reference matching, review queue</td><td>Same, plus automatic UTR and amount matching of UPI money</td><td>Match or better</td></tr>
+  <tr><td>Contacts</td><td>Email BCC and one-at-a-time WhatsApp drafts</td><td>Consent-checked, previewed updates with limits; manual-send mode; nothing delivered until a provider is chosen</td><td>Match. Choose providers</td></tr>
+  <tr><td>Academy</td><td>Roster, five skills, guardian-email access, publish, <b>photo and video gallery</b></td><td>Everything except photo and video upload; parent access by staff link, not by email match; students 16+ can have a login</td><td><b>Gap:</b> media upload. Wait for consent and storage decisions</td></tr>
+  <tr><td>Match day</td><td>Ball-by-ball, public page, YouTube embed</td><td>Same</td><td>Match</td></tr>
+  <tr><td>Ask AI</td><td>Built-in answers; no external model</td><td>Built-in for owners and for customers; optional Claude mode for owners, not yet tried against the real service</td><td>Ahead. Decide whether to switch Claude on</td></tr>
+  <tr><td>Backups</td><td>Daily 03:15 including media</td><td>Daily 03:15; database and uploads; keeps the newest 14</td><td>Match. Copy off the server</td></tr>
+  <tr><td>Scale</td><td>One host; Postgres is a later step</td><td>One host; Postgres migration planned</td><td>Match</td></tr>
+</table>
+<div class="note"><b>Wix and cost.</b> The public site can stay on Wix with the booking screens embedded; Wix requires a Premium plan with a connected domain for that. The other option is to serve the whole site from the server, which already works as a standalone website, and drop Wix. Prices of Wix plans and of a small Mumbai server were taken from comparison sites and <b>not verified here</b>; check current prices before deciding. My lean: serve everything from one small server and keep Wix only if you want its editor for marketing pages.</div>
+</section>
+
+<section>
+<h2 style="margin-top:8mm">21. Backups and everyday operation</h2>
+<ul>
+  <li><b>Daily backup at 03:15 India time</b>: the database and the uploaded files (receipts), written to a temporary folder, integrity-checked, then renamed so a half-written copy is never mistaken for a good one. The newest 14 are kept. The admin desk shows the schedule and the latest snapshot.</li>
+  <li><b>A backup on the same disk does not protect against losing the disk.</b> Copy the backups folder off the server too, and encrypt it first.</li>
+  <li><b>Restore</b> is a manual copy of the snapshot back into place. It has not been rehearsed on a second machine; do that once before launch.</li>
+  <li><b>Daily sweep</b> inside the server: releases unpaid holds after checking for late payments, expires credit, sends reminders, posts recurring entries and takes the backup.</li>
+  <li><b>Manual sends and opt-out:</b> staff can mark a contact as opted out of a channel; manual-send mode prepares messages to be sent by hand and records them as sent.</li>
+</ul>
+</section>
+
+<section class="page">
+<h2>22. Progress, launch checklist and decisions</h2>
+<table style="font-size:8.2pt">
+  <tr><th style="width:48%">Part</th><th style="width:16%">Status</th><th>Notes</th></tr>
+  <tr><td>Bookings, payments, cancellation, credit, enquiries, staff, roles</td><td><span class="pill done">Done</span></td><td>Tested</td></tr>
+  <tr><td>Ground details, contact, academy, tagline, look</td><td><span class="pill done">Done</span></td><td>Fonts approximate</td></tr>
+  <tr><td>Contacts and updates</td><td><span class="pill done">Done</span></td><td>No provider connected; "Reply STOP" not read</td></tr>
+  <tr><td>Books, Reports, exports (PDF, Excel, CSV), month sign-off</td><td><span class="pill done">Done</span></td><td>With screens</td></tr>
+  <tr><td>Receipts, statement import, UPI reconciliation, rules, recurring entries</td><td><span class="pill done">Done</span></td><td>Tested on generated statements only</td></tr>
+  <tr><td>Ask AI (owners and customers)</td><td><span class="pill done">Done</span></td><td>Claude mode not run against the real service</td></tr>
+  <tr><td>Website, customer dashboard, phone layout, hosted preview</td><td><span class="pill done">Done</span></td><td>Checked in a browser, not a phone</td></tr>
+  <tr><td>Academy, parent and 16+ logins, match scoring, live page</td><td><span class="pill done">Done</span></td><td>No media upload</td></tr>
+  <tr><td>Platform page and leads</td><td><span class="pill done">Done</span></td><td>No tenant provisioning</td></tr>
+  <tr><td>Two-step sign-in, daily backups</td><td><span class="pill done">Done</span></td><td>Restore not rehearsed</td></tr>
+  <tr><td>Live bank feed</td><td><span class="pill now">Built</span></td><td>Pipeline and Yodlee client tested against a stand-in; real Yodlee and bank linking not done</td></tr>
+  <tr><td><code>api.dajicricket.com</code>: Docker, Caddy, HTTPS, admin script, off-server backup, restore</td><td><span class="pill now">Written</span></td><td>Not run on a real server. Stays on SQLite; Postgres not done</td></tr>
+  <tr><td>Wix custom-element widgets</td><td><span class="pill done">Built</span></td><td>Tested in a plain page, not in Wix</td></tr>
+  <tr><td>Expo iOS and Android app</td><td><span class="pill now">Written</span></td><td>Source only; never run</td></tr>
+  <tr><td>Contacts full screen</td><td><span class="pill done">Done</span></td><td>Filters, export, message composer with preview and confirm</td></tr>
+  <tr><td>Photo upload for gallery, grounds and academy</td><td><span class="pill done">Done</span></td><td>PNG, JPEG, WebP, GIF up to 6 MB, checked by content; admin desk uploader and academy photo strip</td></tr>
+  <tr><td>Tenant provisioning, plans, custom domains</td><td><span class="pill warn">Paused</span></td><td>Removed from scope for now at your request</td></tr>
+  <tr><td>Encrypted backups and secrets, strict content policy</td><td><span class="pill done">Done</span></td><td>Independent security review still open (section 19)</td></tr>
+</table>
+<h3 style="margin-top:3mm">Launch checklist</h3>
+<table style="font-size:8.2pt">
+  <tr><th style="width:24%">Check</th><th>Done when</th></tr>
+  <tr><td>Environment</td><td>Production secrets are unique and long; demo mode is off; the first super admin was made with the admin script</td></tr>
+  <tr><td>DNS and HTTPS</td><td>The API address points at the server, ports 80 and 443 are open and Caddy has issued the certificate</td></tr>
+  <tr><td>Two owners</td><td>Two test owners were created and one cannot see the other's bookings, money, files or students</td></tr>
+  <tr><td>Payments</td><td>A full booking, payment, webhook replay and cancellation was run in Razorpay test mode</td></tr>
+  <tr><td>Recovery</td><td>Backups are copied off the server, encrypted, and a restore was tried on another machine</td></tr>
+</table>
+<h3>Needs your decision</h3>
+<ul>
+  <li>Confirm the defaults in section 5 (advance, hold times, credit expiry, refunds, no-shows) and whether prices include GST.</li>
+  <li>Choose email, SMS and WhatsApp providers and whether push notifications are in the first release.</li>
+  <li>Privacy: customer consent wording, guardian consent for children, retention and deletion, withdrawal process, backup retention.</li>
+  <li>Provide privacy policy, cancellation terms, terms of service and the invoice format.</li>
+  <li>Send your Instagram address and a few gallery photo links.</li>
+  <li>Confirm "Surat" as the address line, and send the sign painter's artwork or font names.</li>
+  <li>Say whether to use Claude in Ask AI, and when to revisit tenant provisioning and custom domains (paused for now).</li>
+  <li>Send two or three redacted real bank statements (CSV or Excel).</li>
+  <li>Name the people who own operations: owner, general manager, support contact, and who runs backup and restore.</li>
+  <li>Hosting: Wix with embedded screens, or everything from one server (section 20).</li>
+</ul>
+</section>
+</body>
+</html>

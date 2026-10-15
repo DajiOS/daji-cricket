@@ -1,0 +1,143 @@
+import { MAX_DAYS_AHEAD } from '../hold.ts';
+import { BRAND, type PublicConfig } from '@daji/shared';
+import { Router, ok, created } from '../http.ts';
+import { razorpayConfigured } from '../config.ts';
+import { getSettings } from '../settings.ts';
+import { availability, getGroundOr404, listGrounds, toGround } from '../grounds.ts';
+import { Validator } from '../input.ts';
+import { HttpError } from '../errors.ts';
+import { checkPasswordStrength, createUser, login, signToken, toUser, userByPhone, userRow } from '../auth.ts';
+import { checkOtp, requestOtp } from '../otp.ts';
+import { audit } from '../audit.ts';
+import { createEnquiry } from '../enquiries.ts';
+import { isValidDate, istDate } from '../time.ts';
+import { closedByScope } from '../closures.ts';
+import { now } from '../clock.ts';
+import { run } from '../db.ts';
+
+export function publicRoutes(r: Router): void {
+  r.get('/api/health', () => ok({ ok: true, time: now() }), { rate: 'none' });
+
+  r.get('/api/config', (c) => {
+    const s = getSettings();
+    const cfg: PublicConfig = {
+      brand: BRAND.name,
+      tagline: BRAND.tagline,
+      contact: { name: s.contactName, phone: s.contactPhone, email: s.contactEmail },
+      academy: { name: s.academyName, runBy: s.academyRunBy, brand: s.academyBrand, about: s.academyAbout, coaches: s.academyCoaches },
+      instagramUrl: s.instagramUrl || null,
+      gallery: s.galleryImages,
+      academyGallery: s.academyImages,
+      razorpayEnabled: s.razorpayEnabled,
+      razorpayDemo: !razorpayConfigured(c.cfg) && c.cfg.demoMode,
+      razorpayKeyId: razorpayConfigured(c.cfg) ? c.cfg.razorpay.keyId : null,
+      holdMinutesOnline: s.holdMinutesOnline,
+      maxDaysAhead: MAX_DAYS_AHEAD,
+      holdMinutesUpi: s.holdMinutesUpi,
+      verifyMinutesUpi: s.verifyMinutesUpi,
+      creditExpiryDays: s.creditExpiryDays,
+      freeCancelHours: s.freeCancelHours,
+      lateCancelCreditPercent: s.lateCancelCreditPercent,
+      cashRefundPercent: s.cashRefundPercent,
+      requireApproval: s.requireApproval,
+      autoDebitEnabled: s.autoDebitEnabled,
+      autoDebitHoursBefore: s.autoDebitHoursBefore,
+      bookingsOpenFrom: s.bookingsOpenFrom,
+      bookingsCloseFrom: s.bookingsCloseFrom,
+      closedDates: closedByScope(istDate(now())),
+      advanceMode: s.advanceMode,
+      advanceValue: s.advanceValue,
+      fullPaymentWithinHours: s.fullPaymentWithinHours,
+      demoMode: c.cfg.demoMode,
+      publicUrl: c.cfg.publicUrl,
+    };
+    return ok(cfg);
+  });
+
+  r.get('/api/grounds', (c) => ok({ items: listGrounds({ city: c.query.get('city') ?? undefined, q: c.query.get('q') ?? undefined }) }));
+
+  r.get('/api/grounds/:id', (c) => {
+    const g = getGroundOr404(c.params.id!);
+    if (!g.active) throw new HttpError(404, 'NOT_FOUND', 'Ground not found');
+    return ok(toGround(g));
+  });
+
+  r.get('/api/grounds/:id/availability', (c) => {
+    const g = getGroundOr404(c.params.id!);
+    if (!g.active) throw new HttpError(404, 'NOT_FOUND', 'Ground not found');
+    const date = c.query.get('date');
+    if (!isValidDate(date)) throw new HttpError(400, 'VALIDATION_FAILED', 'Send a date like 2026-10-21', { fields: [{ field: 'date', message: 'Must be a date like 2026-10-21' }] });
+    return ok(availability(g, date));
+  });
+
+  r.post('/api/enquiries', (c) => created(createEnquiry(c.user?.role === 'customer' ? c.user : null, c.json())), { rate: 'auth' });
+
+  r.post('/api/auth/register', (c) => {
+    const v = new Validator(c.json());
+    const firstName = v.str('firstName', { min: 1, max: 40 });
+    const lastName = v.str('lastName', { min: 1, max: 40 });
+    const name = firstName ? undefined : v.str('name', { required: true, min: 2, max: 80 });
+    const email = v.email('email', true);
+    const phone = v.phone('phone'); // optional: an account can be made with just an email
+    const password = v.str('password', { required: true, trim: false });
+    const consent = (c.json() as any).consent ?? {};
+    const cv = new Validator(typeof consent === 'object' && consent ? consent : {});
+    const ce = cv.bool('email'), cs = cv.bool('sms'), cw = cv.bool('whatsapp');
+    for (const f of cv.fields) v.fail(`consent.${f.field}`, f.message);
+    if (password) { const pw = checkPasswordStrength(password); if (pw) v.fail('password', pw); }
+    v.done();
+    const row = createUser({ role: 'customer', name: name ?? `${firstName} ${lastName ?? ''}`, ...(firstName ? { firstName, lastName: lastName ?? '' } : {}), email: email!, phone: phone ?? null, password: password! });
+    if (ce || cs || cw) {
+      run('UPDATE users SET consent_email = ?, consent_sms = ?, consent_whatsapp = ?, consent_updated_at = ? WHERE id = ?', ce ? 1 : 0, cs ? 1 : 0, cw ? 1 : 0, now(), row.id);
+      audit({ id: row.id, role: 'customer' }, 'consent.set', 'user', row.id, { email: !!ce, sms: !!cs, whatsapp: !!cw });
+    }
+    const fresh = userRow(row.id)!;
+    return created({ token: signToken(c.cfg, fresh), user: toUser(fresh) });
+  }, { rate: 'auth' });
+
+  r.post('/api/auth/login', (c) => {
+    const v = new Validator(c.json());
+    const who = v.str('identifier', { max: 120 }) ?? v.str('email', { max: 120, required: true });
+    const password = v.str('password', { required: true, trim: false });
+    const code = v.str('code', { max: 12 });
+    v.done();
+    return ok(login(c.cfg, who!, password!, code));
+  }, { rate: 'auth' });
+
+  // ---- phone number and one-time code: create an account, or sign in
+  r.post('/api/auth/otp/request', async (c) => {
+    const v = new Validator(c.json());
+    const phone = v.phone('phone', true);
+    v.done();
+    return ok(await requestOtp(c.cfg, phone!));
+  }, { rate: 'auth' });
+
+  r.post('/api/auth/otp/verify', (c) => {
+    const body = c.json() as any;
+    const v = new Validator(body);
+    const phone = v.phone('phone', true);
+    const code = v.str('code', { required: true, min: 4, max: 8 });
+    const firstName = v.str('firstName', { min: 1, max: 40 });
+    const lastName = v.str('lastName', { min: 1, max: 40 });
+    const consent = body?.consent ?? {};
+    const cv = new Validator(typeof consent === 'object' && consent ? consent : {});
+    const ce = cv.bool('email'), cs = cv.bool('sms'), cw = cv.bool('whatsapp');
+    v.done();
+    const check = checkOtp(c.cfg, phone!, code!);
+    const existing = userByPhone(phone!);
+    if (existing) {
+      if (!existing.active) throw new HttpError(403, 'ACCOUNT_DISABLED', 'This account has been disabled');
+      check.consume();
+      return ok({ token: signToken(c.cfg, existing), user: toUser(existing), created: false });
+    }
+    if (!firstName || !lastName) throw new HttpError(400, 'NAME_REQUIRED', 'There is no account for this number yet. Add your first and last name to create one.', { fields: [{ field: 'firstName', message: 'Required' }, { field: 'lastName', message: 'Required' }] });
+    check.consume();
+    const row = createUser({ role: 'customer', name: `${firstName} ${lastName}`, firstName, lastName, phone: phone! });
+    if (ce || cs || cw) {
+      run('UPDATE users SET consent_email = ?, consent_sms = ?, consent_whatsapp = ?, consent_updated_at = ? WHERE id = ?', ce ? 1 : 0, cs ? 1 : 0, cw ? 1 : 0, now(), row.id);
+      audit({ id: row.id, role: 'customer' }, 'consent.set', 'user', row.id, { email: !!ce, sms: !!cs, whatsapp: !!cw });
+    }
+    const fresh = userRow(row.id)!;
+    return created({ token: signToken(c.cfg, fresh), user: toUser(fresh), created: true });
+  }, { rate: 'auth' });
+}

@@ -1,0 +1,188 @@
+{
+ "name": "Cricket Ground",
+ "city": "Surat",
+ "area": null,
+ "address": null,
+ "lat": 21.1818855,
+ "lng": 72.9134859,
+ "mapUrl": "https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7",
+ "description": "Full-size turf wicket with floodlights for evening matches.",
+ "facilities": [
+  "Floodlights",
+  "Changing rooms",
+  "Parking",
+  "Drinking water",
+  "Scoreboard"
+ ],
+ "images": [],
+ "surface": "Turf wicket",
+ "openTime": "06:00",
+ "closeTime": "27:00",
+ "slotMinutes": 60,
+ "pricePaise": 180000,
+ "weekendPricePaise": 220000,
+ "eveningSurchargePaise": 40000,
+ "eveningFrom": "18:00",
+ "maxSlots": 8,
+ "minNoticeMinutes": 0,
+ "advanceMode": null,
+ "advanceValue": null,
+ "active": true,
+ "formats": [],
+ "winterOpenTime": "07:00",
+ "winterCloseTime": "27:00",
+ "winterFromMonth": 11,
+ "winterToMonth": 2,
+ "rates": [
+  {
+   "id": "l-night",
+   "label": "Evening hours",
+   "ball": "leather",
+   "days": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    0
+   ],
+   "from": "19:00",
+   "to": "27:00",
+   "mode": "hourly",
+   "pricePaise": 350000
+  },
+  {
+   "id": "l-morn",
+   "label": "Morning session",
+   "ball": "leather",
+   "days": [
+    2,
+    3,
+    4,
+    5
+   ],
+   "from": "07:00",
+   "to": "10:00",
+   "mode": "fixed",
+   "pricePaise": 400000
+  },
+  {
+   "id": "l-day",
+   "label": "Day session",
+   "ball": "leather",
+   "days": [
+    2,
+    3,
+    4,
+    5
+   ],
+   "from": "10:00",
+   "to": "18:00",
+   "mode": "fixed",
+   "pricePaise": 600000
+  },
+  {
+   "id": "l-wknd",
+   "label": "Weekend day",
+   "ball": "leather",
+   "days": [
+    6,
+    0
+   ],
+   "from": "07:00",
+   "to": "19:00",
+   "mode": "fixed",
+   "pricePaise": 1500000
+  },
+  {
+   "id": "t-night",
+   "label": "Evening hours",
+   "ball": "tennis",
+   "days": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    0
+   ],
+   "from": "19:00",
+   "to": "27:00",
+   "mode": "hourly",
+   "pricePaise": 350000
+  },
+  {
+   "id": "t-morn",
+   "label": "Morning session",
+   "ball": "tennis",
+   "days": [
+    2,
+    3,
+    4,
+    5
+   ],
+   "from": "07:00",
+   "to": "10:00",
+   "mode": "fixed",
+   "pricePaise": 500000
+  },
+  {
+   "id": "t-both",
+   "label": "Two-day tournament (Sat + Sun)",
+   "ball": "tennis",
+   "days": [
+    6
+   ],
+   "from": "07:00",
+   "to": "23:00",
+   "mode": "fixed",
+   "pricePaise": 15100000,
+   "bundleDays": 2
+  },
+  {
+   "id": "t-sat",
+   "label": "Saturday tournament",
+   "ball": "tennis",
+   "days": [
+    6
+   ],
+   "from": "07:00",
+   "to": "19:00",
+   "mode": "fixed",
+   "pricePaise": 10000000
+  },
+  {
+   "id": "t-sun",
+   "label": "Sunday tournament",
+   "ball": "tennis",
+   "days": [
+    0
+   ],
+   "from": "07:00",
+   "to": "23:00",
+   "mode": "fixed",
+   "pricePaise": 9000000
+  },
+  {
+   "id": "l-practice",
+   "label": "Practice hours",
+   "ball": "practice",
+   "days": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    0
+   ],
+   "from": "07:00",
+   "to": "19:00",
+   "mode": "hourly",
+   "pricePaise": 60000
+  }
+ ],
+ "closedDays": [
+  1
+ ],
+ "ratesNote": "For custom days and reservations please call."
+}

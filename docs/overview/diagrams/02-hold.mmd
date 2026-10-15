@@ -1,0 +1,14 @@
+flowchart TD
+  S(["Customer picks ground, date and slots"]) --> H{{"Slots free?"}}
+  H -- "No" --> X["Shown as unavailable,<br/>pick other slots"]
+  H -- "Yes" --> HOLD["Slots held<br/>one row per ground and slot start,<br/>so double booking cannot happen"]
+  HOLD --> CR{{"Use account credit?"}}
+  CR -- "Yes" --> AP["Credit applied,<br/>oldest expiry first"]
+  CR -- "No" --> SW
+  AP --> FULL{{"Advance fully<br/>covered?"}}
+  FULL -- "Yes" --> CONF(["Confirmed straight away"])
+  FULL -- "No" --> SW{{"Global Razorpay switch"}}
+  SW -- "ON" --> RP(["Razorpay path"])
+  SW -- "OFF" --> UP(["UPI path"])
+  classDef good fill:#dcefe3,stroke:#237052
+  class CONF good

@@ -1,0 +1,15 @@
+flowchart TD
+  OK["Will receive it"] --> CF["You confirm the exact number<br/>(if it changed, you must preview again)"]
+  CF --> LIM{"Allowed?"}
+  LIM -->|"new request,<br/>under 10 today"| Q["Queued for each person,<br/>with a way to stop"]
+  LIM -->|"same request<br/>sent again"| RP["Earlier result returned;<br/>nothing is sent twice"]
+  LIM -->|"10 already<br/>today"| NO["Refused"]
+  Q --> H["History: who was sent to,<br/>who was skipped and why"]
+  Q --> PR["Provider sends it.<br/>Not connected yet: stays 'queued'"]
+  Q --> UN["Stopping: the email link switches<br/>that channel off; later blasts skip them.<br/>SMS and WhatsApp say 'Reply STOP' but<br/>replies are not read yet"]
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef bad fill:#f8e1db,stroke:#c2543f
+  classDef warn fill:#f3ead4,stroke:#9a7d44
+  class OK,Q good
+  class NO bad
+  class PR,UN warn

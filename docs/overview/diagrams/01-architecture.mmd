@@ -1,0 +1,34 @@
+flowchart TB
+  V["Visitors and customers"]
+  M["iOS and Android app<br/>Expo React Native"]
+  subgraph WIX["dajicricket.com on Wix"]
+    direction LR
+    P["Native Wix pages<br/>home, grounds, gallery,<br/>contact, academy<br/>(Google reads these)"]
+    CE["Custom elements<br/>booking, my account,<br/>accounting, with Contacts,<br/>Reports and Ask AI"]
+  end
+  subgraph HOST["api.dajicricket.com on your server"]
+    direction TB
+    C["Caddy: automatic HTTPS"]
+    API["Node API<br/>bookings · payments · credit · enquiries<br/>contacts and blasts · books and reports · Ask AI"]
+    J["Scheduled sweeps<br/>hold and credit expiry, reminders,<br/>bank sync, daily backup"]
+    DB[("SQLite database<br/>Postgres migrations included")]
+    C --> API
+    J --> API
+    API --> DB
+  end
+  PAY["Razorpay (online)<br/>Direct UPI and QR<br/>(staff verify)"]
+  YD["Yodlee<br/>bank feed"]
+  MSG["Email, SMS, WhatsApp<br/>providers: not chosen yet"]
+  AI["Claude API<br/>optional, for Ask AI"]
+  V --> P
+  V --> CE
+  CE -->|"widget script and API calls"| C
+  M --> C
+  API <--> PAY
+  API <--> YD
+  API -.-> MSG
+  API -.->|"only if a key is set"| AI
+  classDef ext fill:#f3ead4,stroke:#9a7d44,color:#1b1812
+  classDef opt fill:#ffffff,stroke:#9a7d44,stroke-dasharray:4 3,color:#1b1812
+  class PAY,YD ext
+  class MSG,AI opt

@@ -1,0 +1,11 @@
+flowchart LR
+  held(["held"]) -- "payment verified" --> confirmed(["confirmed"])
+  held -- "deadline, no payment" --> expired(["expired"])
+  expired -. "late payment, slots free" .-> confirmed
+  confirmed -- "match played" --> completed(["completed"])
+  confirmed -- "customer or staff cancels" --> cancelled(["cancelled"])
+  confirmed -- "did not turn up" --> no_show(["no_show"])
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef bad fill:#f8e1db,stroke:#c2543f
+  class confirmed,completed good
+  class expired,cancelled,no_show bad

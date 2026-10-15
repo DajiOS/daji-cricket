@@ -1,0 +1,11 @@
+flowchart TD
+  A(["Staff pick ground and slots"]) --> C{{"Slots free?"}}
+  C -- "No" --> A
+  C -- "Yes" --> D["Find the customer by phone or create a walk-in record.<br/>Record the payment: cash, card, UPI or bank transfer"]
+  D --> F{{"Paid at least<br/>the advance?"}}
+  F -- "No" --> G["Refused, nothing held"]
+  F -- "Yes" --> H["Booking confirmed,<br/>customer notified, audit record"]
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef bad fill:#f8e1db,stroke:#c2543f
+  class H good
+  class G bad

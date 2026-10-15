@@ -1,0 +1,10 @@
+flowchart LR
+  created(["created"]) --> pending(["pending"]) --> submitted(["submitted"]) --> captured(["captured"])
+  submitted -- "staff reject" --> rejected(["rejected"])
+  pending -- "gateway failure" --> failed(["failed"])
+  captured -- "part refund" --> partial(["partially_refunded"]) --> refunded(["refunded"])
+  captured -- "full refund" --> refunded
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef bad fill:#f8e1db,stroke:#c2543f
+  class captured good
+  class rejected,failed bad

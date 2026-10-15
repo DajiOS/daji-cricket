@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en" data-theme="obsidian">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daji Cricket Ground — theme preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="{{GOOGLE_FONTS}}">
+<style>
+{{TOKENS}}
+*{box-sizing:border-box;margin:0}
+html{background:var(--bg)}
+body{font-family:var(--font-body);color:var(--text);background:var(--bg);background-image:var(--gradient-canvas);background-attachment:fixed;line-height:1.6;font-weight:300;-webkit-font-smoothing:antialiased;font-feature-settings:"lnum","tnum"}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.05;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");mix-blend-mode:overlay}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1240px;margin:0 auto;padding:0 32px;position:relative}
+.eyebrow{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);font-weight:500}
+.display{font-family:var(--font-display);font-weight:600;letter-spacing:.015em;line-height:1.02;text-transform:uppercase}
+.display em,.script{font-family:var(--font-script);font-style:normal;font-weight:400;letter-spacing:0;text-transform:none;padding:0 .06em}
+.gold-text{background:var(--gradient-gold);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hair{height:1px;background:linear-gradient(90deg,transparent,var(--line-strong),transparent);border:0}
+
+/* nav */
+nav{height:112px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center}
+.wm-nav{height:88px;width:auto;margin:0 0 0 -4px;display:block}
+.links{display:flex;gap:30px;align-items:center;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-muted);font-weight:400}
+.links a:hover{color:var(--gold-bright)}
+
+/* controls */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;height:52px;padding:0 30px;border-radius:var(--radius-md);font:600 12px var(--font-body);letter-spacing:.18em;text-transform:uppercase;border:1px solid transparent;cursor:pointer;transition:all 260ms var(--ease);white-space:nowrap}
+.btn.primary{background:var(--gradient-gold);color:var(--on-gold);box-shadow:0 10px 30px -12px rgba(201,169,107,.55),inset 0 1px 0 rgba(255,255,255,.35)}
+.btn.primary:hover{background:var(--gradient-gold-hover);transform:translateY(-1px);box-shadow:0 18px 40px -14px rgba(201,169,107,.7),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn.outline{border-color:var(--line-strong);color:var(--gold-bright);background:transparent}
+.btn.outline:hover{border-color:var(--gold);background:rgba(201,169,107,.06)}
+.btn.ghost{color:var(--text-muted);padding:0 8px}
+.btn.sm{height:40px;padding:0 20px;font-size:11px}
+.btn.block{width:100%}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.06fr .94fr;gap:72px;align-items:center;padding:96px 0 112px;position:relative}
+.hero h1{font-size:clamp(56px,7.4vw,104px);margin:22px 0 28px}
+.hero h1 em{font-size:1.18em}
+.hero p.lead{max-width:30em;color:var(--text-muted);font-size:17px;line-height:1.75}
+.cta{display:flex;gap:14px;margin:40px 0 56px;flex-wrap:wrap}
+.facts{display:grid;grid-template-columns:repeat(3,auto);gap:0;justify-content:start;border-top:1px solid var(--line)}
+.facts div{padding:22px 40px 0 0;margin-right:40px;border-right:1px solid var(--line)}
+.facts div:last-child{border:0;margin:0}
+.facts strong{display:block;font-family:var(--font-display);font-weight:600;font-size:34px;line-height:1.1}
+.facts span{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-faint)}
+
+/* booking panel */
+.panel{background:linear-gradient(180deg,var(--surface-high),var(--surface));border:1px solid var(--line);border-radius:var(--radius-lg);padding:34px;box-shadow:var(--shadow-card);position:relative}
+.panel::before{content:"";position:absolute;left:34px;right:34px;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.7}
+.panel h3{font-family:var(--font-display);font-weight:700;font-size:32px;letter-spacing:.05em;text-transform:uppercase;line-height:1.1;margin:8px 0 4px}
+.panel .sub{color:var(--text-muted);font-size:13px}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin:26px 0 22px}
+.day{border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 0;text-align:center;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);transition:all 260ms var(--ease)}
+.day b{display:block;font-family:var(--font-display);font-size:25px;font-weight:600;letter-spacing:0;color:var(--text);line-height:1.2}
+.day.on{border-color:var(--gold);background:rgba(201,169,107,.08);color:var(--gold-bright)}
+.day.on b{color:var(--gold-bright)}
+.slots{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.slot{height:60px;border:1px solid var(--line);border-radius:var(--radius-md);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;font-weight:400;color:var(--text);transition:all 260ms var(--ease)}
+.slot small{font-size:10.5px;letter-spacing:.06em;color:var(--text-faint);margin-top:2px}
+.slot.av:hover{border-color:var(--gold);transform:translateY(-1px)}
+.slot.sel{background:var(--gradient-gold);color:var(--on-gold);border-color:transparent;box-shadow:0 12px 28px -14px rgba(201,169,107,.7)}
+.slot.sel small{color:rgba(23,19,10,.72)}
+.slot.held{border-style:dashed;border-color:rgba(224,180,92,.45);color:var(--warn);background:repeating-linear-gradient(135deg,transparent 0 6px,rgba(224,180,92,.07) 6px 12px)}
+.slot.held small{color:var(--warn);opacity:.8}
+.slot.booked{color:var(--text-faint);text-decoration:line-through;background:rgba(255,255,255,.02);border-color:transparent}
+.slot.booked small{text-decoration:none}
+.slot.blocked{color:var(--text-faint);border-color:transparent;background:rgba(255,255,255,.015)}
+.legend{display:flex;gap:20px;margin:18px 0 26px;font-size:11px;color:var(--text-muted);letter-spacing:.06em;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:-1px;border:1px solid var(--line-strong)}
+.legend .a{background:transparent}.legend .s{background:var(--gold);border-color:var(--gold)}.legend .h{border:1px dashed var(--warn)}.legend .b{background:var(--surface-top);border-color:transparent}
+.sum{border-top:1px solid var(--line);padding-top:20px}
+.sum .row{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;color:var(--text-muted);font-size:14px}
+.sum .row b{font-weight:400;color:var(--text)}
+.sum .total{margin:10px 0 20px;padding-top:16px;border-top:1px solid var(--line);align-items:flex-end}
+.sum .total span{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold)}
+.sum .total b{font-family:var(--font-display);font-size:44px;font-weight:600;line-height:1;color:var(--gold-bright)}
+.note{margin-top:16px;font-size:12px;color:var(--text-faint);text-align:center;letter-spacing:.02em}
+
+/* sections */
+section{padding:104px 0;border-top:1px solid var(--line)}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:32px;margin-bottom:56px;flex-wrap:wrap}
+.head h2{font-size:clamp(40px,4.6vw,64px);margin-top:14px}
+.head h2 em{font-size:1.2em}
+.head p{max-width:26em;color:var(--text-muted)}
+.grounds{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden;transition:all 360ms var(--ease);display:flex;flex-direction:column}
+.card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lift);border-color:var(--line-strong)}
+.plate{height:190px;position:relative;display:flex;align-items:flex-end;padding:22px;background:radial-gradient(420px 220px at 80% 0%,rgba(44,122,91,.35),transparent 70%),linear-gradient(160deg,#18211d,#0e1311)}
+.plate i{position:absolute;right:20px;top:-26px;font-family:var(--font-script);font-style:normal;font-weight:400;font-size:210px;line-height:1;color:rgba(216,190,132,.10)}
+.plate .eyebrow{position:relative}
+.card .body{padding:26px 26px 28px;display:flex;flex-direction:column;gap:14px;flex:1}
+.card h4{font-family:var(--font-display);font-weight:700;font-size:28px;letter-spacing:.05em;text-transform:uppercase;line-height:1.1}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);color:var(--text-muted)}
+.price{margin-top:auto;display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);padding-top:18px}
+.price b{font-family:var(--font-display);font-size:30px;font-weight:600;color:var(--gold-bright)}
+.price span{font-size:12px;color:var(--text-faint);letter-spacing:.08em}
+.arrow{color:var(--gold);font-size:12px;letter-spacing:.2em;text-transform:uppercase}
+
+/* accounting */
+.acct{display:grid;grid-template-columns:1.25fr .75fr;gap:24px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:32px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-bottom:28px;border:1px solid var(--line);border-radius:var(--radius-md)}
+.kpi{padding:20px 22px;border-right:1px solid var(--line)}
+.kpi:last-child{border:0;background:linear-gradient(180deg,rgba(201,169,107,.10),transparent)}
+.kpi span{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-faint)}
+.kpi b{display:block;font-family:var(--font-display);font-weight:600;font-size:34px;line-height:1.15;margin-top:6px}
+.kpi:last-child b{color:var(--gold-bright)}
+.kpi small{color:var(--text-muted);font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-faint);font-weight:500;text-align:left;padding:0 0 12px}
+th:last-child,td:last-child{text-align:right}
+td{padding:11px 0;border-top:1px solid var(--line);color:var(--text-muted);font-feature-settings:"lnum","tnum"}
+td:last-child{color:var(--text);font-variant-numeric:tabular-nums}
+tr.grp td{border-top:1px solid var(--line-strong);padding-top:18px;font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);font-weight:500}
+tr.sub td{color:var(--text);font-weight:500}
+tr.net td{border-top:1px solid var(--gold);padding-top:16px;font-family:var(--font-display);font-size:24px;color:var(--gold-bright)}
+tr.net td:first-child{font-family:var(--font-body);font-size:11px;letter-spacing:.22em;text-transform:uppercase}
+.bars{display:flex;align-items:flex-end;gap:10px;height:170px;margin:24px 0 10px}
+.bars i{flex:1;background:linear-gradient(180deg,rgba(201,169,107,.55),rgba(201,169,107,.12));border-radius:2px 2px 0 0;position:relative}
+.bars i.cur{background:var(--gradient-gold);box-shadow:0 0 28px -4px var(--glow)}
+.mlabels{display:flex;gap:10px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint)}
+.mlabels span{flex:1;text-align:center}
+.recon{margin-top:30px;border-top:1px solid var(--line);padding-top:22px;display:grid;gap:12px;font-size:13px;color:var(--text-muted)}
+.recon div{display:flex;justify-content:space-between;gap:12px}
+.recon b{font-weight:400;color:var(--text)}
+
+/* specimen */
+.spec{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.spec .box h5{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);font-weight:500;margin-bottom:22px}
+.stack{display:grid;gap:14px;justify-items:start}
+label.f{display:block;width:100%;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-faint)}
+.in{display:block;margin-top:8px;height:52px;width:100%;border:1px solid var(--line-strong);border-radius:var(--radius-md);background:var(--bg-raised);color:var(--text);padding:0 16px;font:400 15px var(--font-body);letter-spacing:.02em}
+.in.focus{border-color:var(--gold);box-shadow:0 0 0 4px rgba(201,169,107,.14)}
+.in.bad{border-color:var(--danger)}
+.err{color:var(--danger);font-size:12px;margin-top:6px;letter-spacing:.02em}
+.st{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:7px 12px;border-radius:var(--radius-sm);border:1px solid currentColor;background:rgba(255,255,255,.015);font-weight:500}
+.st::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.st.ok{color:var(--ok)}.st.warn{color:var(--warn)}.st.danger{color:var(--danger)}.st.info{color:var(--info)}.st.mute{color:var(--text-muted)}
+.sw{display:flex;align-items:center;gap:14px;font-size:14px;color:var(--text-muted);width:100%;justify-content:space-between}
+.tog{width:52px;height:28px;border-radius:99px;background:var(--gradient-gold);position:relative;box-shadow:inset 0 1px 2px rgba(0,0,0,.3)}
+.tog::after{content:"";position:absolute;right:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#17130a}
+.swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%}
+.swatches div{height:54px;border-radius:var(--radius-md);border:1px solid var(--line);display:flex;align-items:flex-end;padding:6px 8px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text);text-shadow:0 1px 2px rgba(0,0,0,.5)}
+
+/* academy + visit */
+.academy{display:grid;grid-template-columns:1.1fr .9fr;gap:24px;align-items:stretch}
+.academy .copy{display:flex;flex-direction:column;justify-content:center;gap:22px}
+.academy .copy p{color:var(--text-muted);font-size:17px;line-height:1.75;max-width:32em}
+.academy .copy .by{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-faint)}
+.mp{background:radial-gradient(520px 260px at 85% 0%,rgba(44,122,91,.30),transparent 70%),linear-gradient(160deg,#18211d,#0e1311);border:1px solid var(--line);border-radius:var(--radius-lg);padding:40px;display:flex;flex-direction:column;justify-content:space-between;min-height:300px;position:relative;overflow:hidden}
+.mp b{font-family:var(--font-display);font-weight:700;font-size:clamp(88px,11vw,150px);line-height:.9;letter-spacing:.04em}
+.mp span{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--text-muted)}
+.mp .eyebrow{position:relative}
+.visit{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.visit .box{display:flex;flex-direction:column;gap:12px}
+.visit h5{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);font-weight:500;margin-bottom:6px}
+.visit .big{font-family:var(--font-display);font-weight:600;font-size:30px;letter-spacing:.04em;text-transform:uppercase;line-height:1.1}
+.visit .line{color:var(--text-muted);font-size:15px}
+.visit a.link{color:var(--gold-bright);border-bottom:1px solid var(--line-strong);width:max-content;padding-bottom:2px}
+.visit a.link:hover{border-color:var(--gold)}
+.visit .btn{margin-top:auto;align-self:flex-start}
+.tagline{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:8px;color:var(--text-muted);font-size:12px;letter-spacing:.34em;text-transform:uppercase}
+.tagline::before,.tagline::after{content:"";height:1px;width:min(120px,14vw);background:linear-gradient(90deg,transparent,var(--gold))}
+.tagline::after{transform:scaleX(-1)}
+/* the wordmark, as on the sign */
+.signoff{text-align:center;padding:64px 0 40px}
+.signoff svg{width:100%;max-width:980px;height:auto}
+footer{padding:48px 0 64px;border-top:1px solid var(--line);display:flex;justify-content:space-between;color:var(--text-faint);font-size:12px;letter-spacing:.12em;text-transform:uppercase;flex-wrap:wrap;gap:12px}
+
+@media (max-width:1020px){
+ .hero{grid-template-columns:1fr;gap:56px;padding:64px 0 80px}
+ .grounds,.spec,.visit,.academy{grid-template-columns:1fr}
+ .acct{grid-template-columns:1fr}
+ .links a:not(.keep){display:none}
+}
+@media (max-width:560px){
+ .wrap{padding:0 20px}
+ nav{height:84px}.wm-nav{height:62px;margin:0 0 0 -2px}.links a{white-space:nowrap}
+ .hero h1{font-size:54px}.cta .btn{width:100%}
+ .facts{grid-template-columns:1fr 1fr 1fr}.facts div{padding-right:14px;margin-right:14px}.facts strong{font-size:24px}.facts span{font-size:9px;letter-spacing:.14em}
+ .panel{padding:22px}.days{gap:5px}.day b{font-size:21px}.slots{gap:6px}.slot{height:56px;font-size:14px}
+ .sum .total b{font-size:38px}
+ .tagline{letter-spacing:.2em;font-size:11px}.mp{padding:28px;min-height:240px}
+ section{padding:72px 0}.kpis{grid-template-columns:1fr}.kpi{border-right:0;border-bottom:1px solid var(--line)}.kpi:last-child{border:0}
+ .box{padding:22px}.swatches{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body style="position:relative">
+<div class="wrap">
+  <nav>
+    <a class="brand" href="#" aria-label="Daji Cricket Ground">{{WORDMARK_NAV}}</a>
+    <div class="links"><a href="#grounds">Grounds</a><a href="#academy">Academy</a><a href="#visit">Contact</a><a href="#" class="keep">Sign in</a><a class="btn primary sm" href="#">Book now</a></div>
+  </nav>
+
+  <header class="hero">
+    <div style="position:relative">
+      <div class="eyebrow">{{CITY}} &nbsp;·&nbsp; {{TAGLINE}}</div>
+      <h1 class="display">Book <em class="gold-text">the ground.</em></h1>
+      <p class="lead">A turf wicket under floodlights, held for you the moment you choose. Pay the advance online and your slot is confirmed.</p>
+      <div class="cta"><a class="btn primary" href="#">Check availability</a><a class="btn outline" href="#">Send an enquiry</a></div>
+      <div class="facts">
+        <div><strong>06–23</strong><span>Open daily</span></div>
+        <div><strong>{{PRICE_FROM}}</strong><span>Per hour</span></div>
+        <div><strong>15 min</strong><span>Slot held</span></div>
+      </div>
+    </div>
+
+    <aside class="panel" aria-label="Booking">
+      <div class="eyebrow">Reserve</div>
+      <h3>Cricket Ground</h3>
+      <div class="sub">{{CITY}} · Turf wicket · Floodlights</div>
+      <div class="days">{{DAYS}}</div>
+      <div class="slots">{{SLOTS}}</div>
+      <div class="legend"><span><i class="a"></i>Available</span><span><i class="s"></i>Selected</span><span><i class="h"></i>Held</span><span><i class="b"></i>Booked</span></div>
+      <div class="sum">
+        <div class="row"><span>2 slots · Sat 17 Oct · 19:00 – 21:00</span><b>{{SUM_TOTAL}}</b></div>
+        <div class="row"><span>Advance (50%)</span><b>{{SUM_ADV}}</b></div>
+        <div class="row total"><span>Due now</span><b>{{SUM_ADV}}</b></div>
+      </div>
+      <a class="btn primary block" href="#">Hold these slots &nbsp;·&nbsp; 15:00</a>
+      <div class="note">Free cancellation more than 24 hours before the start.</div>
+    </aside>
+  </header>
+</div>
+
+<section id="grounds"><div class="wrap">
+  <div class="head"><div><div class="eyebrow">The grounds</div><h2 class="display">Three ways <em>to play.</em></h2></div><p>Every ground shows live availability. Prices include floodlights after 18:00.</p></div>
+  <div class="grounds">{{GROUNDS}}</div>
+</div></section>
+
+<section id="academy"><div class="wrap">
+  <div class="head"><div><div class="eyebrow">Academy</div><h2 class="display">{{ACADEMY_H}}</h2></div></div>
+  <div class="academy">
+    <div class="copy">
+      <p>{{ACADEMY_ABOUT}}</p>
+      <div class="by">Run by {{ACADEMY_RUNBY}} &nbsp;·&nbsp; {{ACADEMY_BRAND}}</div>
+      <div class="cta"><a class="btn outline" href="#visit">Ask about the academy</a></div>
+    </div>
+    <div class="mp"><span class="eyebrow">Trains under</span><b class="gold-text">{{ACADEMY_BRAND}}</b><span>{{ACADEMY_NAME}} &nbsp;·&nbsp; at Daji Cricket Ground</span></div>
+  </div>
+</div></section>
+
+<section id="visit"><div class="wrap">
+  <div class="head"><div><div class="eyebrow">Contact</div><h2 class="display">Find us, <em>or call.</em></h2></div><p>Questions about a booking, a tournament or the academy: write or call and we will get back to you.</p></div>
+  <div class="visit">
+    <div class="box"><h5>Contact person</h5><div class="big">{{CONTACT_NAME}}</div><a class="line link" href="tel:+91{{CONTACT_PHONE_RAW}}">{{CONTACT_PHONE}}</a><a class="line link" href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a></div>
+    <div class="box"><h5>Where</h5><div class="big">Daji Cricket Ground</div><div class="line">{{CITY}} &nbsp;·&nbsp; {{COORDS}}</div><a class="btn primary sm" href="{{DIRECTIONS}}" target="_blank" rel="noopener">Get directions</a></div>
+    <div class="box"><h5>Open</h5><div class="big">06:00 – 23:00</div><div class="line">Every day. Floodlights from 18:00.</div><a class="btn outline sm" href="#">Send an enquiry</a></div>
+  </div>
+</div></section>
+
+<section id="accounts"><div class="wrap">
+  <div class="head"><div><div class="eyebrow">For owners</div><h2 class="display">October, <em>in numbers.</em></h2></div><p>Profit and loss from bookings and the bank statement, reconciled and ready for your accountant.</p></div>
+  <div class="acct">
+    <div class="box">
+      <div class="kpis">
+        <div class="kpi"><span>Revenue</span><b>{{K_REV}}</b><small>{{K_REV_NOTE}}</small></div>
+        <div class="kpi"><span>Expenses</span><b>{{K_EXP}}</b><small>{{K_EXP_NOTE}}</small></div>
+        <div class="kpi"><span>Net profit</span><b>{{K_NET}}</b><small>{{K_MARGIN}} margin</small></div>
+      </div>
+      <table><thead><tr><th>Profit &amp; loss · October 2026</th><th>₹</th></tr></thead><tbody>{{PL_ROWS}}</tbody></table>
+    </div>
+    <div class="box">
+      <div class="eyebrow">Net profit, last 12 months</div>
+      <div class="bars">{{BARS}}</div>
+      <div class="mlabels">{{MLABELS}}</div>
+      <div class="recon">
+        <div class="eyebrow" style="margin-bottom:2px">Reconciliation</div>
+        <div><span>UPI payments matched to bank</span><b>18 of 19</b></div>
+        <div><span>Razorpay settlements received</span><b>{{RZP}}</b></div>
+        <div><span>Uncategorised bank rows</span><b><span class="st warn" style="padding:3px 8px;font-size:10px">3 to review</span></b></div>
+        <div style="margin-top:6px"><a class="btn outline sm" href="#">Export to Excel</a></div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="head"><div><div class="eyebrow">Specimen</div><h2 class="display">The <em>details.</em></h2></div><p>Controls, states and palette. Gold is kept to under a tenth of any screen so it still reads as rare.</p></div>
+  <div class="spec">
+    <div class="box"><h5>Buttons &amp; switch</h5><div class="stack">
+      <a class="btn primary" href="#">Confirm booking</a><a class="btn outline" href="#">Add note</a><a class="btn ghost" href="#">Cancel</a>
+      <div class="sw" style="margin-top:12px"><span>Online payments (Razorpay)</span><div class="tog"></div></div>
+    </div></div>
+    <div class="box"><h5>Fields</h5><div class="stack" style="gap:20px">
+      <label class="f">Mobile number<span class="in focus">98765 43210</span></label>
+      <label class="f">UPI reference (UTR)<span class="in bad">6123456</span><div class="err">Must be the 12-digit UPI reference.</div></label>
+    </div></div>
+    <div class="box"><h5>Status</h5><div class="stack">
+      <span class="st ok">Confirmed</span><span class="st warn">Held · 12:40 left</span><span class="st info">Awaiting verification</span><span class="st danger">Refund pending</span><span class="st mute">Cancelled</span>
+    </div></div>
+  </div>
+  <div class="box" style="margin-top:24px"><h5 style="font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);font-weight:500;margin-bottom:20px">Palette</h5>
+    <div class="swatches">{{SWATCHES}}</div></div>
+</div></section>
+
+<div class="wrap"><section class="signoff">{{WORDMARK_BIG}}<div class="tagline">{{TAGLINE}}</div></section><footer><span>© Daji Cricket Ground &nbsp;·&nbsp; {{TAGLINE}}</span><span>{{CONTACT_EMAIL}} &nbsp;·&nbsp; dajicricket.com</span></footer></div>
+</body>
+</html>

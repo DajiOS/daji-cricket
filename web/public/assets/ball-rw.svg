@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Red and white leather cricket ball">
+  <defs>
+    <radialGradient id="r" cx="32%" cy="30%" r="80%"><stop offset="0" stop-color="#e0473c"/><stop offset=".55" stop-color="#b3261e"/><stop offset="1" stop-color="#6e120d"/></radialGradient>
+    <radialGradient id="w" cx="62%" cy="28%" r="85%"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#ebe7df"/><stop offset="1" stop-color="#b9b3a7"/></radialGradient>
+    <clipPath id="c"><circle cx="60" cy="60" r="54"/></clipPath>
+  </defs>
+  <ellipse cx="60" cy="112" rx="38" ry="5" fill="#000" opacity=".25"/>
+  <g clip-path="url(#c)">
+    <rect x="0" y="0" width="120" height="120" fill="url(#w)"/>
+    <path d="M0 0H58C50 30 50 90 58 120H0Z" fill="url(#r)"/>
+    <path d="M58 0C50 30 50 90 58 120" fill="none" stroke="#f4f1ea" stroke-width="2" opacity=".9"/>
+    <g fill="none" stroke-linecap="round">
+      <path d="M44 4C36 34 36 86 44 116" stroke="#f4f1ea" stroke-width="3" stroke-dasharray="3 4.5"/>
+      <path d="M51 2C43 34 43 86 51 118" stroke="#f4f1ea" stroke-width="3" stroke-dasharray="3 4.5" stroke-dashoffset="2"/>
+      <path d="M66 2C58 34 58 86 66 118" stroke="#2b2b2b" stroke-width="3" stroke-dasharray="3 4.5"/>
+      <path d="M73 4C65 34 65 86 73 116" stroke="#2b2b2b" stroke-width="3" stroke-dasharray="3 4.5" stroke-dashoffset="2"/>
+    </g>
+    <ellipse cx="38" cy="34" rx="16" ry="9" fill="#fff" opacity=".22" transform="rotate(-30 38 34)"/>
+  </g>
+  <circle cx="60" cy="60" r="54" fill="none" stroke="#000" stroke-opacity=".18"/>
+</svg>

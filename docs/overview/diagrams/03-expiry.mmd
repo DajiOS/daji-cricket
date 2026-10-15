@@ -1,0 +1,11 @@
+flowchart TD
+  T(["Sweep (every minute) finds a hold past its deadline"]) --> P{{"Payment state?"}}
+  P -- "Captured or verified" --> C["Booking confirmed"]
+  P -- "Pending or submitted" --> G{{"Grace left and<br/>extension available?"}}
+  P -- "No payment" --> R["Slots released<br/>audit record, customer notified"]
+  G -- "Yes" --> X["Hold extended,<br/>booking flagged for staff review"]
+  G -- "No" --> R
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef bad fill:#f8e1db,stroke:#c2543f
+  class C good
+  class R bad

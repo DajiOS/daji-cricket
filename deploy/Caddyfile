@@ -1,0 +1,7 @@
+# Caddy gets and renews the HTTPS certificate by itself once the DNS record for the host points at this server.
+{$API_HOST} {
+	encode zstd gzip
+	reverse_proxy api:4000
+	header -Server
+	log
+}

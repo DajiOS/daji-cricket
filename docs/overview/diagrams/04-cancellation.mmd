@@ -1,0 +1,16 @@
+flowchart TD
+  R(["Customer asks to cancel"]) --> S{{"Booking already started?"}}
+  S -- "Yes" --> NO["Refused: staff<br/>mark a no-show instead"]
+  S -- "No" --> H{{"More than 24 hours before start?<br/>Exactly 24 h counts as within"}}
+  H -- "Yes" --> F["Free cancellation,<br/>slots released"]
+  H -- "No" --> L["Final 24 hours:<br/>slots released, no cash refund"]
+  F --> RF["Refund to the original method<br/>Razorpay: automatic<br/>UPI or cash: staff pay out and record it"]
+  F --> CR["Any part paid with credit<br/>returns to the wallet"]
+  L --> C["Paid amount becomes credit<br/>new lot, expires in 90 days,<br/>ledger entry written"]
+  RF --> N(["Customer notified, audit record"])
+  CR --> N
+  C --> N
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef warn fill:#f6edd2,stroke:#a98530
+  class F,RF,CR good
+  class L,C warn

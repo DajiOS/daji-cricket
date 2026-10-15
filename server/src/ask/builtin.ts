@@ -1,0 +1,389 @@
+import { formatPaise } from '@daji/shared';
+import { now } from '../clock.ts';
+import { addDays, dayOfWeek, istDate, istMidnight, monthRange, DAY } from '../time.ts';
+import { addMonths, niceDay, niceRange, parseRange, type Span } from './dates.ts';
+import * as T from './tools.ts';
+
+// The built-in answerer: reads a question, works out what is being asked and for which dates, asks the software through
+// the same tools as the Reports tab, and writes the answer in plain words. No outside service is involved.
+// Every answer says which dates and which basis it used, so a wrong reading is easy to spot.
+
+export type Intent =
+  | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'unknown';
+
+export interface Detail { label: string; text: string }
+export interface Period { from: string; to: string; label: string }
+export interface OpenReport { tab: 'reports' | 'bookings' | 'contacts' | 'accounts'; report?: string; params?: Record<string, string> }
+export interface Built {
+  intent: Intent;
+  answer: string;
+  details: Detail[];
+  understood: string;
+  period: Period | null;
+  open: OpenReport | null;
+  notes: string[];
+  suggestions: string[];
+}
+
+const RULES: [Intent, RegExp][] = [
+  ['help', /\b(help|what can you|what (can|do|should) i ask|examples?|how does (this|it) work|what (do|can) you (do|know))\b/],
+  ['balance_sheet', /balance ?sheet|\bassets\b|liabilit|net worth|\bequity\b|what (do )?(we|i) own/],
+  ['pnl', /profit (and|&|n|\/) ?loss|\bp ?(&|and|n|\/) ?l\b|\bpnl\b|income statement|how (much )?(did|do|have) (we|i) (make|made|earn|earned|do|done)|how are we doing|how.?s (the )?business|how is (the )?business|financial summary|financial position/],
+  ['awaiting', /awaiting|to verify|verification|waiting for (me|us|approval|verification)|payments? (to|waiting|pending) (verify|check|approv)|upi (proof|screenshot)s?/],
+  ['outstanding', /outstanding|\bowe[ds]?\b|\bdues?\b|unpaid|pending (payment|balance|amount|dues)|to collect|receivables?|balance (due|pending|remaining|left|owed)|yet to (pay|collect)|hasn.?t paid|haven.?t paid|not (yet )?paid|who (still )?owes/],
+  ['refunds', /refund/],
+  ['credits', /\bcredits?\b|wallet/],
+  ['no_shows', /no[- ]?shows?|(did not|didn.?t|never) (turn|show|come)/],
+  ['cancellations', /cancel/],
+  ['utilisation', /utili[sz]ation|occupancy|how busy|busiest|capacity|fill rate|how (full|booked)|how well booked/],
+  ['gst', /\bgst\b|\btax(es)?\b/],
+  ['uncategorised', /uncategori[sz]ed|unclassified|not categori[sz]ed|needs? (categor|review)/],
+  ['account_balance', /(bank|account|cash)s?( in hand| in the bank| on hand)?\s*balances?|balances? (in|of|at|on)( my| our| the)? (bank|account|accounts|cash)|how much (money|cash)|money in( the)? bank|cash (in hand|at hand|on hand)|\bbalances?\b/],
+  ['profit', /profit|surplus|margin|net (income|earnings)|bottom line|\bloss\b/],
+  ['expenses', /expens|spend|spent|spending|costs?\b|\bbills?\b|outgo|paid out|payments made|outflow/],
+  ['collections', /collect(ed|ion|ions)?\b|received|receipts?|came in|money in\b|takings|cash in\b/],
+  ['revenue', /revenue|income|turnover|sales\b|earnings?|earned|gross|top line/],
+  ['upcoming', /upcoming|who.?s (playing|coming|booked)|what.?s (booked|coming|on|scheduled|next)|next (booking|session|match|game|slot)s?|\bagenda\b|\bschedule/],
+  ['customers', /customers?|players?|\bpeople\b|\bmembers?\b|\bclients?\b/],
+  ['bookings', /bookings?|sessions?|\bslots?\b|matches|games|reservations?|hours (booked|played)/],
+];
+
+const PRIORITY: Intent[] = ['help', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'upcoming', 'customers', 'bookings'];
+
+/** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
+const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
+
+export function classify(question: string): { intent: Intent; matched: Intent[] } {
+  const t = normalise(question);
+  const matched = RULES.filter(([, re]) => re.test(t)).map(([i]) => i);
+  if (!matched.length) return { intent: 'unknown', matched };
+  const money = matched.filter((i) => i === 'revenue' || i === 'expenses' || i === 'profit' || i === 'pnl');
+  if (money.length >= 2) return { intent: 'pnl', matched };
+  const intent = PRIORITY.find((i) => matched.includes(i))!;
+  return { intent, matched };
+}
+
+// ---------------------------------------------------------------- small helpers
+
+const R = (p: number): string => formatPaise(p);
+const count = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString('en-IN')} ${n === 1 ? one : many}`;
+const describe = (s: Span): string => {
+  const r = niceRange(s.from, s.to);
+  return s.label === r || /^\d/.test(s.label) ? r : `${s.label} (${r})`;
+};
+const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+/** "in October 2026", "this month so far", "on 14 Oct 2026": the period as it reads after a verb. */
+const inP = (s: Span): string => {
+  if (s.from === s.to) return /^(today|yesterday|tomorrow)$/.test(s.label) ? s.label : `on ${niceDay(s.from)}`;
+  if (/^(this|last|next) /.test(s.label)) return describe(s);
+  return `in ${describe(s)}`;
+};
+/** What to compare a period with: the same days of the previous month for "this month so far", else the same length just before. */
+function comparisonSpan(p: Span): Span {
+  const m = monthRange(p.from.slice(0, 7))!;
+  if (p.from.endsWith('-01') && p.to <= m.to) {
+    const pm = monthRange(addMonths(p.from, -1).slice(0, 7))!;
+    const to = p.to === m.to ? pm.to : `${pm.from.slice(0, 7)}-${String(Math.min(Number(p.to.slice(8, 10)), Number(pm.to.slice(8, 10)))).padStart(2, '0')}`;
+    return { from: pm.from, to, label: niceRange(pm.from, to) };
+  }
+  const days = Math.round((istMidnight(p.to) - istMidnight(p.from)) / DAY) + 1;
+  const from = addDays(p.from, -days), to = addDays(p.from, -1);
+  return { from, to, label: niceRange(from, to) };
+}
+const pctChange = (cur: number, prev: number): string | null => {
+  if (prev === 0) return null;
+  const v = Math.round(((cur - prev) / Math.abs(prev)) * 1000) / 10;
+  return v === 0 ? 'the same' : `${Math.abs(v)}% ${v > 0 ? 'higher' : 'lower'}`;
+};
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const STOP = new Set(['daji', 'cricket', 'ground', 'the', 'and']);
+
+/** The ground the question names ("main turf", "the nets"), if exactly one. */
+export function groundIn(question: string, list: { id: string; name: string }[]): { id: string; name: string } | null {
+  const t = normalise(question);
+  const words = (s: string) => normalise(s).split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w));
+  const hits = list.filter((g) => {
+    if (t.includes(normalise(g.name))) return true;
+    const mine = words(g.name);
+    const others = new Set(list.filter((o) => o.id !== g.id).flatMap((o) => words(o.name)));
+    const distinct = mine.filter((w) => !others.has(w));
+    return distinct.some((w) => new RegExp(`\\b${w}s?\\b`).test(t));
+  });
+  return hits.length === 1 ? hits[0]! : null;
+}
+
+/** Rows whose name the question mentions ("electricity", "canteen"), so "how much on repairs" answers about repairs. */
+function focusRows<Row extends { name: string }>(question: string, rows: Row[]): Row[] {
+  const t = normalise(question);
+  const GENERIC = new Set(['other', 'income', 'expenses', 'expense', 'fees', 'booking', 'bookings', 'money', 'received']);
+  return rows.filter((r) => normalise(r.name).split(/[^a-z]+/).some((w) => w.length >= 4 && !GENERIC.has(w) && new RegExp(`\\b${w}`).test(t)));
+}
+
+const NAMES: Record<Intent, string> = {
+  help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', no_shows: 'No-shows',
+  cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
+};
+
+export const EXAMPLES = {
+  reports: ['What was the revenue for the past 37 days?', 'What is my account balance?', 'What was our profit last month?', 'How much did we spend on electricity this financial year?', 'Compare this month with last month', 'Show the balance sheet'],
+  bookings: ['How many bookings did we have last week?', "What's booked for tomorrow?", 'Who still owes us money?', 'How busy was the cricket ground in September?', 'How many no-shows this month?', 'How much account credit do customers hold?'],
+  customers: ['How many new customers played this month?'],
+};
+
+// ---------------------------------------------------------------- the answerer
+
+export interface AskInput { question: string; ctx: T.Ctx }
+
+const PAST_INTENTS = new Set<Intent>(['pnl', 'revenue', 'expenses', 'profit', 'collections', 'gst', 'customers', 'no_shows', 'cancellations', 'refunds']);
+
+export function answerBuiltin(input: AskInput): Built {
+  const { question, ctx } = input;
+  const today = istDate(now());
+  const { intent } = classify(question);
+  const base = (i: Intent, answer: string, extra: Partial<Built> = {}): Built => ({ intent: i, answer, details: [], understood: NAMES[i], period: null, open: null, notes: [], suggestions: [], ...extra });
+
+  if (intent === 'help') return help(ctx);
+  if (intent === 'unknown') {
+    const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
+    return base('unknown', "I'm not sure what you're asking. I can answer questions about revenue, expenses, profit, account balances, bookings, money owed, cancellations and more, for any dates you like.", { suggestions: lot });
+  }
+
+  const wantsFuture = intent === 'upcoming' || /\b(upcoming|next|tomorrow|will|coming|booked for|scheduled)\b/.test(normalise(question));
+  const parsed = parseRange(question, today, wantsFuture ? 'future' : 'past');
+  if (parsed.error) return base(intent, parsed.error, { understood: NAMES[intent] });
+
+  const ground = T.grounds(ctx).length > 1 ? groundIn(question, T.grounds(ctx)) : null;
+  const notes: string[] = [];
+  const t = normalise(question);
+  const compare = /\bcompar|versus|\bvs\b|than (last|the previous|before)|against|change from|up or down|growth|grew|increase|decrease/.test(t);
+  const basis: 'accrual' | 'cash' = /cash basis|on a cash|cash accounting/.test(t) ? 'cash' : 'accrual';
+
+  // ---- which dates
+  const noRangeDefault = (): Span => {
+    const m = today.slice(0, 7);
+    if (intent === 'upcoming') return { from: today, to: addDays(today, 6), label: 'the next 7 days' };
+    if (intent === 'bookings') return { from: `${m}-01`, to: monthEnd(today), label: 'this month' };
+    if (intent === 'no_shows' || intent === 'cancellations' || intent === 'utilisation' || intent === 'customers' || intent === 'refunds') return { from: addDays(today, -29), to: today, label: 'the past 30 days' };
+    return { from: `${m}-01`, to: today, label: 'this month so far' };
+  };
+  let span: Span | null = parsed.span;
+  let defaulted = false;
+  const usesRange = !['account_balance', 'balance_sheet', 'outstanding', 'awaiting', 'credits', 'uncategorised'].includes(intent);
+  if (usesRange && !span) { span = noRangeDefault(); defaulted = true; }
+  if (span && span.from === '1970-01-01') span = { ...span, from: T.earliestDate(ctx.ownerId) };
+  if (span && defaulted) notes.push(`You did not say which dates, so I used ${describe(span)}.`);
+
+  // Money and activity can only have happened by today.
+  let future = false;
+  if (span && PAST_INTENTS.has(intent)) {
+    if (span.from > today) future = true;
+    else if (span.to > today) span = { from: span.from, to: today, label: `${span.label} so far` };
+  }
+  if (span && intent === 'upcoming' && span.to < today) { notes.push(`${describe(span)} is already over, so this shows what happened then.`); }
+  if (span && intent === 'upcoming' && span.from < today && span.to >= today) span = { ...span, from: today };
+
+  const period: Period | null = span ? { from: span.from, to: span.to, label: span.label } : null;
+  const understood = (...bits: string[]) => [NAMES[intent], ...(span ? [describe(span)] : []), ...bits].join(' · ');
+  const done = (answer: string, extra: Partial<Built> = {}): Built => ({ intent, answer, details: [], understood: understood(), period, open: null, notes, suggestions: [], ...extra });
+  const p = span!;
+
+  switch (intent) {
+    case 'revenue': case 'expenses': case 'profit': case 'pnl': {
+      if (future) return futureMoney(ctx, intent, p, done);
+      if (ground && intent === 'revenue') return groundRevenue(ctx, ground, p, done);
+      if (ground) notes.push(`Expenses and other income are not recorded per ground, so this is for all of your grounds.`);
+      const r = T.pnl(ctx, { from: p.from, to: p.to, basis });
+      const prevSpan = compare ? comparisonSpan(p) : null;
+      const prev = prevSpan ? T.pnl(ctx, { from: prevSpan.from, to: prevSpan.to, basis }) : null;
+      const open: OpenReport = { tab: 'reports', report: 'pnl', params: { from: p.from, to: p.to, basis, ...(compare ? { compare: '1' } : {}) } };
+      const bookingsIncome = r.revenue.find((x) => x.code === 'booking_income')?.paise ?? 0;
+      const kept = r.revenue.find((x) => x.code === 'forfeited_income')?.paise ?? 0;
+      const other = r.revenuePaise - bookingsIncome - kept;
+      if (basis === 'accrual') notes.push('Booking income is counted on the day each session was played, not the day it was paid for.');
+      if (prev && prev.uncategorisedTransactions > 0) notes.push('The comparison period also has bank transactions that are not categorised yet.');
+      else notes.push('Cash basis: booking money counted on the day it was received, less refunds.');
+      if (r.uncategorisedTransactions > 0) notes.push(`${count(r.uncategorisedTransactions, 'bank transaction')} ${r.uncategorisedTransactions === 1 ? 'is' : 'are'} not categorised yet, so expenses and other income may be incomplete.`);
+      const pick = (x: { revenuePaise: number; expensesPaise: number; netProfitPaise: number }) => (intent === 'expenses' ? x.expensesPaise : intent === 'profit' ? x.netProfitPaise : x.revenuePaise);
+      const vs = prev ? pctChange(pick(r), pick(prev)) : null;
+      const before = prev && prevSpan ? ` For comparison, ${niceRange(prevSpan.from, prevSpan.to)} ${intent === 'pnl' ? `had revenue ${R(prev.revenuePaise)} and profit ${R(prev.netProfitPaise)}` : `was ${R(pick(prev))}`}${vs ? `, so this period is ${vs}` : ''}.` : '';
+      const lines = (rows: typeof r.revenue) => rows.filter((x) => x.paise !== 0).map((x) => ({ label: x.name, text: R(x.paise) }));
+      if (intent === 'revenue') {
+        const f = focusRows(question, r.revenue);
+        if (f.length) return done(`${f.map((x) => `${x.name}: ${R(x.paise)}`).join('; ')} ${inP(p)}.`, { open, details: lines(f), understood: understood(basis), notes });
+        const parts = [bookingsIncome ? `${R(bookingsIncome)} from sessions played` : '', kept ? `${R(kept)} from advances kept (no-shows and late cancellations)` : '', other ? `${R(other)} from other income` : ''].filter(Boolean);
+        return done(`Revenue for ${describe(p)} was ${R(r.revenuePaise)}${parts.length > 1 ? `: ${parts.join(', ')}` : ''}.${before}`, { open, details: lines(r.revenue), understood: understood(basis === 'cash' ? 'cash basis' : 'counted when sessions are played'), suggestions: ['What were the expenses over the same period?', 'Compare with the previous period'] });
+      }
+      if (intent === 'expenses') {
+        const f = focusRows(question, r.expenses);
+        if (f.length) return done(`${f.map((x) => `${x.name}: ${R(x.paise)}`).join('; ')} ${inP(p)}.`, { open, details: lines(f), understood: understood(), notes });
+        const top = r.expenses.filter((x) => x.paise > 0).slice(0, 3).map((x) => `${x.name} ${R(x.paise)}`);
+        return done(`Expenses for ${describe(p)} were ${R(r.expensesPaise)}${top.length ? `. The biggest: ${top.join(', ')}` : ''}.${before}`, { open, details: lines(r.expenses), understood: understood(), suggestions: ['What was the profit over the same period?'] });
+      }
+      if (intent === 'profit') {
+        return done(`${r.netProfitPaise >= 0 ? 'Profit' : 'Loss'} for ${describe(p)} was ${R(Math.abs(r.netProfitPaise))}: revenue ${R(r.revenuePaise)} minus expenses ${R(r.expensesPaise)}${r.marginPercent !== null ? ` (a margin of ${r.marginPercent}%)` : ''}.${before}`,
+          { open, details: [{ label: 'Revenue', text: R(r.revenuePaise) }, { label: 'Expenses', text: R(r.expensesPaise) }, { label: r.netProfitPaise >= 0 ? 'Profit' : 'Loss', text: R(Math.abs(r.netProfitPaise)) }], understood: understood(basis === 'cash' ? 'cash basis' : 'counted when sessions are played') });
+      }
+      return done(`For ${describe(p)}: revenue ${R(r.revenuePaise)}, expenses ${R(r.expensesPaise)}, ${r.netProfitPaise >= 0 ? 'profit' : 'loss'} ${R(Math.abs(r.netProfitPaise))}${r.marginPercent !== null ? ` (${r.marginPercent}% margin)` : ''}.${before}`,
+        { open, details: [{ label: 'Booking income', text: R(bookingsIncome) }, ...(kept ? [{ label: 'Advances kept', text: R(kept) }] : []), ...(other ? [{ label: 'Other income', text: R(other) }] : []), { label: 'Total revenue', text: R(r.revenuePaise) }, { label: 'Total expenses', text: R(r.expensesPaise) }, { label: r.netProfitPaise >= 0 ? 'Profit' : 'Loss', text: R(Math.abs(r.netProfitPaise)) }], understood: understood(basis === 'cash' ? 'cash basis' : 'counted when sessions are played') });
+    }
+
+    case 'collections': {
+      if (future) return done(`${cap(describe(p))} has not happened yet, so no money has been received for it.`);
+      const c = T.collections(ctx, p);
+      return done(`You received ${R(c.totalReceivedPaise)} ${inP(p)}: ${R(c.bookingMoneyReceivedPaise)} from booking payments (after refunds)${c.otherIncomePaise ? ` and ${R(c.otherIncomePaise)} from other income` : ''}.`,
+        { open: { tab: 'reports', report: 'pnl', params: { from: p.from, to: p.to, basis: 'cash' } }, details: [{ label: 'Booking payments, after refunds', text: R(c.bookingMoneyReceivedPaise) }, { label: 'Other income', text: R(c.otherIncomePaise) }], understood: understood('cash basis'),
+          notes: [...notes, 'This is money that arrived in the period, including advances for sessions that are still to come. It is not the same as revenue, which counts a session when it is played.'] });
+    }
+
+    case 'account_balance': {
+      const asOf = span && span.to < today ? span.to : undefined;
+      const a = T.accounts(ctx, { asOf });
+      const when = a.asOf === today ? '' : ` on ${niceDay(a.asOf)}`;
+      const open: OpenReport = { tab: 'accounts' };
+      if (!a.accounts.length) return base('account_balance', `You have not added a bank or cash account yet, so there is no balance to show. Add one under Reports → Accounts and record its opening balance.${a.heldForCustomersPaise > 0 ? ` For now, ${R(a.heldForCustomersPaise)} of what customers have paid is held for them (advances for sessions not yet played, and account credit).` : ''}`, { open, understood: NAMES.account_balance });
+      const held = a.heldForCustomersPaise;
+      return base('account_balance', `Your ${a.accounts.length === 1 ? 'account holds' : 'accounts hold'} ${R(a.totalPaise)}${when}${a.accounts.length > 1 ? ` in total: ${a.accounts.map((x) => `${x.name} ${R(x.balancePaise)}`).join(', ')}` : ` (${a.accounts[0]!.name})`}.`, {
+        open, details: a.accounts.map((x) => ({ label: x.name, text: R(x.balancePaise) })), period: asOf ? { from: asOf, to: asOf, label: niceDay(asOf) } : null, understood: `Account balances · ${asOf ? 'as at ' + niceDay(asOf) : 'right now'}`,
+        notes: held > 0 ? [`${R(held)} of the money you have received is held for customers (advances for sessions not yet played, and account credit), so it is not all free to spend.`] : [],
+      });
+    }
+
+    case 'balance_sheet': {
+      const asOf = span && span.to < today ? span.to : today;
+      const b = T.balance(ctx, { asOf });
+      return base('balance_sheet', `As at ${niceDay(asOf)} you have ${R(b.totalAssetsPaise)} in assets, owe ${R(b.totalLiabilitiesPaise)}, and the owner's equity is ${R(b.totalEquityPaise)}.`, {
+        open: { tab: 'reports', report: 'balance-sheet', params: { asOf } }, period: { from: asOf, to: asOf, label: niceDay(asOf) }, understood: `Balance sheet · as at ${niceDay(asOf)}`,
+        details: [{ label: 'Cash and bank', text: R(b.cashAndBankPaise) }, { label: 'Customers owe you', text: R(b.customersOweYouPaise) }, { label: 'Held for sessions not yet played', text: R(b.customerAdvancesPaise) }, { label: 'Account credit owed to customers', text: R(b.customerCreditsPaise) }, { label: 'GST payable', text: R(b.gstPayablePaise) }],
+        notes: b.uncategorisedTransactions ? [`${count(b.uncategorisedTransactions, 'bank transaction')} not categorised yet.`] : [],
+      });
+    }
+
+    case 'gst': {
+      if (future) return done(`${cap(describe(p))} has not happened yet.`);
+      const g = T.gst(ctx, p);
+      if (g.percent === 0) return done('GST is not set up. Prices are treated as having no GST in them. You can set the rate under Reports → Settings.', { open: { tab: 'reports', report: 'settings' } });
+      return done(`GST at ${g.percent}% on sessions played ${inP(p)} comes to ${R(g.gstOnSessionsPlayedPaise)}. Right now you owe ${R(g.gstPayableNowPaise)} in total.`, { open: { tab: 'reports', report: 'balance-sheet', params: { asOf: today } }, notes: [...notes, 'Prices are treated as already including GST.'] });
+    }
+
+    case 'uncategorised': {
+      const u = T.uncategorised(ctx);
+      return base('uncategorised', u.count ? `${count(u.count, 'bank transaction')} (${R(u.totalPaise)} in total) ${u.count === 1 ? 'is' : 'are'} not categorised yet.` : 'Every bank transaction is categorised.', { open: { tab: 'accounts', params: { categorised: 'no' } } });
+    }
+
+    case 'outstanding': {
+      const o = T.outstanding(ctx);
+      const parts = [`customers owe ${R(o.playedNotFullyPaid.amountPaise)} for ${count(o.playedNotFullyPaid.bookings, 'session')} already played`, `${R(o.upcomingBalanceToCollect.amountPaise)} is still to collect on ${count(o.upcomingBalanceToCollect.bookings, 'upcoming booking')}`];
+      const extra = o.paymentsAwaitingVerification.count ? ` ${count(o.paymentsAwaitingVerification.count, 'payment')} worth ${R(o.paymentsAwaitingVerification.amountPaise)} ${o.paymentsAwaitingVerification.count === 1 ? 'is' : 'are'} waiting for you to verify.` : '';
+      return base('outstanding', `Right now ${parts.join(', and ')}.${extra}`, {
+        open: { tab: 'reports', report: 'schedule/past' }, understood: 'Money owed · right now',
+        details: [{ label: 'Owed for sessions already played', text: R(o.playedNotFullyPaid.amountPaise) }, { label: 'Balance on upcoming bookings', text: R(o.upcomingBalanceToCollect.amountPaise) }, { label: 'Payments waiting to be verified', text: R(o.paymentsAwaitingVerification.amountPaise) }],
+      });
+    }
+
+    case 'awaiting': {
+      const o = T.outstanding(ctx);
+      const a = o.paymentsAwaitingVerification;
+      return base('awaiting', a.count ? `${count(a.count, 'payment')} worth ${R(a.amountPaise)} ${a.count === 1 ? 'is' : 'are'} waiting for you to verify.` : 'No payments are waiting to be verified.', { open: { tab: 'bookings', report: 'payments' } });
+    }
+
+    case 'credits': {
+      const c = T.credits(ctx);
+      return base('credits', c.outstandingPaise ? `Customers hold ${R(c.outstandingPaise)} of account credit across ${count(c.customersHoldingCredit, 'person', 'people')}; ${R(c.expiringWithin30DaysPaise)} of it expires within 30 days.` : 'No customer holds any account credit right now.', { understood: 'Account credit · right now' });
+    }
+
+    case 'refunds': {
+      const f = T.refunds(ctx, p);
+      return done(`${f.stillToSend.count ? `${count(f.stillToSend.count, 'refund')} worth ${R(f.stillToSend.amountPaise)} ${f.stillToSend.count === 1 ? 'is' : 'are'} still to send. ` : 'No refunds are waiting to be sent. '}In ${describe(p)} you refunded ${count(f.refundedInPeriod.count, 'booking')} totalling ${R(f.refundedInPeriod.amountPaise)}.`,
+        { details: [{ label: 'Still to send', text: R(f.stillToSend.amountPaise) }, { label: 'Refunded in the period', text: R(f.refundedInPeriod.amountPaise) }] });
+    }
+
+    case 'utilisation': {
+      const days = Math.round((Date.parse(p.to) - Date.parse(p.from)) / 86_400_000);
+      if (days > 366) return done('Utilisation covers at most 366 days at a time. Try a shorter period.');
+      const u = T.utilisation(ctx, p);
+      const rows = ground ? u.grounds.filter((g) => g.groundId === ground.id) : u.grounds;
+      const booked = rows.reduce((s, g) => s + g.bookedSlots, 0), avail = rows.reduce((s, g) => s + g.availableSlots, 0);
+      if (!avail) return done('There are no open slots to measure in that period.');
+      const pct = Math.round((booked / avail) * 1000) / 10;
+      return done(`${ground ? ground.name : 'Your grounds'} ${ground ? 'was' : 'were'} ${pct}% booked (${booked.toLocaleString('en-IN')} of ${avail.toLocaleString('en-IN')} slots) ${inP(p)}.`,
+        { details: rows.map((g) => ({ label: g.ground, text: `${g.utilisationPercent}% (${g.bookedSlots} of ${g.availableSlots} slots)` })), notes: [...notes, 'Counts confirmed, completed and no-show bookings against every open slot.'] });
+    }
+
+    case 'customers': {
+      if (future) return done(`${cap(describe(p))} has not happened yet.`);
+      const c = T.customers(ctx, p);
+      return done(`${count(c.playedInPeriod, 'person', 'people')} played ${inP(p)}, ${c.firstTimeInPeriod} of them for the first time. In all, ${count(c.haveEverPlayed, 'person', 'people')} have played; ${c.canEmail} can be emailed and ${c.canWhatsapp} reached on WhatsApp.`, { open: { tab: 'contacts' } });
+    }
+
+    case 'no_shows': case 'cancellations': {
+      if (future) return done(`${cap(describe(p))} has not happened yet.`);
+      const b = T.bookings(ctx, { from: p.from, to: p.to, groundId: ground?.id });
+      const where = ground ? ` at ${ground.name}` : '';
+      if (intent === 'no_shows') {
+        return done(b.noShows.count ? `${count(b.noShows.count, 'no-show')}${where} ${inP(p)}; you kept ${R(b.noShows.advanceKeptPaise)} of their advances.` : `There were no no-shows${where} ${inP(p)}.`, { open: { tab: 'reports', report: 'schedule/past', params: { from: p.from, to: p.to } } });
+      }
+      const c = b.cancellations;
+      return done(c.count ? `${count(c.count, 'booking')} ${c.count === 1 ? 'was' : 'were'} cancelled${where} ${inP(p)}: ${c.inTime} in time (${R(c.refundedPaise)} refunded) and ${c.late} late (${R(c.creditGivenPaise)} turned into credit, ${R(c.advanceKeptPaise)} kept).` : `Nothing was cancelled${where} ${inP(p)}.`,
+        { open: { tab: 'reports', report: 'schedule/past', params: { from: p.from, to: p.to } }, notes: [...notes, 'A cancellation is counted on the day it was cancelled, not the day of the session.'] });
+    }
+
+    case 'upcoming': case 'bookings': {
+      const b = T.bookings(ctx, { from: p.from, to: p.to, groundId: ground?.id });
+      const where = ground ? ` at ${ground.name}` : '';
+      const bits: string[] = [];
+      if (b.played.sessions) bits.push(`${count(b.played.sessions, 'session')} played (${count(b.played.slots, 'slot')})`);
+      if (b.noShows.count) bits.push(`${count(b.noShows.count, 'no-show')}`);
+      if (b.cancellations.count) bits.push(`${count(b.cancellations.count, 'cancellation')}`);
+      if (b.upcoming.bookings) bits.push(`${count(b.upcoming.bookings, 'booking')} still to come (${count(b.upcoming.slots, 'slot')}, worth ${R(b.upcoming.valuePaise)}, ${R(b.upcoming.toCollectPaise)} still to collect)`);
+      const open: OpenReport = { tab: 'reports', report: p.to >= today && b.upcoming.bookings ? 'schedule/future' : 'schedule/past', params: { from: p.from, to: p.to } };
+      const details: Detail[] = [];
+      if (b.upcoming.bookings && b.upcoming.bookings <= 8 || intent === 'upcoming') {
+        const u = T.upcoming(ctx, { from: p.from, to: p.to, groundId: ground?.id, limit: 8 }, true);
+        for (const s of u.sessions) details.push({ label: `${DOW[dayOfWeek(s.date)]} ${niceDay(s.date, false)}, ${s.start}–${s.end}`, text: `${s.ground}${s.customer ? ` · ${s.customer}` : ''} · ${R(s.totalPaise)}${s.toCollectPaise ? ` (${R(s.toCollectPaise)} to collect)` : ' (paid)'}` });
+        if (u.total > u.sessions.length) notes.push(`Showing the first ${u.sessions.length} of ${u.total}.`);
+      }
+      if (!bits.length) return done(`I found no bookings${where} for ${describe(p)}.`, { open });
+      const multi = !ground && b.byGround.length > 1;
+      if (multi && !details.length) for (const g of b.byGround) details.push({ label: g.groundName, text: `${g.played} played, ${g.upcoming} coming up` });
+      return done(`For ${describe(p)}${where}: ${bits.join('; ')}.`, { open, details, understood: understood(), suggestions: ['Who still owes us money?', 'How busy were the grounds then?'] });
+    }
+
+    default:
+      return base('unknown', "I couldn't work that one out.");
+  }
+}
+
+function monthEnd(date: string): string {
+  const y = Number(date.slice(0, 4)), m = Number(date.slice(5, 7));
+  return `${date.slice(0, 7)}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+}
+
+/** Revenue-type questions about dates that have not happened: nothing is earned yet, but sessions may be booked. */
+function futureMoney(ctx: T.Ctx, intent: Intent, p: Span, done: (a: string, e?: Partial<Built>) => Built): Built {
+  if (!T.can(ctx, 'bookings')) return done(`${cap(describe(p))} has not happened yet, so there is nothing to report.`);
+  const b = T.bookings(ctx, { from: p.from, to: p.to });
+  const what = intent === 'expenses' ? 'expenses' : intent === 'profit' ? 'profit' : 'revenue';
+  const booked = b.upcoming.bookings ? ` ${count(b.upcoming.bookings, 'booking')} ${b.upcoming.bookings === 1 ? 'is' : 'are'} already confirmed, worth ${R(b.upcoming.valuePaise)} (${R(b.upcoming.paidPaise)} paid so far).` : ' No bookings are confirmed for it yet.';
+  return done(`${cap(describe(p))} has not happened yet, so there is no ${what} to report: income is counted when a session is played.${booked}`, { open: { tab: 'reports', report: 'schedule/future', params: { from: p.from, to: p.to } } });
+}
+
+function groundRevenue(ctx: T.Ctx, g: { id: string; name: string }, p: Span, done: (a: string, e?: Partial<Built>) => Built): Built {
+  if (!T.can(ctx, 'bookings')) return done(`I can only break revenue down by ground for people who can see bookings.`);
+  const b = T.bookings(ctx, { from: p.from, to: p.to, groundId: g.id });
+  const row = b.byGround.find((x) => x.groundId === g.id);
+  const earned = row?.earnedPaise ?? 0;
+  return done(`${g.name} earned ${R(earned)} from bookings ${inP(p)} (${count(b.played.sessions, 'session')} played).`, {
+    open: { tab: 'reports', report: 'schedule/past', params: { from: p.from, to: p.to, groundId: g.id } }, notes: ['This is booking income only. Other income, such as canteen sales, is not recorded per ground.'],
+    details: [{ label: 'Price of sessions played', text: R(b.played.valuePaise) }, { label: 'Advances kept', text: R(b.noShows.advanceKeptPaise + b.cancellations.advanceKeptPaise) }],
+  });
+}
+
+function help(ctx: T.Ctx): Built {
+  const lot = [...(T.can(ctx, 'reports') ? EXAMPLES.reports : []), ...(T.can(ctx, 'bookings') ? EXAMPLES.bookings : []), ...(T.can(ctx, 'customers') ? EXAMPLES.customers : [])];
+  return {
+    intent: 'help', answer: 'Ask me about your money or your bookings in plain words, for any dates: "past 37 days", "last month", "in September", "from 1 Oct to 14 Oct". I read the same figures as the Reports tab and tell you which dates I used.',
+    details: [], understood: 'Help', period: null, open: null, notes: ['I only read figures; I never change anything.'], suggestions: lot,
+  };
+}

@@ -1,0 +1,173 @@
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import type { Consent, Role, StaffPermission, User } from '@daji/shared';
+import { STAFF_PERMISSIONS } from '@daji/shared';
+import { checkCode, mfaEnabled } from './mfa.ts';
+import { many, one, run, registerSchema } from './db.ts';
+import { normalizePhone } from './input.ts';
+import { splitName, titleCase } from './names.ts';
+import { now } from './clock.ts';
+import { newId } from './ids.ts';
+import { HttpError, forbidden } from './errors.ts';
+import type { Config } from './config.ts';
+
+// First and last name are kept apart so the admin can edit them; `name` stays the two joined.
+registerSchema('names-1', `ALTER TABLE users ADD COLUMN first_name TEXT;
+ALTER TABLE users ADD COLUMN last_name TEXT;`);
+
+registerSchema('avatar-1', `ALTER TABLE users ADD COLUMN avatar_id TEXT;
+ALTER TABLE users ADD COLUMN avatar_ext TEXT;
+ALTER TABLE users ADD COLUMN avatar_mime TEXT;`);
+
+export interface UserRow {
+  id: string; role: Role; name: string; email: string | null; phone: string | null; password_hash: string | null;
+  owner_id: string | null; permissions: string; active: number;
+  consent_email: number; consent_sms: number; consent_whatsapp: number; consent_updated_at: number | null;
+  business_name: string | null; upi_id: string | null; token_version: number; created_at: number; updated_at: number;
+  first_name: string | null; last_name: string | null;
+  avatar_id: string | null; avatar_ext: string | null; avatar_mime: string | null;
+}
+
+// ---- passwords (scrypt) ----
+export function hashPassword(pw: string): string {
+  const salt = randomBytes(16);
+  const dk = scryptSync(pw, salt, 32, { N: 16384, r: 8, p: 1 });
+  return `scrypt$16384$${salt.toString('base64')}$${dk.toString('base64')}`;
+}
+export function verifyPassword(pw: string, stored: string | null): boolean {
+  if (!stored) return false;
+  const parts = stored.split('$');
+  if (parts.length !== 4 || parts[0] !== 'scrypt') return false;
+  const salt = Buffer.from(parts[2]!, 'base64');
+  const want = Buffer.from(parts[3]!, 'base64');
+  const got = scryptSync(pw, salt, want.length, { N: Number(parts[1]), r: 8, p: 1 });
+  return got.length === want.length && timingSafeEqual(got, want);
+}
+
+// ---- tokens (HS256 JWT) ----
+const b64u = (b: Buffer | string) => Buffer.from(b).toString('base64url');
+export interface TokenPayload { sub: string; role: Role; tv: number; iat: number; exp: number }
+
+export function signToken(cfg: Config, u: { id: string; role: Role; token_version: number }): string {
+  const iat = Math.floor(now() / 1000);
+  const body: TokenPayload = { sub: u.id, role: u.role, tv: u.token_version, iat, exp: iat + cfg.jwtTtlDays * 86400 };
+  const head = b64u(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const pl = b64u(JSON.stringify(body));
+  const sig = createHmac('sha256', cfg.jwtSecret).update(`${head}.${pl}`).digest('base64url');
+  return `${head}.${pl}.${sig}`;
+}
+
+export function verifyToken(cfg: Config, token: string): TokenPayload | null {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [h, p, s] = parts as [string, string, string];
+  try {
+    if (JSON.parse(Buffer.from(h, 'base64url').toString()).alg !== 'HS256') return null;
+  } catch { return null; }
+  const want = createHmac('sha256', cfg.jwtSecret).update(`${h}.${p}`).digest();
+  const got = Buffer.from(s, 'base64url');
+  if (got.length !== want.length || !timingSafeEqual(got, want)) return null;
+  try {
+    const pl = JSON.parse(Buffer.from(p, 'base64url').toString()) as TokenPayload;
+    if (typeof pl.exp !== 'number' || pl.exp * 1000 < now()) return null;
+    return pl;
+  } catch { return null; }
+}
+
+// ---- users ----
+export function toUser(r: UserRow): User {
+  const perms = (JSON.parse(r.permissions || '[]') as string[]).filter((p): p is StaffPermission => (STAFF_PERMISSIONS as readonly string[]).includes(p));
+  const consent: Consent = { email: !!r.consent_email, sms: !!r.consent_sms, whatsapp: !!r.consent_whatsapp, updatedAt: r.consent_updated_at };
+  return {
+    id: r.id, role: r.role, name: r.name, firstName: r.first_name ?? splitName(r.name).first, lastName: r.last_name ?? splitName(r.name).last, email: r.email, phone: r.phone, ownerId: r.owner_id,
+    permissions: perms, active: !!r.active, consent, businessName: r.business_name, upiId: r.upi_id, createdAt: r.created_at,
+    avatarUrl: r.avatar_id ? `/api/avatar/${r.avatar_id}` : null,
+  };
+}
+export const userRow = (id: string): UserRow | undefined => one<UserRow>('SELECT * FROM users WHERE id = ?', id);
+export const userByPhone = (phone: string): UserRow | undefined => one<UserRow>("SELECT * FROM users WHERE phone = ? AND role = 'customer' ORDER BY created_at LIMIT 1", phone);
+export const userByEmail = (email: string): UserRow | undefined => one<UserRow>('SELECT * FROM users WHERE lower(email) = lower(?)', email);
+
+export interface NewUser {
+  role: Role; name: string; firstName?: string; lastName?: string; email?: string | null; phone?: string | null; password?: string | null;
+  ownerId?: string | null; permissions?: StaffPermission[]; businessName?: string | null; upiId?: string | null;
+}
+export function createUser(n: NewUser): UserRow {
+  if (n.email && userByEmail(n.email)) throw new HttpError(409, 'EMAIL_TAKEN', 'An account with this email already exists');
+  const id = newId('usr');
+  const t = now();
+  const parts = n.firstName ? { first: titleCase(n.firstName), last: titleCase(n.lastName ?? '') } : (() => { const x = splitName(titleCase(n.name)); return { first: x.first, last: x.last }; })();
+  const fullName = [parts.first, parts.last].filter(Boolean).join(' ') || n.name;
+  run(
+    `INSERT INTO users(id, role, name, first_name, last_name, email, phone, password_hash, owner_id, permissions, business_name, upi_id, created_at, updated_at)
+     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    id, n.role, fullName, parts.first, parts.last, n.email ?? null, n.phone ?? null, n.password ? hashPassword(n.password) : null,
+    n.ownerId ?? null, JSON.stringify(n.permissions ?? []), n.businessName ?? null, n.upiId ?? null, t, t,
+  );
+  return userRow(id)!;
+}
+
+export function setPassword(userId: string, pw: string): void {
+  run('UPDATE users SET password_hash = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?', hashPassword(pw), now(), userId);
+}
+
+export function checkPasswordStrength(pw: string): string | null {
+  if (pw.length < 8) return 'At least 8 characters';
+  if (pw.length > 200) return 'Too long';
+  if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/\d/.test(pw)) return 'Use a capital letter, a small letter and a number';
+  return null;
+}
+
+// A dummy hash so that unknown emails cost the same time as wrong passwords.
+const DUMMY = hashPassword('not-a-real-password-1');
+
+/** Accounts that can be meant by a sign-in name: an email address, or a mobile number (owners and staff before customers). */
+function candidatesFor(identifier: string): UserRow[] {
+  const id = identifier.trim();
+  if (id.includes('@')) { const r = userByEmail(id); return r ? [r] : []; }
+  const phone = normalizePhone(id);
+  return phone ? many<UserRow>("SELECT * FROM users WHERE phone = ? AND password_hash IS NOT NULL ORDER BY (role = 'customer'), created_at", phone) : [];
+}
+
+/** Sign in with an email address or a mobile number, and the password. */
+export function login(cfg: Config, identifier: string, password: string, code?: string): { token: string; user: User } {
+  const found = candidatesFor(identifier);
+  let r = found[0];
+  for (const c of found) if (c.password_hash && verifyPassword(password, c.password_hash)) { r = c; break; }
+  const ok = verifyPassword(password, r?.password_hash ?? DUMMY);
+  if (!r || !ok || !r.password_hash) throw new HttpError(401, 'INVALID_LOGIN', 'Email, mobile number or password is not right');
+  if (!r.active) throw new HttpError(403, 'ACCOUNT_DISABLED', 'This account has been disabled');
+  if (mfaEnabled(r.id)) {
+    if (!code) throw new HttpError(401, 'MFA_REQUIRED', 'Enter the 6 digit code from your authenticator app');
+    if (!checkCode(r.id, code, { requireEnabled: true })) throw new HttpError(401, 'MFA_INVALID', 'That code is not right or has already been used. Wait for the next one.');
+  }
+  return { token: signToken(cfg, r), user: toUser(r) };
+}
+
+/** Resolves the Authorization header to an active user, or null. */
+export function authenticate(cfg: Config, header: string | undefined): UserRow | null {
+  if (!header || !header.startsWith('Bearer ')) return null;
+  const p = verifyToken(cfg, header.slice(7).trim());
+  if (!p) return null;
+  const r = userRow(p.sub);
+  if (!r || !r.active || r.token_version !== p.tv) return null;
+  return r;
+}
+
+// ---- permissions ----
+export function hasPermission(u: UserRow, perm: StaffPermission): boolean {
+  if (u.role === 'super_admin' || u.role === 'owner') return true;
+  if (u.role !== 'staff') return false;
+  return (JSON.parse(u.permissions || '[]') as string[]).includes(perm);
+}
+export function requirePermission(u: UserRow, perm: StaffPermission): void {
+  if (!hasPermission(u, perm)) throw forbidden(`This needs the "${perm}" permission`);
+}
+/** The owner whose data a user works on: owners are themselves, staff their employer. Null for admin/customer. */
+export function scopeOwnerId(u: UserRow): string | null {
+  if (u.role === 'owner') return u.id;
+  if (u.role === 'staff') return u.owner_id;
+  return null;
+}
+export function listStaff(ownerId: string): UserRow[] {
+  return many<UserRow>("SELECT * FROM users WHERE role='staff' AND owner_id = ? ORDER BY created_at", ownerId);
+}

@@ -1,0 +1,78 @@
+/* Generated from shared/src/brand.ts — do not edit. */
+:root {
+  --bg: #0a0c0b;
+  --bg-raised: #0f1211;
+  --surface: #141816;
+  --surface-high: #1a1f1c;
+  --surface-top: #222824;
+  --line: rgba(216,190,132,0.16);
+  --line-strong: rgba(216,190,132,0.38);
+  --text: #f3eee3;
+  --text-muted: #b9b3a4;
+  --text-faint: #8d8979;
+  --gold: #c9a96b;
+  --gold-bright: #e6d09f;
+  --gold-deep: #9a7d44;
+  --on-gold: #17130a;
+  --bronze: #b8805c;
+  --emerald: #123b2d;
+  --emerald-bright: #2c7a5b;
+  --ok: #6dbb96;
+  --warn: #e0b45c;
+  --danger: #df7d6e;
+  --info: #8eadd0;
+  --glow: rgba(230,208,159,0.22);
+  --scrim: rgba(5,6,5,0.72);
+  --font-script: 'Kaushan Script', 'Yellowtail', 'Segoe Script', 'Brush Script MT', cursive;
+  --font-display: 'Barlow Semi Condensed', 'Roboto Condensed', 'Arial Narrow', 'DejaVu Sans Condensed', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --radius-sm: 2px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --shadow-card: 0 28px 60px -28px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.04);
+  --shadow-lift: 0 40px 80px -30px rgba(0,0,0,0.85), 0 0 0 1px rgba(216,190,132,0.22);
+  --gradient-gold: linear-gradient(135deg, #ecd9ad 0%, #c9a96b 46%, #a3844a 100%);
+  --gradient-gold-hover: linear-gradient(135deg, #f3e3bd 0%, #d6b87b 46%, #b2915a 100%);
+  --gradient-canvas: radial-gradient(1200px 600px at 78% -10%, rgba(44,122,91,0.16), transparent 60%), radial-gradient(900px 500px at 0% 0%, rgba(184,128,92,0.10), transparent 55%);
+}
+
+[data-theme="ivory"] {
+  --bg: #f6f2e9;
+  --bg-raised: #fbf8f1;
+  --surface: #fffdf8;
+  --surface-high: #f1ebdd;
+  --surface-top: #e8e0cd;
+  --line: rgba(70,54,20,0.14);
+  --line-strong: rgba(70,54,20,0.34);
+  --text: #1b1812;
+  --text-muted: #5a5446;
+  --text-faint: #6c6555;
+  --gold: #80622a;
+  --gold-bright: #b8934a;
+  --gold-deep: #5f4818;
+  --on-gold: #17130a;
+  --bronze: #8e5a3a;
+  --emerald: #0f3d2e;
+  --emerald-bright: #1d6a4d;
+  --ok: #1a6e48;
+  --warn: #8a6010;
+  --danger: #b23c2e;
+  --info: #2f5f93;
+  --glow: rgba(184,147,74,0.18);
+  --scrim: rgba(246,242,233,0.78);
+  --font-script: 'Kaushan Script', 'Yellowtail', 'Segoe Script', 'Brush Script MT', cursive;
+  --font-display: 'Barlow Semi Condensed', 'Roboto Condensed', 'Arial Narrow', 'DejaVu Sans Condensed', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --radius-sm: 2px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --shadow-card: 0 28px 60px -28px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.04);
+  --shadow-lift: 0 40px 80px -30px rgba(0,0,0,0.85), 0 0 0 1px rgba(216,190,132,0.22);
+  --gradient-gold: linear-gradient(135deg, #ecd9ad 0%, #c9a96b 46%, #a3844a 100%);
+  --gradient-gold-hover: linear-gradient(135deg, #f3e3bd 0%, #d6b87b 46%, #b2915a 100%);
+  --gradient-canvas: radial-gradient(1200px 600px at 78% -10%, rgba(44,122,91,0.16), transparent 60%), radial-gradient(900px 500px at 0% 0%, rgba(184,128,92,0.10), transparent 55%);
+}

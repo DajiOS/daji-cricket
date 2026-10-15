@@ -1,0 +1,340 @@
+{
+ "config": {
+  "brand": "Daji Cricket Ground",
+  "tagline": "Project by Daji Parivar",
+  "instagramUrl": "https://www.instagram.com/dajicricketground/",
+  "contact": {
+   "name": "Hemanshu Patel",
+   "phone": "7567156000",
+   "email": "dajicricket@gmail.com"
+  },
+  "academy": {
+   "name": "MP13 Academy",
+   "runBy": "Munaf Patel",
+   "brand": "MP13",
+   "coaches": [
+    {
+     "name": "Munaf Patel",
+     "title": "Founder, MP13",
+     "bio": "Former India fast bowler and 2011 World Cup winner.",
+     "photo": ""
+    },
+    {
+     "name": "Rakesh Desai",
+     "title": "Head batting coach",
+     "bio": "Level 2 coach with 15 years of age-group experience.",
+     "photo": ""
+    }
+   ],
+   "about": "MP13 Academy is associated with Daji Cricket Ground. Munaf Patel runs his academy under MP13."
+  },
+  "razorpayEnabled": true,
+  "razorpayDemo": true,
+  "razorpayKeyId": null,
+  "holdMinutesOnline": 15,
+  "holdMinutesUpi": 15,
+  "verifyMinutesUpi": 120,
+  "creditExpiryDays": 90,
+  "freeCancelHours": 24,
+  "advanceMode": "percent",
+  "advanceValue": 50,
+  "fullPaymentWithinHours": 24,
+  "demoMode": true,
+  "publicUrl": ""
+ },
+ "grounds": [
+  {
+   "id": "gnd_vjlWqEh2Erf9",
+   "ownerId": "usr_-EGRksMvuFWe",
+   "ownerName": "Daji Cricket Ground",
+   "name": "Cricket Ground",
+   "slug": "daji-main-turf",
+   "city": "Surat",
+   "area": null,
+   "address": null,
+   "lat": 21.1818855,
+   "lng": 72.9134859,
+   "mapUrl": "https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7",
+   "directionsUrl": "https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7",
+   "description": "Full-size turf wicket with floodlights for evening matches.",
+   "facilities": [
+    "Floodlights",
+    "Changing rooms",
+    "Parking",
+    "Drinking water",
+    "Scoreboard"
+   ],
+   "images": [],
+   "surface": "Turf wicket",
+   "openTime": "06:00",
+   "closeTime": "27:00",
+   "slotMinutes": 60,
+   "pricePaise": 180000,
+   "weekendPricePaise": 220000,
+   "eveningSurchargePaise": 40000,
+   "eveningFrom": "18:00",
+   "maxSlots": 8,
+   "minNoticeMinutes": 0,
+   "advanceMode": null,
+   "advanceValue": null,
+   "active": true,
+   "formats": [],
+   "winterOpenTime": "07:00",
+   "winterCloseTime": "27:00",
+   "winterFromMonth": 11,
+   "winterToMonth": 2,
+   "rates": [
+    {
+     "id": "l-night",
+     "label": "Evening hours",
+     "ball": "leather",
+     "days": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      0
+     ],
+     "from": "19:00",
+     "to": "27:00",
+     "mode": "hourly",
+     "pricePaise": 350000
+    },
+    {
+     "id": "l-morn",
+     "label": "Morning session",
+     "ball": "leather",
+     "days": [
+      2,
+      3,
+      4,
+      5
+     ],
+     "from": "07:00",
+     "to": "10:00",
+     "mode": "fixed",
+     "pricePaise": 400000
+    },
+    {
+     "id": "l-day",
+     "label": "Day session",
+     "ball": "leather",
+     "days": [
+      2,
+      3,
+      4,
+      5
+     ],
+     "from": "10:00",
+     "to": "18:00",
+     "mode": "fixed",
+     "pricePaise": 600000
+    },
+    {
+     "id": "l-wknd",
+     "label": "Weekend day",
+     "ball": "leather",
+     "days": [
+      6,
+      0
+     ],
+     "from": "07:00",
+     "to": "19:00",
+     "mode": "fixed",
+     "pricePaise": 1500000
+    },
+    {
+     "id": "t-night",
+     "label": "Evening hours",
+     "ball": "tennis",
+     "days": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      0
+     ],
+     "from": "19:00",
+     "to": "27:00",
+     "mode": "hourly",
+     "pricePaise": 350000
+    },
+    {
+     "id": "t-morn",
+     "label": "Morning session",
+     "ball": "tennis",
+     "days": [
+      2,
+      3,
+      4,
+      5
+     ],
+     "from": "07:00",
+     "to": "10:00",
+     "mode": "fixed",
+     "pricePaise": 500000
+    },
+    {
+     "id": "t-both",
+     "label": "Two-day tournament (Sat + Sun)",
+     "ball": "tennis",
+     "days": [
+      6
+     ],
+     "from": "07:00",
+     "to": "23:00",
+     "mode": "fixed",
+     "pricePaise": 15100000,
+     "bundleDays": 2
+    },
+    {
+     "id": "t-sat",
+     "label": "Saturday tournament",
+     "ball": "tennis",
+     "days": [
+      6
+     ],
+     "from": "07:00",
+     "to": "19:00",
+     "mode": "fixed",
+     "pricePaise": 10000000
+    },
+    {
+     "id": "t-sun",
+     "label": "Sunday tournament",
+     "ball": "tennis",
+     "days": [
+      0
+     ],
+     "from": "07:00",
+     "to": "23:00",
+     "mode": "fixed",
+     "pricePaise": 9000000
+    },
+    {
+     "id": "l-practice",
+     "label": "Practice hours",
+     "ball": "practice",
+     "days": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      0
+     ],
+     "from": "07:00",
+     "to": "19:00",
+     "mode": "hourly",
+     "pricePaise": 60000
+    }
+   ],
+   "closedDays": [
+    1
+   ],
+   "ratesNote": "For custom days and reservations please call."
+  }
+ ],
+ "adminSettings": {
+  "razorpayEnabled": true,
+  "upiId": "dajicricket@okhdfcbank",
+  "upiPayee": "Daji Cricket Ground",
+  "contactName": "Hemanshu Patel",
+  "contactPhone": "7567156000",
+  "contactEmail": "dajicricket@gmail.com",
+  "academyName": "MP13 Academy",
+  "academyRunBy": "Munaf Patel",
+  "academyBrand": "MP13",
+  "academyAbout": "MP13 Academy is associated with Daji Cricket Ground. Munaf Patel runs his academy under MP13.",
+  "holdMinutesOnline": 15,
+  "holdMinutesUpi": 15,
+  "verifyMinutesUpi": 120,
+  "graceMinutes": 10,
+  "maxHoldExtensions": 2,
+  "advanceMode": "percent",
+  "advanceValue": 50,
+  "fullPaymentWithinHours": 24,
+  "freeCancelHours": 24,
+  "lateCancelCreditPercent": 100,
+  "cashRefundPercent": 50,
+  "requireApproval": true,
+  "creditExpiryDays": 90,
+  "noShowGraceMinutes": 30
+ },
+ "askExamples": [
+  "What was the revenue for the past 37 days?",
+  "What is my account balance?",
+  "What was our profit last month?",
+  "How much did we spend on electricity this financial year?",
+  "Compare this month with last month",
+  "Show the balance sheet",
+  "How many bookings did we have last week?",
+  "What's booked for tomorrow?",
+  "Who still owes us money?",
+  "How busy was the main turf in September?",
+  "How many no-shows this month?",
+  "How much account credit do customers hold?",
+  "How many new customers played this month?"
+ ],
+ "users": {
+  "owner": {
+   "id": "usr_-EGRksMvuFWe",
+   "role": "owner",
+   "name": "Daji Owner",
+   "email": "owner1@daji.test",
+   "phone": "9000000002",
+   "ownerId": null,
+   "permissions": [],
+   "active": true,
+   "consent": {
+    "email": false,
+    "sms": false,
+    "whatsapp": false,
+    "updatedAt": null
+   },
+   "businessName": "Daji Cricket Ground",
+   "upiId": "dajicricket@okhdfcbank",
+   "createdAt": 1792003854019
+  },
+  "admin": {
+   "id": "usr_4_wK7_cCOseW",
+   "role": "super_admin",
+   "name": "Platform Admin",
+   "email": "admin@daji.test",
+   "phone": "9000000001",
+   "ownerId": null,
+   "permissions": [],
+   "active": true,
+   "consent": {
+    "email": false,
+    "sms": false,
+    "whatsapp": false,
+    "updatedAt": null
+   },
+   "businessName": null,
+   "upiId": null,
+   "createdAt": 1792003853971
+  },
+  "customer": {
+   "id": "usr_qEr4rjoMqW6I",
+   "role": "customer",
+   "name": "Demo Customer",
+   "email": "customer@daji.test",
+   "phone": "9876543210",
+   "ownerId": null,
+   "permissions": [],
+   "active": true,
+   "consent": {
+    "email": false,
+    "sms": false,
+    "whatsapp": false,
+    "updatedAt": null
+   },
+   "businessName": null,
+   "upiId": null,
+   "createdAt": 1792003854159
+  }
+ }
+}

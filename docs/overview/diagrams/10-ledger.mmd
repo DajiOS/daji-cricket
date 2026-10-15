@@ -1,0 +1,13 @@
+flowchart LR
+  SRC["WHAT REALLY HAPPENED<br/>(each thing stored once)<br/><br/>Bank and cash transactions<br/>Booking payments (verified)<br/>Refunds<br/>Account credit: issued, expired<br/>Bookings: played, no-show, cancelled<br/>Journal entries typed in"]
+  L["THE LEDGER<br/>worked out on demand;<br/>every entry has equal<br/>debits and credits"]
+  SRC --> L
+  L --> PL["Profit and Loss<br/>any dates, accrual or cash,<br/>compared with an earlier period"]
+  L --> BS["Balance Sheet<br/>on any date"]
+  L --> TB["Trial balance<br/>and general ledger"]
+  L --> FS["Future schedule<br/>booked, and still to collect"]
+  L --> PS["Past schedule<br/>played, missed, cancelled,<br/>and what each earned"]
+  PL --> X["Excel and CSV"]
+  BS --> X
+  FS --> X
+  PS --> X

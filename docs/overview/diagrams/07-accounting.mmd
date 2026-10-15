@@ -1,0 +1,16 @@
+flowchart TD
+  U["Statement upload<br/>CSV, Excel or PDF"]
+  Y["Yodlee bank feed<br/>nightly and on demand"]
+  CB["Cash book entries"]
+  U --> I
+  Y --> I
+  CB --> I
+  I["Ingest: duplicates skipped by fingerprint,<br/>unreadable rows reported"]
+  I --> CAT["Categorise: owner rules beat built-in rules,<br/>a manual choice always sticks"]
+  CAT --> M["Match bank credits to UPI bookings by UTR<br/>one bank line to one payment only"]
+  M --> L["The books (section 7)<br/>one ledger feeds every report"]
+  L --> PL["P&L · Balance Sheet · Trial balance<br/>Future and Past schedule"]
+  PL --> SO["Month-end sign-off<br/>locks the month; changes need a reason"]
+  PL --> EX["Export to CSV and Excel"]
+  classDef next fill:#ffffff,stroke:#9a7d44,stroke-dasharray:4 3,color:#1b1812
+  class U,Y,I,CAT,M next
