@@ -1987,6 +1987,8 @@ function deskNav(tab, sub, quiet) {
 function route() {
   const hash = location.hash;
   let v = 'home';
+  // staff and owners now work in the new admin desk
+  if ((DESK_HASH.test(hash) || hash === '#platform') && state.user && state.user.role !== 'customer') { location.replace('desk.html' + (hash === '#platform' ? '#/platform' : '')); return; }
   if (hash === '#bookings' && state.user && state.user.role === 'customer') v = 'bookings';
   else if (DESK_HASH.test(hash) && state.user && state.user.role !== 'customer') { v = 'desk'; const m = DESK_HASH.exec(hash); if (m[1]) state.deskTab = m[1]; state.deskSub = m[2] || null; }
   else if ((hash === '#bookings' || DESK_HASH.test(hash)) && !state.user) { openAuth({ note: 'Sign in to see this page.', after: () => { location.hash = hash; route(); } }); return; }
