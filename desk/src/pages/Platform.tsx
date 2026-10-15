@@ -1,6 +1,23 @@
-import { PageHead, Empty } from '../ui';
+import { PageHead } from '../ui';
+import { SectionTabs, sectionOf } from '../parts/admin/common';
+import { Leads, Connections, Services } from '../parts/admin/Platform';
+import People from '../parts/admin/People';
+import Payments from '../parts/admin/Payments';
+import Backups from '../parts/admin/Backups';
+
+const TABS: [string, string][] = [['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings'], ['connections', 'Connections'], ['services', 'Services']];
 
 export default function Platform({ sub }: { sub: string }) {
-  void sub;
-  return <div className="stack"><PageHead eyebrow="Coming together" title="Platform" /><Empty>This page is being built.</Empty></div>;
+  const tab = sectionOf(sub, TABS.map(([k]) => k));
+  return (
+    <div className="stack">
+      <PageHead eyebrow="Software owner" title="Platform" lede="Settings and people for the whole platform. Choose an owner at the top to work inside their desk." />
+      <SectionTabs base="/platform" sub={sub} items={TABS} />
+      {tab === 'requests' && <Leads />}
+      {tab === 'people' && <People />}
+      {tab === 'settings' && <div className="stack"><Payments /><Backups /></div>}
+      {tab === 'connections' && <Connections />}
+      {tab === 'services' && <Services />}
+    </div>
+  );
 }

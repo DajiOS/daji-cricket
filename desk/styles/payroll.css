@@ -1,0 +1,59 @@
+/* Staff and payroll */
+.pr-between { justify-content: space-between; width: 100%; }
+.pr-monthbar { gap: 6px; }
+.pr-monthbar .inp { width: 160px; }
+.pr-note, .pr-warn { border-bottom: 1px solid var(--line); }
+.pr-warn, .pr-warn-t { color: var(--warn); }
+.pr-actions { justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
+
+/* attendance grid */
+.pr-grid { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; }
+.pr-grid th, .pr-grid td { padding: 0; border-bottom: 1px solid #1d1b17; text-align: center; }
+.pr-grid thead th { background: #121518; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--line); }
+.pr-grid .pr-name { position: sticky; left: 0; z-index: 3; background: var(--panel); text-align: left; padding: 8px 14px; min-width: 140px; max-width: 180px; border-right: 1px solid var(--line); white-space: nowrap; }
+.pr-grid thead .pr-name { background: #121518; color: var(--faint); font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; }
+.pr-day button { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 100%; padding: 6px 0; background: transparent; border: 0; color: var(--muted); cursor: pointer; font: 600 12px var(--sans); }
+.pr-day button:disabled { cursor: default; }
+.pr-day button:not(:disabled):hover { color: var(--gold-hi); }
+.pr-day i { font-style: normal; font-size: 9.5px; color: var(--faint); }
+.pr-day.wk i, .pr-day.wk b { color: var(--gold-lo); }
+.pr-cell { padding: 3px 1px !important; min-width: 25px; }
+.pr-mark { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--ivory); font: 700 11px var(--sans); cursor: pointer; padding: 0; }
+.pr-mark:disabled { opacity: .35; cursor: default; }
+.pr-mark:not(:disabled):hover { border-color: var(--gold); }
+.pr-mark.present, .pr-mini.present { background: rgba(95,176,122,.18); border-color: rgba(95,176,122,.5); color: var(--good); }
+.pr-mark.half, .pr-mini.half { background: rgba(216,166,64,.16); border-color: rgba(216,166,64,.5); color: var(--warn); }
+.pr-mark.absent, .pr-mini.absent { background: rgba(224,106,90,.16); border-color: rgba(224,106,90,.5); color: var(--bad); }
+.pr-mark.leave, .pr-mini.leave { background: rgba(111,160,208,.16); border-color: rgba(111,160,208,.5); color: var(--info); }
+.pr-tot { min-width: 30px; padding: 0 6px !important; color: var(--muted); font-variant-numeric: tabular-nums; border-left: 1px solid #1d1b17; }
+.pr-tot:first-of-type { border-left: 1px solid var(--line); }
+
+/* payslip */
+.pr-slip { display: grid; gap: 16px; }
+.pr-slip-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.pr-slip-head h2 { margin: 0; font-family: var(--serif); font-size: 26px; color: var(--ivory); }
+.pr-who { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pr-slip-tbl td { padding: 10px 4px; }
+.pr-net td { font-family: var(--serif); font-size: 22px; color: var(--gold-hi); border-top: 1px solid var(--line-strong); }
+.pr-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(26px, 1fr)); gap: 4px; margin-top: 8px; }
+.pr-mini { position: relative; height: 32px; border-radius: 6px; border: 1px solid var(--line); font: 700 11px var(--sans); display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; color: var(--muted); }
+.pr-mini i { position: absolute; top: 2px; left: 0; right: 0; text-align: center; font: 500 8.5px var(--sans); font-style: normal; opacity: .7; }
+.pr-adj { display: grid; gap: 4px; border-top: 1px solid var(--line); padding-top: 10px; }
+
+@media (max-width: 720px) {
+  .pr-who { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pr-monthbar .inp { width: 140px; }
+  .pr-grid .pr-name { min-width: 112px; padding: 8px 10px; }
+  .pr-slip-head h2 { font-size: 21px; }
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .overlay, .overlay * { visibility: visible; }
+  .overlay { position: absolute; inset: 0; background: #fff; display: block; padding: 0; backdrop-filter: none; }
+  .overlay .modal { max-height: none; box-shadow: none; border: 0; background: #fff; color: #111; width: 100%; max-width: none; }
+  .overlay .modal-head, .overlay .modal-foot { display: none; }
+  .overlay .modal * { color: #111 !important; background: transparent !important; border-color: #bbb !important; }
+}
+
+.pr-brush { max-width: 100%; overflow-x: auto; }

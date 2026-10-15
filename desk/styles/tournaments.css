@@ -1,0 +1,4 @@
+/* Tournaments: small additions to the shared styles. */
+.page-head .lede .badge { margin-left: 8px; vertical-align: middle; }
+select.inp { appearance: auto; }
+textarea.inp { height: auto; padding-top: 10px; resize: vertical; }

@@ -1,0 +1,12 @@
+.bills-search { width: 260px; max-width: 100%; }
+.bills-bad { color: #f19a8d; }
+.bills-kv > div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid #1d1b17; font-size: 13.5px; }
+.bills-kv > div:last-child { border-bottom: 0; }
+.bills-kv span { color: var(--faint); }
+.bills-kv b { color: var(--ivory); font-weight: 600; text-align: right; word-break: break-word; }
+.bills-ev { padding: 8px 0 8px 14px; border-left: 2px solid var(--line-strong); position: relative; }
+.bills-ev::before { content: ''; position: absolute; left: -5px; top: 14px; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+@media (max-width: 720px) { .bills-search { width: 100%; } .bills-kv > div { flex-direction: column; gap: 2px; } .bills-kv b { text-align: left; } }
+.bills-vendor { min-width: 170px; }
+.bills-sm-only { display: none; }
+@media (max-width: 720px) { .bills-sm-only { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; } }
