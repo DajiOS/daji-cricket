@@ -1,6 +1,6 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { startHarness, grounds, dayFromNow, type Harness, type GroundLite } from './helpers.ts';
+import { startHarness, grounds, dayFromNow, advance, DAY, type Harness, type GroundLite } from './helpers.ts';
 import { many } from '../src/db.ts';
 import { roundRobin, oversToBalls } from '../src/tournaments.ts';
 
@@ -134,4 +134,62 @@ test('deleting: tournaments with paid teams are kept, others are soft deleted', 
   assert.equal((await h.del(`${B}/${t}`, owner)).status, 200);
   assert.equal((await h.get(B, owner)).body.items.length, 0);
   assert.equal(many('SELECT 1 FROM tournaments WHERE deleted_at IS NOT NULL').length, 1);
+});
+
+// ------------------------------------------------------------------ ledger posting
+
+async function bankAccount(name = 'Main bank'): Promise<string> {
+  const r = await h.post('/api/accounting/accounts', { kind: 'bank', name }, owner); assert.equal(r.status, 201, JSON.stringify(r.body)); return r.body.id;
+}
+const ledger = async () => (await h.get('/api/accounting/transactions?limit=50', owner)).body.items as any[];
+
+test('marking a team fee paid posts income in Tournament entry fees; unpaying removes it; no double posting', async () => {
+  const acc = await bankAccount();
+  const t = await make();
+  const tm = await team(t, 'Lions');
+  assert.equal((await ledger()).length, 0, 'unpaid team posts nothing');
+  const paid = await h.patch(`${B}/${t}/teams/${tm}`, { feePaid: true, paymentRef: 'UTR55' }, owner);
+  assert.equal(paid.status, 200, JSON.stringify(paid.body));
+  assert.ok(paid.body.ledgerTxnId);
+  let l = await ledger();
+  assert.equal(l.length, 1);
+  assert.equal(l[0].id, paid.body.ledgerTxnId); assert.equal(l[0].amountPaise, 500000); assert.equal(l[0].accountId, acc);
+  assert.equal(l[0].description, 'Tournament fee Diwali Cup Lions'); assert.equal(l[0].categoryName, 'Tournament entry fees');
+  await h.patch(`${B}/${t}/teams/${tm}`, { feePaid: true, captain: 'New captain' }, owner); // still paid: an edit, not a payment
+  await h.patch(`${B}/${t}/teams/${tm}`, { feePaid: true }, owner);
+  assert.equal((await ledger()).length, 1);
+  const un = await h.patch(`${B}/${t}/teams/${tm}`, { feePaid: false }, owner);
+  assert.equal(un.body.feePaid, false); assert.equal(un.body.ledgerTxnId, null);
+  assert.equal((await ledger()).length, 0);
+  await h.patch(`${B}/${t}/teams/${tm}`, { feePaid: true }, owner);
+  assert.equal((await ledger()).length, 1);
+});
+
+test('a team added already paid is posted; a zero fee or no account posts nothing and never blocks', async () => {
+  const t = await make();
+  const noAcct = await h.post(`${B}/${t}/teams`, { name: 'Tigers', feePaid: true }, owner);
+  assert.equal(noAcct.status, 201); assert.equal(noAcct.body.feePaid, true); assert.equal(noAcct.body.ledgerTxnId, null);
+  assert.equal((await h.patch(`${B}/${t}/teams/${noAcct.body.id}`, { feePaid: false }, owner)).status, 200);
+  await bankAccount();
+  const ok = await h.post(`${B}/${t}/teams`, { name: 'Bears', feePaid: true }, owner);
+  assert.ok(ok.body.ledgerTxnId); assert.equal((await ledger()).length, 1);
+  const free = await make({ name: 'Friendly', entryFeePaise: 0 });
+  const f = await h.post(`${B}/${free}/teams`, { name: 'Hawks', feePaid: true }, owner);
+  assert.equal(f.status, 201); assert.equal(f.body.ledgerTxnId, null); assert.equal((await ledger()).length, 1);
+});
+
+test('fee payments in a signed-off month are refused with 409 and change nothing', async () => {
+  await bankAccount();
+  const t = await make();
+  const tm = await team(t, 'Lions');
+  const paid = await h.patch(`${B}/${t}/teams/${tm}`, { feePaid: true }, owner);
+  const month = (await ledger())[0].date.slice(0, 7);
+  advance(40 * DAY); // past the end of the month so it can be signed off
+  owner = await h.login('owner1'); // the old session has expired
+  assert.equal((await h.post('/api/accounting/signoffs', { month }, owner)).status, 201);
+  const r = await h.patch(`${B}/${t}/teams/${tm}`, { feePaid: false }, owner);
+  assert.equal(r.status, 409); assert.equal(r.body.error.code, 'PERIOD_LOCKED');
+  const after = (await h.get(`${B}/${t}`, owner)).body.teams.find((x: any) => x.id === tm);
+  assert.equal(after.feePaid, true); assert.equal(after.ledgerTxnId, paid.body.ledgerTxnId);
+  assert.equal((await ledger()).length, 1);
 });

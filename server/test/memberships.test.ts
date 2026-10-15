@@ -152,3 +152,52 @@ test('permissions and owner isolation', async () => {
   assert.equal((await h.get(`${B}/stats`, admin)).status, 400, 'super admin must name an owner');
   assert.equal((await h.get(`${B}/stats?ownerId=${one<{ id: string }>('SELECT id FROM users WHERE email = ?', 'owner1@daji.test')!.id}`, admin)).status, 200);
 });
+
+// ------------------------------------------------------------------ ledger posting
+
+async function acct(kind: 'bank' | 'cash', name: string): Promise<string> {
+  const r = await h.post('/api/accounting/accounts', { kind, name }, owner); assert.equal(r.status, 201, JSON.stringify(r.body)); return r.body.id;
+}
+const ledgerRows = async () => (await h.get('/api/accounting/transactions?limit=50', owner)).body.items as any[];
+
+test('a sale and a renewal each post income in Memberships and keep the transaction id on the payment', async () => {
+  const bank = await acct('bank', 'Main bank'), till = await acct('cash', 'Till');
+  const p = await plan();
+  const sold = await sell(p.id, { method: 'upi', reference: 'UTR1' });
+  assert.equal(sold.status, 201, JSON.stringify(sold.body));
+  assert.equal(sold.body.ledger.accountId, bank);
+  let rows = await ledgerRows();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].amountPaise, 300000); assert.equal(rows[0].date, today()); assert.equal(rows[0].categoryName, 'Club memberships');
+  assert.equal(rows[0].description, 'Membership sale Gold Ravi Kumar');
+  const ren = await h.post(`${B}/members/${sold.body.id}/renew`, { method: 'cash', amountPaise: 250000 }, owner);
+  assert.equal(ren.status, 200, JSON.stringify(ren.body));
+  assert.equal(ren.body.ledger.accountId, till);
+  rows = await ledgerRows();
+  assert.equal(rows.length, 2);
+  assert.ok(rows.some((r) => r.amountPaise === 250000 && r.description === 'Membership renewal Gold Ravi Kumar' && r.accountId === till));
+  const pays = (await h.get(`${B}/members/${sold.body.id}`, owner)).body.payments as any[];
+  assert.equal(pays.length, 2);
+  assert.deepEqual(pays.map((x) => x.ledgerTxnId).sort(), rows.map((r) => r.id).sort());
+});
+
+test('without an account the payment is still recorded, with ledger null; a free plan posts nothing', async () => {
+  const p = await plan();
+  const sold = await sell(p.id);
+  assert.equal(sold.status, 201); assert.equal(sold.body.ledger, null); assert.equal(sold.body.paidPaise, 300000);
+  assert.equal((await h.get(`${B}/members/${sold.body.id}`, owner)).body.payments[0].ledgerTxnId, null);
+  assert.equal((await ledgerRows()).length, 0);
+  await acct('bank', 'Main bank');
+  const free = await plan({ name: 'Trial', pricePaise: 0 });
+  const t = await sell(free.id, { phone: '9876500002', name: 'Asha' });
+  assert.equal(t.status, 201); assert.equal(t.body.ledger, null); assert.equal((await ledgerRows()).length, 0);
+});
+
+test('a refused sale (duplicate phone) posts nothing; another owner has their own books', async () => {
+  await acct('bank', 'Main bank');
+  const p = await plan();
+  assert.equal((await sell(p.id)).status, 201);
+  assert.equal((await sell(p.id)).status, 409);
+  assert.equal((await ledgerRows()).length, 1);
+  assert.equal((await h.get('/api/accounting/transactions?limit=50', owner2)).body.items.length, 0);
+});

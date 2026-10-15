@@ -185,6 +185,7 @@ export const BUILTIN_CATEGORIES: BuiltinCategory[] = [
   { code: 'equipment_rental', name: 'Equipment rental', kind: 'income', group: 'Other income', sort: 40 },
   { code: 'sponsorship', name: 'Sponsorship & advertising', kind: 'income', group: 'Other income', sort: 50 },
   { code: 'interest', name: 'Interest received', kind: 'income', group: 'Other income', sort: 60 },
+  { code: 'memberships', name: 'Club memberships', kind: 'income', group: 'Other income', sort: 35 },
   { code: 'other_income', name: 'Other income', kind: 'income', group: 'Other income', sort: 90 },
 
   { code: 'salaries', name: 'Salaries & wages', kind: 'expense', group: 'Staff', sort: 10 },

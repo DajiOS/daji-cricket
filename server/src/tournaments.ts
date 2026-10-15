@@ -4,8 +4,9 @@ import { audit, type Actor } from './audit.ts';
 import { HttpError, conflict, notFound } from './errors.ts';
 import { newId } from './ids.ts';
 import { Validator } from './input.ts';
-import { addDays, istMidnight, minutesOf, MIN } from './time.ts';
+import { addDays, istDate, istMidnight, minutesOf, MIN } from './time.ts';
 import { createMatch } from './matches.ts';
+import { postToLedger, removeFromLedger } from './accounting/autopost.ts';
 
 // Tournaments: teams with entry fees, fixtures (round robin can be generated), results and a points table worked out from the results.
 // A fixture can be handed to the match-day scorer (matches.ts): the scorer's finished result is copied back, nothing is typed twice.
@@ -81,11 +82,13 @@ CREATE INDEX ix_tournament_fixtures_t ON tournament_fixtures(tournament_id, roun
 
 export const FORMATS = ['round_robin', 'knockout', 'league_knockout', 'other'] as const;
 export const STATUSES = ['draft', 'open', 'running', 'completed', 'cancelled'] as const;
+registerSchema('tournaments-2', `ALTER TABLE tournament_teams ADD COLUMN ledger_txn_id TEXT;`);
+
 const OUTCOMES = ['team_a', 'team_b', 'tie', 'no_result'] as const;
 const MAX_TEAMS = 32;
 
 interface TRow { id: string; owner_id: string; name: string; start_date: string; end_date: string; format: string; overs: number; entry_fee_paise: number; points_win: number; points_tie: number; status: string; notes: string | null; created_at: number }
-interface TeamRow { id: string; tournament_id: string; name: string; captain: string | null; phone: string | null; fee_paid: number; payment_ref: string | null; paid_at: number | null }
+interface TeamRow { id: string; tournament_id: string; name: string; captain: string | null; phone: string | null; fee_paid: number; payment_ref: string | null; paid_at: number | null; ledger_txn_id: string | null }
 interface FxRow { id: string; tournament_id: string; round: number; team_a_id: string; team_b_id: string; starts_at: number | null; ground_id: string | null; outcome: string | null; winner_team_id: string | null; result_text: string | null; a_runs: number | null; a_balls: number | null; b_runs: number | null; b_balls: number | null; match_id: string | null }
 
 const bad = (field: string, message: string) => new HttpError(400, 'VALIDATION_FAILED', message, { fields: [{ field, message }] });
@@ -109,8 +112,8 @@ export const ballsToOvers = (b: number | null): string | null => (b === null ? n
 
 // ------------------------------------------------------------------ output
 
-export interface TeamOut { id: string; name: string; captain: string | null; phone: string | null; feePaid: boolean; paymentRef: string | null; paidAt: number | null }
-const toTeam = (r: TeamRow): TeamOut => ({ id: r.id, name: r.name, captain: r.captain, phone: r.phone, feePaid: !!r.fee_paid, paymentRef: r.payment_ref, paidAt: r.paid_at });
+export interface TeamOut { id: string; name: string; captain: string | null; phone: string | null; feePaid: boolean; paymentRef: string | null; paidAt: number | null; ledgerTxnId: string | null }
+const toTeam = (r: TeamRow): TeamOut => ({ id: r.id, name: r.name, captain: r.captain, phone: r.phone, feePaid: !!r.fee_paid, paymentRef: r.payment_ref, paidAt: r.paid_at, ledgerTxnId: r.ledger_txn_id });
 
 export interface FixtureOut {
   id: string; round: number; teamAId: string; teamBId: string; teamA: string; teamB: string; startsAt: number | null; groundId: string | null; groundName: string | null;
@@ -241,8 +244,14 @@ function teamOr404(tid: string, teamId: string): TeamRow {
 const nameTaken = (tid: string, name: string, except?: string): boolean =>
   !!one('SELECT 1 FROM tournament_teams WHERE tournament_id = ? AND deleted_at IS NULL AND lower(name) = lower(?) AND id <> ?', tid, name, except ?? '');
 
+/** Books the entry fee as income in 'tournament_fees' and remembers the transaction on the team. Does nothing when the fee is 0 or the owner has no account; 409 PERIOD_LOCKED in a signed-off month. */
+function postFee(actor: Actor, ownerId: string, teamId: string, t: TRow, teamName: string, ref: string | null | undefined): void {
+  const posted = postToLedger(ownerId, actor, { date: istDate(now()), amountPaise: t.entry_fee_paise, description: `Tournament fee ${t.name} ${teamName}`, categoryCode: 'tournament_fees', method: 'bank', reference: ref });
+  if (posted) run('UPDATE tournament_teams SET ledger_txn_id = ? WHERE id = ?', posted.transactionId, teamId);
+}
+
 export function addTeam(actor: Actor, ownerId: string, tid: string, src: unknown): TeamOut {
-  own(ownerId, tid);
+  const t0 = own(ownerId, tid);
   const v = new Validator(src);
   const name = v.str('name', { required: true, min: 2, max: 50 });
   const captain = v.str('captain', { max: 80 });
@@ -253,14 +262,17 @@ export function addTeam(actor: Actor, ownerId: string, tid: string, src: unknown
   if (nameTaken(tid, name!)) throw bad('name', 'Another team in this tournament has that name');
   if (teamsOf(tid).length >= MAX_TEAMS) throw bad('name', `A tournament can have at most ${MAX_TEAMS} teams`);
   const id = newId('trt');
-  run(`INSERT INTO tournament_teams(id, tournament_id, owner_id, name, captain, phone, fee_paid, payment_ref, paid_at, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    id, tid, ownerId, name!, captain ?? null, phone ?? null, feePaid ? 1 : 0, ref ?? null, feePaid ? now() : null, now(), actor.id, now(), actor.id);
+  tx(() => {
+    run(`INSERT INTO tournament_teams(id, tournament_id, owner_id, name, captain, phone, fee_paid, payment_ref, paid_at, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      id, tid, ownerId, name!, captain ?? null, phone ?? null, feePaid ? 1 : 0, ref ?? null, feePaid ? now() : null, now(), actor.id, now(), actor.id);
+    if (feePaid) postFee(actor, ownerId, id, t0, name!, ref);
+  });
   audit(actor, 'tournament.team_add', 'tournament', tid, { team: name, feePaid }, ownerId);
   return toTeam(teamOr404(tid, id));
 }
 
 export function updateTeam(actor: Actor, ownerId: string, tid: string, teamId: string, src: unknown): TeamOut {
-  own(ownerId, tid);
+  const t0 = own(ownerId, tid);
   const cur = teamOr404(tid, teamId);
   const v = new Validator(src);
   const name = v.str('name', { min: 2, max: 50 });
@@ -273,8 +285,12 @@ export function updateTeam(actor: Actor, ownerId: string, tid: string, teamId: s
   const paid = feePaid === undefined ? !!cur.fee_paid : feePaid;
   const paidAt = paid ? (cur.fee_paid ? cur.paid_at : now()) : null;
   const newRef = !paid ? null : ref === undefined ? cur.payment_ref : ref || null;
-  run('UPDATE tournament_teams SET name = ?, captain = ?, phone = ?, fee_paid = ?, payment_ref = ?, paid_at = ?, updated_at = ?, updated_by = ? WHERE id = ?',
-    name ?? cur.name, captain === undefined ? cur.captain : captain || null, phone === undefined ? cur.phone : phone || null, paid ? 1 : 0, newRef, paidAt, now(), actor.id, teamId);
+  tx(() => {
+    if (cur.fee_paid && !paid) removeFromLedger(ownerId, actor, cur.ledger_txn_id); // 409 PERIOD_LOCKED if that month is signed off
+    run('UPDATE tournament_teams SET name = ?, captain = ?, phone = ?, fee_paid = ?, payment_ref = ?, paid_at = ?, ledger_txn_id = ?, updated_at = ?, updated_by = ? WHERE id = ?',
+      name ?? cur.name, captain === undefined ? cur.captain : captain || null, phone === undefined ? cur.phone : phone || null, paid ? 1 : 0, newRef, paidAt, paid ? cur.ledger_txn_id : null, now(), actor.id, teamId);
+    if (!cur.fee_paid && paid) postFee(actor, ownerId, teamId, t0, name ?? cur.name, newRef);
+  });
   if (feePaid !== undefined && feePaid !== !!cur.fee_paid) audit(actor, feePaid ? 'tournament.fee_paid' : 'tournament.fee_unpaid', 'tournament', tid, { team: cur.name, ref: newRef }, ownerId);
   else audit(actor, 'tournament.team_update', 'tournament', tid, { team: cur.name }, ownerId);
   return toTeam(teamOr404(tid, teamId));
