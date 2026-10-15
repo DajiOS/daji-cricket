@@ -1,0 +1,8 @@
+.rem-msg { max-width: 360px; min-width: 200px; font-size: 12.5px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rem-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: nowrap; white-space: nowrap; }
+.tbl td .strong { white-space: nowrap; }
+.rem-preview { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: #0f0f0f; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rem-preview .muted { font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; display: block; margin-bottom: 4px; }
+.card-head .seg { margin-left: auto; }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; }
+@media (max-width: 720px) { .rem-msg { max-width: 240px; } }

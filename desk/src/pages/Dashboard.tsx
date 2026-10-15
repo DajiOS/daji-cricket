@@ -1,6 +1,123 @@
-import { PageHead, Empty } from '../ui';
+import { useEffect, useState } from 'react';
+import { useSession } from '../App';
+import { PageHead, Stat, Loading, ErrorBox, Empty, Icon } from '../ui';
+import { CollectionChart, Ring } from '../charts';
+import { api, useApi, inr, inrShort, fmtDay, todayISO, can, go } from '../lib';
+import { Schedule, Attention, type TodayData } from '../parts/dash/Today';
+
+interface Overview {
+  range: { from: string; to: string };
+  bookings: { byStatus: Record<string, { count: number; totalPaise: number; paidPaise: number }> };
+  utilization: { groundId: string; groundName: string; availableSlots: number; bookedSlots: number; utilization: number }[];
+  payments: { outstandingBalances: { bookings: number; amountPaise: number } };
+}
+interface Pnl { revenue: { totalPaise: number }; netProfitPaise: number; uncategorised: { count: number } }
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const SOLD = ['confirmed', 'completed', 'no_show']; // sessions that count as booked
+
+/** The last six months as YYYY-MM, oldest first. */
+function lastMonths(n: number) {
+  const [y, m] = todayISO().split('-').map(Number);
+  return Array.from({ length: n }, (_, i) => { const d = new Date(Date.UTC(y!, m! - 1 - (n - 1 - i), 1)); return d.toISOString().slice(0, 7); });
+}
+const monthEnd = (p: string) => { const [y, m] = p.split('-').map(Number); return `${p}-${String(new Date(Date.UTC(y!, m!, 0)).getUTCDate()).padStart(2, '0')}`; };
 
 export default function Dashboard({ sub }: { sub: string }) {
   void sub;
-  return <div className="stack"><PageHead eyebrow="Coming together" title="Dashboard" /><Empty>This page is being built.</Empty></div>;
+  const { me, ownerId } = useSession();
+  const [version, setVersion] = useState(0);
+  const bump = () => setVersion((v) => v + 1);
+  const canBookings = can(me, 'manage_bookings'), canReports = can(me, 'view_reports');
+  const month = todayISO().slice(0, 7);
+
+  const [today, todayErr] = useApi<TodayData>(canBookings ? '/api/staff/today' : null, [version, ownerId]);
+  const [pnl, pnlErr] = useApi<Pnl>(canReports ? `/api/accounting/reports/pnl?month=${month}` : null, [ownerId]);
+
+  // six months of sessions booked against money received
+  const [trend, setTrend] = useState<{ period: string; billed: number; collected: number }[] | null>(null);
+  const [util, setUtil] = useState<Overview | null>(null);
+  const [trendErr, setTrendErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!canReports) return;
+    let live = true; setTrend(null); setTrendErr(null);
+    Promise.all(lastMonths(6).map((p) => api<Overview>(`/api/staff/reports/overview?from=${p}-01&to=${monthEnd(p)}`).then((o) => ({ p, o }))))
+      .then((rows) => {
+        if (!live) return;
+        setTrend(rows.map(({ p, o }) => ({ period: p, billed: SOLD.reduce((a, k) => a + (o.bookings.byStatus[k]?.totalPaise || 0), 0), collected: SOLD.reduce((a, k) => a + (o.bookings.byStatus[k]?.paidPaise || 0), 0) })));
+        setUtil(rows[rows.length - 1]!.o);
+      }).catch((e) => live && setTrendErr(e.message));
+    return () => { live = false; };
+  }, [canReports, ownerId, version]);
+
+  const hour = Number(new Date(Date.now() + 19800000).toISOString().slice(11, 13));
+  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const toCollect = (today?.bookings || []).reduce((a, b) => a + (b.status === 'confirmed' ? Math.max(0, b.balancePaise || 0) : 0), 0);
+  const monthName = MONTHS[Number(month.slice(5)) - 1]!.slice(0, 3);
+  const booked = util?.utilization.reduce((a, g) => a + g.bookedSlots, 0) || 0, avail = util?.utilization.reduce((a, g) => a + g.availableSlots, 0) || 0;
+  const thisMonth = trend?.[trend.length - 1];
+
+  return (
+    <div className="stack">
+      <PageHead eyebrow={me.role === 'super_admin' ? 'Software owner' : me.businessName || 'Daji Cricket Ground'} title={`${greet}, ${me.name.split(' ')[0]}`}
+        lede={`Here is the ground as of ${fmtDay(todayISO())}.`}>
+        {canBookings && <button className="btn primary" onClick={() => go('/bookings/new')}><Icon name="plus" />New booking</button>}
+      </PageHead>
+
+      <div className="grid g4">
+        <Stat label="Sessions today" value={today ? today.bookings.length : '…'} foot={today ? (today.bookings.length ? `${today.bookings.filter((b) => b.startAt > Date.now()).length} still to play` : 'A quiet day') : ' '} />
+        <Stat label={`Revenue · ${monthName}`} value={pnl ? inrShort(pnl.revenue.totalPaise) : canReports && !pnlErr ? '…' : thisMonth ? inrShort(thisMonth.collected) : '—'}
+          foot={pnl ? 'from sessions played this month' : pnlErr ? 'Sessions played, from payments received' : canReports ? ' ' : 'Your role does not include reports'} />
+        <Stat label={`Net profit · ${monthName}`} value={pnl ? <span style={pnl.netProfitPaise < 0 ? { color: '#f19a8d' } : undefined}>{inrShort(pnl.netProfitPaise)}</span> : canReports && !pnlErr ? '…' : '—'}
+          foot={pnl ? (pnl.uncategorised.count ? `${pnl.uncategorised.count} bank transactions still need a category` : 'after expenses') : pnlErr ? 'Accounting is not available here' : ' '} />
+        <Stat label="To collect today" value={today ? <span style={toCollect ? { color: '#e9c06a' } : undefined}>{inr(toCollect)}</span> : '…'} foot="balances on today's sessions" />
+      </div>
+
+      <div className="grid g-2-1">
+        <div className="card">
+          <div className="card-head"><h3>Sessions billed vs collected</h3><span className="muted small">Last 6 months</span></div>
+          <div className="card-pad">
+            {!canReports ? <Empty>The reports are not available to your role.</Empty> : trendErr ? <ErrorBox msg={trendErr} /> : !trend ? <Loading h={240} /> : <CollectionChart data={trend} />}
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-head"><h3>Ground utilisation</h3><span className="muted small">{MONTHS[Number(month.slice(5)) - 1]}</span></div>
+          <div className="card-pad">
+            {!canReports ? <Empty>The reports are not available to your role.</Empty> : !util ? <Loading h={200} /> : (
+              <>
+                <div className="row" style={{ gap: 20, alignItems: 'center', flexWrap: 'nowrap' }}>
+                  <Ring value={booked} total={avail} label="Booked" />
+                  <div className="stack" style={{ flex: 1, minWidth: 120, gap: 10 }}>
+                    {util.utilization.map((g) => (
+                      <div key={g.groundId}>
+                        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><span className="small">{g.groundName}</span><b className="tabular small">{Math.round(g.utilization)}%</b></div>
+                        <div className="meter" style={{ marginTop: 5 }}><span style={{ width: `${Math.min(100, g.utilization)}%` }} /></div>
+                      </div>))}
+                  </div>
+                </div>
+                <div className="divider" />
+                <div className="small muted">{booked} of {avail} hours booked this month</div>
+                {util.payments.outstandingBalances.bookings > 0 && <div className="small muted" style={{ marginTop: 6 }}>Balances still to collect: <b className="gold tabular">{inr(util.payments.outstandingBalances.amountPaise)}</b> on {util.payments.outstandingBalances.bookings} bookings</div>}
+              </>)}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid g-2-1 dash-lists">
+        <div className="card">
+          <div className="card-head"><h3>Today's schedule</h3><a className="small" href="#/bookings/day">Day view →</a></div>
+          {canBookings ? <Schedule data={today} err={todayErr} onChanged={bump} /> : <Empty>Your role does not include bookings.</Empty>}
+        </div>
+        <div className="card">
+          <div className="card-head"><h3>Needs your attention</h3><a className="small" href="#/bookings/approvals">Approvals →</a></div>
+          <Attention today={today} canBookings={canBookings} canVerify={can(me, 'verify_payments')} onChanged={bump} version={version} />
+        </div>
+      </div>
+
+      <div className="grid g3">
+        {([['/academy', 'MP13 Academy', 'Students, attendance, progress cards and fees.', 'manage_academy'], ['/memberships', 'Memberships', 'Plans, members and renewals.', 'manage_bookings'], ['/bills', 'Bills and payroll', 'Bills to approve, staff attendance and salaries.', 'manage_accounting']] as const)
+          .filter(([, , , perm]) => can(me, perm)).map(([to, title, text]) => (
+            <a key={to} href={`#${to}`} className="card card-pad biz-card"><div className="eyebrow">Open</div><h2>{title}</h2><div className="muted small" style={{ marginTop: 6 }}>{text}</div></a>))}
+      </div>
+    </div>
+  );
 }
