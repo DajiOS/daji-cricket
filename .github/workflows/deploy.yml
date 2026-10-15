@@ -1,5 +1,5 @@
 # Deploys to the Lightsail server whenever main changes.
-# Switched on by the repository variable DEPLOY_ENABLED=true and the secrets SERVER_HOST, SERVER_USER, SERVER_KEY, SERVER_HOSTKEY.
+# Switched on by the repository variable DEPLOY_ENABLED=true and the secrets SERVER_HOST, SERVER_USER, SERVER_KEY.
 # The code is copied to ~/cricket-booking on the server with rsync (the server needs no access to GitHub),
 # then the same steps you ran by hand: docker compose up -d --build. .env files and data on the server are never touched,
 # and files that were removed from the repo are left alone on the server.
@@ -19,13 +19,13 @@ jobs:
       - name: Set up SSH
         env:
           SERVER_KEY: ${{ secrets.SERVER_KEY }}
-          SERVER_HOSTKEY: ${{ secrets.SERVER_HOSTKEY }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
         run: |
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SERVER_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf '%s %s\n' "$SERVER_HOST" "$SERVER_HOSTKEY" > ~/.ssh/known_hosts
+          ssh-keyscan -t ed25519 -T 10 "$SERVER_HOST" > ~/.ssh/known_hosts
+          test -s ~/.ssh/known_hosts
       - name: Copy the code
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
