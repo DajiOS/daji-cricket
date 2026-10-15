@@ -1,5 +1,8 @@
-# Deploys to the Lightsail server whenever main changes. Switched on by a repository variable DEPLOY_ENABLED=true
-# (Settings > Secrets and variables > Actions > Variables) and the secrets SERVER_HOST, SERVER_USER, SERVER_KEY.
+# Deploys to the Lightsail server whenever main changes.
+# Switched on by the repository variable DEPLOY_ENABLED=true and the secrets SERVER_HOST, SERVER_USER, SERVER_KEY, SERVER_HOSTKEY.
+# The code is copied to ~/cricket-booking on the server with rsync (the server needs no access to GitHub),
+# then the same steps you ran by hand: docker compose up -d --build. .env files and data on the server are never touched,
+# and files that were removed from the repo are left alone on the server.
 name: Deploy
 on:
   push:
@@ -10,19 +13,40 @@ jobs:
   deploy:
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
-      - uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_KEY }}
-          script_stop: true
-          script: |
+      - uses: actions/checkout@v4
+      - name: Set up SSH
+        env:
+          SERVER_KEY: ${{ secrets.SERVER_KEY }}
+          SERVER_HOSTKEY: ${{ secrets.SERVER_HOSTKEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SERVER_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s %s\n' "$SERVER_HOST" "$SERVER_HOSTKEY" > ~/.ssh/known_hosts
+      - name: Copy the code
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          rsync -az \
+            --exclude '.git' --exclude '.github' --exclude 'node_modules' --exclude 'mobile' \
+            --exclude '.env' --exclude 'deploy/.env' --exclude 'data' --exclude '*.db' --exclude '*.db-wal' --exclude '*.db-shm' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            ./ "$SERVER_USER@$SERVER_HOST:cricket-booking/"
+      - name: Build and restart
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$SERVER_USER@$SERVER_HOST" '
+            set -e
             cd ~/cricket-booking
-            git fetch --depth 1 origin main
-            git reset --hard origin/main
             chmod -R a+rX server web shared
             cd deploy
             sudo docker compose up -d --build
             sudo docker image prune -f
+            sudo docker compose ps
+          '
