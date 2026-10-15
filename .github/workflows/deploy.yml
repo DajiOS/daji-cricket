@@ -22,8 +22,18 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$SERVER_KEY" > ~/.ssh/deploy_key
+          # Rebuild the key's layout: a pasted key often loses its line breaks or gains spaces or carriage returns.
+          python3 - <<'PY'
+          import os, re, textwrap
+          raw = os.environ['SERVER_KEY']
+          m = re.search(r'-----BEGIN ([A-Z ]+)-----(.*?)-----END \1-----', raw, re.S)
+          if not m:
+              raise SystemExit('SERVER_KEY does not contain a BEGIN ... END private key block')
+          body = re.sub(r'\s+', '', m.group(2))
+          open(os.path.expanduser('~/.ssh/deploy_key'), 'w').write('-----BEGIN %s-----\n%s\n-----END %s-----\n' % (m.group(1), '\n'.join(textwrap.wrap(body, 70)), m.group(1)))
+          PY
           chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null || { echo 'The SERVER_KEY secret is not a valid private key. Copy it again from the server with: cat ~/.ssh/gh_deploy'; exit 1; }
           ssh-keyscan -t ed25519 -T 10 "$SERVER_HOST" > ~/.ssh/known_hosts
           test -s ~/.ssh/known_hosts
       - name: Copy the code
