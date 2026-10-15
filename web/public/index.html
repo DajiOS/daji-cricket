@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en" data-theme="onyx-slate">
+<head>
+<script src="zoom.js"></script>
+<meta charset="utf-8">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daji Cricket Ground</title>
+<meta name="description" content="Book the ground at Daji Cricket Ground, Surat. Project by Daji Parivar.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@300;400;500;600&family=Kaushan+Script&family=Playfair+Display:wght@600;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div id="splash" hidden aria-hidden="true"><video id="splash-v" muted playsinline preload="auto"><source src="assets/intro.webm" type="video/webm"><source src="assets/intro.mp4" type="video/mp4"></video><img id="splash-logo" src="assets/logo.svg" alt=""><button id="splash-skip" type="button">Skip</button></div>
+
+
+<div id="view-home" class="view on">
+<div class="wrap">
+  <nav>
+    <a class="brand" href="#top" data-home aria-label="Daji Cricket Ground"><img class="wm-nav" src="assets/logo.svg" alt="Daji Cricket Ground"><span class="brand-tag" data-tagline></span></a>
+    <div class="links" id="links">
+      <a href="#grounds" data-jump="grounds">Grounds</a>
+      <a href="#gallery" data-jump="gallery">Gallery</a>
+      <a href="#live" data-jump="live" id="nav-live" hidden>Live scores</a>
+      <a href="#academy">MP13 Academy</a>
+      <a href="#visit" data-jump="visit">Contact</a>
+      <a href="#" data-instagram target="_blank" rel="noopener" hidden>Instagram</a>
+      <span id="authlinks" class="who"></span>
+      <a class="btn primary sm" href="#book" data-jump="book" data-book>Book now</a>
+      <span id="profile-slot" class="profile-slot"></span>
+    </div>
+    <button class="menu" type="button" id="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="links"><i></i><i></i><i></i></button>
+  </nav>
+
+  <header class="hero" id="top">
+    <div style="position:relative">
+            <h1 class="display">Book <em class="gold-text">the ground.</em></h1>
+      <p class="lead">A turf wicket under floodlights, held for you the moment you choose. Pay the advance online and your slot is confirmed.</p>
+      <div class="cta"><a class="btn primary" href="#book" data-jump="book">Check availability</a><button class="btn outline" type="button" data-enquiry>Send an enquiry</button></div>
+      <div class="facts" id="facts"></div>
+      <ol class="howto"><li><b>1</b>Pick a day</li><li><b>2</b>Choose ball and match</li><li><b>3</b>Pay the advance</li><li><b>✓</b>Slot is yours</li></ol>
+    </div>
+
+    <aside class="panel" id="book" aria-label="Booking">
+      <div class="eyebrow">Reserve</div>
+      <h3 id="p-name">Loading…</h3>
+      <div class="sub" id="p-sub"></div>
+      <div class="tabs" id="p-tabs"></div>
+      <div class="step"><i>1</i>Pick a day</div>
+      <div class="datebar">
+        <label class="datepick"><input type="date" id="p-date" aria-label="Pick any date, up to a year ahead"></label>
+        <div class="dayscroll" id="p-days"></div>
+      </div>
+      <div class="step" id="p-step2" hidden><i>2</i>Choose the ball and match length</div>
+      <div id="p-formats" class="fmtpick" hidden></div>
+      <div class="step" id="p-step3"><i>2</i>Pick your time</div>
+      <div id="p-hint" class="hint"></div>
+      <div class="slots" id="p-slots"></div>
+      <div class="legend"><span><i class="a"></i>Available</span><span><i class="s"></i>Selected</span><span><i class="h"></i>Held</span><span><i class="b"></i>Booked</span></div>
+      <div class="sum" id="p-sum"></div>
+      <div class="repeat" id="p-repeat-row" hidden><label for="p-repeat">Repeat</label><select id="p-repeat" aria-label="Repeat this booking"><option value="">Does not repeat</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="yearly">Every year</option></select><span id="p-repeat-n" hidden><input id="p-repeat-count" type="number" min="2" value="4" inputmode="numeric" aria-label="Number of bookings"> times</span></div><div class="fe promo-msg" id="p-repeat-msg"></div>
+      <label class="check" id="p-credit-row" hidden><input type="checkbox" id="p-credit"><span id="p-credit-text"></span></label>
+      <div class="promo" id="p-promo-row" hidden><input id="p-promo" type="text" placeholder="Promo code" maxlength="30" autocomplete="off" autocapitalize="characters" aria-label="Promo code"><button class="btn outline sm" id="p-promo-apply" type="button">Apply</button></div><div class="fe promo-msg" id="p-promo-msg"></div>
+      <button class="btn primary block" id="p-hold" type="button" disabled>Choose your slots</button>
+      <div class="note" id="p-note"></div>
+      <div class="note callnote" id="p-callnote" hidden></div>
+    </aside>
+  </header>
+</div>
+
+<section id="grounds"><div class="wrap">
+  <div class="head"><div><div class="eyebrow">The grounds</div><h2 class="display">Ways <em>to play.</em></h2></div><p>Every ground shows live availability. Prices are per hour and include floodlights after the evening time shown on each ground.</p></div>
+  <div class="grounds" id="grounds-list"><div class="skeleton">Loading grounds…</div></div>
+</div></section>
+
+<section id="gallery"><div class="wrap">
+  <div class="head"><div><div class="eyebrow">Gallery</div><h2 class="display">Life <em>at the ground.</em></h2></div><p id="gal-note">Matches, practice and MP13 Academy, as they happen.</p></div>
+  <div class="gallery" id="gal-grid"></div>
+  <div class="cta" style="margin:28px 0 0"><a class="btn outline" data-instagram href="#" target="_blank" rel="noopener" hidden>Follow us on Instagram</a></div>
+</div></section>
+
+<section id="live" hidden><div class="wrap">
+  <div class="head"><div><div class="eyebrow">Match day</div><h2 class="display">Live <em>scores.</em></h2></div><p>Matches played at the ground, scored ball by ball. Tap a match to see the full scorecard.</p></div>
+  <div id="live-list"></div>
+</div></section>
+
+<section id="academy-teaser"><div class="wrap">
+  <div class="head"><div><div class="eyebrow">MP13 Academy</div><h2 class="display" id="t-h"></h2></div></div>
+  <div class="academy">
+    <div class="copy">
+      <p id="t-about"></p>
+      <div class="cta" style="margin:0"><a class="btn primary" href="#academy">See the academy</a><button class="btn outline" type="button" data-enquiry="academy">Ask about the academy</button></div>
+    </div>
+    <div class="mp"><span class="eyebrow">Trains under</span><b class="gold-text" id="t-brand"></b><span id="t-line"></span></div>
+  </div>
+</div></section>
+
+<section id="visit"><div class="wrap">
+  <div class="head"><div><div class="eyebrow">Contact</div><h2 class="display">Find us, <em>or call.</em></h2></div><p>Questions about a booking, a tournament or MP13 Academy: write or call and we will get back to you.</p></div>
+  <div class="visit">
+    <div class="box"><h5>Contact person</h5><div class="big" id="ct-name"></div><a class="line link" id="ct-phone" href="#"></a><a class="line link" id="ct-email" href="#"></a><a class="btn wa sm" id="ct-wa" href="#" target="_blank" rel="noopener">Chat on WhatsApp</a></div>
+    <div class="box"><h5>Where</h5><div class="big">Daji Cricket Ground</div><div class="line" id="ct-where"></div><a class="btn primary sm" id="ct-dir" href="#" target="_blank" rel="noopener">Get directions</a></div>
+    <div class="box"><h5>Open</h5><div class="big" id="ct-open"></div><div class="line" id="ct-open-sub"></div><button class="btn outline sm" type="button" data-enquiry>Send an enquiry</button></div>
+  </div>
+</div></section>
+
+<div class="wrap"><section class="signoff" style="border:0"><div class="wmbox"><img src="assets/logo.svg" alt="" style="width:100%;height:auto;display:block"><div class="tagline" id="tagline"></div></div></section>
+<footer><span id="foot-l"></span><span><a href="#" data-instagram target="_blank" rel="noopener" hidden style="margin-right:18px">Instagram</a><a href="#terms" data-terms style="margin-right:18px">Terms and conditions</a><a href="#platform" style="margin-right:18px">For ground owners</a><span id="foot-r"></span></span></footer></div>
+</div>
+
+<!-- ============ MP13 Academy ============ -->
+<div id="view-academy" class="view">
+<div class="wrap">
+  <nav><a class="brand" href="#top" data-home><img class="wm-nav" src="assets/logo.svg" alt="Daji Cricket Ground"><span class="brand-tag" data-tagline></span></a><div class="links" data-navclone></div></nav>
+  <header class="hero acad-hero">
+    <div style="position:relative">
+      <div class="eyebrow">Cricket coaching at Daji Cricket Ground</div>
+      <h1 class="display" id="ac-h"></h1>
+      <p class="lead" id="ac-about"></p>
+      <div class="by" id="ac-by"></div>
+      <div class="cta"><button class="btn primary" type="button" data-enquiry="academy">Ask about joining</button><a class="btn wa" id="ac-wa" href="#" target="_blank" rel="noopener">Chat on WhatsApp</a></div>
+    </div>
+    <div class="mp"><span class="eyebrow">Trains under</span><b class="gold-text" id="ac-brand"></b><span id="ac-line"></span></div>
+  </header>
+  <section style="border:0;padding:32px 0">
+    <div class="head"><div><div class="eyebrow">How it works</div><h2 class="display">Join in <em>three steps.</em></h2></div></div>
+    <ol class="steps3">
+      <li><b>1</b><h4>Ask us</h4><p>Send an enquiry or message us on WhatsApp. Tell us the player's age and what they want to work on.</p></li>
+      <li><b>2</b><h4>Come for a session</h4><p>We call you back and fix a time to meet the coaches at the ground.</p></li>
+      <li><b>3</b><h4>Train and track</h4><p>Coaches mark attendance at every session. Parents see a monthly progress card on their account.</p></li>
+    </ol>
+  </section>
+  <section style="border:0;padding:24px 0" id="ac-coaches" hidden>
+    <div class="head"><div><div class="eyebrow">Coaching staff</div><h2 class="display">Meet <em>the coaches.</em></h2></div></div>
+    <div class="coach-grid" id="ac-coach-grid"></div>
+  </section>
+  <section style="border:0;padding:24px 0" id="ac-galsec" hidden>
+    <div class="head"><div><div class="eyebrow">Photos</div><h2 class="display">At <em>the nets.</em></h2></div></div>
+    <div class="acgal" id="ac-gal"></div>
+  </section>
+  <section style="border:0;padding:24px 0 80px">
+    <div class="box acad-cta"><div><h4 class="big">Questions about MP13 Academy?</h4><div class="line" id="ac-contact"></div></div><button class="btn primary" type="button" data-enquiry="academy">Send an enquiry</button></div>
+  </section>
+</div>
+</div>
+
+<!-- ============ My bookings ============ -->
+<div id="view-bookings" class="view">
+<div class="wrap">
+  <nav><a class="brand" href="#top" data-home><img class="wm-nav" src="assets/logo.svg" alt="Daji Cricket Ground"><span class="brand-tag" data-tagline></span></a><div class="links" data-navclone></div></nav>
+  <section style="border:0;padding:64px 0 96px">
+    <div class="head"><div><div class="eyebrow">Your account</div><h2 class="display">My <em>dashboard.</em></h2></div><p id="bk-credit"></p></div>
+    <div class="tabs" id="bk-tabs" style="margin:0 0 22px"></div>
+    <div id="bk-dash"></div>
+    <div class="bookings" id="bk-list"><div class="skeleton">Loading…</div></div>
+    <div id="bk-extra"></div>
+  </section>
+</div>
+</div>
+
+<!-- ============ Owner desk ============ -->
+<div id="view-desk" class="view">
+<div class="wrap">
+  <nav><a class="brand" href="#top" data-home><img class="wm-nav" src="assets/logo.svg" alt="Daji Cricket Ground"><span class="brand-tag" data-tagline></span></a><div class="links" data-navclone></div></nav>
+  <section style="border:0;padding:64px 0 96px">
+    <div class="head"><div><div class="eyebrow" id="dk-eyebrow">Owner desk</div><h2 class="display" id="dk-title">Today, <em>at a glance.</em></h2></div><span id="dk-ask-slot"></span><p id="dk-sub">A first look at the owner screens. Reports, Contacts and the books each get their own full screens in the next stage.</p></div>
+    <div id="dk-body"></div>
+  </section>
+</div>
+</div>
+
+<!-- ============ Sign in / create account ============ -->
+<div id="view-login" class="view">
+<div class="wrap">
+  <nav><a class="brand" href="#top" data-home><img class="wm-nav" src="assets/logo.svg" alt="Daji Cricket Ground"><span class="brand-tag" data-tagline></span></a><div class="links"><a class="keep" href="#top" data-home>Back to the ground</a></div></nav>
+  <section style="border:0;padding:64px 0 96px">
+    <div class="loginbox">
+      <div class="eyebrow">Your account</div>
+      <h2 class="display" style="font-size:clamp(40px,6vw,64px);margin:14px 0 8px">Sign <em>in.</em></h2>
+      <div id="login-body"></div>
+    </div>
+  </section>
+</div>
+</div>
+
+<!-- ============ For ground owners (the SaaS page) ============ -->
+<div id="view-platform" class="view">
+<div class="wrap">
+  <nav><a class="brand" href="#top" data-home><img class="wm-nav" src="assets/logo.svg" alt="Daji Cricket Ground"><span class="brand-tag" data-tagline></span></a><div class="links"><a class="keep" href="#top" data-home>Back to the ground</a></div></nav>
+  <header class="hero plat" id="plat-top">
+    <div style="position:relative">
+      <div class="eyebrow">For ground owners</div>
+      <h1 class="display">Run your ground <em class="gold-text">like this one.</em></h1>
+      <p class="lead">The booking, payment, accounting and academy software behind Daji Cricket Ground, offered to other ground owners. Your own grounds, your own prices, your own books. Nothing shared with anyone else.</p>
+      <div class="cta"><button class="btn primary" type="button" id="plat-cta">Ask for access</button></div>
+    </div>
+  </header>
+  <section style="border:0;padding:40px 0">
+    <div class="head"><div><div class="eyebrow">What you get</div><h2 class="display">One system, <em>every job.</em></h2></div></div>
+    <div class="feat" id="plat-feat"></div>
+  </section>
+  <section style="border:0;padding:40px 0 96px" id="plat-form">
+    <div class="head"><div><div class="eyebrow">Get started</div><h2 class="display">Tell us <em>about your ground.</em></h2></div><p>We will call you to understand your ground and set up a demonstration with your own details. Pricing is agreed with you directly.</p></div>
+    <form class="box plat-form" id="plat-f" novalidate></form>
+  </section>
+</div>
+</div>
+
+<!-- ============ Dialogs ============ -->
+<div class="modal" id="modal" role="dialog" aria-modal="true"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="embed.js"></script>
+<script src="app.js"></script>
+<script src="books.js"></script>
+<script src="club.js"></script>
+<script src="contacts.js"></script>
+</body>
+</html>

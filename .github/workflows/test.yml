@@ -1,0 +1,19 @@
+# Runs the server tests on every push and pull request. Informational: it does not block a deploy.
+name: Tests
+on:
+  push:
+  pull_request:
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Link the shared package
+        run: mkdir -p server/node_modules/@daji && ln -s ../../../shared server/node_modules/@daji/shared
+      - name: Test
+        working-directory: server
+        run: npm test

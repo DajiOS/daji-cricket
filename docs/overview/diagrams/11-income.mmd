@@ -1,0 +1,16 @@
+flowchart TD
+  A["Customer pays the advance<br/>(captured or verified)"] --> B["Held as 'Customer advances':<br/>owed to the customer, not income yet"]
+  B --> C(["What happens to the booking?"])
+  C -->|"Played<br/>(end time passed)"| D["On the play date:<br/>Booking income<br/>(GST inside the price goes<br/>to GST payable)"]
+  C -->|"No-show"| E["On the play date:<br/>advance kept =<br/>Forfeited income"]
+  C -->|"Cancelled"| F{"How early?"}
+  F -->|"More than 24 h before"| G["Refund or credit for all paid:<br/>no income"]
+  F -->|"Inside 24 h"| H["Credit share to 'Customer credits';<br/>what is kept = Forfeited income,<br/>on the cancellation day"]
+  D --> D2["Balance not paid yet?<br/>Shows as 'Customers owe you'.<br/>Paid later: settles it,<br/>not new income"]
+  H --> I{"Credit used<br/>within 90 days?"}
+  I -->|"Yes"| J["Spent on a later booking,<br/>earned when that is played"]
+  I -->|"No"| K["Expires: written off<br/>as Forfeited income"]
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef warn fill:#f3ead4,stroke:#9a7d44
+  class D,J good
+  class E,H,K warn

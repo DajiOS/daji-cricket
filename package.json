@@ -1,0 +1,19 @@
+{
+  "name": "daji-cricket-ground",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Daji Cricket Ground \u2014 booking platform (customer web, Expo app, Node API, accounting)",
+  "workspaces": [
+    "shared",
+    "server"
+  ],
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "test": "npm test -w server",
+    "typecheck": "npm run typecheck -w server",
+    "start": "npm start -w server"
+  },
+  "type": "module"
+}

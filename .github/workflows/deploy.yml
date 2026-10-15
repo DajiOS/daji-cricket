@@ -1,0 +1,28 @@
+# Deploys to the Lightsail server whenever main changes. Switched on by a repository variable DEPLOY_ENABLED=true
+# (Settings > Secrets and variables > Actions > Variables) and the secrets SERVER_HOST, SERVER_USER, SERVER_KEY.
+name: Deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency: deploy
+jobs:
+  deploy:
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_KEY }}
+          script_stop: true
+          script: |
+            cd ~/cricket-booking
+            git fetch --depth 1 origin main
+            git reset --hard origin/main
+            chmod -R a+rX server web shared
+            cd deploy
+            sudo docker compose up -d --build
+            sudo docker image prune -f

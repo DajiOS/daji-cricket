@@ -1,0 +1,8 @@
+flowchart TD
+  A(["Payment arrives after the slots were released"]) --> S{{"Slots still free?"}}
+  S -- "Yes" --> RC["Booking re-confirmed<br/>customer notified"]
+  S -- "No" --> RF["Automatic refund,<br/>payment marked late"]
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef bad fill:#f8e1db,stroke:#c2543f
+  class RC good
+  class RF bad

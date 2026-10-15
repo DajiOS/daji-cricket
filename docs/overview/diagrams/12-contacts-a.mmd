@@ -1,0 +1,12 @@
+flowchart TD
+  P["People who have played at your grounds<br/>(completed, or confirmed and finished)"]
+  P --> F["Choose who<br/>ground · dates played · times played ·<br/>quiet since a date · name search"]
+  F --> T["Write the update: a template or your own<br/>closed day · rain · new timings · price ·<br/>facility · tournament and academy<br/>{name} becomes each first name"]
+  T --> V["Preview<br/>audience, who will get it,<br/>a sample, the exact message"]
+  V --> R(["For each person, on the channel you chose"])
+  R -->|"agreed to this channel,<br/>has an address, account active"| OK["Will receive it"]
+  R -->|"has not agreed · no address ·<br/>account disabled"| SK["Skipped, with the reason shown"]
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef bad fill:#f8e1db,stroke:#c2543f
+  class OK good
+  class SK bad

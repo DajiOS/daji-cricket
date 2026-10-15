@@ -1,0 +1,116 @@
+import { runRecurring } from './accounting/books.ts';
+import { runDepreciation } from './accounting/plus.ts';
+import { runFeedSync } from './accounting/feed.ts';
+import { many, run, tx } from './db.ts';
+import { now } from './clock.ts';
+import { audit, SYSTEM } from './audit.ts';
+import { HOUR, MIN } from './time.ts';
+import { getSettings } from './settings.ts';
+import { bookingOr404, confirmBooking, releaseSiblings, releaseSlots, type BookingRow } from './bookings.ts';
+import { logEvent, markFailed, processRefunds, type PaymentRow } from './payments.ts';
+import { notify, venueData } from './notifications.ts';
+import * as credits from './credits.ts';
+import { runBackupIfDue } from './backup.ts';
+import type { Config } from './config.ts';
+import { chargeDue } from './autodebit.ts';
+
+export interface ExpiryResult { released: number; confirmed: number; extended: number }
+
+/**
+ * Hold expiry (FR-02, FR-05, BR-03). A hold is never released just because its timer ran out:
+ *   money already received            → confirm
+ *   a payment still pending/submitted → extend by the grace period (bounded), flag for staff review
+ *   nothing pending, or extensions used up → release
+ * A payment that turns up after release is handled in payments.applyCaptured (re-confirm or refund).
+ */
+export function sweepHolds(): ExpiryResult {
+  const res: ExpiryResult = { released: 0, confirmed: 0, extended: 0 };
+  const due = many<BookingRow>("SELECT * FROM bookings WHERE status = 'held' AND hold_expires_at IS NOT NULL AND hold_expires_at <= ? ORDER BY hold_expires_at LIMIT 500", now());
+  const s = getSettings();
+  for (const d of due) {
+    tx(() => {
+      const b = bookingOr404(d.id);
+      if (b.status !== 'held' || b.hold_expires_at === null || b.hold_expires_at > now()) return;
+      const pays = many<PaymentRow>('SELECT * FROM payments WHERE booking_id = ?', b.id);
+      if (b.paid_paise >= b.advance_paise) { confirmBooking(b.id, SYSTEM, { via: 'sweep' }); res.confirmed++; return; }
+      const pending = pays.some((p) => p.status === 'pending' || p.status === 'submitted');
+      if (pending && b.hold_extensions < s.maxHoldExtensions) {
+        const next = now() + s.graceMinutes * MIN;
+        run('UPDATE bookings SET hold_expires_at = ?, hold_extensions = hold_extensions + 1, needs_review = 1, updated_at = ? WHERE id = ?', next, now(), b.id);
+        audit(SYSTEM, 'booking.hold_extend', 'booking', b.id, { extensions: b.hold_extensions + 1, until: next, reason: 'payment pending' }, b.owner_id);
+        res.extended++;
+        return;
+      }
+      for (const p of pays) {
+        if (p.status === 'created') markFailed(p.id, 'hold expired', SYSTEM);
+        else if (p.status === 'pending' || p.status === 'submitted') logEvent(p.id, null, 'hold.released_while_pending', { note: 'a late verification will be reconciled' });
+      }
+      // Credit used on a booking that never completes goes back to the wallet.
+      for (const p of pays) if (p.method === 'credit' && p.status === 'captured') {
+        credits.issueCredit({ customerId: b.customer_id, ownerId: b.owner_id, amountPaise: p.amount_paise, source: 'restore', bookingId: b.id, note: `Hold ${b.ref} expired`, silent: true });
+        run("UPDATE payments SET status = 'refunded', refunded_paise = amount_paise WHERE id = ?", p.id);
+      }
+      releaseSlots(b.id);
+      releaseSiblings(b);
+      run("UPDATE bookings SET status = 'expired', hold_expires_at = NULL, needs_review = ?, updated_at = ? WHERE id = ?", pending ? 1 : 0, now(), b.id);
+      audit(SYSTEM, 'booking.expire', 'booking', b.id, { pendingPaymentIgnored: pending, extensions: b.hold_extensions }, b.owner_id);
+      const g = many<{ name: string }>('SELECT name FROM grounds WHERE id = ?', b.ground_id)[0];
+      notify(b.customer_id, 'hold_expired', { ref: b.ref, ground: g?.name, startAt: b.start_at }, b.id);
+      res.released++;
+    });
+  }
+  return res;
+}
+
+/** Confirmed bookings are marked completed a day after they end, unless staff recorded a no-show. */
+export function sweepCompleted(): number {
+  const rows = many<BookingRow>("SELECT * FROM bookings WHERE status = 'confirmed' AND end_at <= ?", now() - 24 * HOUR);
+  for (const b of rows) {
+    run("UPDATE bookings SET status = 'completed', updated_at = ? WHERE id = ? AND status = 'confirmed'", now(), b.id);
+    audit(SYSTEM, 'booking.complete', 'booking', b.id, null, b.owner_id);
+  }
+  return rows.length;
+}
+
+/** One reminder per confirmed booking, 24 hours before it starts, once. */
+export function sweepReminders(): number {
+  const t = now();
+  const rows = many<BookingRow & { ground_name: string }>("SELECT b.*, g.name AS ground_name FROM bookings b JOIN grounds g ON g.id = b.ground_id WHERE b.status = 'confirmed' AND b.reminded_at IS NULL AND b.start_at > ? AND b.start_at <= ?", t, t + 24 * HOUR);
+  for (const b of rows) {
+    run('UPDATE bookings SET reminded_at = ? WHERE id = ? AND reminded_at IS NULL', t, b.id);
+    notify(b.customer_id, 'booking_reminder', { ref: b.ref, ground: b.ground_name, startAt: b.start_at, amountPaise: Math.max(b.total_paise - b.paid_paise, 0), ...venueData(b.ground_id) }, b.id);
+  }
+  return rows.length;
+}
+
+export interface SweepResult { expiry: ExpiryResult; creditsExpiredPaise: number; reminders: number; completed: number; refundsProcessed: number }
+
+/** Everything the scheduler does each minute. Safe to run any number of times. */
+export async function runSweeps(cfg: Config): Promise<SweepResult> {
+  const expiry = sweepHolds();
+  const ce = credits.expireDue();
+  const reminders = sweepReminders();
+  const completed = sweepCompleted();
+  const refunds = await processRefunds(cfg);
+  await chargeDue(cfg).catch((e) => console.error(JSON.stringify({ level: 'error', where: 'autodebit', error: String((e as Error)?.message ?? e) })));
+  runRecurring(null, null);
+  runDepreciation(null, SYSTEM);
+  await runFeedSync(cfg, (e) => console.error(JSON.stringify({ level: 'error', where: 'bank-feed', error: String((e as Error)?.message ?? e) })));
+  return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done };
+}
+
+let timer: ReturnType<typeof setInterval> | null = null;
+export function startScheduler(cfg: Config, onError: (e: unknown) => void = () => {}): void {
+  if (timer) return;
+  let running = false;
+  timer = setInterval(() => {
+    if (running) return;
+    running = true;
+    try { runBackupIfDue(cfg, onError); } catch (e) { onError(e); }
+    runSweeps(cfg).catch(onError).finally(() => { running = false; });
+  }, cfg.sweepIntervalSeconds * 1000);
+  timer.unref();
+}
+export function stopScheduler(): void {
+  if (timer) { clearInterval(timer); timer = null; }
+}

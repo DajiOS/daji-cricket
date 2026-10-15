@@ -1,0 +1,8 @@
+flowchart TD
+  A(["Customer submits an enquiry<br/>status: new"]) --> B["Staff review and contact the customer<br/>notes kept, status: follow-up"]
+  B --> E["Quotation sent<br/>status: quoted"]
+  E --> F{{"Customer agrees?"}}
+  F -- "Yes" --> G["Converted to a booking at the<br/>quoted price, linked to the enquiry<br/>status: converted"]
+  F -- "No" --> H["Closed with a reason<br/>status: closed"]
+  classDef good fill:#dcefe3,stroke:#237052
+  class G good

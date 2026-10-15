@@ -1,0 +1,23 @@
+{
+  "name": "@daji/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/index.ts",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/index.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=4 --test-timeout=180000 \"test/**/*.test.ts\"",
+    "test:serial": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 --test-timeout=180000 \"test/**/*.test.ts\"",
+    "test:one": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1",
+    "typecheck": "tsc --noEmit -p .",
+    "prestart": "node scripts/check-node.cjs",
+    "pretest": "node scripts/check-node.cjs"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "@types/node": "26.2.0"
+  }
+}

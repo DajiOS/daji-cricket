@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Daji Cricket Ground",
+    "slug": "daji-cricket-ground",
+    "version": "0.2.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0c0b",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.dajicricket.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Daji Cricket Ground uses the camera to take photos that prove a task is done.",
+        "NSPhotoLibraryUsageDescription": "Daji Cricket Ground uses your photos so you can choose a profile picture."
+      }
+    },
+    "android": {
+      "package": "com.dajicricket.app",
+      "useNextNotificationsApi": true,
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "POST_NOTIFICATIONS"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0a0c0b"
+      }
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#c9a24b"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Daji Cricket Ground uses the camera to take photos that prove a task is done.",
+          "photosPermission": "Daji Cricket Ground uses your photos so you can choose a profile picture."
+        }
+      ]
+    ],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0c0b"
+    }
+  }
+}

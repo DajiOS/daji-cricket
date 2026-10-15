@@ -1,0 +1,19 @@
+flowchart TD
+  Q["You type a question<br/>'What was the revenue for the past 37 days?'"]
+  Q --> CK(["Signed in, and under<br/>30 questions this hour?"])
+  CK -->|"No"| ER["Clear error message"]
+  CK -->|"Yes"| MODE(["Which answerer?"])
+  MODE -->|"Built-in (default)"| B1["Built-in answerer<br/>reads the topic, dates and ground,<br/>checks what you may see,<br/>and looks it up in your books<br/>(same code as the Reports tab)"]
+  MODE -->|"Claude, if set up"| C1["Used only if a key is set and the built-in<br/>answerer cannot read the question.<br/>Claude gets read-only tools for your books.<br/>No customer names, phones or emails are sent.<br/>Up to 6 look-ups. If it fails or times out,<br/>the built-in answerer takes over"]
+  B1 -->|"can read it,<br/>and you may see it"| AN["Plain-language answer with the exact dates<br/>and basis used, a few details,<br/>and 'open this report'"]
+  B1 -->|"cannot read it, or a<br/>permission is missing"| HP["Says so, shows examples or names<br/>the missing permission"]
+  C1 --> C2(["Every rupee amount in the reply<br/>is checked against the tool results"])
+  C2 -->|"all match"| AN
+  C2 -->|"one does not"| FL["Marked 'not fully verified',<br/>with the amounts to double-check"]
+  AN --> LOG["The question (not the answer)<br/>is logged for audit"]
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef bad fill:#f8e1db,stroke:#c2543f
+  classDef warn fill:#f3ead4,stroke:#9a7d44
+  class AN good
+  class ER bad
+  class FL,HP warn

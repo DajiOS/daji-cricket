@@ -1,0 +1,11 @@
+flowchart TD
+  RP["Razorpay checkout<br/>15 minute hold"] --> WH["Signed webhook or<br/>signed client confirmation"]
+  UP["UPI ID and QR shown<br/>15 minutes to pay and send the UTR"] --> ST["Staff match the UTR to the bank credit<br/>120 minute verification window"]
+  WH --> OK{{"Payment valid?"}}
+  ST --> OK
+  OK -- "Yes" --> CONF["Booking confirmed<br/>customer notified"]
+  OK -- "No" --> REL["Slots released<br/>customer notified"]
+  classDef good fill:#dcefe3,stroke:#237052
+  classDef bad fill:#f8e1db,stroke:#c2543f
+  class CONF good
+  class REL bad
