@@ -1084,7 +1084,8 @@ html:not([data-embed]):not([data-embed-section]) #view-home{
   /* academy + visit */
   .academy .copy p{font-size:19px}
   .visit{gap:0}
-  .visit .box{border-top:1px solid var(--lux-line);padding:36px 40px 8px 0}
+  .visit .box{background:none;border:0;border-top:1px solid var(--lux-line);border-radius:0;padding:36px 40px 8px 0}
+  .academy .mp{background:none;border:0;border-top:1px solid var(--lux-line);border-radius:0}
   .visit h5{font-size:13px;letter-spacing:.04em;text-transform:none;color:var(--gold)}
   .visit .big{font-weight:300;text-transform:none;font-size:clamp(28px,3vw,42px);letter-spacing:0}
   .visit a.link{border-color:var(--lux-line)}
