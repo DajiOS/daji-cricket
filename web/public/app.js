@@ -2094,7 +2094,7 @@ async function renderMyDash(el) {
   // where the logo sits in the last frame of the 1920x1080 video
   const F = { x: 173.7, y: 279.4, w: 1576.7, h: 525.8 };
   let done = false, started = false;
-  const cleanup = () => { root.classList.remove('splash-on'); box.remove(); };
+  const cleanup = () => { root.classList.remove('splash-on', 'splash-reveal'); box.remove(); };
   const finish = (instant) => {
     if (done) return; done = true;
     try { sessionStorage.setItem('daji.splash', '1'); } catch { /* ignore */ }
@@ -2111,8 +2111,9 @@ async function renderMyDash(el) {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       box.classList.add('fly');                       // video fades out under the identical logo
       fly.classList.add('move'); place(target.getBoundingClientRect());   // glide starts at once, no pause
-      setTimeout(() => box.classList.add('reveal'), 250);                 // dark backdrop melts away while it flies
-      setTimeout(() => { done = true; try { sessionStorage.setItem('daji.splash', '1'); } catch { /* ignore */ } cleanup(); }, 1650);
+      // the site stays covered until the logo has landed in the nav; then the cover fades away and the page comes in
+      setTimeout(() => { root.classList.add('splash-reveal'); box.classList.add('reveal'); }, 1650);
+      setTimeout(() => { done = true; try { sessionStorage.setItem('daji.splash', '1'); } catch { /* ignore */ } cleanup(); }, 1650 + 1300);
     }));
   };
   v.addEventListener('ended', landing);
