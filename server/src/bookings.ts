@@ -1,3 +1,5 @@
+import { istDate } from './time.ts';
+import { assertOpen } from './accounting/store.ts';
 import type { Booking, BookingStatus, Page, Payment } from '@daji/shared';
 import { many, one, run, registerSchema } from './db.ts';
 import { now } from './clock.ts';
@@ -192,6 +194,7 @@ export function markNoShow(actor: Actor, id: string): BookingRow {
   if (b.status !== 'confirmed') throw new HttpError(409, 'BAD_STATE', `Only a confirmed booking can be a no-show (this one is ${b.status})`);
   const grace = getSettings().noShowGraceMinutes;
   if (now() < b.start_at + grace * 60_000) throw new HttpError(409, 'TOO_EARLY', `A no-show can be recorded ${grace} minutes after the start time`);
+  assertOpen(b.owner_id, istDate(b.start_at)); // a signed-off month does not change
   const t = now();
   run("UPDATE bookings SET status = 'no_show', cancel_kind = 'none', updated_at = ? WHERE id = ?", t, id);
   audit(actor, 'booking.no_show', 'booking', id, { paidPaise: b.paid_paise }, b.owner_id);

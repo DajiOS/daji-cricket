@@ -14,6 +14,7 @@ export function gatewayRoutes(r: Router): void {
     const sig = c.req.headers['x-razorpay-signature'];
     const eid = c.req.headers['x-razorpay-event-id'];
     const out = handleWebhook(c.cfg, c.raw, { signature: Array.isArray(sig) ? sig[0] : sig, eventId: Array.isArray(eid) ? eid[0] : eid });
+    if (out.status === 404) throw new HttpError(404, 'NOT_FOUND', 'Not known here yet; send it again later');
     if (out.status !== 200) throw new HttpError(out.status, out.outcome === 'bad_signature' ? 'BAD_SIGNATURE' : 'BAD_REQUEST', out.outcome === 'bad_signature' ? 'The signature does not match' : 'The webhook body is not valid');
     return ok({ received: true, outcome: out.outcome });
   }, { rate: 'none', maxBody: 1024 * 1024 });
