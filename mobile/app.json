@@ -59,6 +59,7 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "scheme": "dajicricket"
+    "scheme": "dajicricket",
+    "owner": "akeahms"
   }
 }
