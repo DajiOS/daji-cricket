@@ -1131,3 +1131,28 @@ html[data-embed] #anatomy{display:none!important}
 
 /* the hero's entrance waits under the intro cover and plays as the cover fades */
 html.splash-on:not(.splash-reveal) #view-home :is(.ln > span,header.hero p.lead,.cta,.facts){animation-play-state:paused}
+
+/* ===== Split screen: the booking panel stays fixed on the left, the story scrolls on the right ===== */
+.resbar{display:none}
+@media (min-width:1180px){
+  html:not([data-embed]):not([data-embed-section]) #view-home{padding-left:480px}
+  html:not([data-embed]):not([data-embed-section]) #view-home aside#book{position:fixed;left:0;top:0;bottom:0;width:480px;max-width:none;margin:0;padding:34px 44px 24px;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;background:#0d0f0e;border:0;border-right:1px solid var(--lux-line);z-index:20;zoom:1;scrollbar-width:thin}
+  html:not([data-embed]):not([data-embed-section]) #view-home aside#book h3{font-size:44px;margin:4px 0 6px}
+  html:not([data-embed]):not([data-embed-section]) #view-home aside#book #p-hold{position:sticky;bottom:0;z-index:2}
+  html:not([data-embed]):not([data-embed-section]) #view-home header.hero h1{font-size:clamp(60px,7.2vw,128px);max-width:8em}
+  html:not([data-embed]):not([data-embed-section]) #view-home header.hero::before,
+  html:not([data-embed]):not([data-embed-section]) #view-home header.hero::after{display:none}
+  html:not([data-embed]):not([data-embed-section]) #view-home nav .wm-nav{height:56px}
+  html:not([data-embed]):not([data-embed-section]) #view-home nav .links{gap:24px;font-size:12.5px;white-space:nowrap;flex-wrap:nowrap}
+  html:not([data-embed]):not([data-embed-section]) #view-home nav .links a{white-space:nowrap}
+  html:not([data-embed]):not([data-embed-section]) #view-home nav .links .btn{height:46px;padding:0 22px}
+  html:not([data-embed]):not([data-embed-section]) #view-home nav{gap:20px}
+  html:not([data-embed]):not([data-embed-section]) #view-home .cta .btn.primary{display:none}
+  html:not([data-embed]):not([data-embed-section]) #view-home header.hero > div:first-child{padding-bottom:56px}
+}
+@media (max-width:1179px){
+  html:not([data-embed]):not([data-embed-section]) .resbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:30;align-items:center;justify-content:space-between;gap:14px;padding:12px max(20px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px));background:#0d0f0e;border-top:1px solid var(--lux-line);color:var(--text);text-decoration:none}
+  .resbar span{font:300 22px/1.1 var(--font-display)}
+  .resbar b{background:var(--gold);color:#0a0a08;padding:15px 24px;font:500 13px var(--font-body)}
+  html:not([data-embed]):not([data-embed-section]) #view-home{padding-bottom:84px}
+}
