@@ -50,25 +50,22 @@ function Shell({ route }: { route: string }) {
     <div className={`shell${collapsed ? ' rail' : ''}`}>
       <aside className={`side${open ? ' open' : ''}`} aria-label="Main navigation">
         <a className="brand" href="./" aria-label="Daji Cricket Ground, back to the website">{collapsed ? <Crest size={36} /> : <Logo width={196} />}</a>
+        <button className="rail-toggle side-toggle" onClick={() => setRailSaved(!rail)} aria-label={rail ? 'Open the menu' : 'Fold the menu'} aria-pressed={rail} title={rail ? 'Open the menu' : 'Fold the menu'}><Icon name="menu" />{!collapsed && <span>Fold menu</span>}</button>
         {collapsed ? (
           <nav className="nav rail-nav" aria-label="Menu">
-            {NAV.map((g, gi) => {
+            {NAV.map((g) => {
               const items = g.items.filter(visible);
               if (!items.length) return null;
+              const on = items.some((i) => isOn(i.to));
+              const dot = items.some((i) => i.count === 'approvals') && waiting > 0;
+              const icon = GROUP_ICONS[g.group] ?? items[0]!.icon;
+              if (items.length === 1 && !SUBS[items[0]!.to]) return <a key={g.group} href={`#${items[0]!.to}`} className={`rail-btn${on ? ' on' : ''}`} title={g.group} aria-label={g.group}><Icon name={icon} /></a>;
               return (
-                <Fragment key={g.group}>
-                  {gi > 0 && <div className="rail-sep" aria-hidden="true" />}
-                  {items.map((i) => {
-                    const dot = i.count === 'approvals' && waiting > 0;
-                    if (!SUBS[i.to]) return <a key={i.to} href={`#${i.to}`} className={`rail-btn${isOn(i.to) ? ' on' : ''}`} title={i.label} aria-label={i.label}><Icon name={i.icon} />{dot && <span className="rail-dot" aria-hidden="true" />}</a>;
-                    return (
-                      <button key={i.to} className={`rail-btn${isOn(i.to) ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.key === i.to} aria-label={i.label} title={i.label}
-                        onMouseEnter={(e) => openFly(i.to, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(i.to, e.currentTarget)}
-                        onClick={(e) => openFly(i.to, e.currentTarget)}>
-                        <Icon name={i.icon} />
-                      </button>);
-                  })}
-                </Fragment>);
+                <button key={g.group} className={`rail-btn${on ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.key === g.group} aria-label={g.group} title={g.group}
+                  onMouseEnter={(e) => openFly(g.group, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(g.group, e.currentTarget)}
+                  onClick={(e) => openFly(g.group, e.currentTarget)}>
+                  <Icon name={icon} />{dot && <span className="rail-dot" aria-hidden="true" />}
+                </button>);
             })}
           </nav>
         ) : (
@@ -102,19 +99,26 @@ function Shell({ route }: { route: string }) {
         </div>
       </aside>
       {collapsed && fly && (() => {
-        const i = NAV.flatMap((x) => x.items).find((x) => x.to === fly.key);
-        if (!i || !SUBS[i.to]) return null;
+        const g = NAV.find((x) => x.group === fly.key);
+        const items = g ? g.items.filter(visible) : [];
+        if (!g || !items.length) return null;
         return (
-          <div className="flyout" role="menu" aria-label={i.label} style={{ top: fly.top }} onMouseEnter={() => clearTimeout(flyTimer.current)} onMouseLeave={closeFlySoon}>
-            <div className="nav-group">{i.label}</div>
-            {SUBS[i.to]!.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} role="menuitem" className={`sub${isOn(i.to) && subOn(i.to, k) ? ' on' : ''}`} onClick={() => setFly(null)}><Icon name={SUB_ICONS[`${i.to}:${k}`] ?? 'chevron'} size={15} />{l}</a>)}
+          <div className="flyout" role="menu" aria-label={g.group} style={{ top: fly.top }} onMouseEnter={() => clearTimeout(flyTimer.current)} onMouseLeave={closeFlySoon}>
+            <div className="nav-group">{g.group}</div>
+            {items.map((i) => (
+              <Fragment key={i.to}>
+                <a href={`#${i.to}`} role="menuitem" className={isOn(i.to) ? 'on' : ''} onClick={() => setFly(null)}>
+                  <Icon name={i.icon} />{i.label}
+                  {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
+                </a>
+                {SUBS[i.to] && SUBS[i.to]!.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} role="menuitem" className={`sub${isOn(i.to) && subOn(i.to, k) ? ' on' : ''}`} onClick={() => setFly(null)}><Icon name={SUB_ICONS[`${i.to}:${k}`] ?? 'chevron'} size={15} />{l}</a>)}
+              </Fragment>))}
           </div>);
       })()}
       {open && <div className="overlay" style={{ zIndex: 35, padding: 0 }} onClick={() => setOpen(false)} />}
       <main className="main">
         <header className="top">
           <button className="btn ghost sm menu-btn" onClick={() => setOpen(true)} aria-label="Open menu"><Icon name="menu" /></button>
-          <button className="btn ghost sm rail-toggle" onClick={() => setRailSaved(!rail)} aria-label="Menu" aria-pressed={rail} title="Menu"><Icon name="menu" /></button>
           {s.me.role === 'super_admin'
             ? <div className="seg hide-sm" role="group" aria-label="Business">{s.owners.map((o) => <button key={o.id} className={o.id === s.ownerId ? 'on' : ''} onClick={() => s.setOwner(o.id)}>{o.businessName || o.name}</button>)}</div>
             : <div className="seg hide-sm" role="group" aria-label="Business"><button className="on">{owner?.businessName || s.me.businessName || 'Daji Cricket Ground'}</button></div>}
@@ -131,6 +135,7 @@ function Shell({ route }: { route: string }) {
   );
 }
 
+const GROUP_ICONS: Record<string, string> = { Portfolio: 'dashboard', Ground: 'ball', 'Task Management': 'tasks', 'People & Messages': 'users', 'MP13 Academy': 'grad', Finance: 'accounts', Settings: 'settings' };
 export function App() {
   const route = useRoute();
   const [me, setMe] = useState<Me | null | undefined>(undefined);
