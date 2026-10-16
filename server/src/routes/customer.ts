@@ -4,6 +4,7 @@ import { U, page } from './helpers.ts';
 import { Validator } from '../input.ts';
 import { HttpError } from '../errors.ts';
 import { audit } from '../audit.ts';
+import { deleteMyAccount } from '../accountDeletion.ts';
 import { checkPasswordStrength, setPassword, signToken, toUser, userByEmail, userRow, verifyPassword } from '../auth.ts';
 import { run, one } from '../db.ts';
 import { now } from '../clock.ts';
@@ -128,6 +129,9 @@ export function customerRoutes(r: Router): void {
     const fresh = userRow(u.id)!;
     return ok({ token: signToken(c.cfg, fresh), user: toUser(fresh) });
   }, { auth: 'user', rate: 'auth' });
+
+  // Delete my account (customers). Asked for by Apple and Google for any app that lets people sign up.
+  r.post('/api/me/delete', (c) => ok(deleteMyAccount(c.cfg.dataDir, U(c), c.json())), { auth: 'user', rate: 'auth' });
 
   // ---- bookings
   // Shows what a promo code takes off before the customer holds the slot.

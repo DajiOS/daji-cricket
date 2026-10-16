@@ -3,7 +3,7 @@ import { Image, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api, authImage, upload } from './api';
 import { takeProofPhoto } from './camera';
 import type { Task, TeamMember, User } from './types';
-import { Badge, Btn, Chip, Field, Loading, Section, s } from './ui';
+import { Badge, Btn, Chip, Field, Loading, s } from './ui';
 import { C, niceDate } from './theme';
 
 const when = (ms: number): string => new Date(ms).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });

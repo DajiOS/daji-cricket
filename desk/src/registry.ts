@@ -6,6 +6,7 @@ import Promos from './pages/Promos';
 import Tasks from './pages/Tasks';
 import Matches from './pages/Matches';
 import Contacts from './pages/Contacts';
+import Cards from './pages/Cards';
 import Academy from './pages/Academy';
 import Accounting from './pages/Accounting';
 import Transactions from './pages/Transactions';
@@ -36,7 +37,7 @@ export interface NavGroup { group: string; items: NavItem[] }
 /** First match wins, so longer paths come before shorter ones. A page receives the rest of the path in `sub` (for example /bills/bil_123 gives sub "bil_123"). */
 export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/bookings', page: Bookings }, { path: '/promos', page: Promos }, { path: '/tasks', page: Tasks }, { path: '/matches', page: Matches },
-  { path: '/contacts', page: Contacts }, { path: '/academy', page: Academy },
+  { path: '/cards', page: Cards }, { path: '/contacts', page: Contacts }, { path: '/academy', page: Academy },
   { path: '/accounting', page: Accounting }, { path: '/transactions', page: Transactions }, { path: '/bank', page: BankImport },
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
@@ -52,6 +53,7 @@ export const NAV: NavGroup[] = [
     { to: '/tasks', label: 'Tasks', icon: 'tasks', perm: 'manage_tasks' },
     { to: '/matches', label: 'Matches', icon: 'ball', perm: 'manage_matches' },
     { to: '/contacts', label: 'Contacts', icon: 'users', perm: 'view_customers' },
+    { to: '/cards', label: 'Business cards', icon: 'card', perm: 'view_customers' },
   ] },
   { group: 'MP13 Academy', items: [{ to: '/academy', label: 'MP13 Academy', icon: 'grad', perm: 'manage_academy' }] },
   { group: 'Members & Events', items: [

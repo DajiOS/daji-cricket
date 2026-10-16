@@ -37,7 +37,7 @@ export interface Config {
     userLogin: string;
   };
   /** Daily snapshot of the database (and uploaded files) at 03:15 IST. `dir` is where snapshots go; copy them off the server too. */
-  backup: { enabled: boolean; keep: number; dir: string; passphrase: string };
+  backup: { enabled: boolean; keep: number; dir: string; passphrase: string; s3: { bucket: string; region: string; keyId: string; secret: string; prefix: string } };
   /** Encrypts 2-step sign-in secrets in the database (src/vault.ts). Keep a copy somewhere safe: without it they cannot be read. */
   fieldKey: string;
   sweepIntervalSeconds: number;
@@ -161,7 +161,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       configName: env.YODLEE_CONFIG_NAME || '',
       userLogin: env.YODLEE_USER_LOGIN || '',
     },
-    backup: { enabled: truthy(env.BACKUP_ENABLED, !isLocal), keep: Math.max(1, Math.floor(Number(env.BACKUP_KEEP ?? 14)) || 14), dir: env.BACKUP_DIR || join(dataDir, 'backups'), passphrase: env.BACKUP_PASSPHRASE || '' },
+    backup: { enabled: truthy(env.BACKUP_ENABLED, !isLocal), keep: Math.max(1, Math.floor(Number(env.BACKUP_KEEP ?? 14)) || 14), dir: env.BACKUP_DIR || join(dataDir, 'backups'), passphrase: env.BACKUP_PASSPHRASE || '', s3: { bucket: env.BACKUP_S3_BUCKET || '', region: env.BACKUP_S3_REGION || 'ap-south-1', keyId: env.BACKUP_S3_KEY_ID || '', secret: env.BACKUP_S3_SECRET || '', prefix: (env.BACKUP_S3_PREFIX || 'daji-backups').replace(/^\/+|\/+$/g, '') } },
     fieldKey: env.FIELD_KEY || '',
     sweepIntervalSeconds: Number(env.SWEEP_INTERVAL_SECONDS ?? 60),
     whatsapp: {
@@ -218,6 +218,7 @@ export function configWarnings(c: Config): string[] {
   if (!c.isLocal && !c.demoMode && !(c.whatsapp.token && c.whatsapp.phoneId) && !(c.msg91.authKey && c.msg91.templateId)) w.push('Neither WhatsApp (WHATSAPP_TOKEN, WHATSAPP_PHONE_ID) nor MSG91 (MSG91_AUTH_KEY, MSG91_TEMPLATE_ID) is set up: sign-in codes cannot be sent, so customers can only sign in with email and password.');
   if (c.corsOrigins === '*' && !c.isLocal) w.push('CORS is open to every origin.');
   if (!c.isLocal && c.fieldKey.length < 24) w.push('FIELD_KEY is not set (at least 24 characters): 2-step sign-in secrets are stored unencrypted.');
+  if (!c.isLocal && c.backup.enabled && !c.backup.s3.bucket) w.push('BACKUP_S3_BUCKET is not set: backups stay on the same disk as the database. Set the BACKUP_S3_* settings (needs BACKUP_PASSPHRASE) to copy each backup off the server.');
   if (!c.isLocal && c.backup.enabled && !c.backup.passphrase) w.push('BACKUP_PASSPHRASE is not set: backups are stored unencrypted. Set it, and keep a copy of it away from the server.');
   return w;
 }
