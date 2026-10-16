@@ -114,7 +114,7 @@ function Shell({ route }: { route: string }) {
       <main className="main">
         <header className="top">
           <button className="btn ghost sm menu-btn" onClick={() => setOpen(true)} aria-label="Open menu"><Icon name="menu" /></button>
-          <button className="btn ghost sm rail-toggle" onClick={() => setRailSaved(!rail)} aria-label={rail ? 'Open the menu' : 'Fold the menu'} aria-pressed={rail} title={rail ? 'Open the menu' : 'Fold the menu'}><Icon name="menu" /></button>
+          <button className="btn ghost sm rail-toggle" onClick={() => setRailSaved(!rail)} aria-label="Menu" aria-pressed={rail} title="Menu"><Icon name="menu" /></button>
           {s.me.role === 'super_admin'
             ? <div className="seg hide-sm" role="group" aria-label="Business">{s.owners.map((o) => <button key={o.id} className={o.id === s.ownerId ? 'on' : ''} onClick={() => s.setOwner(o.id)}>{o.businessName || o.name}</button>)}</div>
             : <div className="seg hide-sm" role="group" aria-label="Business"><button className="on">{owner?.businessName || s.me.businessName || 'Daji Cricket Ground'}</button></div>}

@@ -46,4 +46,6 @@ jobs:
           working-directory: mobile
       - name: Publish to production
         if: env.HAS_EXPO == 'true' && github.event_name == 'push'
-        run: eas update --branch production --message "${{ github.event.head_commit.message }}" --non-interactive
+        run: |
+          APP_VARIANT=customer eas update --branch production-customer --message "${{ github.event.head_commit.message }}" --non-interactive
+          APP_VARIANT=admin eas update --branch production-admin --message "${{ github.event.head_commit.message }}" --non-interactive
