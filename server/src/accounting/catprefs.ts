@@ -18,6 +18,14 @@ CREATE TABLE acct_category_prefs (
 );
 `);
 
+// What a bank-type account holds: money in a bank ('bank'), a credit card ('card') or a loan ('loan'). Cards and loans are liabilities.
+// ext_id is the bank feed's own id for a transaction, so a line is never added twice and a statement line can be matched to it.
+registerSchema('coa-2', `
+ALTER TABLE acct_accounts ADD COLUMN holds TEXT NOT NULL DEFAULT 'bank';
+ALTER TABLE acct_transactions ADD COLUMN ext_id TEXT;
+CREATE INDEX ix_acct_txn_ext ON acct_transactions(account_id, ext_id) WHERE ext_id IS NOT NULL;
+`);
+
 export const INACTIVE_TAG = ' (Inactive)';
 
 /** SQL for a category's name as this business sees it. `catAlias` is the acct_categories alias, `ownerExpr` the owner id column or placeholder. */

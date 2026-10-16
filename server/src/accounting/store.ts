@@ -53,20 +53,20 @@ export function updateAcctSettings(ownerId: string, actor: Actor, body: unknown)
 // ------------------------------------------------------------------ accounts
 
 export interface AcctAccountOut {
-  id: string; kind: 'bank' | 'cash'; name: string; bankName: string | null; last4: string | null; source: string;
+  id: string; kind: 'bank' | 'cash'; holds: 'bank' | 'card' | 'loan'; name: string; bankName: string | null; last4: string | null; source: string;
   openingPaise: number; openingDate: string | null; balancePaise: number; transactions: number; uncategorised: number; lastTransactionDate: string | null; active: boolean;
 }
-interface AccountRow { active: number; id: string; kind: 'bank' | 'cash'; name: string; bank_name: string | null; last4: string | null; source: string; opening_paise: number; opening_date: string | null; n: number; net: number; unc: number; last: string | null }
+interface AccountRow { holds: 'bank' | 'card' | 'loan'; active: number; id: string; kind: 'bank' | 'cash'; name: string; bank_name: string | null; last4: string | null; source: string; opening_paise: number; opening_date: string | null; n: number; net: number; unc: number; last: string | null }
 
 export function listAccounts(ownerId: string): AcctAccountOut[] {
   return many<AccountRow>(
-    `SELECT a.active, a.id, a.kind, a.name, a.bank_name, a.last4, a.source, a.opening_paise, a.opening_date,
+    `SELECT a.holds, a.active, a.id, a.kind, a.name, a.bank_name, a.last4, a.source, a.opening_paise, a.opening_date,
        (SELECT COUNT(*) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL) n,
        (SELECT COALESCE(SUM(t.amount_paise), 0) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL) net,
        (SELECT COUNT(*) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL AND t.category_id IS NULL) unc,
        (SELECT MAX(t.txn_date) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL) last
      FROM acct_accounts a WHERE a.owner_id = ? AND a.deleted_at IS NULL ORDER BY a.created_at, a.name`, ownerId)
-    .map((r) => ({ id: r.id, kind: r.kind, name: r.name, bankName: r.bank_name, last4: r.last4, source: r.source, openingPaise: r.opening_paise, openingDate: r.opening_date,
+    .map((r) => ({ id: r.id, kind: r.kind, holds: r.holds, name: r.name, bankName: r.bank_name, last4: r.last4, source: r.source, openingPaise: r.opening_paise, openingDate: r.opening_date,
       balancePaise: r.opening_paise + r.net, transactions: r.n, uncategorised: r.unc, lastTransactionDate: r.last, active: !!r.active }));
 }
 
@@ -79,6 +79,7 @@ export function accountOr404(ownerId: string, id: string): AccountRow & { owner_
 export function createAccount(ownerId: string, actor: Actor, body: unknown): AcctAccountOut {
   const v = new Validator(body);
   const kind = v.oneOf('kind', ['bank', 'cash'] as const, true);
+  const holdsIn = v.oneOf('holds', ['bank', 'card', 'loan'] as const);
   const name = v.str('name', { required: true, min: 2, max: 60 });
   const bankName = v.str('bankName', { max: 60 });
   const last4 = v.str('last4', { max: 4 });
@@ -91,8 +92,8 @@ export function createAccount(ownerId: string, actor: Actor, body: unknown): Acc
   if (dupe) throw conflict('DUPLICATE', 'You already have an account with this name');
   if (openingDate) assertOpen(ownerId, openingDate);
   const id = newId('acc'), t = now();
-  run(`INSERT INTO acct_accounts(id, owner_id, kind, name, bank_name, last4, source, opening_paise, opening_date, created_at, created_by, updated_at, updated_by)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, ownerId, kind!, name!, bankName ?? null, last4 ?? null, 'manual', opening, openingDate ?? null, t, actor.id, t, actor.id);
+  run(`INSERT INTO acct_accounts(id, owner_id, kind, holds, name, bank_name, last4, source, opening_paise, opening_date, created_at, created_by, updated_at, updated_by)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, ownerId, kind!, kind === 'bank' ? holdsIn ?? 'bank' : 'bank', name!, bankName ?? null, last4 ?? null, 'manual', opening, openingDate ?? null, t, actor.id, t, actor.id);
   audit(actor, 'acct.account.create', 'acct_account', id, { kind, name, openingPaise: opening }, ownerId);
   return listAccounts(ownerId).find((a) => a.id === id)!;
 }

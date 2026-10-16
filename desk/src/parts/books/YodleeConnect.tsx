@@ -40,8 +40,9 @@ function FastLinkDialog({ onClose, flow }: { onClose: () => void; flow: Flow }) 
 }
 
 /** The bank accounts Yodlee reports for this business, each with a picker for the books account it should feed. */
-function Connected({ accounts, reloadFeed, openFlow }: { accounts: { id: string; name: string }[]; reloadFeed: () => void; openFlow: (f: Flow) => void }) {
+function Connected({ accounts, reloadFeed, openFlow }: { accounts: { id: string; name: string; holds?: string }[]; reloadFeed: () => void; openFlow: (f: Flow) => void }) {
   const [list, e, reload] = useApi<{ accounts: any[] }>('/api/accounting/feed/yodlee/accounts');
+  const [feed] = useApi<{ accounts: any[] }>('/api/accounting/feed');
   const [pick, setPick] = useState<Record<string, string>>({}); const [busy, setBusy] = useState<string | null>(null); const toast = useToast();
   const working = !!list?.accounts.some((a: any) => a.status?.code === 'working');
   useEffect(() => { if (!working) return; const t = setInterval(reload, 4000); return () => clearInterval(t); }, [working, reload]);
@@ -53,6 +54,9 @@ function Connected({ accounts, reloadFeed, openFlow }: { accounts: { id: string;
     <div className="bk-list" style={{ marginBottom: 12 }}>
       {list.accounts.map((a) => {
         const books = accounts.find((x) => x.id === a.linkedTo);
+        const fb = feed?.accounts.find((x) => x.id === a.linkedTo);
+        const want = a.container === 'creditCard' ? 'card' : a.container === 'loan' ? 'loan' : 'bank';
+        const choices = accounts.filter((x) => (x.holds ?? 'bank') === want);
         return (
           <div key={a.id} className="bk-li bk-feed-row">
             <div style={{ minWidth: 0 }}>
@@ -60,13 +64,13 @@ function Connected({ accounts, reloadFeed, openFlow }: { accounts: { id: string;
               <div className="muted small">{a.container === 'creditCard' ? 'Credit card' : a.container === 'loan' ? 'Loan' : 'Bank account'} · {a.accountName}{a.balancePaise !== null && <> · {a.container === 'bank' ? 'balance' : 'owing'} {inr(a.balancePaise)}</>}</div>
               <div className={a.status?.code === 'ok' || a.status?.code === 'working' ? 'muted small' : 'err small'}>{a.status?.text}</div>
             </div>
-            {books ? <span className="muted small">Feeds <strong>{books.name}</strong></span> : (
+            {books ? <span className="muted small">Feeds <strong>{books.name}</strong>{fb && fb.bankBalancePaise !== null && <><br />Bank says {inr(fb.bankBalancePaise)} · books say {inr(fb.bookBalancePaise)}{fb.bankBalancePaise === fb.bookBalancePaise ? ' ✓' : ''}</>}</span> : (
               <div className="row" style={{ gap: 6 }}>
                 <select className="inp" style={{ maxWidth: 220 }} aria-label="Books account" value={pick[a.id] ?? ''} onChange={(ev) => setPick({ ...pick, [a.id]: ev.target.value })}>
-                  <option value="">Choose a books account</option>
-                  {accounts.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                  <option value="">Choose {a.container === 'bank' ? 'a books account' : a.container === 'creditCard' ? 'a credit card account' : 'a loan account'}</option>
+                  {choices.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                 </select>
-                <button className="btn sm primary" disabled={!pick[a.id] || busy === a.id || a.container !== 'bank'} onClick={() => act(a.id, () => post('/api/accounting/feed/link', { accountId: pick[a.id], providerRef: a.id }), 'Linked')}>Link</button>
+                <button className="btn sm primary" disabled={!pick[a.id] || busy === a.id} onClick={() => act(a.id, () => post('/api/accounting/feed/link', { accountId: pick[a.id], providerRef: a.id }), 'Linked')}>Link</button>
               </div>
             )}
             {a.status?.action === 'fix' && <button className="btn sm primary" onClick={() => openFlow({ flow: 'edit', providerAccountId: a.providerAccountId })}>Fix login</button>}
@@ -80,8 +84,8 @@ function Connected({ accounts, reloadFeed, openFlow }: { accounts: { id: string;
   );
 }
 
-export function YodleeConnect({ accounts, reload }: { accounts: { id: string; name: string }[]; reload: () => void }) {
-  const [open, setOpen] = useState<Flow | null>(null); const [tick, setTick] = useState(0);
+export function YodleeConnect({ accounts, reload }: { accounts: { id: string; name: string; holds?: string }[]; reload: () => void }) {
+  const toast = useToast(); const [open, setOpen] = useState<Flow | null>(null); const [tick, setTick] = useState(0);
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
@@ -90,7 +94,7 @@ export function YodleeConnect({ accounts, reload }: { accounts: { id: string; na
       </div>
       <Connected key={tick} accounts={accounts} reloadFeed={reload} openFlow={setOpen} />
       <SyncLog key={'l' + tick} />
-      {open && <FastLinkDialog flow={open} onClose={() => { setOpen(null); setTick((t) => t + 1); }} />}
+      {open && <FastLinkDialog flow={open} onClose={async () => { setOpen(null); try { const r: any = await post('/api/accounting/feed/yodlee/autolink', {}); if (r.linked?.length) toast(`Joined ${r.linked.map((x: any) => x.name).join(', ')}`); } catch { /* the list below still shows what to choose */ } reload(); setTick((t) => t + 1); }} />}
     </>
   );
 }

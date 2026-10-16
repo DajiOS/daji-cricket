@@ -104,7 +104,7 @@ export function Setup() {
           <ErrorBox msg={sh.error} />
           <Section title="Bank and cash accounts" aside={<button className="btn sm primary" onClick={() => setDlg('account')}><Icon name="plus" />Add an account</button>} pad={false}>
             <Grid heads={['Account', 'Kind', 'Balance', 'Transactions', 'Uncategorised']} nums={[2, 3, 4]} empty="No accounts yet."
-              rows={sh.accounts.map((a) => [a.name + (a.bankName ? ` · ${a.bankName}` : ''), a.kind === 'bank' ? 'Bank' : 'Cash', inr(a.balancePaise), a.transactions, a.uncategorised])} />
+              rows={sh.accounts.map((a) => [a.name + (a.bankName ? ` · ${a.bankName}` : ''), a.kind === 'cash' ? 'Cash' : a.holds === 'card' ? 'Credit card' : a.holds === 'loan' ? 'Loan' : 'Bank', inr(a.balancePaise), a.transactions, a.uncategorised])} />
           </Section>
           <CoaPanel onChange={sh.reload} />
           <Section title="Rules that categorise bank lines" pad={false} aside={<>
@@ -146,7 +146,7 @@ function CoaPanel({ onChange }: { onChange: () => void }) {
         <Section title="Chart of accounts" pad={false} aside={<label className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" checked={showOff} onChange={(e) => setShowOff(e.target.checked)} />Show inactive</label>}>
           <div className="card-pad" style={{ paddingBottom: 0 }}><Note>Rename anything. Make an account inactive when you stop using it: it stays in reports for the dates that have entries, tagged (Inactive), and takes no new entries. A bank or cash account can go inactive only when its balance is zero. Delete works only on what was never used.</Note></div>
           <Grid heads={['Account', 'Type', 'Used', 'Balance', 'Status', '']} nums={[2, 3]} empty="Nothing to show."
-            rows={items.map((x) => [label(x), x.type === 'account' ? (x.kind === 'cash' ? 'Cash' : 'Bank') : x.kind === 'income' ? 'Income' : 'Expense', x.uses ? `${x.uses} use${x.uses === 1 ? '' : 's'}` : 'Never',
+            rows={items.map((x) => [label(x), x.type === 'account' ? (x.kind === 'cash' ? 'Cash' : x.holds === 'card' ? 'Credit card' : x.holds === 'loan' ? 'Loan' : 'Bank') : x.kind === 'income' ? 'Income' : 'Expense', x.uses ? `${x.uses} use${x.uses === 1 ? '' : 's'}` : 'Never',
               x.balancePaise === null ? '' : inr(x.balancePaise), x.active ? 'Active' : 'Inactive',
               <span className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
                 <button className="btn sm ghost" onClick={() => setEdit({ id: x.id, name: x.name })}>Rename</button>

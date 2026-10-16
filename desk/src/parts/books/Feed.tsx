@@ -38,7 +38,7 @@ export function FeedPanel({ onAccountAdded }: { onAccountAdded?: () => void }) {
           ? <Note>Not connected on this server. Until it is, load statements below. When a feed provider is set up, new bank transactions will arrive here by themselves each day.</Note>
           : <>
             {f.provider === 'demo' && <Note>Demo feed: made-up transactions so you can see how it works.</Note>}
-            {f.provider === 'yodlee' && <YodleeConnect accounts={f.accounts.map((a: any) => ({ id: a.id, name: a.name }))} reload={reload} />}
+            {f.provider === 'yodlee' && <YodleeConnect accounts={f.accounts.map((a: any) => ({ id: a.id, name: a.name, holds: a.holds }))} reload={reload} />}
             {f.accounts.length ? <div className="bk-list">{f.accounts.map((a: any) => <FeedRow key={a.id} a={a} reload={reload} provider={f.provider} />)}</div> : <p className="muted" style={{ margin: 0 }}>Add a bank account first.</p>}
           </>}
       </Section>

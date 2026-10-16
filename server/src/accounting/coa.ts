@@ -10,7 +10,7 @@ import { accountOr404, assertOpen, listAccounts, listCategories } from './store.
 // Inactive accounts stay in every report for dates that have entries, tagged "NAME (Inactive)", and take no new entries.
 
 export interface CoaItem {
-  id: string; type: 'account' | 'category'; code: string | null; name: string; kind: string; group: string;
+  id: string; type: 'account' | 'category'; holds?: string; code: string | null; name: string; kind: string; group: string;
   active: boolean; builtin: boolean; used: boolean; uses: number; balancePaise: number | null; canDelete: boolean; deleteBlock: string | null; canDeactivate: boolean; deactivateBlock: string | null;
 }
 
@@ -30,7 +30,7 @@ export function listCoa(ownerId: string): CoaItem[] {
   for (const a of listAccounts(ownerId)) {
     const used = a.transactions > 0 || !!one('SELECT 1 FROM acct_journal_lines l JOIN acct_journals j ON j.id = l.journal_id WHERE j.owner_id = ? AND j.deleted_at IS NULL AND l.account_code = ?', ownerId, `bank:${a.id}`);
     const bal = a.balancePaise;
-    out.push({ id: a.id, type: 'account', code: null, name: a.name, kind: a.kind, group: a.kind === 'cash' ? 'Cash' : 'Bank', active: a.active, builtin: false, used, uses: a.transactions,
+    out.push({ id: a.id, type: 'account', code: null, name: a.name, kind: a.kind, holds: a.holds, group: a.kind === 'cash' ? 'Cash' : a.holds === 'card' ? 'Credit cards' : a.holds === 'loan' ? 'Loans' : 'Bank', active: a.active, builtin: false, used, uses: a.transactions,
       balancePaise: bal, canDelete: !used, deleteBlock: used ? 'It has entries, so it cannot be deleted. Make it inactive instead.' : null,
       canDeactivate: bal === 0, deactivateBlock: bal === 0 ? null : 'Its balance is not zero. Move the money out first.' });
   }

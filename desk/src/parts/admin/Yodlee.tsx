@@ -30,6 +30,7 @@ export function YodleeSettings() {
     catch (e) { toast(errText(e)); } finally { setBusy(false); }
   };
   const runTest = async () => { setBusy(true); try { setTest(await post('/api/admin/yodlee/test')); } catch (e) { setTest({ ok: false, message: errText(e) }); } finally { setBusy(false); } };
+  const subscribe = async () => { setBusy(true); try { const r = await post<any>('/api/admin/yodlee/subscribe'); toast(r.message); } catch (e) { toast(errText(e)); } finally { setBusy(false); } };
   const copy = async (t: string) => { try { await navigator.clipboard.writeText(t); toast('Copied'); } catch { toast('Select the address and copy it'); } };
   return (
     <div className="stack">
@@ -60,11 +61,12 @@ export function YodleeSettings() {
       <Panel title="Webhook (automatic updates)" note="Yodlee calls this address when a bank has new data, so transactions arrive within minutes instead of waiting for the daily pull.">
         {data.webhookUrl ? (
           <>
-            <p className="hint" style={{ marginTop: 0 }}>Register this address as your DATA_UPDATES and REFRESH webhook in Yodlee. It contains a secret, so keep it private.</p>
+            <p className="hint" style={{ marginTop: 0 }}>Press Turn on instant updates and Yodlee is told to call this address for REFRESH, DATA_UPDATES and AUTO_REFRESH_UPDATES. It contains a secret, so keep it private. Yodlee enables webhooks only after the contract is signed.</p>
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
               <input className="inp" readOnly value={data.webhookUrl} style={{ flex: '1 1 320px' }} onFocus={(e) => e.currentTarget.select()} aria-label="Webhook address" />
               <button className="btn sm" onClick={() => copy(data.webhookUrl)}>Copy</button>
-              <button className="btn sm ghost" disabled={busy} onClick={() => save({ generateWebhookSecret: true }, 'New address made. Update it in Yodlee.')}>Make a new one</button>
+              <button className="btn sm ghost" disabled={busy} onClick={() => save({ generateWebhookSecret: true }, 'New address made. Turn on instant updates again.')}>Make a new one</button>
+              <button className="btn sm primary" disabled={busy} onClick={subscribe}>Turn on instant updates</button>
             </div>
           </>
         ) : <button className="btn primary" disabled={busy} onClick={() => save({ generateWebhookSecret: true }, 'Webhook address made')}>Make the webhook address</button>}

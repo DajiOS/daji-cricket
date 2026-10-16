@@ -44,6 +44,11 @@ CREATE TABLE acct_feed_log (
 CREATE INDEX ix_acct_feed_log_owner ON acct_feed_log(owner_id, started_at);
 `);
 
+registerSchema('accounting-feed-3', `
+ALTER TABLE acct_feed_state ADD COLUMN bank_balance_paise INTEGER;
+ALTER TABLE acct_feed_state ADD COLUMN bank_balance_at INTEGER;
+`);
+
 /** How long an account may go without a sync before the scheduler pulls it again (a webhook usually gets there first). */
 export const FEED_SYNC_HOURS = 4;
 const syncing = new Set<string>();
@@ -52,6 +57,8 @@ export interface FeedProvider {
   id: 'yodlee' | 'demo';
   /** Transactions on or after `since` (YYYY-MM-DD) for the provider's own account id. */
   fetch(ownerId: string, providerRef: string, since: string): Promise<StatementRow[]>;
+  /** What the bank says the account's balance is now, in paise (positive for money held, as a card or loan owes it: the amount owed). */
+  balance?(ownerId: string, providerRef: string): Promise<number | null>;
 }
 
 type Fetcher = typeof fetch;
@@ -114,6 +121,13 @@ export async function yFetch(cfg: Config, loginName: string, path: string, init:
 export function yodleeProvider(cfg: Config, f: Fetcher = fetch): FeedProvider {
   return {
     id: 'yodlee',
+    async balance(ownerId, ref) {
+      const res = await yFetch(cfg, yodleeLogin(cfg, ownerId), `/accounts/${encodeURIComponent(ref)}`, {}, f);
+      if (!res.ok) return null;
+      const a = ((await res.json()) as { account?: { currentBalance?: { amount?: number }; balance?: { amount?: number } }[] }).account?.[0];
+      const v = a?.currentBalance?.amount ?? a?.balance?.amount;
+      return typeof v === 'number' ? Math.round(v * 100) : null;
+    },
     async fetch(ownerId, ref, since) {
       const out: StatementRow[] = [];
       for (let skip = 0, line = 1; skip < 5000; skip += 500) {
@@ -163,13 +177,15 @@ export function providerFor(cfg: Config, f: Fetcher = fetch): FeedProvider | nul
 
 // ------------------------------------------------------------------ linking and syncing
 
-interface FeedAccount { id: string; name: string; providerRef: string | null; source: string; lastSyncAt: number | null; lastOk: boolean | null; lastMessage: string | null }
+interface FeedAccount { id: string; name: string; holds: string; providerRef: string | null; source: string; lastSyncAt: number | null; lastOk: boolean | null; lastMessage: string | null; bankBalancePaise: number | null; bankBalanceAt: number | null; bookBalancePaise: number }
 
 export function feedStatus(cfg: Config, ownerId: string): { provider: 'yodlee' | 'demo' | null; accounts: FeedAccount[] } {
-  const rows = many<{ id: string; name: string; provider_ref: string | null; source: string; last_sync_at: number | null; last_ok: number | null; last_message: string | null }>(
-    `SELECT a.id, a.name, a.provider_ref, a.source, s.last_sync_at, s.last_ok, s.last_message FROM acct_accounts a LEFT JOIN acct_feed_state s ON s.account_id = a.id
+  const rows = many<{ id: string; name: string; holds: string; provider_ref: string | null; source: string; last_sync_at: number | null; last_ok: number | null; last_message: string | null; bb: number | null; bba: number | null; book: number }>(
+    `SELECT a.id, a.name, a.holds, a.provider_ref, a.source, s.last_sync_at, s.last_ok, s.last_message, s.bank_balance_paise bb, s.bank_balance_at bba,
+       a.opening_paise + (SELECT COALESCE(SUM(t.amount_paise), 0) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL) book
+     FROM acct_accounts a LEFT JOIN acct_feed_state s ON s.account_id = a.id
      WHERE a.owner_id = ? AND a.kind = 'bank' AND a.deleted_at IS NULL ORDER BY a.name`, ownerId);
-  return { provider: providerFor(cfg)?.id ?? null, accounts: rows.map((r) => ({ id: r.id, name: r.name, providerRef: r.provider_ref, source: r.source, lastSyncAt: r.last_sync_at, lastOk: r.last_ok === null ? null : !!r.last_ok, lastMessage: r.last_message })) };
+  return { provider: providerFor(cfg)?.id ?? null, accounts: rows.map((r) => ({ id: r.id, name: r.name, holds: r.holds, providerRef: r.provider_ref, source: r.source, lastSyncAt: r.last_sync_at, lastOk: r.last_ok === null ? null : !!r.last_ok, lastMessage: r.last_message, bankBalancePaise: r.bb, bankBalanceAt: r.bba, bookBalancePaise: r.book })) };
 }
 
 export function linkAccount(cfg: Config, ownerId: string, actor: Actor, body: unknown): FeedAccount {
@@ -194,14 +210,15 @@ const cell = (v: string): string => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '"
 const csv = (rows: StatementRow[]): Buffer => Buffer.from(['Date,Description,Reference,Amount,Balance', ...rows.map((r) => [r.date, r.description, r.reference ?? '', (r.amountPaise / 100).toFixed(2), r.balancePaise === null ? '' : (r.balancePaise / 100).toFixed(2)].map(cell).join(','))].join('\r\n') + '\r\n');
 
 /** Pulls the latest transactions for one linked account and loads them through the normal import. */
-export async function syncAccount(cfg: Config, ownerId: string, actor: Actor, accountId: string, f: Fetcher = fetch, trigger: 'manual' | 'schedule' | 'webhook' = 'manual'): Promise<ImportResult & { fetched: number }> {
+export async function syncAccount(cfg: Config, ownerId: string, actor: Actor, accountId: string, f: Fetcher = fetch, trigger: 'manual' | 'schedule' | 'webhook' = 'manual'): Promise<ImportResult & { fetched: number; adopted: number }> {
   const p = providerFor(cfg, f);
   if (!p) throw new HttpError(409, 'FEED_NOT_CONFIGURED', 'No bank feed is set up on this server yet.');
   const a = accountOr404(ownerId, accountId);
+  const holds = one<{ h: string }>('SELECT holds h FROM acct_accounts WHERE id = ?', a.id)?.h ?? 'bank';
   const ref = one<{ r: string | null }>('SELECT provider_ref r FROM acct_accounts WHERE id = ?', a.id)?.r ?? null;
   if (!ref || !ref.startsWith(`${p.id}:`)) throw new HttpError(409, 'NOT_LINKED', 'Link this account to its bank first.');
   const last = one<{ d: string | null }>("SELECT MAX(txn_date) d FROM acct_transactions WHERE owner_id = ? AND account_id = ? AND source = 'upload'", ownerId, a.id)?.d;
-  const since = last ? istDate(Date.parse(last + 'T00:00:00+05:30') - 7 * DAY) : istDate(now() - 90 * DAY); // a week of overlap catches late-posting items; duplicates are skipped
+  const since = last ? istDate(Date.parse(last + 'T00:00:00+05:30') - 7 * DAY) : istDate(now() - (p.id === 'yodlee' ? 180 : 90) * DAY); // a week of overlap catches late-posting items; duplicates are skipped
   const mark = (ok: boolean, msg: string) => run('INSERT INTO acct_feed_state(account_id, last_sync_at, last_ok, last_message) VALUES(?,?,?,?) ON CONFLICT(account_id) DO UPDATE SET last_sync_at = excluded.last_sync_at, last_ok = excluded.last_ok, last_message = excluded.last_message', a.id, now(), ok ? 1 : 0, msg.slice(0, 300));
   if (syncing.has(a.id)) throw new HttpError(409, 'SYNC_RUNNING', 'This account is already being synced. Try again in a minute.');
   syncing.add(a.id);
@@ -210,12 +227,29 @@ export async function syncAccount(cfg: Config, ownerId: string, actor: Actor, ac
   const finish = (ok: boolean, o: { fetched?: number; rowsNew?: number; rowsDuplicate?: number; matched?: number }, msg: string) => run('UPDATE acct_feed_log SET finished_at = ?, ok = ?, fetched = ?, new_rows = ?, duplicates = ?, matched = ?, message = ? WHERE id = ?', now(), ok ? 1 : 0, o.fetched ?? 0, o.rowsNew ?? 0, o.rowsDuplicate ?? 0, o.matched ?? 0, msg.slice(0, 300), logId);
   try {
     const rows = await p.fetch(ownerId, ref.slice(p.id.length + 1), since);
-    const buf = csv(rows);
-    const dry = importStatement(ownerId, actor, a.id, `feed-${p.id}-${istDate(now())}.csv`, buf, true);
+    // A line the bank sent before is never added twice. A line that was uploaded from a statement earlier (same amount, within a day, no bank id yet) takes the bank's id instead of being doubled.
+    let adopted = 0; const fresh: StatementRow[] = [];
+    for (const r of rows) {
+      if (p.id !== 'yodlee' || !r.reference) { fresh.push(r); continue; }
+      if (one('SELECT 1 FROM acct_transactions WHERE account_id = ? AND (ext_id = ? OR reference = ?)', a.id, r.reference, r.reference)) continue;
+      const m = one<{ id: string }>(`SELECT id FROM acct_transactions WHERE account_id = ? AND ext_id IS NULL AND deleted_at IS NULL AND amount_paise = ? AND ABS(julianday(txn_date) - julianday(?)) <= 1
+        ORDER BY ABS(julianday(txn_date) - julianday(?)), seq LIMIT 1`, a.id, r.amountPaise, r.date, r.date);
+      if (m) { run('UPDATE acct_transactions SET ext_id = ? WHERE id = ?', r.reference, m.id); adopted++; continue; }
+      fresh.push(r);
+    }
+    const buf = csv(fresh);
+    const none = { importId: null, dryRun: false, filename: '', rowsTotal: 0, rowsNew: 0, rowsDuplicate: 0, rowsSkipped: 0, periodFrom: null, periodTo: null, categorisedByRules: 0, warnings: [], skipped: [], columns: {}, sample: [], lockedMonthRows: 0, reviewRequired: false, preview: [] } as unknown as ImportResult; // nothing new to load
+    const dry = fresh.length === 0 ? none : importStatement(ownerId, actor, a.id, `feed-${p.id}-${istDate(now())}.csv`, buf, true);
     const res = dry.rowsNew === 0 ? dry : importStatement(ownerId, actor, a.id, `feed-${p.id}-${istDate(now())}-${now()}.csv`, buf, false);
-    mark(true, `${res.rowsNew} new, ${res.rowsDuplicate} already in the books`);
-    finish(true, { fetched: rows.length, rowsNew: res.rowsNew, rowsDuplicate: res.rowsDuplicate, matched: res.categorisedByRules }, `${res.rowsNew} new, ${res.rowsDuplicate} already in the books`);
-    return { ...res, fetched: rows.length };
+    if (p.id === 'yodlee' && res.importId) run('UPDATE acct_transactions SET ext_id = reference WHERE import_id = ? AND ext_id IS NULL AND reference IS NOT NULL', res.importId);
+    const msg = `${res.rowsNew} new, ${rows.length - fresh.length - adopted + res.rowsDuplicate} already in the books${adopted ? `, ${adopted} matched to statement lines` : ''}`;
+    mark(true, msg);
+    try { // the bank's own balance, to show beside the books' balance; a failure here never fails the sync
+      const b = await p.balance?.(ownerId, ref.slice(p.id.length + 1));
+      if (b !== null && b !== undefined) run('UPDATE acct_feed_state SET bank_balance_paise = ?, bank_balance_at = ? WHERE account_id = ?', holds === 'bank' ? b : -Math.abs(b), now(), a.id);
+    } catch { /* optional */ }
+    finish(true, { fetched: rows.length, rowsNew: res.rowsNew, rowsDuplicate: rows.length - fresh.length - adopted + res.rowsDuplicate, matched: res.categorisedByRules }, msg);
+    return { ...res, fetched: rows.length, adopted };
   } catch (e) { mark(false, (e as Error).message); finish(false, {}, (e as Error).message); throw e; }
   finally { syncing.delete(a.id); }
 }
