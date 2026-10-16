@@ -4,9 +4,11 @@ import { Loading, ErrorBox, Empty } from '../../ui';
 import { useApi, fmtDay, todayISO, addDaysISO, inr } from '../../lib';
 import { type Booking, type Page, BookingChip, timeRange, whatOf } from './common';
 import { BookingDetail } from './Detail';
+import { DayTimeline, ViewToggle, useView } from './BookingCalendar';
 
 export function DayView({ version, onChanged }: { version: number; onChanged: () => void }) {
   const [date, setDate] = useState(todayISO());
+  const [view, setView] = useView();
   const [open, setOpen] = useState<string | null>(null);
   const [d, err] = useApi<Page<Booking>>(`/api/staff/bookings?from=${date}&to=${date}&limit=200`, [version]);
   const live = (d?.items || []).filter((b) => b.status !== 'cancelled' && b.status !== 'expired').sort((a, b) => a.startAt - b.startAt);
@@ -20,8 +22,9 @@ export function DayView({ version, onChanged }: { version: number; onChanged: ()
         {date !== todayISO() && <button className="btn ghost sm" onClick={() => setDate(todayISO())}>Today</button>}
         <b className="gold" style={{ marginLeft: 6 }}>{fmtDay(date)}</b>
         {d && <span className="muted small">{live.length} {live.length === 1 ? 'session' : 'sessions'}</span>}
+        <span style={{ marginLeft: 'auto' }}><ViewToggle value={view} onChange={setView} /></span>
       </div>
-      {err ? <ErrorBox msg={err} /> : !d ? <Loading h={200} /> : !live.length ? <div className="card"><Empty>No sessions on this day.</Empty></div> : (
+      {err ? <ErrorBox msg={err} /> : !d ? <Loading h={200} /> : !live.length ? <div className="card"><Empty>No sessions on this day.</Empty></div> : view === 'calendar' ? <DayTimeline bookings={live} onOpen={setOpen} /> : (
         <div className="grid g2">
           {grounds.map((g) => (
             <div className="card" key={g}>
