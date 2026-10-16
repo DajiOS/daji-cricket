@@ -4,9 +4,10 @@ import { Leads, Connections, Services } from '../parts/admin/Platform';
 import People from '../parts/admin/People';
 import Payments from '../parts/admin/Payments';
 import Backups from '../parts/admin/Backups';
+import { RefundApprovals } from '../parts/admin/Refunds';
 import { YodleeSettings } from '../parts/admin/Yodlee';
 
-const TABS: [string, string][] = [['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings'], ['connections', 'Connections'], ['bank', 'Bank connection'], ['services', 'Services']];
+const TABS: [string, string][] = [['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings'], ['connections', 'Connections'], ['bank', 'Bank connection'], ['services', 'Services'], ['refunds', 'Refunds']];
 
 export default function Platform({ sub }: { sub: string }) {
   const tab = sectionOf(sub, TABS.map(([k]) => k));
@@ -20,6 +21,7 @@ export default function Platform({ sub }: { sub: string }) {
       {tab === 'connections' && <Connections />}
       {tab === 'bank' && <YodleeSettings />}
       {tab === 'services' && <Services />}
+      {tab === 'refunds' && <RefundApprovals />}
     </div>
   );
 }

@@ -11,7 +11,7 @@ after(async () => { await h.close(); });
 beforeEach(() => { h.reset(); resetRateLimits(); });
 
 test('sign-in attempts are limited to 20 a minute per address', async () => {
-  const attempt = () => h.post('/api/auth/login', { email: 'customer@daji.test', password: 'Wrong@12345' });
+  let k = 0; const attempt = () => h.post('/api/auth/login', { email: `guess${k++}@daji.test`, password: 'Wrong@12345' }); // a different account each time, so only the per-address limit applies
   for (let i = 0; i < 20; i++) assert.equal((await attempt()).status, 401);
   const blocked = await attempt();
   assert.equal(blocked.status, 429);
