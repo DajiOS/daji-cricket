@@ -1,5 +1,6 @@
 import { Router, ok, created } from '../http.ts';
 import { U, page } from './helpers.ts';
+import { approveRefund, declineRefund, listRefunds } from '../payments.ts';
 import { Validator } from '../input.ts';
 import { HttpError, notFound } from '../errors.ts';
 import { audit, listAudit } from '../audit.ts';
@@ -146,6 +147,10 @@ export function adminRoutes(r: Router): void {
     catch (e) { throw new HttpError(500, 'BACKUP_FAILED', `The backup could not be completed: ${(e as Error).message}`); }
   }, A);
 
+  const SUP = { auth: ['super_admin' as const] };
+  r.get('/api/admin/refunds', (c) => { const st = c.query.get('status') ?? 'awaiting'; return ok({ items: st === 'awaiting' ? listRefunds(c.query.get('ownerId'), 'pending').filter((x) => !x.approvedAt) : listRefunds(c.query.get('ownerId'), st) }); }, SUP);
+  r.post('/api/admin/refunds/:id/approve', (c) => ok(approveRefund(U(c), c.params.id!)), SUP);
+  r.post('/api/admin/refunds/:id/decline', (c) => { const v = new Validator(c.json()); const reason = v.str('reason', { required: true, max: 200 }); v.done(); return ok(declineRefund(U(c), c.params.id!, reason!)); }, SUP);
   r.get('/api/admin/audit', (c) => {
     const { limit, offset } = page(c, 50);
     return ok(listAudit({ ownerId: c.query.get('ownerId'), entity: c.query.get('entity') ?? undefined, entityId: c.query.get('entityId') ?? undefined, action: c.query.get('action') ?? undefined, limit, offset }));

@@ -260,10 +260,11 @@ test('webhook: payment.failed marks the payment failed and keeps the hold until 
   assert.equal(d.body.booking.status, 'held');
 });
 
-test('webhook: unknown orders and unknown events are acknowledged, not errors', async () => {
+test('webhook: an unknown order is answered 404 (so Razorpay sends it again) and not remembered; unknown events are acknowledged', async () => {
   const a = await sendWebhook(h, capturedEvent('order_nobody', 100), { eventId: 'evt_u1' });
-  assert.equal(a.status, 200);
-  assert.equal(a.body.outcome, 'unknown_order');
+  assert.equal(a.status, 404);
+
+  assert.equal(many('SELECT 1 FROM webhook_events WHERE id = ?', 'evt_u1').length, 0);
   const b = await sendWebhook(h, { event: 'subscription.charged', payload: {} }, { eventId: 'evt_u2' });
   assert.equal(b.body.outcome, 'ignored');
 });
@@ -368,6 +369,11 @@ test('gateway refunds are queued and the sweep hands them to the gateway', async
   assert.equal(q.body.items.length, 1);
   assert.equal(q.body.items[0].mode, 'gateway');
 
+  assert.equal((await runSweeps(h.cfg)).refundsProcessed, 0, 'nothing is sent before the super admin authorises it');
+  const adm = await h.login('admin');
+  assert.equal((await h.post(`/api/admin/refunds/${q.body.items[0].id}/approve`, {}, staff)).status, 403);
+  assert.equal((await h.get('/api/admin/refunds', adm)).body.items.length, 1);
+  assert.equal((await h.post(`/api/admin/refunds/${q.body.items[0].id}/approve`, {}, adm)).status, 200);
   const out = await runSweeps(h.cfg);
   assert.equal(out.refundsProcessed, 1);
   const after = await h.get('/api/staff/refunds?status=done', staff);
@@ -388,9 +394,23 @@ test('manual refunds (UPI money) stay open until staff record the transfer refer
   await runSweeps(h.cfg);
   assert.equal((await h.get('/api/staff/refunds?status=pending', staff)).body.items.length, 1, 'the sweep never touches manual refunds');
 
+  assert.equal((await h.post(`/api/staff/refunds/${open[0].id}/complete`, { reference: 'UTR998877665544' }, staff)).status, 409, 'not before the super admin authorises it');
+  assert.equal((await h.post(`/api/admin/refunds/${open[0].id}/approve`, {}, await h.login('admin'))).status, 200);
   assert.equal((await h.post(`/api/staff/refunds/${open[0].id}/complete`, {}, staff)).status, 400, 'a reference is required');
   const done = await h.post(`/api/staff/refunds/${open[0].id}/complete`, { reference: 'UTR998877665544' }, staff);
   assert.equal(done.status, 200);
   assert.equal(done.body.status, 'done');
   assert.equal((await h.post(`/api/staff/refunds/${open[0].id}/complete`, { reference: 'again' }, staff)).status, 409);
+});
+
+test('the super admin can decline a refund: nothing is paid and the payment shows no refund', async () => {
+  const b = await bookAndPay(h, cust, g.id, dayFromNow(3), '19:00', 1);
+  await h.post(`/api/bookings/${b.id}/cancel`, { reason: 'rain' }, cust);
+  const id = (await h.get('/api/staff/refunds?status=pending', staff)).body.items[0].id;
+  const adm = await h.login('admin');
+  assert.equal((await h.post(`/api/admin/refunds/${id}/decline`, {}, adm)).status, 400, 'a reason is needed');
+  assert.equal((await h.post(`/api/admin/refunds/${id}/decline`, { reason: 'not valid' }, adm)).status, 200);
+  assert.equal((await runSweeps(h.cfg)).refundsProcessed, 0);
+  assert.equal((await h.get(`/api/bookings/${b.id}`, cust)).body.payments[0].refundedPaise, 0);
+  assert.equal((await h.post(`/api/admin/refunds/${id}/approve`, {}, adm)).status, 409);
 });
