@@ -33,7 +33,7 @@ export function previewCancel(b: BookingRow, opts: { waive?: boolean; at?: numbe
     const creditPaid = paid - cashPaid;
     const pct = s.cashRefundPercent;
     // Back to the original payment method only a share comes back; keeping it as credit returns everything. Staff can waive the rule.
-    const cashBack = opts.waive === true ? cashPaid : Math.floor((cashPaid * pct) / 100);
+    const cashBack = opts.waive === true || b.status === 'held' ? cashPaid : Math.floor((cashPaid * pct) / 100);
     let refund = cashBack, credit = creditPaid, retained = cashPaid - cashBack;
     if (opts.prefer === 'credit') { credit = paid; refund = 0; retained = 0; }
     const hasChoice = cashPaid > 0 && cashBack < cashPaid;
@@ -86,10 +86,10 @@ export function cancelBooking(user: UserRow, bookingId: string, input: { reason?
     const pays = many<PaymentRow>('SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at, rowid', b.id);
 
     // Money that is still in flight cannot confirm anything any more; a late capture will be refunded automatically.
-    for (const p of pays) if (p.status === 'created' || p.status === 'pending' || p.status === 'submitted') {
+    for (const p of pays) if (p.status === 'created' || p.status === 'pending') {
       run("UPDATE payments SET status = 'failed', reject_reason = 'booking cancelled', updated_at = ? WHERE id = ?", t, p.id);
       logEvent(p.id, user.id, 'failed', { reason: 'booking cancelled' });
-    }
+    } else if (p.status === 'submitted') logEvent(p.id, user.id, 'cancel.while_pending', { note: 'a UTR was sent; staff can still verify it and it is refunded' }); // left as it is so the money can be matched and returned
 
     let refundTotal = 0;
     if (out.kind === 'free') {
@@ -140,7 +140,7 @@ function ownerCancel(user: UserRow, bookingId: string, reasonIn: string | undefi
     const b = accessBooking(user, bookingId, 'manage_bookings');
     ensureCancellable(b);
     const t = now();
-    for (const p of many<PaymentRow>('SELECT * FROM payments WHERE booking_id = ?', b.id)) if (p.status === 'created' || p.status === 'pending' || p.status === 'submitted') {
+    for (const p of many<PaymentRow>('SELECT * FROM payments WHERE booking_id = ?', b.id)) if (p.status === 'created' || p.status === 'pending') {
       run("UPDATE payments SET status = 'failed', reject_reason = 'booking cancelled', updated_at = ? WHERE id = ?", t, p.id);
       logEvent(p.id, user.id, 'failed', { reason: 'booking cancelled' });
     }
@@ -171,7 +171,7 @@ export function resolveOwnerCancel(user: UserRow, bookingId: string, choice: 're
     const t = now();
     let refund = 0;
     if (choice === 'refund' || choice === 'half') {
-      let toRefund = choice === 'half' ? Math.round(cashPaid * getSettings().cashRefundPercent / 100) : cashPaid;
+      let toRefund = choice === 'half' ? Math.floor(cashPaid * getSettings().cashRefundPercent / 100) : cashPaid;
       for (const p of [...pays].reverse()) {
         if (toRefund <= 0) break;
         if (p.method === 'credit' || (p.status !== 'captured' && p.status !== 'partially_refunded')) continue;

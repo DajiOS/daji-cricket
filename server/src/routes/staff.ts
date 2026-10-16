@@ -32,6 +32,8 @@ function perms(v: Validator, key: string): StaffPermission[] | undefined {
   return [...new Set(arr)] as StaffPermission[];
 }
 
+const needPay = (u: Parameters<typeof hasPermission>[0]): void => { if (u.role === 'staff' && !hasPermission(u, 'verify_payments') && !hasPermission(u, 'record_payments') && !hasPermission(u, 'view_reports')) throw new HttpError(403, 'FORBIDDEN', 'This needs a payments permission'); };
+
 export function staffRoutes(r: Router): void {
   const A = { auth: STAFF_ROLES };
 
@@ -138,6 +140,7 @@ export function staffRoutes(r: Router): void {
 
   r.get('/api/staff/payments/:id/history', (c) => {
     const p = paymentOr404(c.params.id!);
+    needPay(U(c));
     accessBooking(U(c), p.booking_id);
     return ok({ items: paymentHistory(p.id) });
   }, A);
@@ -152,7 +155,7 @@ export function staffRoutes(r: Router): void {
     return ok({ ...out, booking: viewBooking(out.payment.bookingId) });
   }, A);
 
-  r.get('/api/staff/refunds', (c) => ok({ items: listRefunds(ownerFilter(c), c.query.get('status') ?? undefined) }), A);
+  r.get('/api/staff/refunds', (c) => { needPay(U(c)); return ok({ items: listRefunds(ownerFilter(c), c.query.get('status') ?? undefined) }); }, A);
   r.post('/api/staff/refunds/:id/complete', (c) => {
     const v = new Validator(c.json());
     const reference = v.str('reference', { required: true, max: 80 });
@@ -161,7 +164,7 @@ export function staffRoutes(r: Router): void {
   }, A);
 
   // ---- grounds
-  r.get('/api/staff/grounds', (c) => ok({ items: listGrounds({ ownerId: ownerFilter(c), includeInactive: true }) }), A);
+  r.get('/api/staff/grounds', (c) => { const u = U(c); if (u.role === 'staff' && !hasPermission(u, 'manage_grounds') && !hasPermission(u, 'manage_bookings')) throw new HttpError(403, 'FORBIDDEN', 'This needs a grounds or bookings permission'); return ok({ items: listGrounds({ ownerId: ownerFilter(c), includeInactive: true }) }); }, A);
 
   r.post('/api/staff/grounds', (c) => {
     const u = U(c);
