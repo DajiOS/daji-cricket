@@ -34,6 +34,16 @@ export function setOtpSender(s: OtpSender | null): void { whatsappSender = s; }
 /** A text message (MSG91) is the back-up when WhatsApp is not set up or does not deliver. */
 export function setOtpSmsSender(s: OtpSender | null): void { smsSender = s; }
 
+/** Tells the ground's contact person something by WhatsApp. `vars` fill the template's text variables in order. */
+export type AlertSender = (phone: string, vars: string[]) => Promise<boolean>;
+let alertSender: AlertSender | null = null;
+export function setAlertSender(s: AlertSender | null): void { alertSender = s; }
+/** Sends a staff alert on WhatsApp. Never throws; false when WhatsApp is not set up or the send fails. */
+export async function sendAlert(phone: string, vars: string[]): Promise<boolean> {
+  if (!alertSender) return false;
+  try { return await alertSender(phone, vars); } catch { return false; }
+}
+
 /** Delivers a sign-in code: WhatsApp first, then text message. False when neither is set up or both fail. */
 export async function sendOtpCode(phone: string, code: string): Promise<boolean> {
   for (const s of [whatsappSender, smsSender]) {
@@ -93,6 +103,7 @@ const T: Record<string, (d: TemplateData) => { subject: string; body: string }> 
   booking_reminder: (d) => ({ subject: `Reminder — ${d.ref}`, body: `Reminder: booking ${d.ref} at ${d.ground} starts ${fmtDateTime(d.startAt!)}. Balance to pay at the ground: ${formatPaise(d.amountPaise ?? 0)}.${venueTail(d)}` }),
   autodebit_charged: (d) => ({ subject: `Balance paid automatically — ${d.ref}`, body: `We charged the balance of ${formatPaise(d.amountPaise ?? 0)} for booking ${d.ref} at ${d.ground} on ${fmtDateTime(d.startAt!)} from your approved bank account. Nothing more to pay at the ground.` }),
   autodebit_failed: (d) => ({ subject: `Auto-debit did not go through — ${d.ref}`, body: `We could not charge the balance of ${formatPaise(d.amountPaise ?? 0)} for booking ${d.ref}${d.reason ? ` (${d.reason})` : ''}. Please pay it at the ground, or pay online from My bookings.` }),
+  enquiry_new: (d) => ({ subject: `New enquiry from ${d.name ?? 'a visitor'}`, body: `${d.name ?? 'Someone'}${d.contactPhone ? ' (' + d.contactPhone + ')' : ''} sent an enquiry${d.ground ? ' about ' + d.ground : ''}.${d.extra ? ' ' + d.extra : ''}` }),
   enquiry_received: (d) => ({ subject: 'We got your enquiry', body: `Thanks ${d.name ?? ''}, we have your enquiry and will get back to you soon.` }),
   quotation_sent: (d) => ({ subject: 'Your quotation', body: `We have sent you a quotation of ${formatPaise(d.amountPaise ?? 0)}.${d.extra ? ' ' + d.extra : ''}` }),
   enquiry_converted: (d) => ({ subject: `Booking created — ${d.ref}`, body: `Your enquiry is now booking ${d.ref} at ${d.ground} on ${fmtDateTime(d.startAt!)}.` }),

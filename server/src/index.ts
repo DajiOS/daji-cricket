@@ -3,9 +3,9 @@ import { openDb, closeDb } from './db.ts';
 import { buildServer } from './app.ts';
 import { seedDemo, hasAdmin } from './seed.ts';
 import { startScheduler, stopScheduler } from './jobs.ts';
-import { flushNotifications, registerProvider, setOtpSender, setOtpSmsSender } from './notifications.ts';
+import { flushNotifications, registerProvider, setAlertSender, setOtpSender, setOtpSmsSender } from './notifications.ts';
 import { expoPushProvider } from './push.ts';
-import { whatsappOtpSender, msg91OtpSender } from './whatsapp.ts';
+import { whatsappOtpSender, whatsappAlertSender, msg91OtpSender } from './whatsapp.ts';
 import { gmailProvider } from './gmail.ts';
 import { applyYodleeSettings } from './yodleeSettings.ts';
 
@@ -23,6 +23,7 @@ if (cfg.demoMode) {
 registerProvider('push', expoPushProvider(cfg));
 registerProvider('email', gmailProvider(cfg));
 setOtpSender(whatsappOtpSender(cfg));
+setAlertSender(whatsappAlertSender(cfg));
 setOtpSmsSender(msg91OtpSender(cfg));
 const server = buildServer(cfg);
 startScheduler(cfg, (e) => console.error(JSON.stringify({ level: 'error', where: 'sweep', error: String((e as Error)?.stack ?? e) })));

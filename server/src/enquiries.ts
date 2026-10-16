@@ -7,7 +7,8 @@ import { audit, type Actor } from './audit.ts';
 import { Validator } from './input.ts';
 import { getGroundOr404 } from './grounds.ts';
 import { hasPermission, requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
-import { notify } from './notifications.ts';
+import { notify, sendAlert } from './notifications.ts';
+import { getSettings } from './settings.ts';
 import { createStaffBooking, parseWalkIn } from './hold.ts';
 import { isClosedDate } from './closures.ts';
 
@@ -55,6 +56,10 @@ export function createEnquiry(user: UserRow | null, body: unknown): Enquiry {
     audit(user ? { id: user.id, role: user.role } : { id: null, role: 'anonymous' }, 'enquiry.create', 'enquiry', id, { groundId: g.id }, g.owner_id);
   });
   if (user?.role === 'customer') notify(user.id, 'enquiry_received', { name: name });
+  // the ground's people hear about it straight away: an app alert and email to the owner, and a WhatsApp to the contact number
+  try { notify(g.owner_id, 'enquiry_new', { name: name, contactPhone: phone, ground: g.name, extra: message!.slice(0, 160) }); } catch { /* the enquiry is saved either way */ }
+  const to = getSettings().contactPhone;
+  if (to) void sendAlert(to, [name!, phone!, message!]);
   return view(row(id)!, true);
 }
 
