@@ -84,7 +84,15 @@ export function applyCaptured(paymentId: string, o: CaptureOpts): { outcome: Cap
       return { outcome: 'partial' as const };
     }
     if (b.status === 'confirmed' || b.status === 'completed' || b.status === 'no_show') {
-      run('UPDATE bookings SET paid_paise = paid_paise + ?, updated_at = ? WHERE id = ?', amount, t, b.id);
+      // Only what is still owed counts toward the booking; money beyond the total (staff took cash while this payment was in flight) goes back.
+      const owed = Math.max(b.total_paise - b.paid_paise, 0), keep = Math.min(amount, owed), over = amount - keep;
+      run('UPDATE bookings SET paid_paise = paid_paise + ?, updated_at = ? WHERE id = ?', keep, t, b.id);
+      if (over > 0) {
+        refundPayment(paymentOr404(p.id), over, 'payment received after the booking was already fully paid', o.actor);
+        audit(o.actor, 'payment.overpaid_refund', 'payment', p.id, { bookingId: b.id, amountPaise: over }, p.owner_id);
+        notify(b.customer_id, 'late_payment_refund', { ref: b.ref, refundPaise: over }, b.id);
+        if (keep === 0) return { outcome: 'extra_refunded' as const };
+      }
       if (p.method === 'razorpay' && p.purpose === 'balance') {
         const g = one<{ name: string }>('SELECT name FROM grounds WHERE id = ?', b.ground_id);
         notify(b.customer_id, 'autodebit_charged', { ref: b.ref, ground: g?.name, startAt: b.start_at, amountPaise: amount }, b.id);
