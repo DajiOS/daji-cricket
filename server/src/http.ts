@@ -155,9 +155,10 @@ export function frameAncestorsPolicy(cfg: Config): string {
  * Razorpay's checkout script and frame, Google Fonts, and images from anywhere over https (gallery links).
  */
 export function sitePolicy(cfg: Config): string {
+  let fl = ''; try { if (cfg.yodlee.fastLinkUrl) fl = new URL(cfg.yodlee.fastLinkUrl).origin; } catch { /* a bad URL simply adds nothing */ }
   return ["default-src 'self'", "script-src 'self' https://checkout.razorpay.com", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", 'font-src https://fonts.gstatic.com',
-    "img-src 'self' data: https:", `connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com`, 'frame-src https://api.razorpay.com https://checkout.razorpay.com',
-    "object-src 'none'", "base-uri 'none'", "form-action 'self'", frameAncestorsPolicy(cfg)].join('; ');
+    "img-src 'self' data: https:", `connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com`, `frame-src https://api.razorpay.com https://checkout.razorpay.com${fl ? ' ' + fl : ''}`,
+    "object-src 'none'", "base-uri 'none'", `form-action 'self'${fl ? ' ' + fl : ''}`, frameAncestorsPolicy(cfg)].join('; ');
 }
 
 /** `frame` replaces the blanket X-Frame-Options: DENY, which would stop the Wix page from embedding the app. */

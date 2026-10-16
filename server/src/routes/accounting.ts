@@ -1,11 +1,12 @@
 import { feedStatus, linkAccount, syncAccount } from '../accounting/feed.ts';
+import { disconnectProviderAccount, fastLinkSession, listProviderAccounts, ownersInWebhook, webhookAuthorised } from '../accounting/yodlee.ts';
 import { Router, ok, created } from '../http.ts';
 import type { Ctx, Reply } from '../http.ts';
 import { U, page, ownerOrFail } from './helpers.ts';
 import { HttpError, forbidden } from '../errors.ts';
-import { audit } from '../audit.ts';
+import { audit, SYSTEM } from '../audit.ts';
 import { hasPermission } from '../auth.ts';
-import { one } from '../db.ts';
+import { many, one, run } from '../db.ts';
 import { now } from '../clock.ts';
 import { istDate, monthRange, addDays as addDaysIst } from '../time.ts';
 import { balanceSheet, accountLedger, financialYear, profitAndLoss, rangeFrom, requireDate, trialBalance } from '../accounting/statements.ts';
@@ -232,6 +233,29 @@ export function accountingRoutes(r: Router): void {
     const accountId = String((c.json() as { accountId?: unknown })?.accountId ?? '');
     return ok(await syncAccount(c.cfg, owner, actor(c), accountId));
   }, { ...A, rate: 'auth' });
+  // ---- Yodlee: connect a bank (FastLink), see what was connected, disconnect, and the webhook Yodlee calls with fresh data
+  r.post('/api/accounting/feed/yodlee/session', async (c) => { canWrite(c); return ok(await fastLinkSession(c.cfg, ownerOrFail(c, 'connect a bank'))); }, { ...A, rate: 'auth' });
+  r.get('/api/accounting/feed/yodlee/accounts', async (c) => { canRead(c); return ok({ accounts: await listProviderAccounts(c.cfg, ownerOrFail(c, 'see connected banks')) }); }, A);
+  r.post('/api/accounting/feed/yodlee/disconnect', async (c) => {
+    canWrite(c);
+    const owner = ownerOrFail(c, 'disconnect a bank');
+    const id = String((c.json() as { providerAccountId?: unknown })?.providerAccountId ?? '');
+    await disconnectProviderAccount(c.cfg, owner, id);
+    run("UPDATE acct_accounts SET provider_ref = NULL, source = 'upload', updated_at = ?, updated_by = ? WHERE owner_id = ? AND provider_ref = ?", now(), actor(c).id, owner, `yodlee:${id}`);
+    audit(actor(c), 'feed.disconnect', 'acct_account', id, { provider: 'yodlee' }, owner);
+    return ok({ ok: true });
+  }, A);
+  r.post('/api/webhooks/yodlee', (c) => {
+    if (!webhookAuthorised(c.cfg, c.query.get('token') ?? undefined)) throw new HttpError(401, 'UNAUTHORISED', 'Not allowed');
+    let body: unknown = null; try { body = JSON.parse(c.raw.toString('utf8')); } catch { throw new HttpError(400, 'BAD_REQUEST', 'The webhook body is not valid'); }
+    const owners = ownersInWebhook(c.cfg, body);
+    // answer Yodlee at once; the pull runs behind it, and a failure is recorded against the account
+    for (const o of owners) {
+      const ids = many<{ id: string }>("SELECT id FROM acct_accounts WHERE owner_id = ? AND provider_ref LIKE 'yodlee:%' AND deleted_at IS NULL", o).map((x) => x.id);
+      setImmediate(async () => { for (const id of ids) { try { await syncAccount(c.cfg, o, SYSTEM, id); } catch (e) { console.error(JSON.stringify({ level: 'error', where: 'yodlee-webhook', error: String((e as Error)?.message ?? e) })); } } });
+    }
+    return ok({ received: true, owners: owners.length });
+  }, { rate: 'none', maxBody: 1024 * 1024 });
   r.get('/api/accounting/budgets', (c) => { canRead(c); return ok(listBudgets(ownerOrFail(c, 'see budgets'))); }, A);
   r.put('/api/accounting/budgets', (c) => { canWrite(c); return ok(setBudgets(ownerOrFail(c, 'set budgets'), actor(c), c.json())); }, A);
   r.post('/api/accounting/transfers', (c) => { canWrite(c); return created(transfer(ownerOrFail(c, 'move money between accounts'), actor(c), c.json())); }, A);

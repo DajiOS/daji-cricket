@@ -30,6 +30,7 @@ export interface Config {
     privateKeyPem: string;
     issuer: string;
     keyId: string;
+    webhookSecret: string;
   };
   /** Daily snapshot of the database (and uploaded files) at 03:15 IST. `dir` is where snapshots go; copy them off the server too. */
   backup: { enabled: boolean; keep: number; dir: string; passphrase: string };
@@ -152,6 +153,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       privateKeyPem: (env.YODLEE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
       issuer: env.YODLEE_ISSUER || '',
       keyId: env.YODLEE_KEY_ID || '',
+      webhookSecret: env.YODLEE_WEBHOOK_SECRET || '',
     },
     backup: { enabled: truthy(env.BACKUP_ENABLED, !isLocal), keep: Math.max(1, Math.floor(Number(env.BACKUP_KEEP ?? 14)) || 14), dir: env.BACKUP_DIR || join(dataDir, 'backups'), passphrase: env.BACKUP_PASSPHRASE || '' },
     fieldKey: env.FIELD_KEY || '',

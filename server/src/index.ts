@@ -7,9 +7,11 @@ import { flushNotifications, registerProvider, setOtpSender, setOtpSmsSender } f
 import { expoPushProvider } from './push.ts';
 import { whatsappOtpSender, msg91OtpSender } from './whatsapp.ts';
 import { gmailProvider } from './gmail.ts';
+import { applyYodleeSettings } from './yodleeSettings.ts';
 
 const cfg = loadConfig();
 openDb(cfg.dbPath);
+applyYodleeSettings(cfg);
 for (const w of configWarnings(cfg)) console.warn(`WARNING: ${w}`);
 if (cfg.demoMode) {
   const r = seedDemo(cfg);
