@@ -70,7 +70,7 @@ test('the Yodlee provider signs its token, reads transactions, and skips pending
   });
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   try {
-    const cfg = { ...h.cfg, demoMode: false, yodlee: { apiUrl: `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, fastLinkUrl: '', clientId: 'c', secret: 's', adminLoginName: 'daji', privateKeyPem: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), issuer: 'iss', keyId: 'k1' } };
+    const cfg = { ...h.cfg, demoMode: false, yodlee: { apiUrl: `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, fastLinkUrl: '', clientId: 'c', secret: '', adminLoginName: 'daji', privateKeyPem: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), issuer: 'iss', keyId: 'k1' } };
     const id = await bank();
     await h.post('/api/accounting/feed/link', { accountId: id, providerRef: 'DEMO' }, owner); // links as demo; relink under yodlee below
     const { run } = await import('../src/db.ts');
@@ -91,12 +91,14 @@ test('the Yodlee provider signs its token, reads transactions, and skips pending
   } finally { srv.close(); }
 });
 
-test('the daily sweep syncs each linked account once a day', async () => {
+test('the scheduled sweep syncs each linked account every four hours', async () => {
   const id = await bank();
   await h.post('/api/accounting/feed/link', { accountId: id, providerRef: 'D1' }, owner);
   assert.equal(await runFeedSync(h.cfg), 1);
-  assert.equal(await runFeedSync(h.cfg), 0, 'already done today');
-  advance(DAY);
-  assert.equal(await runFeedSync(h.cfg), 1);
+  assert.equal(await runFeedSync(h.cfg), 0, 'just done');
+  advance(3 * 60 * 60 * 1000);
+  assert.equal(await runFeedSync(h.cfg), 0, 'three hours is not yet due');
+  advance(61 * 60 * 1000);
+  assert.equal(await runFeedSync(h.cfg), 1, 'four hours later it is due');
   assert.ok(istDate(now()));
 });

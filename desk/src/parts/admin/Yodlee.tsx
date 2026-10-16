@@ -7,16 +7,18 @@ import { Panel, errText } from './common';
 const TEXT: [string, string, string][] = [
   ['apiUrl', 'Yodlee API address', 'For example https://sandbox.api.yodlee.com/ysl (testing) or the address Yodlee gave you for live.'],
   ['fastLinkUrl', 'FastLink address', 'The bank sign-in page address from Yodlee, for example https://fl4.sandbox.yodlee.com/authenticate/<your-name>/fastlink/'],
-  ['clientId', 'Client ID (cobrand name)', 'Optional. Sent with every request when Yodlee gave you one.'],
-  ['issuer', 'Issuer ID', 'The issuer Yodlee shows next to your public key. Signs every request.'],
-  ['keyId', 'Key ID', 'Optional. The id of the public key you uploaded to Yodlee.'],
+  ['clientId', 'Client ID', 'From the Yodlee dashboard, next to the secret. Used with the secret below to sign in.'],
   ['adminLoginName', 'Admin login name', 'The Yodlee admin user used to add each business as a user. Default: daji.'],
+  ['configName', 'FastLink configuration name', 'The name you published in Yodlee\'s Configuration Tool (aggregation, India, INR). Blank uses Aggregation.'],
+  ['userLogin', 'Sandbox test user', 'Sandbox only, for example sbMem… as Yodlee gave you. Leave blank for Development and Live.'],
+  ['issuer', 'Issuer ID', 'Only for the private-key way of signing in. Leave blank when you use a client ID and secret.'],
+  ['keyId', 'Key ID', 'Optional, private-key way only. The id of the public key you uploaded to Yodlee.'],
 ];
 
 export function YodleeSettings() {
   const [data, error, reload] = useApi<any>('/api/admin/yodlee');
   const [form, setForm] = useState<Record<string, string>>({});
-  const [pem, setPem] = useState(''); const [busy, setBusy] = useState(false);
+  const [pem, setPem] = useState(''); const [sec, setSec] = useState(''); const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<{ ok: boolean; message: string } | null>(null);
   const toast = useToast();
   useEffect(() => { if (data) setForm(data.fields); }, [data]);
@@ -24,7 +26,7 @@ export function YodleeSettings() {
   if (!data) return <Loading />;
   const save = async (extra: Record<string, unknown> = {}, ok = 'Saved') => {
     setBusy(true);
-    try { await put('/api/admin/yodlee', { ...form, ...(pem.trim() ? { privateKeyPem: pem } : {}), ...extra }); setPem(''); setTest(null); toast(ok); reload(); }
+    try { await put('/api/admin/yodlee', { ...form, ...(pem.trim() ? { privateKeyPem: pem } : {}), ...(sec.trim() ? { secret: sec.trim() } : {}), ...extra }); setPem(''); setSec(''); setTest(null); toast(ok); reload(); }
     catch (e) { toast(errText(e)); } finally { setBusy(false); }
   };
   const runTest = async () => { setBusy(true); try { setTest(await post('/api/admin/yodlee/test')); } catch (e) { setTest({ ok: false, message: errText(e) }); } finally { setBusy(false); } };
@@ -40,13 +42,17 @@ export function YodleeSettings() {
               <input className="inp" value={form[k] ?? ''} onChange={(e) => setForm({ ...form, [k]: e.target.value })} autoComplete="off" />
             </Field>
           ))}
-          <Field label={`Private key ${data.secretsSet.privateKeyPem ? '(saved, leave blank to keep)' : '(not set)'}`} hint="Paste the whole key, from -----BEGIN to -----END. It signs a short-lived token for each request." full>
+          <Field label={`Client secret ${data.secretsSet.secret ? '(saved, leave blank to keep)' : '(not set)'}`} hint="The secret from the Yodlee dashboard. With the client ID it signs in at Yodlee. Use this OR the private key below." full>
+            <input className="inp" type="password" value={sec} onChange={(e) => setSec(e.target.value)} placeholder={data.secretsSet.secret ? '••••••••  (hidden)' : ''} autoComplete="new-password" />
+          </Field>
+          <Field label={`Private key ${data.secretsSet.privateKeyPem ? '(saved, leave blank to keep)' : '(not set)'}`} hint="Only if Yodlee gave you a key pair instead of a secret. Paste the whole key, from -----BEGIN to -----END. It signs a short-lived token for each request." full>
             <textarea className="inp" rows={5} value={pem} onChange={(e) => setPem(e.target.value)} placeholder={data.secretsSet.privateKeyPem ? '••••••••  (hidden)' : '-----BEGIN PRIVATE KEY-----'} spellCheck={false} autoComplete="off" />
           </Field>
         </div>
         <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           <button className="btn primary" disabled={busy} onClick={() => save()}>Save</button>
           <button className="btn" disabled={busy} onClick={runTest}>Test the keys</button>
+          {data.secretsSet.secret && <button className="btn ghost" disabled={busy} onClick={() => save({ clear: ['secret'] }, 'Secret removed')}>Remove saved secret</button>}
           {data.secretsSet.privateKeyPem && <button className="btn ghost" disabled={busy} onClick={() => save({ clear: ['privateKeyPem'] }, 'Key removed')}>Remove saved key</button>}
         </div>
         {test && <p className={test.ok ? 'gold' : 'err'} style={{ marginBottom: 0 }}>{test.message}</p>}

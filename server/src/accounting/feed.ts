@@ -26,6 +26,28 @@ CREATE TABLE acct_feed_state (
 );
 `);
 
+registerSchema('accounting-feed-2', `
+CREATE TABLE acct_feed_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  trigger TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  finished_at INTEGER,
+  ok INTEGER,
+  fetched INTEGER NOT NULL DEFAULT 0,
+  new_rows INTEGER NOT NULL DEFAULT 0,
+  duplicates INTEGER NOT NULL DEFAULT 0,
+  matched INTEGER NOT NULL DEFAULT 0,
+  message TEXT
+);
+CREATE INDEX ix_acct_feed_log_owner ON acct_feed_log(owner_id, started_at);
+`);
+
+/** How long an account may go without a sync before the scheduler pulls it again (a webhook usually gets there first). */
+export const FEED_SYNC_HOURS = 4;
+const syncing = new Set<string>();
+
 export interface FeedProvider {
   id: 'yodlee' | 'demo';
   /** Transactions on or after `since` (YYYY-MM-DD) for the provider's own account id. */
@@ -48,9 +70,46 @@ export function yodleeToken(cfg: Config, loginName: string, t = now()): string {
   return `${head}.${body}.${b64u(sig)}`;
 }
 
-export const yodleeConfigured = (cfg: Config): boolean => !!(cfg.yodlee.apiUrl && cfg.yodlee.privateKeyPem && cfg.yodlee.issuer);
+/** Yodlee is usable with either kind of key: client ID + secret (signs in at /auth/token), or an issuer + private key (we sign the token ourselves). */
+export const yodleeConfigured = (cfg: Config): boolean => !!(cfg.yodlee.apiUrl && ((cfg.yodlee.clientId && cfg.yodlee.secret) || (cfg.yodlee.privateKeyPem && cfg.yodlee.issuer)));
 /** Each ground owner is one Yodlee user, named from the owner's id, so one owner's banks can never be read for another. */
-export const yodleeLogin = (cfg: Config, ownerId: string): string => `${cfg.yodlee.adminLoginName || 'daji'}_${ownerId}`.slice(0, 60);
+export const yodleeLogin = (cfg: Config, ownerId: string): string => cfg.yodlee.userLogin || `${cfg.yodlee.adminLoginName || 'daji'}_${ownerId}`.slice(0, 60);
+
+// ---- signing in, and calling Yodlee: tokens are reused until two minutes before they expire, a 401 gets one fresh token, and a busy Yodlee is retried.
+const tokens = new Map<string, { token: string; until: number }>();
+export const clearYodleeTokens = (): void => { tokens.clear(); };
+let retryDelays = [1000, 3000];
+/** Tests shorten the waits. */
+export const setYodleeRetryDelays = (d: number[]): void => { retryDelays = d; };
+
+/** A token for one Yodlee login. Client-credentials keys ask Yodlee (POST /auth/token); private-key accounts sign it here. */
+export async function userToken(cfg: Config, loginName: string, f: Fetcher = fetch): Promise<string> {
+  const y = cfg.yodlee;
+  if (!y.secret || !y.clientId) return yodleeToken(cfg, loginName);
+  const key = `${y.apiUrl}|${y.clientId}|${loginName}`, hit = tokens.get(key);
+  if (hit && hit.until - 120_000 > now()) return hit.token;
+  const res = await f(`${y.apiUrl}/auth/token`, { method: 'POST', headers: { 'Api-Version': '1.1', loginName, 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: new URLSearchParams({ clientId: y.clientId, secret: y.secret }).toString(), signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) {
+    let d = ''; try { const j = await res.json() as { errorMessage?: string; errorCode?: string }; d = j.errorMessage || j.errorCode || ''; } catch { /* not JSON */ }
+    throw new HttpError(502, 'FEED_AUTH', `Yodlee did not accept the client ID and secret (${res.status}${d ? ': ' + d : ''}). Check them in Admin, Yodlee.`);
+  }
+  const j = await res.json() as { token?: { accessToken?: string; expiresIn?: number } };
+  const t = j.token?.accessToken; if (!t) throw new HttpError(502, 'FEED_AUTH', 'Yodlee signed in but sent no token.');
+  tokens.set(key, { token: t, until: now() + (Number(j.token?.expiresIn) > 0 ? Number(j.token!.expiresIn) : 1800) * 1000 });
+  return t;
+}
+
+/** One call to Yodlee as `loginName`. Retries 429/502/503/504 after 1 s and 3 s, and a 401 once with a fresh token. */
+export async function yFetch(cfg: Config, loginName: string, path: string, init: RequestInit = {}, f: Fetcher = fetch): Promise<Response> {
+  const y = cfg.yodlee; let renewed = false;
+  for (let attempt = 0; ; attempt++) {
+    const token = await userToken(cfg, loginName, f);
+    const res = await f(`${y.apiUrl}${path}`, { ...init, headers: { 'Api-Version': '1.1', Authorization: `Bearer ${token}`, Accept: 'application/json', ...(!y.secret && y.clientId ? { 'Cobrand-Name': y.clientId } : {}), ...(init.headers as Record<string, string> | undefined) }, signal: init.signal ?? AbortSignal.timeout(30_000) });
+    if (res.status === 401 && !renewed && y.secret) { renewed = true; tokens.delete(`${y.apiUrl}|${y.clientId}|${loginName}`); continue; }
+    if ([429, 502, 503, 504].includes(res.status) && attempt < retryDelays.length) { await new Promise((r) => setTimeout(r, retryDelays[attempt])); continue; }
+    return res;
+  }
+}
 
 export function yodleeProvider(cfg: Config, f: Fetcher = fetch): FeedProvider {
   return {
@@ -58,8 +117,7 @@ export function yodleeProvider(cfg: Config, f: Fetcher = fetch): FeedProvider {
     async fetch(ownerId, ref, since) {
       const out: StatementRow[] = [];
       for (let skip = 0, line = 1; skip < 5000; skip += 500) {
-        const url = `${cfg.yodlee.apiUrl}/transactions?accountId=${encodeURIComponent(ref)}&fromDate=${since}&top=500&skip=${skip}`;
-        const res = await f(url, { headers: { 'Api-Version': '1.1', Authorization: `Bearer ${yodleeToken(cfg, yodleeLogin(cfg, ownerId))}`, ...(cfg.yodlee.clientId ? { 'Cobrand-Name': cfg.yodlee.clientId } : {}) } });
+        const res = await yFetch(cfg, yodleeLogin(cfg, ownerId), `/transactions?accountId=${encodeURIComponent(ref)}&fromDate=${since}&top=500&skip=${skip}`, {}, f);
         if (!res.ok) throw new HttpError(502, 'FEED_ERROR', `The bank feed answered ${res.status}. Try again later.`);
         const data = await res.json() as { transaction?: YodleeTxn[] };
         const page = data.transaction ?? [];
@@ -136,7 +194,7 @@ const cell = (v: string): string => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '"
 const csv = (rows: StatementRow[]): Buffer => Buffer.from(['Date,Description,Reference,Amount,Balance', ...rows.map((r) => [r.date, r.description, r.reference ?? '', (r.amountPaise / 100).toFixed(2), r.balancePaise === null ? '' : (r.balancePaise / 100).toFixed(2)].map(cell).join(','))].join('\r\n') + '\r\n');
 
 /** Pulls the latest transactions for one linked account and loads them through the normal import. */
-export async function syncAccount(cfg: Config, ownerId: string, actor: Actor, accountId: string, f: Fetcher = fetch): Promise<ImportResult & { fetched: number }> {
+export async function syncAccount(cfg: Config, ownerId: string, actor: Actor, accountId: string, f: Fetcher = fetch, trigger: 'manual' | 'schedule' | 'webhook' = 'manual'): Promise<ImportResult & { fetched: number }> {
   const p = providerFor(cfg, f);
   if (!p) throw new HttpError(409, 'FEED_NOT_CONFIGURED', 'No bank feed is set up on this server yet.');
   const a = accountOr404(ownerId, accountId);
@@ -145,23 +203,38 @@ export async function syncAccount(cfg: Config, ownerId: string, actor: Actor, ac
   const last = one<{ d: string | null }>("SELECT MAX(txn_date) d FROM acct_transactions WHERE owner_id = ? AND account_id = ? AND source = 'upload'", ownerId, a.id)?.d;
   const since = last ? istDate(Date.parse(last + 'T00:00:00+05:30') - 7 * DAY) : istDate(now() - 90 * DAY); // a week of overlap catches late-posting items; duplicates are skipped
   const mark = (ok: boolean, msg: string) => run('INSERT INTO acct_feed_state(account_id, last_sync_at, last_ok, last_message) VALUES(?,?,?,?) ON CONFLICT(account_id) DO UPDATE SET last_sync_at = excluded.last_sync_at, last_ok = excluded.last_ok, last_message = excluded.last_message', a.id, now(), ok ? 1 : 0, msg.slice(0, 300));
+  if (syncing.has(a.id)) throw new HttpError(409, 'SYNC_RUNNING', 'This account is already being synced. Try again in a minute.');
+  syncing.add(a.id);
+  run('INSERT INTO acct_feed_log(owner_id, account_id, trigger, started_at) VALUES(?,?,?,?)', ownerId, a.id, trigger, now());
+  const logId = one<{ m: number }>('SELECT MAX(id) m FROM acct_feed_log WHERE account_id = ?', a.id)!.m;
+  const finish = (ok: boolean, o: { fetched?: number; rowsNew?: number; rowsDuplicate?: number; matched?: number }, msg: string) => run('UPDATE acct_feed_log SET finished_at = ?, ok = ?, fetched = ?, new_rows = ?, duplicates = ?, matched = ?, message = ? WHERE id = ?', now(), ok ? 1 : 0, o.fetched ?? 0, o.rowsNew ?? 0, o.rowsDuplicate ?? 0, o.matched ?? 0, msg.slice(0, 300), logId);
   try {
     const rows = await p.fetch(ownerId, ref.slice(p.id.length + 1), since);
     const buf = csv(rows);
     const dry = importStatement(ownerId, actor, a.id, `feed-${p.id}-${istDate(now())}.csv`, buf, true);
     const res = dry.rowsNew === 0 ? dry : importStatement(ownerId, actor, a.id, `feed-${p.id}-${istDate(now())}-${now()}.csv`, buf, false);
     mark(true, `${res.rowsNew} new, ${res.rowsDuplicate} already in the books`);
+    finish(true, { fetched: rows.length, rowsNew: res.rowsNew, rowsDuplicate: res.rowsDuplicate, matched: res.categorisedByRules }, `${res.rowsNew} new, ${res.rowsDuplicate} already in the books`);
     return { ...res, fetched: rows.length };
-  } catch (e) { mark(false, (e as Error).message); throw e; }
+  } catch (e) { mark(false, (e as Error).message); finish(false, {}, (e as Error).message); throw e; }
+  finally { syncing.delete(a.id); }
 }
 
-/** The daily sweep: every linked account once a day. A failure is recorded against the account and never stops the others. */
+/** The scheduled sweep: every linked account that has not synced for four hours. A failure is recorded against the account and never stops the others. */
 export async function runFeedSync(cfg: Config, onError: (e: unknown) => void = () => {}): Promise<number> {
   if (!providerFor(cfg)) return 0;
-  const cutoff = now() - 20 * 60 * 60 * 1000;
+  const cutoff = now() - FEED_SYNC_HOURS * 60 * 60 * 1000;
   const due = many<{ id: string; owner_id: string }>(`SELECT a.id, a.owner_id FROM acct_accounts a LEFT JOIN acct_feed_state s ON s.account_id = a.id
     WHERE a.provider_ref IS NOT NULL AND a.deleted_at IS NULL AND a.active = 1 AND (s.last_sync_at IS NULL OR s.last_sync_at < ?)`, cutoff);
   let n = 0;
-  for (const d of due) { try { await syncAccount(cfg, d.owner_id, SYSTEM, d.id); n++; } catch (e) { onError(e); } }
+  for (const d of due) { try { await syncAccount(cfg, d.owner_id, SYSTEM, d.id, fetch, 'schedule'); n++; } catch (e) { if ((e as { code?: string }).code !== 'SYNC_RUNNING') onError(e); } }
   return n;
+}
+
+export interface FeedLogOut { id: number; accountId: string; accountName: string; trigger: string; startedAt: number; finishedAt: number | null; ok: boolean | null; fetched: number; newRows: number; duplicates: number; matched: number; message: string | null }
+/** The latest syncs for one owner, newest first. */
+export function feedLog(ownerId: string, limit = 50): FeedLogOut[] {
+  return many<{ id: number; account_id: string; name: string; trigger: string; started_at: number; finished_at: number | null; ok: number | null; fetched: number; new_rows: number; duplicates: number; matched: number; message: string | null }>(
+    `SELECT l.*, a.name FROM acct_feed_log l JOIN acct_accounts a ON a.id = l.account_id WHERE l.owner_id = ? ORDER BY l.id DESC LIMIT ?`, ownerId, Math.min(Math.max(limit, 1), 200))
+    .map((r) => ({ id: r.id, accountId: r.account_id, accountName: r.name, trigger: r.trigger, startedAt: r.started_at, finishedAt: r.finished_at, ok: r.ok === null ? null : !!r.ok, fetched: r.fetched, newRows: r.new_rows, duplicates: r.duplicates, matched: r.matched, message: r.message }));
 }

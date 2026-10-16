@@ -22,6 +22,16 @@ import Settings from './pages/Settings';
 import Platform from './pages/Platform';
 
 export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals' }
+/** The sections inside a page (the pills at its top), so the side menu can list them too. The first one is the page's own address. */
+export const SUBS: Record<string, [string, string][]> = {
+  '/bookings': [['', 'All bookings'], ['day', 'Day view'], ['approvals', 'Approvals'], ['payments', 'UPI to verify']],
+  '/academy': [['students', 'Students'], ['attendance', 'Attendance'], ['fees', 'Fees'], ['skills', 'Skills'], ['coaches', 'Coaches']],
+  '/accounting': [['overview', 'Overview'], ['review', 'Books review'], ['reports', 'Reports'], ['reconcile', 'Reconcile'], ['recurring', 'Recurring'], ['journals', 'Journals'], ['cashflow', 'Cash flow'], ['budget', 'Budget'], ['gst', 'GST'], ['assets', 'Fixed assets'], ['close', 'Month-end'], ['setup', 'Setup']],
+  '/settings': [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['backups', 'Backups'], ['people', 'People'], ['connections', 'Connections'], ['services', 'Services']],
+  '/platform': [['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings'], ['connections', 'Connections'], ['bank', 'Bank connection'], ['services', 'Services']],
+};
+export const subHref = (to: string, k: string): string => (k ? `${to}/${k}` : to);
+
 export interface NavGroup { group: string; items: NavItem[] }
 
 /** First match wins, so longer paths come before shorter ones. A page receives the rest of the path in `sub` (for example /bills/bil_123 gives sub "bil_123"). */

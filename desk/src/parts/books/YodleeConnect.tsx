@@ -4,13 +4,14 @@ import { post, useApi, inr } from '../../lib';
 import { Modal, ErrorBox, Loading, useToast, Icon } from '../../ui';
 import { Note } from './kit';
 
-interface Session { url: string; accessToken: string; params: { configName: string } }
+interface Session { url: string; accessToken: string; params: { configName: string; flow?: string; providerAccountId?: string } }
+type Flow = { flow?: 'edit' | 'refresh'; providerAccountId?: string };
 
 /** FastLink is Yodlee's own bank-login screen. It opens inside this dialog; the page only passes it a short-lived token. */
-function FastLinkDialog({ onClose }: { onClose: () => void }) {
+function FastLinkDialog({ onClose, flow }: { onClose: () => void; flow: Flow }) {
   const [s, setS] = useState<Session | null>(null); const [err, setErr] = useState<string | null>(null);
   const form = useRef<HTMLFormElement>(null); const toast = useToast();
-  useEffect(() => { post<Session>('/api/accounting/feed/yodlee/session').then(setS).catch((e) => setErr(e.message)); }, []);
+  useEffect(() => { post<Session>('/api/accounting/feed/yodlee/session', flow).then(setS).catch((e) => setErr(e.message)); }, []);
   useEffect(() => { if (s) form.current?.submit(); }, [s]);
   useEffect(() => {
     if (!s) return;
@@ -23,13 +24,13 @@ function FastLinkDialog({ onClose }: { onClose: () => void }) {
     addEventListener('message', f); return () => removeEventListener('message', f);
   }, [s, onClose, toast]);
   return (
-    <Modal title="Connect your bank" onClose={onClose} wide foot={<button className="btn primary" onClick={onClose}>Done</button>}>
+    <Modal title={flow.flow === 'refresh' ? 'Answer your bank' : flow.flow === 'edit' ? 'Fix your bank login' : 'Connect your bank'} onClose={onClose} wide foot={<button className="btn primary" onClick={onClose}>Done</button>}>
       {err ? <ErrorBox msg={err} /> : !s ? <Loading h={200} /> : (
         <>
           <p className="muted small" style={{ marginTop: 0 }}>Sign in to your bank in the box below. Your bank password goes to the bank's own screen (run by Yodlee) and never reaches this software. Press Done when it says the bank is connected.</p>
           <form ref={form} method="post" action={s.url} target="yodlee-fastlink">
             <input type="hidden" name="accessToken" value={s.accessToken} />
-            <input type="hidden" name="extraParams" value={`configName=${s.params.configName}`} />
+            <input type="hidden" name="extraParams" value={`configName=${s.params.configName}${s.params.flow ? `&flow=${s.params.flow}&providerAccountId=${s.params.providerAccountId}` : ''}`} />
           </form>
           <iframe name="yodlee-fastlink" title="Bank sign-in" style={{ width: '100%', height: 520, border: '1px solid var(--line, #2a2620)', borderRadius: 10, background: '#fff' }} />
         </>
@@ -39,9 +40,11 @@ function FastLinkDialog({ onClose }: { onClose: () => void }) {
 }
 
 /** The bank accounts Yodlee reports for this business, each with a picker for the books account it should feed. */
-function Connected({ accounts, reloadFeed }: { accounts: { id: string; name: string }[]; reloadFeed: () => void }) {
+function Connected({ accounts, reloadFeed, openFlow }: { accounts: { id: string; name: string }[]; reloadFeed: () => void; openFlow: (f: Flow) => void }) {
   const [list, e, reload] = useApi<{ accounts: any[] }>('/api/accounting/feed/yodlee/accounts');
   const [pick, setPick] = useState<Record<string, string>>({}); const [busy, setBusy] = useState<string | null>(null); const toast = useToast();
+  const working = !!list?.accounts.some((a: any) => a.status?.code === 'working');
+  useEffect(() => { if (!working) return; const t = setInterval(reload, 4000); return () => clearInterval(t); }, [working, reload]);
   if (e) return <ErrorBox msg={e} />;
   if (!list) return <Loading h={80} />;
   if (!list.accounts.length) return <p className="muted small" style={{ margin: '0 0 8px' }}>No bank connected yet. Use Connect a bank, then come back here to choose the account.</p>;
@@ -54,7 +57,8 @@ function Connected({ accounts, reloadFeed }: { accounts: { id: string; name: str
           <div key={a.id} className="bk-li bk-feed-row">
             <div style={{ minWidth: 0 }}>
               <div className="strong">{a.bankName} {a.maskedNumber}</div>
-              <div className="muted small">{a.accountName}{a.balancePaise !== null && <> · balance {inr(a.balancePaise)}</>}{a.refreshStatus && <> · {String(a.refreshStatus).toLowerCase()}</>}</div>
+              <div className="muted small">{a.container === 'creditCard' ? 'Credit card' : a.container === 'loan' ? 'Loan' : 'Bank account'} · {a.accountName}{a.balancePaise !== null && <> · {a.container === 'bank' ? 'balance' : 'owing'} {inr(a.balancePaise)}</>}</div>
+              <div className={a.status?.code === 'ok' || a.status?.code === 'working' ? 'muted small' : 'err small'}>{a.status?.text}</div>
             </div>
             {books ? <span className="muted small">Feeds <strong>{books.name}</strong></span> : (
               <div className="row" style={{ gap: 6 }}>
@@ -62,9 +66,12 @@ function Connected({ accounts, reloadFeed }: { accounts: { id: string; name: str
                   <option value="">Choose a books account</option>
                   {accounts.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                 </select>
-                <button className="btn sm primary" disabled={!pick[a.id] || busy === a.id} onClick={() => act(a.id, () => post('/api/accounting/feed/link', { accountId: pick[a.id], providerRef: a.id }), 'Linked')}>Link</button>
+                <button className="btn sm primary" disabled={!pick[a.id] || busy === a.id || a.container !== 'bank'} onClick={() => act(a.id, () => post('/api/accounting/feed/link', { accountId: pick[a.id], providerRef: a.id }), 'Linked')}>Link</button>
               </div>
             )}
+            {a.status?.action === 'fix' && <button className="btn sm primary" onClick={() => openFlow({ flow: 'edit', providerAccountId: a.providerAccountId })}>Fix login</button>}
+            {a.status?.action === 'otp' && <button className="btn sm primary" onClick={() => openFlow({ flow: 'refresh', providerAccountId: a.providerAccountId })}>Enter code</button>}
+            {a.providerAccountId && a.status?.code !== 'working' && <button className="btn sm" disabled={busy === a.id} onClick={() => act(a.id, () => post('/api/accounting/feed/yodlee/refresh', { providerAccountId: a.providerAccountId }), 'Asked the bank for new data')}>Refresh from bank</button>}
             <button className="btn sm ghost" disabled={busy === a.id} onClick={() => act(a.id, () => post('/api/accounting/feed/yodlee/disconnect', { providerAccountId: a.id }), 'Bank disconnected')}>Disconnect</button>
           </div>
         );
@@ -74,15 +81,41 @@ function Connected({ accounts, reloadFeed }: { accounts: { id: string; name: str
 }
 
 export function YodleeConnect({ accounts, reload }: { accounts: { id: string; name: string }[]; reload: () => void }) {
-  const [open, setOpen] = useState(false); const [tick, setTick] = useState(0);
+  const [open, setOpen] = useState<Flow | null>(null); const [tick, setTick] = useState(0);
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
         <Note>Connect your bank once and new transactions arrive here by themselves.</Note>
-        <button className="btn sm primary" onClick={() => setOpen(true)}><Icon name="plus" />Connect a bank</button>
+        <button className="btn sm primary" onClick={() => setOpen({})}><Icon name="plus" />Connect a bank</button>
       </div>
-      <Connected key={tick} accounts={accounts} reloadFeed={reload} />
-      {open && <FastLinkDialog onClose={() => { setOpen(false); setTick((t) => t + 1); }} />}
+      <Connected key={tick} accounts={accounts} reloadFeed={reload} openFlow={setOpen} />
+      <SyncLog key={'l' + tick} />
+      {open && <FastLinkDialog flow={open} onClose={() => { setOpen(null); setTick((t) => t + 1); }} />}
     </>
+  );
+}
+
+/** The last syncs: when, what triggered it, what came in, and any error. */
+function SyncLog() {
+  const [d] = useApi<{ items: any[] }>('/api/accounting/feed/log');
+  const [show, setShow] = useState(false);
+  if (!d || !d.items.length) return null;
+  const why: Record<string, string> = { manual: 'Sync now', schedule: 'Scheduled', webhook: 'Bank update' };
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button className="btn sm ghost" onClick={() => setShow(!show)}>{show ? 'Hide' : 'Show'} recent syncs ({d.items.length})</button>
+      {show && (
+        <div className="bk-list" style={{ marginTop: 8 }}>
+          {d.items.slice(0, 20).map((l) => (
+            <div key={l.id} className="bk-li">
+              <div style={{ minWidth: 0 }}>
+                <div className="strong">{l.accountName} · {why[l.trigger] ?? l.trigger}</div>
+                <div className="muted small">{new Date(l.startedAt).toLocaleString('en-IN')} · {l.ok === null ? 'running' : l.ok ? `${l.fetched} fetched, ${l.newRows} new, ${l.duplicates} already there, ${l.matched} categorised` : l.message}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

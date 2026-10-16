@@ -390,3 +390,6 @@ body { background:
   radial-gradient(1000px 600px at 50% 110%, rgba(44,60,76,.18), transparent 60%), var(--bg); }
 .side { background: linear-gradient(180deg, #0c0e10, #08090a); }
 .brand-logo { display: block; width: 100%; max-width: 200px; height: auto; }
+/* sections inside a page, listed under it in the menu and in the pop-up */
+.nav a.sub, .flyout a.sub { padding: 5px 12px 5px 40px; font-size: 12.5px; font-weight: 500; }
+.nav a.sub.on, .flyout a.sub.on { box-shadow: none; background: rgba(201,164,76,.1); }
