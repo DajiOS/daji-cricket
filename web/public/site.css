@@ -1128,3 +1128,6 @@ html:not([data-embed]):not([data-embed-section]) #view-home{
 #an-svg .an-l.on{opacity:1}#an-svg .an-l.on path{stroke:var(--gold-bright)}
 @media(max-width:860px){.an-stage{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto;align-content:center;gap:8px;padding:72px 20px 24px}.an-copy{display:contents}.an-copy h2{margin:0;font-size:30px}.an-list{grid-row:3}.an-list li{grid-template-columns:6.5em 1fr;padding:10px 0;font-size:12.5px}.an-list li:not(.on) span{display:none}.an-list li:not(.on){padding:8px 0}#an-svg{grid-row:2;height:100%}}
 html[data-embed] #anatomy{display:none!important}
+
+/* the hero's entrance waits under the intro cover and plays as the cover fades */
+html.splash-on:not(.splash-reveal) #view-home :is(.ln > span,header.hero p.lead,.cta,.facts){animation-play-state:paused}
