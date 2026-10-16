@@ -2083,12 +2083,12 @@ async function renderMyDash(el) {
 // Opening animation: the intro video plays the moment the site opens, then the logo shrinks and settles into the top bar.
 (function splash() {
   const box = document.getElementById('splash'), v = document.getElementById('splash-v'), skip = document.getElementById('splash-skip'), fly = document.getElementById('splash-logo');
-  if (!box || !v) return;
+  if (!box || !v) { document.documentElement.classList.remove('splash-on'); return; }
   let seen = false;
   try { seen = sessionStorage.getItem('daji.splash') === '1'; } catch { /* private mode: just play */ }
   const framed = window.parent !== window || /[?&]embed=/.test(location.search);
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (seen || framed || reduce || (location.hash && location.hash !== '#top')) { box.remove(); return; }
+  if (seen || framed || reduce || (location.hash && location.hash !== '#top')) { document.documentElement.classList.remove('splash-on'); box.remove(); return; }
   const root = document.documentElement;
   root.classList.add('splash-on'); box.hidden = false; window.scrollTo(0, 0);
   // where the logo sits in the last frame of the 1920x1080 video
