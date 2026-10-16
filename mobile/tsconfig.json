@@ -1,1 +1,1 @@
-{ "extends": "expo/tsconfig.base", "compilerOptions": { "strict": true, "noUnusedLocals": true } }
+{ "extends": "expo/tsconfig.base", "compilerOptions": { "strict": true, "noUnusedLocals": true }, "include": ["App.tsx", "src/**/*"], "exclude": ["preview", "node_modules"] }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { PaymentRow, StaffBooking, User } from './types';
-import { Badge, Btn, Chip, Field, KV, Loading, Section, s } from './ui';
+import { Badge, Btn, Chip, Field, KV, Loading, s } from './ui';
 import { C, inr, niceDate } from './theme';
 
 const hhmm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
