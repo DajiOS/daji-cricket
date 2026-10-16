@@ -28,6 +28,9 @@ export function adminRoutes(r: Router): void {
     const body = c.json();
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'VALIDATION_FAILED', 'Send a JSON object of settings', { fields: [{ field: '(body)', message: 'Expected a JSON object' }] });
     const u = U(c);
+    // Where customers' money goes and the public contact details are shared by every business, so only the software owner changes them.
+    const locked = ['razorpayEnabled', 'upiId', 'contactPhone', 'academyCoaches'].filter((k) => k in (body as object));
+    if (u.role !== 'super_admin' && locked.length) throw new HttpError(403, 'FORBIDDEN', `Only the software owner can change: ${locked.join(', ')}`);
     const changed = updateSettings(body as Record<string, unknown>, u.id);
     for (const [k, v] of Object.entries(changed)) audit({ id: u.id, role: u.role }, k === 'razorpayEnabled' ? 'settings.razorpay_toggle' : 'settings.update', 'setting', k, v);
     return ok(getSettings());
