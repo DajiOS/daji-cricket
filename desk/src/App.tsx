@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, Fragment } from 'react';
 import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
 import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
-import { HOME, NAV, PAGES, SUBS, subHref, type NavItem } from './registry';
+import { HOME, NAV, PAGES, SUBS, SUB_ICONS, subHref, type NavItem } from './registry';
 
 // ---------- session shared by every page ----------
 export interface Owner { id: string; name: string; businessName: string | null }
@@ -84,7 +84,7 @@ function Shell({ route }: { route: string }) {
                       <Icon name={i.icon} />{i.label}
                       {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
                     </a>
-                    {SUBS[i.to] && isOn(i.to) && SUBS[i.to]!.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} className={`sub${subOn(i.to, k) ? ' on' : ''}`}>{l}</a>)}
+                    {SUBS[i.to] && isOn(i.to) && SUBS[i.to]!.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} className={`sub${subOn(i.to, k) ? ' on' : ''}`}><Icon name={SUB_ICONS[`${i.to}:${k}`] ?? 'chevron'} size={15} />{l}</a>)}
                   </Fragment>))}
               </div>);
           })}
@@ -108,7 +108,7 @@ function Shell({ route }: { route: string }) {
                   <Icon name={i.icon} />{i.label}
                   {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
                 </a>
-                {SUBS[i.to]?.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} role="menuitem" className={`sub${isOn(i.to) && subOn(i.to, k) ? ' on' : ''}`} onClick={() => setFly(null)}>{l}</a>)}
+                {SUBS[i.to]?.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} role="menuitem" className={`sub${isOn(i.to) && subOn(i.to, k) ? ' on' : ''}`} onClick={() => setFly(null)}><Icon name={SUB_ICONS[`${i.to}:${k}`] ?? 'chevron'} size={15} />{l}</a>)}
               </Fragment>))}
           </div>);
       })()}
