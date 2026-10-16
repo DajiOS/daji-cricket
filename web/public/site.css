@@ -958,8 +958,9 @@ nav{height:128px}.wm-nav{height:92px}
 .signoff .wmbox{max-width:760px}
 
 /* Opening animation: the video plays on open, then the logo shrinks into the top bar */
-#splash{position:fixed;inset:0;z-index:200;background:transparent;display:flex;align-items:center;justify-content:center;opacity:1;transition:background-color 1.2s cubic-bezier(.4,0,.2,1),opacity .6s ease}
+#splash{position:fixed;inset:0;z-index:200;background:transparent;display:none;align-items:center;justify-content:center;opacity:1;transition:background-color 1.2s cubic-bezier(.4,0,.2,1),opacity .6s ease}
 #splash[hidden]{display:none}
+html.splash-on #splash{display:flex}
 #splash.out{opacity:0;pointer-events:none}
 #splash video{width:100%;height:100%;object-fit:contain;display:block;transition:opacity .3s ease}
 #splash.fly{pointer-events:none}
