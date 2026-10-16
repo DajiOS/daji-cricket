@@ -1,5 +1,5 @@
 // Calendar views for bookings: an hourly timeline for one day and a month grid, plus the Calendar / List switch both pages share.
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Loading, ErrorBox, Empty } from '../../ui';
 import { useApi, fmtDay, todayISO, addDaysISO, qs } from '../../lib';
 import { type Booking, type Page, STATUS_LABEL, timeRange, whatOf } from './common';
@@ -19,6 +19,14 @@ export function ViewToggle({ value, onChange }: { value: View; onChange: (v: Vie
     </div>);
 }
 
+const PALETTE = ['#d4a847', '#4fb3a9', '#7a8cf0', '#e0795f', '#a773d6', '#6fbf6f', '#e07aa6', '#5aa9e6'];
+/** Each ground keeps its own colour everywhere, so the sessions on a day can be told apart and counted at a glance. */
+export const groundColor = (name: string) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]!; };
+const cv = (b: Booking) => ({ ['--c' as string]: groundColor(b.groundName) }) as CSSProperties;
+export function Legend({ names }: { names: string[] }) {
+  return names.length ? <div className="cal-legend">{names.map((n) => <span key={n}><i style={{ background: groundColor(n) }} />{n}</span>)}<span className="muted small">Dashed outline = waiting for approval</span></div> : null;
+}
+
 const minOfDay = (ms: number) => Math.round((((ms + IST) % 86400000) + 86400000) % 86400000 / 60000);
 const live = (b: Booking) => b.status !== 'cancelled' && b.status !== 'expired';
 const tone = (b: Booking) => (b.status === 'confirmed' && b.approval === 'pending' ? 'pending' : b.status);
@@ -31,6 +39,7 @@ export function DayTimeline({ bookings, onOpen }: { bookings: Booking[]; onOpen:
   const PX = 56, hours = Array.from({ length: to - from }, (_, i) => from + i);
   const label = (h: number) => `${((h + 11) % 12) + 1} ${h % 24 < 12 ? 'am' : 'pm'}`;
   return (
+    <><Legend names={grounds} />
     <div className="card cal-day">
       <div className="cal-day-head" style={{ gridTemplateColumns: `64px repeat(${grounds.length}, minmax(180px, 1fr))` }}>
         <span />{grounds.map((g) => <b key={g}>{g}</b>)}
@@ -43,13 +52,13 @@ export function DayTimeline({ bookings, onOpen }: { bookings: Booking[]; onOpen:
               const s = minOfDay(b.startAt); let e = minOfDay(b.endAt); if (e <= s) e = 1440;
               const top = ((s - from * 60) / 60) * PX, h = Math.max(30, ((e - s) / 60) * PX - 3);
               return (
-                <button key={b.id} className={`cal-ev s-${tone(b)}`} style={{ top, height: h }} onClick={() => onOpen(b.id)} title={`${b.customerName}, ${timeRange(b)}`}>
+                <button key={b.id} className={`cal-ev s-${tone(b)}`} style={{ top, height: h, ...cv(b) }} onClick={() => onOpen(b.id)} title={`${b.customerName}, ${timeRange(b)}`}>
                   <b>{b.customerName}</b><span>{timeRange(b)}</span>{h > 58 && <span>{whatOf(b)}</span>}
                 </button>);
             })}
           </div>))}
       </div>
-    </div>);
+    </div></>);
 }
 
 /** A month grid. Pressing a day lists that day's sessions underneath. */
@@ -76,6 +85,7 @@ export function MonthCalendar({ filters, onOpen }: { filters: Record<string, str
         {month !== today.slice(0, 7) && <button className="btn ghost sm" onClick={() => { setMonth(today.slice(0, 7)); setSel(null); }}>Today</button>}
         {d && <span className="muted small">{items.filter((b) => b.date.startsWith(month)).length} sessions this month</span>}
       </div>
+      <Legend names={[...new Set(items.map((b) => b.groundName))].sort()} />
       {err ? <ErrorBox msg={err} /> : (
         <div className="card cal-month">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((n) => <div className="cal-dow" key={n}>{n}</div>)}
@@ -83,8 +93,8 @@ export function MonthCalendar({ filters, onOpen }: { filters: Record<string, str
             const list = by(iso), out = !iso.startsWith(month);
             return (
               <button key={iso} className={`cal-cell${out ? ' out' : ''}${iso === today ? ' today' : ''}${sel === iso ? ' sel' : ''}`} onClick={() => setSel(sel === iso ? null : iso)} aria-label={`${fmtDay(iso)}, ${list.length} sessions`}>
-                <span className="cal-num">{Number(iso.slice(8))}</span>
-                {list.slice(0, 3).map((b) => <span key={b.id} className={`cal-chip s-${tone(b)}`}>{new Date(b.startAt + IST).toISOString().slice(11, 16)} {b.customerName.split(' ')[0]}</span>)}
+                <span className="cal-top"><span className="cal-num">{Number(iso.slice(8))}</span>{list.length > 0 && <span className="cal-count">{list.length} {list.length === 1 ? 'session' : 'sessions'}</span>}</span>
+                {list.slice(0, 3).map((b) => <span key={b.id} style={cv(b)} className={`cal-chip s-${tone(b)}`}>{new Date(b.startAt + IST).toISOString().slice(11, 16)} {b.customerName.split(' ')[0]}</span>)}
                 {list.length > 3 && <span className="cal-more">+{list.length - 3} more</span>}
               </button>);
           })}
@@ -96,8 +106,8 @@ export function MonthCalendar({ filters, onOpen }: { filters: Record<string, str
           {by(sel).length === 0 ? <Empty>No sessions on this day.</Empty> : (
             <div className="day-list">
               {by(sel).map((b) => (
-                <button key={b.id} className="day-row" onClick={() => onOpen(b.id)}>
-                  <span className="day-time tabular">{timeRange(b)}</span>
+                <button key={b.id} className="day-row" style={cv(b)} onClick={() => onOpen(b.id)}>
+                  <span className="day-time tabular"><i className="cal-dot" />{timeRange(b)}</span>
                   <span className="day-who"><b>{b.customerName}</b><span className="small muted">{b.groundName} · {whatOf(b)}</span></span>
                   <span className={`cal-chip s-${tone(b)}`}>{b.status === 'confirmed' && b.approval === 'pending' ? 'Pending approval' : STATUS_LABEL[b.status]}</span>
                 </button>))}
