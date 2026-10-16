@@ -11,7 +11,11 @@
       "bundleIdentifier": "com.dajicricket.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Daji Cricket Ground uses the camera to take photos that prove a task is done.",
-        "NSPhotoLibraryUsageDescription": "Daji Cricket Ground uses your photos so you can choose a profile picture."
+        "NSPhotoLibraryUsageDescription": "Daji Cricket Ground uses your photos so you can choose a profile picture.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
@@ -41,6 +45,14 @@
           "cameraPermission": "Daji Cricket Ground uses the camera to take photos that prove a task is done.",
           "photosPermission": "Daji Cricket Ground uses your photos so you can choose a profile picture."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
+        }
       ]
     ],
     "icon": "./assets/icon.png",
@@ -48,6 +60,19 @@
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#0a0c0b"
-    }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "scheme": "dajicricket",
+    "extra": {
+      "eas": {
+        "projectId": "44ea1bd5-2813-4d4e-85b4-c5dd3baadac0"
+      }
+    },
+    "owner": "daji-cricket-ground"
   }
 }

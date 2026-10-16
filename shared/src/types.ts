@@ -521,6 +521,8 @@ export interface Page<T> {
 }
 
 export interface RefundRow {
+  /** Set when the super admin has authorised it; no money moves before then. */
+  approvedAt?: number | null;
   id: string;
   paymentId: string;
   bookingId: string;

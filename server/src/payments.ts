@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Page, Payment, PayMethod, RefundRow } from '@daji/shared';
-import { many, one, run, tx } from './db.ts';
+import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
 import { HttpError, notFound } from './errors.ts';
@@ -49,6 +49,13 @@ export function insertPayment(b: BookingRow, o: { method: PayMethod; status: Pay
 }
 
 export interface CaptureOpts { actor: Actor; via: 'webhook' | 'client' | 'staff' | 'offline'; rpPaymentId?: string; reference?: string; amountPaise?: number }
+// Every refund waits for the super admin's authorisation before any money moves. Refunds that existed before this rule are treated as already authorised.
+registerSchema('refund-approval-1', `
+ALTER TABLE refunds ADD COLUMN approved_at INTEGER;
+ALTER TABLE refunds ADD COLUMN approved_by TEXT;
+UPDATE refunds SET approved_at = created_at, approved_by = 'before-rule';
+`);
+
 export type CaptureOutcome = 'confirmed' | 'partial' | 'already' | 'extra_refunded' | 'late_reconfirmed' | 'late_refunded' | 'cancelled_refunded' | 'paid_extra';
 
 /** The one place a payment becomes money received. Idempotent; safe to call from webhook, client callback and staff verification. */
@@ -84,7 +91,15 @@ export function applyCaptured(paymentId: string, o: CaptureOpts): { outcome: Cap
       return { outcome: 'partial' as const };
     }
     if (b.status === 'confirmed' || b.status === 'completed' || b.status === 'no_show') {
-      run('UPDATE bookings SET paid_paise = paid_paise + ?, updated_at = ? WHERE id = ?', amount, t, b.id);
+      // Only what is still owed counts toward the booking; money beyond the total (staff took cash while this payment was in flight) goes back.
+      const owed = Math.max(b.total_paise - b.paid_paise, 0), keep = Math.min(amount, owed), over = amount - keep;
+      run('UPDATE bookings SET paid_paise = paid_paise + ?, updated_at = ? WHERE id = ?', keep, t, b.id);
+      if (over > 0) {
+        refundPayment(paymentOr404(p.id), over, 'payment received after the booking was already fully paid', o.actor);
+        audit(o.actor, 'payment.overpaid_refund', 'payment', p.id, { bookingId: b.id, amountPaise: over }, p.owner_id);
+        notify(b.customer_id, 'late_payment_refund', { ref: b.ref, refundPaise: over }, b.id);
+        if (keep === 0) return { outcome: 'extra_refunded' as const };
+      }
       if (p.method === 'razorpay' && p.purpose === 'balance') {
         const g = one<{ name: string }>('SELECT name FROM grounds WHERE id = ?', b.ground_id);
         notify(b.customer_id, 'autodebit_charged', { ref: b.ref, ground: g?.name, startAt: b.start_at, amountPaise: amount }, b.id);
@@ -249,6 +264,8 @@ export function handleWebhook(cfg: Config, raw: Buffer, headers: { signature?: s
   return tx(() => {
     if (one('SELECT 1 FROM webhook_events WHERE id = ?', eventId)) return { status: 200, outcome: 'duplicate' };
     const outcome = processWebhookEvent(ev, type);
+    // Not ours yet (the payment or refund row may still be being written): do not remember it, and answer 404 so Razorpay delivers it again.
+    if (outcome === 'unknown_order' || outcome === 'unknown_refund') return { status: 404, outcome };
     run('INSERT INTO webhook_events(id, type, received_at, outcome) VALUES(?,?,?,?)', eventId, type, now(), outcome);
     return { status: 200, outcome };
   });
@@ -294,7 +311,11 @@ function processWebhookEvent(ev: any, type: string): string {
       const r = one<{ id: string; status: string }>('SELECT id, status FROM refunds WHERE rp_refund_id = ?', rf?.id);
       if (!r) return 'unknown_refund';
       if (type === 'refund.processed') finishRefund(r.id, actor, rf?.id ?? null, null);
-      else if (r.status !== 'done') run("UPDATE refunds SET status = 'failed' WHERE id = ?", r.id);
+      else if (r.status !== 'done') { // Razorpay could not send it: hand it to staff to pay by hand (UPI/bank) and mark done, instead of leaving it stuck
+        run("UPDATE refunds SET status = 'pending', mode = 'manual', rp_refund_id = NULL WHERE id = ?", r.id);
+        const bk = one<{ owner_id: string }>('SELECT owner_id FROM refunds WHERE id = ?', r.id);
+        audit(actor, 'refund.gateway_failed', 'refund', r.id, { to: 'manual' }, bk?.owner_id ?? null);
+      }
       return type === 'refund.processed' ? 'refund_done' : 'refund_failed';
     }
     default:
@@ -332,7 +353,7 @@ function finishRefund(refundId: string, actor: Actor, rpRefundId: string | null,
 export async function processRefunds(cfg: Config): Promise<{ done: number; failed: number }> {
   const gw = getGateway(cfg);
   if (!gw) return { done: 0, failed: 0 };
-  const pending = many<{ id: string; payment_id: string; amount_paise: number }>("SELECT id, payment_id, amount_paise FROM refunds WHERE mode = 'gateway' AND status = 'pending' AND rp_refund_id IS NULL ORDER BY created_at LIMIT 50");
+  const pending = many<{ id: string; payment_id: string; amount_paise: number }>("SELECT id, payment_id, amount_paise FROM refunds WHERE mode = 'gateway' AND status = 'pending' AND rp_refund_id IS NULL AND approved_at IS NOT NULL ORDER BY created_at LIMIT 50");
   let done = 0, failed = 0;
   for (const r of pending) {
     const p = paymentRow(r.payment_id);
@@ -356,6 +377,7 @@ export function completeManualRefund(staff: UserRow, refundId: string, reference
   if (!r) throw notFound('Refund not found');
   accessBooking(staff, r.booking_id);
   requirePermission(staff, 'record_payments');
+  if (!one('SELECT 1 x FROM refunds WHERE id = ? AND approved_at IS NOT NULL', refundId)) throw new HttpError(409, 'NEEDS_APPROVAL', 'The super admin has to authorise this refund first');
   if (r.mode !== 'manual') throw new HttpError(409, 'WRONG_MODE', 'This refund is sent through the gateway automatically');
   if (r.status === 'done') throw new HttpError(409, 'BAD_STATE', 'This refund is already marked as paid');
   if (!reference.trim()) throw new HttpError(400, 'VALIDATION_FAILED', 'Enter the payout reference', { fields: [{ field: 'reference', message: 'Required' }] });
@@ -368,8 +390,38 @@ export function completeManualRefund(staff: UserRow, refundId: string, reference
 
 export const toRefund = (r: any): RefundRow => ({
   id: r.id, paymentId: r.payment_id, bookingId: r.booking_id, amountPaise: r.amount_paise, status: r.status, mode: r.mode, reference: r.reference,
-  reason: r.reason, createdAt: r.created_at, completedAt: r.completed_at,
+  reason: r.reason, createdAt: r.created_at, completedAt: r.completed_at, approvedAt: r.approved_at ?? null,
 });
+
+/** The super admin authorises a refund (gateway ones are then sent by the next sweep; manual ones can be paid out and marked done). */
+export function approveRefund(admin: UserRow, refundId: string): RefundRow {
+  if (admin.role !== 'super_admin') throw new HttpError(403, 'FORBIDDEN', 'Only the super admin can authorise a refund');
+  const r = one<{ id: string; status: string; approved_at: number | null; owner_id: string; amount_paise: number }>('SELECT id, status, approved_at, owner_id, amount_paise FROM refunds WHERE id = ?', refundId);
+  if (!r) throw notFound('Refund not found');
+  if (r.approved_at) throw new HttpError(409, 'BAD_STATE', 'This refund is already authorised');
+  if (r.status !== 'pending') throw new HttpError(409, 'BAD_STATE', `This refund is ${r.status}`);
+  run('UPDATE refunds SET approved_at = ?, approved_by = ? WHERE id = ?', now(), admin.id, refundId);
+  logEvent(one<{ p: string }>('SELECT payment_id p FROM refunds WHERE id = ?', refundId)!.p, admin.id, 'refund.approved', { refundId });
+  audit({ id: admin.id, role: admin.role }, 'refund.approve', 'refund', refundId, { amountPaise: r.amount_paise }, r.owner_id);
+  return toRefund(one<any>('SELECT * FROM refunds WHERE id = ?', refundId));
+}
+
+/** The super admin declines: nothing is paid, and the payment goes back to showing the money as not refunded. */
+export function declineRefund(admin: UserRow, refundId: string, reason: string): RefundRow {
+  if (admin.role !== 'super_admin') throw new HttpError(403, 'FORBIDDEN', 'Only the super admin can decline a refund');
+  const r = one<{ id: string; status: string; approved_at: number | null; owner_id: string; amount_paise: number; payment_id: string }>('SELECT id, status, approved_at, owner_id, amount_paise, payment_id FROM refunds WHERE id = ?', refundId);
+  if (!r) throw notFound('Refund not found');
+  if (r.approved_at || r.status !== 'pending') throw new HttpError(409, 'BAD_STATE', 'Only a refund waiting for authorisation can be declined');
+  tx(() => {
+    run("UPDATE refunds SET status = 'failed', reason = COALESCE(reason, '') || ' [declined: ' || ? || ']', completed_at = ?, completed_by = ? WHERE id = ?", reason.slice(0, 200), now(), admin.id, refundId);
+    const p = one<{ amount_paise: number; refunded_paise: number }>('SELECT amount_paise, refunded_paise FROM payments WHERE id = ?', r.payment_id)!;
+    const left = Math.max(p.refunded_paise - r.amount_paise, 0);
+    run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', left, left === 0 ? 'captured' : left >= p.amount_paise ? 'refunded' : 'partially_refunded', now(), r.payment_id);
+    logEvent(r.payment_id, admin.id, 'refund.declined', { refundId, reason });
+    audit({ id: admin.id, role: admin.role }, 'refund.decline', 'refund', refundId, { reason }, r.owner_id);
+  });
+  return toRefund(one<any>('SELECT * FROM refunds WHERE id = ?', refundId));
+}
 
 export function listRefunds(ownerId: string | null, status?: string): RefundRow[] {
   const where: string[] = [];

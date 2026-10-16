@@ -1,0 +1,49 @@
+# The phone app (Expo). On every pull request that touches mobile/, check the types and, if an Expo token is set, publish a preview
+# update that reviewers open in Expo Go or a preview build (a link appears as a comment). On main, publish to the production channel.
+# Needs one repository secret: EXPO_TOKEN (expo.dev, Account settings, Access tokens). Without it the check still runs and the publish steps are skipped.
+name: Phone app
+on:
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/mobile.yml']
+  pull_request:
+    paths: ['mobile/**', '.github/workflows/mobile.yml']
+  workflow_dispatch:
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      HAS_EXPO: ${{ secrets.EXPO_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Align packages to the Expo version
+        run: npx expo install --check || true
+      - name: Check the types
+        run: npm run typecheck
+      - name: Set up EAS
+        if: env.HAS_EXPO == 'true'
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Publish a preview update
+        if: env.HAS_EXPO == 'true' && github.event_name == 'pull_request'
+        uses: expo/expo-github-action/preview@v8
+        with:
+          command: eas update --auto --branch pr-${{ github.event.number }}
+          working-directory: mobile
+      - name: Publish to production
+        if: env.HAS_EXPO == 'true' && github.event_name == 'push'
+        run: eas update --branch production --message "${{ github.event.head_commit.message }}" --non-interactive
