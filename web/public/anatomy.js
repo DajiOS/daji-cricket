@@ -16,11 +16,11 @@
   const ring = (r, z, g, a = {}) => poly(Array.from({ length: 96 }, (_, i) => { const t = (i / 96) * Math.PI * 2; return P(r * Math.cos(t), r * Math.sin(t), z); }), g, true, a);
 
   const layers = [
-    { name: 'Turf', note: 'The outfield, rolled and cut for matches and practice.', draw(g) {
+    { name: 'Ground', note: 'The outfield, rolled and cut for matches and practice.', draw(g) {
       ring(260, 0, g); ring(260, -10, g); ring(150, 0, g, { 'stroke-dasharray': '3 6' });
       for (let i = 0; i < 96; i += 8) { const t = (i / 96) * Math.PI * 2; seg([260 * Math.cos(t), 260 * Math.sin(t), 0], [260 * Math.cos(t), 260 * Math.sin(t), -10], g); }
     } },
-    { name: 'Wicket', note: 'A turf wicket, prepared for leather ball and tennis ball formats.', draw(g) {
+    { name: 'Wicket', note: 'A grass wicket, prepared for leather ball and tennis ball formats.', draw(g) {
       box(-150, -17, 0, 150, 17, 3, g);
       for (const x of [-122, 122]) { seg([x, -17, 3], [x, 17, 3], g); }
       for (const x of [-136, 136]) { seg([x, -17, 3], [x, 17, 3], g); for (const y of [-6, 0, 6]) seg([x, y, 3], [x, y, 30], g); }
