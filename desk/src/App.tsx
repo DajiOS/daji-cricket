@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, Fragment } from 'react';
 import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
 import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
-import { HOME, NAV, PAGES, type NavItem } from './registry';
+import { HOME, NAV, PAGES, SUBS, subHref, type NavItem } from './registry';
 
 // ---------- session shared by every page ----------
 export interface Owner { id: string; name: string; businessName: string | null }
@@ -29,6 +29,8 @@ function Shell({ route }: { route: string }) {
   const openFly = (group: string, el: HTMLElement) => { clearTimeout(flyTimer.current); setFly({ group, top: Math.max(8, Math.min(el.getBoundingClientRect().top, innerHeight - 80)) }); };
   const closeFlySoon = () => { clearTimeout(flyTimer.current); flyTimer.current = window.setTimeout(() => setFly(null), 180); };
   useEffect(() => { if (!fly) return; const f = (e: KeyboardEvent) => e.key === 'Escape' && setFly(null); addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [fly]);
+  /** Which section of a page is showing (the first one when the address is just the page). */
+  const subOn = (to: string, k: string) => { const first = SUBS[to]![0]![0]; const rest = route === to ? '' : route.startsWith(to + '/') ? route.slice(to.length + 1).split('/')[0]! : null; return rest !== null && (rest === k || (!SUBS[to]!.some(([x]) => x === rest) && k === first) || (rest === '' && k === first)); };
   const isOn = (to: string) => (to === '/' ? route === '/' || route === '' : route === to || route.startsWith(to + '/'));
   const visible = (i: NavItem) => can(s.me, i.perm) && (!i.ownerOnly || s.me.role !== 'staff') && (!i.superOnly || s.me.role === 'super_admin');
 
@@ -55,12 +57,12 @@ function Shell({ route }: { route: string }) {
               if (!items.length) return null;
               const active = items.some((i) => isOn(i.to));
               const waitingHere = items.some((i) => i.count === 'approvals') && waiting > 0;
-              if (items.length === 1 || g.group === 'Portfolio') return items.map((i) => (
+              if ((items.length === 1 && !SUBS[items[0]!.to]) || g.group === 'Portfolio') return items.map((i) => (
                 <a key={i.to} href={`#${i.to}`} className={`rail-btn${isOn(i.to) ? ' on' : ''}`} title={i.label} aria-label={i.label}><Icon name={i.icon} /></a>));
               return (
                 <button key={g.group} className={`rail-btn${active ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.group === g.group} aria-label={g.group} title={g.group}
                   onMouseEnter={(e) => openFly(g.group, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(g.group, e.currentTarget)}
-                  onClick={(e) => (fly?.group === g.group ? setFly(null) : openFly(g.group, e.currentTarget))}>
+                  onClick={(e) => openFly(g.group, e.currentTarget)}>
                   <Icon name={items[0]!.icon} />{waitingHere && <span className="rail-dot" aria-hidden="true" />}
                 </button>);
             })}
@@ -77,10 +79,13 @@ function Shell({ route }: { route: string }) {
                 {g.group === 'Portfolio' ? <div className="nav-group">{g.group}</div>
                   : <button className="nav-group nav-toggle" onClick={() => !active && toggleGroup(g.group)} aria-expanded={shown}>{g.group} <span aria-hidden="true">{shown ? '▾' : '▸'}</span>{!shown && <span className="soon-n">{items.length}</span>}</button>}
                 {shown && items.map((i) => (
-                  <a key={i.to} href={`#${i.to}`} className={isOn(i.to) ? 'on' : ''}>
-                    <Icon name={i.icon} />{i.label}
-                    {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
-                  </a>))}
+                  <Fragment key={i.to}>
+                    <a href={`#${i.to}`} className={isOn(i.to) ? 'on' : ''}>
+                      <Icon name={i.icon} />{i.label}
+                      {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
+                    </a>
+                    {SUBS[i.to] && isOn(i.to) && SUBS[i.to]!.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} className={`sub${subOn(i.to, k) ? ' on' : ''}`}>{l}</a>)}
+                  </Fragment>))}
               </div>);
           })}
         </nav>
@@ -98,10 +103,13 @@ function Shell({ route }: { route: string }) {
           <div className="flyout" role="menu" aria-label={fly.group} style={{ top: fly.top }} onMouseEnter={() => clearTimeout(flyTimer.current)} onMouseLeave={closeFlySoon}>
             <div className="nav-group">{fly.group}</div>
             {items.map((i) => (
-              <a key={i.to} href={`#${i.to}`} role="menuitem" className={isOn(i.to) ? 'on' : ''} onClick={() => setFly(null)}>
-                <Icon name={i.icon} />{i.label}
-                {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
-              </a>))}
+              <Fragment key={i.to}>
+                <a href={`#${i.to}`} role="menuitem" className={isOn(i.to) ? 'on' : ''} onClick={() => setFly(null)}>
+                  <Icon name={i.icon} />{i.label}
+                  {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
+                </a>
+                {SUBS[i.to]?.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} role="menuitem" className={`sub${isOn(i.to) && subOn(i.to, k) ? ' on' : ''}`} onClick={() => setFly(null)}>{l}</a>)}
+              </Fragment>))}
           </div>);
       })()}
       {open && <div className="overlay" style={{ zIndex: 35, padding: 0 }} onClick={() => setOpen(false)} />}
