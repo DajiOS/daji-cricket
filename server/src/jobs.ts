@@ -1,13 +1,13 @@
 import { runRecurring } from './accounting/books.ts';
 import { runDepreciation } from './accounting/plus.ts';
 import { runFeedSync } from './accounting/feed.ts';
-import { many, run, tx } from './db.ts';
+import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { audit, SYSTEM } from './audit.ts';
 import { HOUR, MIN } from './time.ts';
 import { getSettings } from './settings.ts';
 import { bookingOr404, confirmBooking, releaseSiblings, releaseSlots, type BookingRow } from './bookings.ts';
-import { logEvent, markFailed, processRefunds, type PaymentRow } from './payments.ts';
+import { logEvent, markFailed, processRefunds, refundPayment, type PaymentRow } from './payments.ts';
 import { notify, venueData } from './notifications.ts';
 import * as credits from './credits.ts';
 import { runBackupIfDue } from './backup.ts';
@@ -50,6 +50,11 @@ export function sweepHolds(): ExpiryResult {
         credits.issueCredit({ customerId: b.customer_id, ownerId: b.owner_id, amountPaise: p.amount_paise, source: 'restore', bookingId: b.id, note: `Hold ${b.ref} expired`, silent: true });
         run("UPDATE payments SET status = 'refunded', refunded_paise = amount_paise WHERE id = ?", p.id);
       }
+      // Cash that was received but did not reach the advance goes back to the customer.
+      for (const p of pays) if (p.method !== 'credit' && (p.status === 'captured' || p.status === 'partially_refunded') && p.amount_paise > p.refunded_paise) {
+        refundPayment(p, p.amount_paise - p.refunded_paise, 'hold expired before the advance was paid', SYSTEM);
+      }
+      run('UPDATE bookings SET paid_paise = 0 WHERE id = ?', b.id);
       releaseSlots(b.id);
       releaseSiblings(b);
       run("UPDATE bookings SET status = 'expired', hold_expires_at = NULL, needs_review = ?, updated_at = ? WHERE id = ?", pending ? 1 : 0, now(), b.id);
@@ -99,12 +104,22 @@ export async function runSweeps(cfg: Config): Promise<SweepResult> {
   return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done };
 }
 
+registerSchema('scheduler-lease-1', `CREATE TABLE scheduler_lease (name TEXT PRIMARY KEY, holder TEXT NOT NULL, until INTEGER NOT NULL);`);
+const instanceId = Math.random().toString(36).slice(2);
+/** Only one server process runs the sweeps and backups at a time: a process takes (or renews) the lease, or skips the round when another holds it. */
+export function takeLease(name: string, ttlMs: number, holder = instanceId): boolean {
+  const t = now();
+  run('INSERT INTO scheduler_lease(name, holder, until) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET holder = excluded.holder, until = excluded.until WHERE scheduler_lease.holder = excluded.holder OR scheduler_lease.until < ?', name, holder, t + ttlMs, t);
+  return one<{ holder: string }>('SELECT holder FROM scheduler_lease WHERE name = ?', name)?.holder === holder;
+}
+
 let timer: ReturnType<typeof setInterval> | null = null;
 export function startScheduler(cfg: Config, onError: (e: unknown) => void = () => {}): void {
   if (timer) return;
   let running = false;
   timer = setInterval(() => {
     if (running) return;
+    if (!takeLease('sweeps', Math.max(120_000, cfg.sweepIntervalSeconds * 3000))) return;
     running = true;
     try { runBackupIfDue(cfg, onError); } catch (e) { onError(e); }
     runSweeps(cfg).catch(onError).finally(() => { running = false; });

@@ -128,18 +128,34 @@ function candidatesFor(identifier: string): UserRow[] {
   return phone ? many<UserRow>("SELECT * FROM users WHERE phone = ? AND password_hash IS NOT NULL ORDER BY (role = 'customer'), created_at", phone) : [];
 }
 
+registerSchema('login-lock-1', `CREATE TABLE login_attempts (key TEXT PRIMARY KEY, fails INTEGER NOT NULL, first_at INTEGER NOT NULL);`);
+const LOCK_FAILS = 10, LOCK_WINDOW_MS = 15 * 60_000;
+/** Wrong passwords or 2FA codes for one account are counted whatever the IP address, so a guessing attack spread over many addresses is stopped too. */
+function lockCheck(key: string): void {
+  const r = one<{ fails: number; first_at: number }>('SELECT fails, first_at FROM login_attempts WHERE key = ?', key);
+  if (!r) return;
+  if (now() - r.first_at > LOCK_WINDOW_MS) { run('DELETE FROM login_attempts WHERE key = ?', key); return; }
+  if (r.fails >= LOCK_FAILS) throw new HttpError(429, 'ACCOUNT_LOCKED', `Too many wrong attempts. Try again in ${Math.max(1, Math.ceil((r.first_at + LOCK_WINDOW_MS - now()) / 60_000))} minutes.`);
+}
+function lockFail(key: string): void {
+  run('INSERT INTO login_attempts(key, fails, first_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET fails = CASE WHEN ? - first_at > ? THEN 1 ELSE fails + 1 END, first_at = CASE WHEN ? - first_at > ? THEN ? ELSE first_at END', key, now(), now(), LOCK_WINDOW_MS, now(), LOCK_WINDOW_MS, now());
+}
+
 /** Sign in with an email address or a mobile number, and the password. */
 export function login(cfg: Config, identifier: string, password: string, code?: string): { token: string; user: User } {
+  const lockKey = identifier.trim().toLowerCase().slice(0, 120);
+  lockCheck(lockKey);
   const found = candidatesFor(identifier);
   let r = found[0];
   for (const c of found) if (c.password_hash && verifyPassword(password, c.password_hash)) { r = c; break; }
   const ok = verifyPassword(password, r?.password_hash ?? DUMMY);
-  if (!r || !ok || !r.password_hash) throw new HttpError(401, 'INVALID_LOGIN', 'Email, mobile number or password is not right');
+  if (!r || !ok || !r.password_hash) { lockFail(lockKey); throw new HttpError(401, 'INVALID_LOGIN', 'Email, mobile number or password is not right'); }
   if (!r.active) throw new HttpError(403, 'ACCOUNT_DISABLED', 'This account has been disabled');
   if (mfaEnabled(r.id)) {
     if (!code) throw new HttpError(401, 'MFA_REQUIRED', 'Enter the 6 digit code from your authenticator app');
-    if (!checkCode(r.id, code, { requireEnabled: true })) throw new HttpError(401, 'MFA_INVALID', 'That code is not right or has already been used. Wait for the next one.');
+    if (!checkCode(r.id, code, { requireEnabled: true })) { lockFail(lockKey); throw new HttpError(401, 'MFA_INVALID', 'That code is not right or has already been used. Wait for the next one.'); }
   }
+  run('DELETE FROM login_attempts WHERE key = ?', lockKey);
   return { token: signToken(cfg, r), user: toUser(r) };
 }
 

@@ -1,5 +1,6 @@
 import { Router, ok, created } from '../http.ts';
 import { U, page } from './helpers.ts';
+import { approveRefund, declineRefund, listRefunds } from '../payments.ts';
 import { Validator } from '../input.ts';
 import { HttpError, notFound } from '../errors.ts';
 import { audit, listAudit } from '../audit.ts';
@@ -20,6 +21,8 @@ const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
 export function adminRoutes(r: Router): void {
   // Platform controls: settings, booking window, closures, backups, connections, people. The owner holds them, and the super admin too.
   const A = { auth: ['owner' as const, 'super_admin' as const] };
+  // People, passwords, the audit log, backups, outside services and connections belong to the software owner only: an owner running one business must not reach other businesses or the platform.
+  const SAO = { auth: ['super_admin' as const] };
 
   r.get('/api/admin/settings', () => ok(getSettings()), A);
 
@@ -27,6 +30,9 @@ export function adminRoutes(r: Router): void {
     const body = c.json();
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'VALIDATION_FAILED', 'Send a JSON object of settings', { fields: [{ field: '(body)', message: 'Expected a JSON object' }] });
     const u = U(c);
+    // Where customers' money goes and the public contact details are shared by every business, so only the software owner changes them.
+    const locked = ['razorpayEnabled', 'upiId', 'contactPhone', 'academyCoaches'].filter((k) => k in (body as object));
+    if (u.role !== 'super_admin' && locked.length) throw new HttpError(403, 'FORBIDDEN', `Only the software owner can change: ${locked.join(', ')}`);
     const changed = updateSettings(body as Record<string, unknown>, u.id);
     for (const [k, v] of Object.entries(changed)) audit({ id: u.id, role: u.role }, k === 'razorpayEnabled' ? 'settings.razorpay_toggle' : 'settings.update', 'setting', k, v);
     return ok(getSettings());
@@ -42,14 +48,14 @@ export function adminRoutes(r: Router): void {
   r.get('/api/admin/yodlee', (c) => ok(viewYodleeSettings(c.cfg)), SA);
   r.put('/api/admin/yodlee', (c) => ok(saveYodleeSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);
   r.post('/api/admin/yodlee/test', async (c) => { const res = await testYodlee(c.cfg); audit({ id: U(c).id, role: U(c).role }, 'yodlee.test', 'yodlee', null, { ok: res.ok }); return ok(res); }, { ...SA, rate: 'auth' });
-  r.get('/api/admin/integrations', (c) => ok({ items: integrationStatuses(c.cfg) }), A);
-  r.post('/api/admin/integrations/:id/test', async (c) => ok(await testIntegration(c.cfg, U(c), c.params.id!)), A);
+  r.get('/api/admin/integrations', (c) => ok({ items: integrationStatuses(c.cfg) }), SAO);
+  r.post('/api/admin/integrations/:id/test', async (c) => ok(await testIntegration(c.cfg, U(c), c.params.id!)), SAO);
 
   // The notebook of outside services and the accounts they were opened with (never keys or passwords).
-  r.get('/api/admin/services', () => ok({ items: listServices() }), A);
-  r.post('/api/admin/services', (c) => created(addService(U(c), c.json())), A);
-  r.patch('/api/admin/services/:id', (c) => ok(updateService(U(c), c.params.id!, c.json())), A);
-  r.del('/api/admin/services/:id', (c) => { deleteService(U(c), c.params.id!); return ok({ removed: true }); }, A);
+  r.get('/api/admin/services', () => ok({ items: listServices() }), SAO);
+  r.post('/api/admin/services', (c) => created(addService(U(c), c.json())), SAO);
+  r.patch('/api/admin/services/:id', (c) => ok(updateService(U(c), c.params.id!, c.json())), SAO);
+  r.del('/api/admin/services/:id', (c) => { deleteService(U(c), c.params.id!); return ok({ removed: true }); }, SAO);
 
   r.get('/api/admin/users', (c) => {
     const { limit, offset } = page(c, 50);
@@ -63,7 +69,7 @@ export function adminRoutes(r: Router): void {
     const total = one<{ n: number }>(`SELECT COUNT(*) n FROM users ${w}`, ...p)!.n;
     const rows = many<UserRow>(`SELECT * FROM users ${w} ORDER BY created_at DESC, id LIMIT ? OFFSET ?`, ...p, limit, offset);
     return ok({ items: rows.map(toUser), total, limit, offset });
-  }, A);
+  }, SAO);
 
   r.post('/api/admin/users', (c) => {
     const u = U(c);
@@ -85,7 +91,7 @@ export function adminRoutes(r: Router): void {
     const row = createUser({ role: role!, name: name!, email: email!, phone: phone ?? null, password: password!, businessName: businessName ?? null, upiId: upiId ?? null, ownerId: role === 'staff' ? ownerId! : null, permissions: (permsArr ?? []) as StaffPermission[] });
     audit({ id: u.id, role: u.role }, 'user.create', 'user', row.id, { role }, row.owner_id ?? (row.role === 'owner' ? row.id : null));
     return created(toUser(row));
-  }, A);
+  }, SAO);
 
   r.patch('/api/admin/users/:id', (c) => {
     const u = U(c);
@@ -118,7 +124,7 @@ export function adminRoutes(r: Router): void {
       newName, phone ?? null, active === undefined ? null : active ? 1 : 0, upiId ?? null, businessName ?? null, permsArr ? JSON.stringify(permsArr) : null, active === false || permsArr ? 1 : 0, now(), target.id);
     audit({ id: u.id, role: u.role }, 'user.update', 'user', target.id, { active, permissions: permsArr }, target.owner_id ?? (target.role === 'owner' ? target.id : null));
     return ok(toUser(userRow(target.id)!));
-  }, A);
+  }, SAO);
 
   r.post('/api/admin/users/:id/password', (c) => {
     const u = U(c);
@@ -131,23 +137,27 @@ export function adminRoutes(r: Router): void {
     setPassword(target.id, pw!);
     audit({ id: u.id, role: u.role }, 'user.password_reset', 'user', target.id);
     return ok({ ok: true });
-  }, A);
+  }, SAO);
 
   // ---- backups: a snapshot every day at 03:15 IST, and one on demand ----
   r.get('/api/admin/backups', (c) => ok({
     enabled: c.cfg.backup.enabled, at: BACKUP_AT, keep: c.cfg.backup.keep,
     nextAt: c.cfg.backup.enabled ? nextBackupAt() : null,
     items: listBackups(c.cfg),
-  }), A);
+  }), SAO);
 
   r.post('/api/admin/backups', (c) => {
     const u = U(c);
     try { return created(backupNow(c.cfg, 'manual', { id: u.id, role: u.role })); }
     catch (e) { throw new HttpError(500, 'BACKUP_FAILED', `The backup could not be completed: ${(e as Error).message}`); }
-  }, A);
+  }, SAO);
 
+  const SUP = { auth: ['super_admin' as const] };
+  r.get('/api/admin/refunds', (c) => { const st = c.query.get('status') ?? 'awaiting'; return ok({ items: st === 'awaiting' ? listRefunds(c.query.get('ownerId'), 'pending').filter((x) => !x.approvedAt) : listRefunds(c.query.get('ownerId'), st) }); }, SUP);
+  r.post('/api/admin/refunds/:id/approve', (c) => ok(approveRefund(U(c), c.params.id!)), SUP);
+  r.post('/api/admin/refunds/:id/decline', (c) => { const v = new Validator(c.json()); const reason = v.str('reason', { required: true, max: 200 }); v.done(); return ok(declineRefund(U(c), c.params.id!, reason!)); }, SUP);
   r.get('/api/admin/audit', (c) => {
     const { limit, offset } = page(c, 50);
     return ok(listAudit({ ownerId: c.query.get('ownerId'), entity: c.query.get('entity') ?? undefined, entityId: c.query.get('entityId') ?? undefined, action: c.query.get('action') ?? undefined, limit, offset }));
-  }, A);
+  }, SAO);
 }

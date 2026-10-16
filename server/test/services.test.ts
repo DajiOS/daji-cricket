@@ -15,11 +15,12 @@ test('the services notebook starts with the services we use, including the MSG91
   assert.ok(r.body.items.some((s: any) => s.name === 'Razorpay') && r.body.items.some((s: any) => s.name === 'Wix'));
 });
 
-test('only the owner and super admin can read or change it', async () => {
+test('only the software owner can read or change it', async () => {
   const staff = await h.login('staff1');
   assert.equal((await h.get('/api/admin/services', staff)).status, 403);
   assert.equal((await h.post('/api/admin/services', { name: 'X service' }, staff)).status, 403);
-  assert.equal((await h.get('/api/admin/services', owner)).status, 200);
+  assert.equal((await h.get('/api/admin/services', owner)).status, 403, 'a business owner no longer sees the platform notebook');
+  assert.equal((await h.get('/api/admin/services', admin)).status, 200);
 });
 
 test('add, edit (clearing a field), and remove a service', async () => {

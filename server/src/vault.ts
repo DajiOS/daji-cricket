@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync, createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 // Encryption at rest for the few values that must never sit readable in the database or a stolen backup.
@@ -13,6 +13,8 @@ let fieldKey: Buffer | null = null;
 const FIELD_SALT = Buffer.from('daji-field-key-v1');
 
 export function setVaultKey(secret: string): void { fieldKey = secret ? scryptSync(secret, FIELD_SALT, 32) : null; }
+/** A short, one-way fingerprint of FIELD_KEY. Stored with each backup so a restore can tell at once whether the key on hand is the one that sealed the data. */
+export function keyFingerprint(): string | null { return fieldKey ? createHash('sha256').update('daji-key-check').update(fieldKey).digest('hex').slice(0, 16) : null; }
 export const vaultOn = (): boolean => fieldKey !== null;
 
 const b64 = (b: Buffer): string => b.toString('base64url');
