@@ -93,15 +93,23 @@ function Viewer({ def }: { def: Def }) {
     if (def.kind === 'ledger') return `/api/accounting/reports/ledger?account=${encodeURIComponent(account)}&from=${q.from}&to=${q.to}`;
     return '';
   };
-  const file = () => `${def.file || def.id}-${def.asOf ? q.to : q.from + '-to-' + q.to}`;
   const invalid = def.range && (!from || !to || to < from) ? 'Choose a start date that is not after the end date.' : def.kind === 'ledger' && !account ? 'Choose an account.' : null;
-  const p = invalid ? null : path();
-  const [r, e] = useApi<any>(p);
+  // The report runs only when Run report is pressed. `ran` is the exact request that was run, so the figures, the file name and the export
+  // always match what was asked for, even if the controls are changed afterwards.
+  const [ran, setRan] = useState<{ path: string; file: string } | null>(null);
+  const [r, setR] = useState<any>(null); const [e, setE] = useState<string | null>(null);
+  const run = () => { if (!invalid) setRan({ path: path(), file: `${def.file || def.id}-${def.asOf ? q.to : q.from + '-to-' + q.to}` }); };
+  useEffect(() => {
+    if (!ran) return; let live = true; setR(null); setE(null);
+    api<any>(ran.path).then((d) => live && setR(d)).catch((x) => live && setE(x.message));
+    return () => { live = false; };
+  }, [ran]);
+  const changed = !!ran && !invalid && ran.path !== path();
   return (
     <div className="stack">
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div className="row"><a className="btn sm ghost no-print" href="#/accounting/reports"><Icon name="back" />Reports</a><h2 style={{ fontSize: 22 }}>{def.name}</h2></div>
-        <ExportBar path={() => path()} name={file} />
+        {ran && <ExportBar path={() => ran.path} name={() => ran.file} />}
       </div>
       <div className="card"><div className="card-pad no-print"><div className="form-grid bk-ctl">
         {def.range && <Field label="Period"><select className="inp" value={preset} onChange={(e) => applyPreset(e.target.value)}><option value="month">This month</option><option value="last">Last month</option><option value="fy">This financial year</option><option value="lastfy">Last financial year</option><option value="custom">Custom</option></select></Field>}
@@ -109,9 +117,13 @@ function Viewer({ def }: { def: Def }) {
         {(def.range || def.asOf) && <Field label={def.asOf ? 'As of' : 'To'}><input className="inp" type="date" value={to} onChange={(e) => { setTo(e.target.value); if (def.range) setPreset('custom'); }} /></Field>}
         {def.basis && <Field label="Basis"><select className="inp" value={basis} onChange={(e) => setBasis(e.target.value)}><option value="accrual">Accrual (sessions played)</option><option value="cash">Cash (money received)</option></select></Field>}
         {def.kind === 'ledger' && <Field label="Account"><select className="inp" value={account} onChange={(e) => setAccount(e.target.value)}><option value="">Choose an account</option>{accts.map((a) => <option key={a.code} value={a.code}>{a.name}</option>)}</select></Field>}
-      </div></div>
+      </div>
+        <div className="row" style={{ gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+          <button className="btn primary" onClick={run} disabled={!!invalid}>{ran ? 'Run again' : 'Run report'}</button>
+          {invalid ? <span className="muted small">{invalid}</span> : changed ? <span className="muted small">You changed the settings. Press Run again to update the figures below.</span> : null}
+        </div></div>
         <div className={def.range || def.asOf || def.kind === 'ledger' ? 'bk-rep-body' : ''}>
-          {invalid ? <Empty>{invalid}</Empty> : e ? <ErrorBox msg={e} /> : !r ? <Loading h={260} /> : <Body def={def} r={r} />}
+          {!ran ? <Empty>Choose the period and press Run report.</Empty> : e ? <ErrorBox msg={e} /> : !r ? <Loading h={260} /> : <Body def={def} r={r} />}
         </div></div>
     </div>
   );
@@ -181,7 +193,9 @@ function Pnl({ p, def }: { p: any; def: Def }) {
   part('Revenue', p.revenue); part('Expenses', p.expenses);
   rows.push({ cls: 'net', cells: ['Net profit', <Money p={p.netProfitPaise} />, ...extra(p.netProfitPaise, p.previousNetProfitPaise)] });
   const heads = ['', 'Amount', ...(pct ? ['% of income'] : []), ...(cmp ? [`Before: ${fmtDate(p.previous.range.from)} to ${fmtDate(p.previous.range.to)}`, 'Change'] : [])];
+  const none = p.revenue.totalPaise === 0 && p.expenses.totalPaise === 0;
   return <Pad><Hint>{fmtDate(p.range.from)} to {fmtDate(p.range.to)}, {p.basis} basis{p.marginPercent !== null ? `. Margin ${p.marginPercent}%` : ''}</Hint>
+    {none && <div className="muted small" style={{ margin: '0 0 12px' }}>Nothing is recorded in this period, so every figure is zero. Try another period, or check that the bank statements for these dates have been loaded.</div>}
     <Grid heads={heads} nums={heads.map((_, i) => i).filter((i) => i > 0)} rows={rows} />
     {p.uncategorised.count > 0 && <div className="err" style={{ margin: '12px 0' }}>{p.uncategorised.count} bank transactions in this period have no category yet, so the profit is not complete.</div>}<Notes n={p.notes} /></Pad>;
 }

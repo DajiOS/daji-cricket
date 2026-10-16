@@ -113,7 +113,7 @@ label.f > span { display: block; font-size: 11.5px; letter-spacing: .6px; color:
 textarea.inp { height: auto; min-height: 80px; padding: 10px 12px; resize: vertical; }
 .inp:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201,164,76,.18); }
 .inp::placeholder { color: var(--faint); }
-select.inp { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--gold) 50%), linear-gradient(135deg, var(--gold) 50%, transparent 50%); background-position: calc(100% - 18px) 17px, calc(100% - 13px) 17px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 32px; }
+select.inp { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--gold) 50%), linear-gradient(135deg, var(--gold) 50%, transparent 50%); background-position: calc(100% - 18px) 17px, calc(100% - 13px) 17px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 32px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
 .form-grid .full { grid-column: 1 / -1; }
 .hint { font-size: 12px; color: var(--faint); margin-top: 5px; }
@@ -208,6 +208,25 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .paper .lbl { font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: #7a6a44; font-weight: 700; }
 .paper .stamp { display: inline-block; border: 2px solid; padding: 3px 12px; border-radius: 6px; font-weight: 800; letter-spacing: 2px; transform: rotate(-4deg); }
 
+/* ---------- folded menu (icon rail) and its pop-up ---------- */
+.rail-toggle { display: inline-flex; }
+.shell.rail { grid-template-columns: 72px 1fr; }
+.shell.rail .side { padding: 16px 10px; align-items: center; overflow: visible; }
+.shell.rail .brand { display: flex; justify-content: center; padding: 4px 0 10px; }
+.rail-nav { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+.rail-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 12px; border: 1px solid transparent; background: none; color: var(--muted); cursor: pointer; }
+.rail-btn:hover, .rail-btn[aria-expanded="true"] { background: var(--panel); color: var(--ivory); text-decoration: none; }
+.rail-btn.on { background: linear-gradient(90deg, rgba(201,164,76,.16), rgba(201,164,76,.04)); color: var(--gold-hi); border-color: var(--gold-lo); }
+.rail-btn svg { width: 20px; height: 20px; }
+.rail-dot { position: absolute; top: 8px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 2px #0a0a0a; }
+.shell.rail .side-foot { border-top: 0; padding: 10px 0 0; display: flex; justify-content: center; }
+.flyout { position: fixed; left: 76px; z-index: 60; min-width: 220px; padding: 8px; border: 1px solid var(--line); border-radius: 14px; background: #0f1012; box-shadow: 0 18px 50px rgba(0,0,0,.65); display: flex; flex-direction: column; gap: 2px; }
+.flyout a { display: flex; align-items: center; gap: 11px; padding: 8px 12px; border-radius: 10px; color: var(--muted); font-weight: 600; font-size: 13.5px; border: 1px solid transparent; }
+.flyout a:hover { background: var(--panel); color: var(--ivory); text-decoration: none; }
+.flyout a.on { background: linear-gradient(90deg, rgba(201,164,76,.16), rgba(201,164,76,.04)); color: var(--gold-hi); border-color: var(--gold-lo); }
+.flyout a svg { width: 18px; height: 18px; flex: none; }
+.flyout a .count { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--gold); color: #120f08; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+
 /* ---------- mobile ---------- */
 .bottom-nav { display: none; }
 .menu-btn { display: none; }
@@ -220,6 +239,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .side { position: fixed; z-index: 40; left: 0; top: 0; width: 280px; transform: translateX(-102%); transition: transform .22s ease; box-shadow: 20px 0 60px rgba(0,0,0,.6); }
   .side.open { transform: none; }
   .menu-btn { display: inline-flex; }
+  .rail-toggle { display: none; }
   .top { padding: 12px 16px; }
   .page { padding: 18px 16px 100px; }
   h1 { font-size: 28px; }
