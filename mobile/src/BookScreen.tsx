@@ -12,7 +12,7 @@ const BALLS: Record<Ball, string> = { leather: 'Leather ball', tennis: 'Tennis b
 const REPEATS: Record<RepeatFrequency, { word: string; def: number; max: number }> = { daily: { word: 'every day', def: 5, max: 60 }, weekly: { word: 'every week', def: 4, max: 52 }, monthly: { word: 'every month', def: 3, max: 12 }, yearly: { word: 'every year', def: 2, max: 3 } };
 const hm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
 
-export function BookScreen({ onHold }: { onHold: (h: HoldResponse) => void }) {
+export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse) => void; onNeedSignIn?: () => void }) {
   const [cfg, setCfg] = useState<AppConfig | null>(null);
   const [grounds, setGrounds] = useState<Ground[]>([]);
   const [gid, setGid] = useState(''); const [date, setDate] = useState(istToday());
@@ -98,7 +98,7 @@ export function BookScreen({ onHold }: { onHold: (h: HoldResponse) => void }) {
     setErr(''); setBusy(true);
     try {
       onHold(await api<HoldResponse>('/api/bookings', { method: 'POST', body: { groundId: gid, date, ...body, useCredit: useCredit && credit > 0, ...(promo.trim() ? { promoCode: promo.trim() } : {}), ...(rep ? { repeat: { frequency: rep.f, count: rep.n } } : {}) } }));
-    } catch (e: any) { setErr(e.message); void loadSlots(); } finally { setBusy(false); }
+    } catch (e: any) { if (e.status === 401 && onNeedSignIn) { onNeedSignIn(); return; } setErr(e.message); void loadSlots(); } finally { setBusy(false); }
   };
 
   if (!cfg && !err) return <Loading />;

@@ -20,6 +20,7 @@ import { MatchesScreen } from './src/MatchesScreen';
 import { Avatar, Btn, Chip, Loading, s } from './src/ui';
 import { registerForPush, unregisterPush, onNotificationTap } from './src/push';
 import { C, inr } from './src/theme';
+import { ADMIN_APP } from './src/variant';
 
 // One app for everyone. What each person sees depends on who signed in:
 //   customer     Book, Mine (bookings and academy), Ask AI, Profile
@@ -38,6 +39,7 @@ export default function App() {
   const [more, setMore] = useState<More>(null);
   const [owners, setOwners] = useState<User[]>([]);
   const [viewOwner, setView] = useState<string | null>(null);
+  const [signin, setSignin] = useState(false); // customer app: the sign-in screen over the booking page
 
   useEffect(() => {
     (async () => {
@@ -59,7 +61,38 @@ export default function App() {
   const signOut = useCallback(async () => { await unregisterPush(); await setToken(null); setViewOwner(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('book'); }, []);
 
   if (user === undefined) return <View style={s.screen}><Loading /></View>;
-  if (user === null) return <><StatusBar style="light" /><AuthScreen onUser={setUser} /></>;
+  if (user === null && ADMIN_APP) return <><StatusBar style="light" /><AuthScreen admin onUser={setUser} /></>;
+  if (user === null) {
+    // Guests open straight on the booking page and only sign in when they hold a slot or open their own pages.
+    const ask = () => setSignin(true);
+    return (
+      <View style={s.screen}>
+        <StatusBar style="light" />
+        <View style={{ flex: 1, display: signin ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
+        {signin && <AuthScreen onUser={(u) => { setSignin(false); setUser(u); }} onBack={() => setSignin(false)} note="Sign in to hold your slot. Your day and time stay as you left them." />}
+        {!signin && (
+          <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: 18 }}>
+            {([['book', 'Book'], ['signin', 'Sign in']] as [string, string][]).map(([id, name]) => (
+              <Pressable key={id} onPress={() => (id === 'signin' ? ask() : setTab(id as Tab))} style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}>
+                <Text style={{ color: tab === id ? C.gold : C.muted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>{name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  }
+  if (ADMIN_APP === (user.role === 'customer')) {
+    return (
+      <View style={[s.screen, s.pad, { paddingTop: 90 }]}>
+        <StatusBar style="light" />
+        <Text style={s.eyebrow}>{ADMIN_APP ? 'Daji Admin' : 'Daji Cricket Ground'}</Text>
+        <Text style={s.h1}>{ADMIN_APP ? 'This app is for the ground team' : 'Please use the Daji Admin app'}</Text>
+        <Text style={[s.muted, { marginBottom: 18 }]}>{ADMIN_APP ? 'Your account is a customer account. Book and manage your games in the Daji Cricket Ground app.' : 'Your account belongs to the ground team. Sign in to the Daji Admin app to work with bookings, tasks and accounts.'}</Text>
+        <Btn label="Sign out" onPress={signOut} />
+      </View>
+    );
+  }
   const customer = user.role === 'customer';
   const perm = (p: string) => user.role !== 'staff' || (user.permissions ?? []).includes(p);
   const bookingsOk = perm('manage_bookings') || perm('verify_payments') || perm('record_payments');
