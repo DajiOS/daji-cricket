@@ -1,3 +1,6 @@
+import { CATALOG, addUsualServices, attachInvoiceFile, costSummary, createInvoice, createSwService, deleteInvoice, deleteSwService, fetchAutoInvoices, listInvoices, listSwServices, readInvoiceFile, saveBillingSettings, updateInvoice, updateSwService, viewBillingSettings } from '../billing.ts';
+import { MAX_ATTACHMENT_BYTES } from '../accounting/books.ts';
+import type { Ctx, Reply } from '../http.ts';
 import { Router, ok, created } from '../http.ts';
 import { U, page } from './helpers.ts';
 import { approveRefund, declineRefund, listRefunds } from '../payments.ts';
@@ -48,6 +51,25 @@ export function adminRoutes(r: Router): void {
   r.get('/api/admin/yodlee', (c) => ok(viewYodleeSettings(c.cfg)), SA);
   r.put('/api/admin/yodlee', (c) => ok(saveYodleeSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);
   r.post('/api/admin/yodlee/subscribe', async (c) => { const res = await subscribeYodleeWebhooks(c.cfg); audit({ id: U(c).id, role: U(c).role }, 'yodlee.subscribe', 'yodlee', null, { ok: res.ok }); return ok(res); }, { ...SA, rate: 'auth' });
+  // ---- software billing: what the platform costs to build and run (software owner only)
+  const SAFILE = { auth: ['super_admin' as const], maxBody: MAX_ATTACHMENT_BYTES + 1024 };
+  const qv = (c: Ctx, k: string): string | undefined => c.query.get(k) ?? undefined;
+  r.get('/api/admin/billing', (c) => ok({ summary: costSummary(), services: listSwServices(), settings: viewBillingSettings(c.cfg), catalogSize: CATALOG.length }), SA);
+  r.get('/api/admin/billing/invoices', (c) => ok({ items: listInvoices({ serviceId: qv(c, 'service'), from: qv(c, 'from'), to: qv(c, 'to'), status: qv(c, 'status') }) }), SA);
+  r.post('/api/admin/billing/services/catalog', (c) => ok(addUsualServices({ id: U(c).id, role: U(c).role })), SA);
+  r.post('/api/admin/billing/services', (c) => created(createSwService({ id: U(c).id, role: U(c).role }, c.json())), SA);
+  r.patch('/api/admin/billing/services/:id', (c) => ok(updateSwService({ id: U(c).id, role: U(c).role }, c.params.id!, c.json())), SA);
+  r.del('/api/admin/billing/services/:id', (c) => ok(deleteSwService({ id: U(c).id, role: U(c).role }, c.params.id!)), SA);
+  r.post('/api/admin/billing/invoices', (c) => created(createInvoice({ id: U(c).id, role: U(c).role }, c.json())), SA);
+  r.patch('/api/admin/billing/invoices/:id', (c) => ok(updateInvoice({ id: U(c).id, role: U(c).role }, c.params.id!, c.json())), SA);
+  r.del('/api/admin/billing/invoices/:id', (c) => { deleteInvoice(c.cfg.dataDir, { id: U(c).id, role: U(c).role }, c.params.id!); return ok({ deleted: true }); }, SA);
+  r.post('/api/admin/billing/invoices/:id/file', (c) => ok(attachInvoiceFile(c.cfg.dataDir, { id: U(c).id, role: U(c).role }, c.params.id!, c.query.get('filename') ?? 'invoice', c.raw)), SAFILE);
+  r.get('/api/admin/billing/invoices/:id/file', (c): Reply => {
+    const f = readInvoiceFile(c.cfg.dataDir, c.params.id!);
+    return { status: 200, raw: f.data, contentType: f.mime, headers: { 'Content-Disposition': `attachment; filename="${f.name.replace(/"/g, '')}"`, 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; sandbox" } };
+  }, SA);
+  r.put('/api/admin/billing/settings', (c) => ok(saveBillingSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);
+  r.post('/api/admin/billing/fetch', async (c) => ok({ results: await fetchAutoInvoices(c.cfg, { id: U(c).id, role: U(c).role }) }), { ...SA, rate: 'auth' });
   r.post('/api/admin/yodlee/test', async (c) => { const res = await testYodlee(c.cfg); audit({ id: U(c).id, role: U(c).role }, 'yodlee.test', 'yodlee', null, { ok: res.ok }); return ok(res); }, { ...SA, rate: 'auth' });
   r.get('/api/admin/integrations', (c) => ok({ items: integrationStatuses(c.cfg) }), SAO);
   r.post('/api/admin/integrations/:id/test', async (c) => ok(await testIntegration(c.cfg, U(c), c.params.id!)), SAO);
