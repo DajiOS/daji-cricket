@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
 import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
 import { HOME, NAV, PAGES, type NavItem } from './registry';
@@ -17,7 +17,18 @@ function Shell({ route }: { route: string }) {
   // Menu groups fold away; the group holding the current page is always open. Choices are remembered in this browser.
   const [openGroups, setOpenGroups] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('daji.deskGroups') || '["Ground","Finance"]'); } catch { return ['Ground', 'Finance']; } });
   const toggleGroup = (g: string) => setOpenGroups((gs) => { const n = gs.includes(g) ? gs.filter((x) => x !== g) : [...gs, g]; try { localStorage.setItem('daji.deskGroups', JSON.stringify(n)); } catch { /* ignore */ } return n; });
-  useEffect(() => setOpen(false), [route]);
+  useEffect(() => { setOpen(false); setFly(null); }, [route]);
+  // The menu can fold into a narrow icon rail (remembered in this browser). In the rail, a group opens as a pop-up list beside it.
+  const [rail, setRail] = useState<boolean>(() => { try { return localStorage.getItem('daji.deskRail') === '1'; } catch { return false; } });
+  const setRailSaved = (v: boolean) => { setRail(v); setFly(null); try { localStorage.setItem('daji.deskRail', v ? '1' : '0'); } catch { /* ignore */ } };
+  const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 860px)').matches);
+  useEffect(() => { const m = matchMedia('(max-width: 860px)'); const f = () => setNarrow(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
+  const collapsed = rail && !narrow;
+  const [fly, setFly] = useState<{ group: string; top: number } | null>(null);
+  const flyTimer = useRef<number | undefined>(undefined);
+  const openFly = (group: string, el: HTMLElement) => { clearTimeout(flyTimer.current); setFly({ group, top: Math.max(8, Math.min(el.getBoundingClientRect().top, innerHeight - 80)) }); };
+  const closeFlySoon = () => { clearTimeout(flyTimer.current); flyTimer.current = window.setTimeout(() => setFly(null), 180); };
+  useEffect(() => { if (!fly) return; const f = (e: KeyboardEvent) => e.key === 'Escape' && setFly(null); addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [fly]);
   const isOn = (to: string) => (to === '/' ? route === '/' || route === '' : route === to || route.startsWith(to + '/'));
   const visible = (i: NavItem) => can(s.me, i.perm) && (!i.ownerOnly || s.me.role !== 'staff') && (!i.superOnly || s.me.role === 'super_admin');
 
@@ -34,9 +45,27 @@ function Shell({ route }: { route: string }) {
   const owner = s.owners.find((o) => o.id === s.ownerId);
 
   return (
-    <div className="shell">
+    <div className={`shell${collapsed ? ' rail' : ''}`}>
       <aside className={`side${open ? ' open' : ''}`} aria-label="Main navigation">
-        <a className="brand" href="./" aria-label="Daji Cricket Ground, back to the website"><Logo width={196} /></a>
+        <a className="brand" href="./" aria-label="Daji Cricket Ground, back to the website">{collapsed ? <Crest size={36} /> : <Logo width={196} />}</a>
+        {collapsed ? (
+          <nav className="nav rail-nav" aria-label="Menu groups">
+            {NAV.map((g) => {
+              const items = g.items.filter(visible);
+              if (!items.length) return null;
+              const active = items.some((i) => isOn(i.to));
+              const waitingHere = items.some((i) => i.count === 'approvals') && waiting > 0;
+              if (items.length === 1 || g.group === 'Portfolio') return items.map((i) => (
+                <a key={i.to} href={`#${i.to}`} className={`rail-btn${isOn(i.to) ? ' on' : ''}`} title={i.label} aria-label={i.label}><Icon name={i.icon} /></a>));
+              return (
+                <button key={g.group} className={`rail-btn${active ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.group === g.group} aria-label={g.group} title={g.group}
+                  onMouseEnter={(e) => openFly(g.group, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(g.group, e.currentTarget)}
+                  onClick={(e) => (fly?.group === g.group ? setFly(null) : openFly(g.group, e.currentTarget))}>
+                  <Icon name={items[0]!.icon} />{waitingHere && <span className="rail-dot" aria-hidden="true" />}
+                </button>);
+            })}
+          </nav>
+        ) : (
         <nav className="nav">
           {NAV.map((g) => {
             const items = g.items.filter(visible);
@@ -55,16 +84,31 @@ function Shell({ route }: { route: string }) {
               </div>);
           })}
         </nav>
+        )}
         <div className="side-foot">
-          <div style={{ color: 'var(--ivory)', fontWeight: 700 }}>{s.me.name}</div>
-          <div className="small">{roleLabel(s.me)}</div>
-          <button className="btn ghost sm" style={{ marginTop: 10, paddingLeft: 0 }} onClick={signOut}><Icon name="logout" />Sign out</button>
+          {collapsed ? <button className="rail-btn" onClick={signOut} title="Sign out" aria-label="Sign out"><Icon name="logout" /></button> : <>
+            <div style={{ color: 'var(--ivory)', fontWeight: 700 }}>{s.me.name}</div>
+            <div className="small">{roleLabel(s.me)}</div>
+            <button className="btn ghost sm" style={{ marginTop: 10, paddingLeft: 0 }} onClick={signOut}><Icon name="logout" />Sign out</button></>}
         </div>
       </aside>
+      {collapsed && fly && (() => {
+        const g = NAV.find((x) => x.group === fly.group); const items = g ? g.items.filter(visible) : [];
+        return (
+          <div className="flyout" role="menu" aria-label={fly.group} style={{ top: fly.top }} onMouseEnter={() => clearTimeout(flyTimer.current)} onMouseLeave={closeFlySoon}>
+            <div className="nav-group">{fly.group}</div>
+            {items.map((i) => (
+              <a key={i.to} href={`#${i.to}`} role="menuitem" className={isOn(i.to) ? 'on' : ''} onClick={() => setFly(null)}>
+                <Icon name={i.icon} />{i.label}
+                {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
+              </a>))}
+          </div>);
+      })()}
       {open && <div className="overlay" style={{ zIndex: 35, padding: 0 }} onClick={() => setOpen(false)} />}
       <main className="main">
         <header className="top">
           <button className="btn ghost sm menu-btn" onClick={() => setOpen(true)} aria-label="Open menu"><Icon name="menu" /></button>
+          <button className="btn ghost sm rail-toggle" onClick={() => setRailSaved(!rail)} aria-label={rail ? 'Show the full menu' : 'Fold the menu'} aria-pressed={rail} title={rail ? 'Show the full menu' : 'Fold the menu'}><Icon name="menu" /></button>
           {s.me.role === 'super_admin'
             ? <div className="seg hide-sm" role="group" aria-label="Business">{s.owners.map((o) => <button key={o.id} className={o.id === s.ownerId ? 'on' : ''} onClick={() => s.setOwner(o.id)}>{o.businessName || o.name}</button>)}</div>
             : <div className="seg hide-sm" role="group" aria-label="Business"><button className="on">{owner?.businessName || s.me.businessName || 'Daji Cricket Ground'}</button></div>}
