@@ -45,6 +45,14 @@
           "cameraPermission": "Daji Cricket Ground uses the camera to take photos that prove a task is done.",
           "photosPermission": "Daji Cricket Ground uses your photos so you can choose a profile picture."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
+        }
       ]
     ],
     "icon": "./assets/icon.png",
