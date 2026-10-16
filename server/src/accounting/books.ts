@@ -10,6 +10,7 @@ import { Validator } from '../input.ts';
 import { addDays, istDate } from '../time.ts';
 import { accountOr404 } from './store.ts';
 import { categoryId } from './schema.ts';
+import { assertAccountActive, assertCategoryActive, effName } from './catprefs.ts';
 
 // Receipts and documents, bank reconciliation against booking payments, and recurring entries.
 
@@ -242,7 +243,7 @@ export function nextOccurrence(start: string, d: string, f: Frequency): string {
 }
 
 interface RecRow { id: string; account_id: string; aname: string; description: string; amount_paise: number; category_id: string | null; cname: string | null; frequency: Frequency; start_date: string; end_date: string | null; next_date: string; last_run_date: string | null; active: number }
-const REC_SELECT = `SELECT r.*, a.name aname, c.name cname FROM acct_recurring r JOIN acct_accounts a ON a.id = r.account_id LEFT JOIN acct_categories c ON c.id = r.category_id`;
+const REC_SELECT = `SELECT r.*, a.name aname, ${effName('c', 'r.owner_id')} cname FROM acct_recurring r JOIN acct_accounts a ON a.id = r.account_id LEFT JOIN acct_categories c ON c.id = r.category_id`;
 const toRec = (r: RecRow): RecurringOut => ({ id: r.id, accountId: r.account_id, accountName: r.aname, description: r.description, amountPaise: r.amount_paise, categoryId: r.category_id, categoryName: r.cname, frequency: r.frequency, startDate: r.start_date, endDate: r.end_date,
   nextDate: r.end_date && r.next_date > r.end_date ? null : r.next_date, lastRunDate: r.last_run_date, active: !!r.active });
 
@@ -265,7 +266,8 @@ function recInput(ownerId: string, body: unknown, partial: boolean) {
   if (o.amountPaise === 0) v.fail('amountPaise', 'Cannot be zero');
   if (o.startDate && o.endDate && o.endDate < o.startDate) v.fail('endDate', 'Must be on or after the start date');
   v.done();
-  if (o.accountId) accountOr404(ownerId, o.accountId);
+  if (o.accountId) { accountOr404(ownerId, o.accountId); assertAccountActive(o.accountId); }
+  if (o.categoryId) assertCategoryActive(ownerId, o.categoryId);
   if (o.categoryId && !one('SELECT 1 FROM acct_categories WHERE id = ? AND (owner_id = ? OR owner_id IS NULL) AND deleted_at IS NULL', o.categoryId, ownerId)) throw new HttpError(400, 'VALIDATION_FAILED', 'No such category', { fields: [{ field: 'categoryId', message: 'No such category' }] });
   return o;
 }

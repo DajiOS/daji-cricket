@@ -106,6 +106,7 @@ export function Setup() {
             <Grid heads={['Account', 'Kind', 'Balance', 'Transactions', 'Uncategorised']} nums={[2, 3, 4]} empty="No accounts yet."
               rows={sh.accounts.map((a) => [a.name + (a.bankName ? ` · ${a.bankName}` : ''), a.kind === 'bank' ? 'Bank' : 'Cash', inr(a.balancePaise), a.transactions, a.uncategorised])} />
           </Section>
+          <CoaPanel onChange={sh.reload} />
           <Section title="Rules that categorise bank lines" pad={false} aside={<>
             <button className="btn sm" onClick={() => act(() => post('/api/accounting/rules/apply', {}), (x) => `${x.categorised} of ${x.checked} categorised`)}>Apply rules to uncategorised lines</button>
             <button className="btn sm primary" onClick={() => setDlg('rule')}><Icon name="plus" />Add a rule</button></>}>
@@ -123,5 +124,38 @@ export function Setup() {
           {dlg === 'account' && <AccountDialog onClose={() => setDlg(null)} done={sh.reload} />}
           {dlg === 'rule' && <RuleDialog cats={sh.categories} onClose={() => setDlg(null)} done={reloadRules} />}
         </div>)}</Load>)}</Load>
+  );
+}
+
+/** Chart of accounts: rename, make inactive, or delete what was never used. */
+function CoaPanel({ onChange }: { onChange: () => void }) {
+  const act = useAct();
+  const [edit, setEdit] = useState<{ id: string; name: string } | null>(null);
+  const [showOff, setShowOff] = useState(true);
+  return (
+    <Load<{ items: any[] }> path="/api/accounting/coa">{(d, reload) => {
+      const done = () => { reload(); onChange(); };
+      const items = d.items.filter((x) => showOff || x.active);
+      const label = (x: any) => edit?.id === x.id
+        ? <span className="row" style={{ gap: 6 }}>
+            <input className="inp" autoFocus value={edit.name} onChange={(e) => setEdit({ id: x.id, name: e.target.value })} style={{ width: 220 }} />
+            <button className="btn sm primary" onClick={async () => { if (await act(() => patch('/api/accounting/coa/' + x.id, { name: edit.name }), () => 'Renamed')) { setEdit(null); done(); } }}>Save</button>
+            <button className="btn sm ghost" onClick={() => setEdit(null)}>Cancel</button></span>
+        : <span>{x.name}{x.active ? '' : ' (Inactive)'}</span>;
+      return (
+        <Section title="Chart of accounts" pad={false} aside={<label className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" checked={showOff} onChange={(e) => setShowOff(e.target.checked)} />Show inactive</label>}>
+          <div className="card-pad" style={{ paddingBottom: 0 }}><Note>Rename anything. Make an account inactive when you stop using it: it stays in reports for the dates that have entries, tagged (Inactive), and takes no new entries. A bank or cash account can go inactive only when its balance is zero. Delete works only on what was never used.</Note></div>
+          <Grid heads={['Account', 'Type', 'Used', 'Balance', 'Status', '']} nums={[2, 3]} empty="Nothing to show."
+            rows={items.map((x) => [label(x), x.type === 'account' ? (x.kind === 'cash' ? 'Cash' : 'Bank') : x.kind === 'income' ? 'Income' : 'Expense', x.uses ? `${x.uses} use${x.uses === 1 ? '' : 's'}` : 'Never',
+              x.balancePaise === null ? '' : inr(x.balancePaise), x.active ? 'Active' : 'Inactive',
+              <span className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                <button className="btn sm ghost" onClick={() => setEdit({ id: x.id, name: x.name })}>Rename</button>
+                {x.active
+                  ? <button className="btn sm ghost" title={x.deactivateBlock ?? ''} disabled={!x.canDeactivate} onClick={async () => { if (await act(() => patch('/api/accounting/coa/' + x.id, { active: false }), () => 'Made inactive')) done(); }}>Make inactive</button>
+                  : <button className="btn sm ghost" onClick={async () => { if (await act(() => patch('/api/accounting/coa/' + x.id, { active: true }), () => 'Active again')) done(); }}>Make active</button>}
+                <button className="btn sm ghost" title={x.deleteBlock ?? ''} disabled={!x.canDelete} onClick={async () => { if (await act(() => del('/api/accounting/coa/' + x.id), () => 'Deleted')) done(); }}>Delete</button>
+              </span>])} />
+        </Section>);
+    }}</Load>
   );
 }

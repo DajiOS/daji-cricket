@@ -1,4 +1,5 @@
 import { many, one, registerSchema, run, tx } from '../db.ts';
+import { assertAccountActive } from './catprefs.ts';
 import { now } from '../clock.ts';
 import { audit, type Actor } from '../audit.ts';
 import { HttpError, notFound } from '../errors.ts';
@@ -213,6 +214,7 @@ export function transfer(ownerId: string, actor: Actor, body: unknown): { refere
   v.done();
   const nameOf = (id: string): string => one<{ name: string }>('SELECT name FROM acct_accounts WHERE id = ? AND owner_id = ? AND deleted_at IS NULL', id, ownerId)?.name ?? (() => { throw notFound('Account not found'); })();
   const fromName = nameOf(from!), toName = nameOf(to!);
+  assertAccountActive(from!); assertAccountActive(to!);
   assertOpen(ownerId, date!);
   const ref = newId('trf').slice(0, 16);
   let a = '', b = '';

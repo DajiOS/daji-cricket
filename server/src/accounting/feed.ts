@@ -160,7 +160,7 @@ export async function runFeedSync(cfg: Config, onError: (e: unknown) => void = (
   if (!providerFor(cfg)) return 0;
   const cutoff = now() - 20 * 60 * 60 * 1000;
   const due = many<{ id: string; owner_id: string }>(`SELECT a.id, a.owner_id FROM acct_accounts a LEFT JOIN acct_feed_state s ON s.account_id = a.id
-    WHERE a.provider_ref IS NOT NULL AND a.deleted_at IS NULL AND (s.last_sync_at IS NULL OR s.last_sync_at < ?)`, cutoff);
+    WHERE a.provider_ref IS NOT NULL AND a.deleted_at IS NULL AND a.active = 1 AND (s.last_sync_at IS NULL OR s.last_sync_at < ?)`, cutoff);
   let n = 0;
   for (const d of due) { try { await syncAccount(cfg, d.owner_id, SYSTEM, d.id); n++; } catch (e) { onError(e); } }
   return n;

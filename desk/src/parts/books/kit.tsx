@@ -10,7 +10,7 @@ export interface Category { id: string; name: string; group: string; kind: strin
 export function useShared() {
   const [a, ea, ra] = useApi<{ items: Account[] }>('/api/accounting/accounts');
   const [c, ec, rc] = useApi<{ items: Category[] }>('/api/accounting/categories');
-  return { accounts: a?.items ?? [], categories: c?.items ?? [], ready: !!a && !!c, error: ea || ec, reload: () => { ra(); rc(); } };
+  return { accounts: (a?.items ?? []).filter((x: any) => x.active !== false), categories: (c?.items ?? []).filter((x: any) => x.active !== false), ready: !!a && !!c, error: ea || ec, reload: () => { ra(); rc(); } };
 }
 export const catOptions = (cats: Category[]) => [...cats.filter((c) => c.kind !== 'booking_receipt'), ...cats.filter((c) => c.kind === 'booking_receipt')];
 export function CatSelect({ cats, value, onChange, blank, className = 'inp' }: { cats: Category[]; value: string; onChange: (v: string) => void; blank: string; className?: string }) {

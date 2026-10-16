@@ -1,3 +1,4 @@
+import { deleteCoa, listCoa, patchCoa } from '../accounting/coa.ts';
 import { feedStatus, linkAccount, syncAccount } from '../accounting/feed.ts';
 import { disconnectProviderAccount, fastLinkSession, listProviderAccounts, ownersInWebhook, webhookAuthorised } from '../accounting/yodlee.ts';
 import { Router, ok, created } from '../http.ts';
@@ -155,6 +156,9 @@ export function accountingRoutes(r: Router): void {
   r.get('/api/accounting/accounts', (c) => { canRead(c); return ok({ items: listAccounts(ownerOrFail(c, 'list accounts')) }); }, A);
   r.post('/api/accounting/accounts', (c) => { canWrite(c); return created(createAccount(ownerOrFail(c, 'add an account'), actor(c), c.json())); }, A);
   r.patch('/api/accounting/accounts/:id', (c) => { canWrite(c); return ok(updateAccount(ownerOrFail(c, 'change an account'), c.params.id!, actor(c), c.json())); }, A);
+  r.get('/api/accounting/coa', (c) => { canRead(c); return ok({ items: listCoa(ownerOrFail(c, 'see the chart of accounts')) }); }, A);
+  r.patch('/api/accounting/coa/:id', (c) => { canWrite(c); return ok(patchCoa(ownerOrFail(c, 'change the chart of accounts'), c.params.id!, actor(c), c.json())); }, A);
+  r.del('/api/accounting/coa/:id', (c) => { canWrite(c); deleteCoa(ownerOrFail(c, 'change the chart of accounts'), c.params.id!, actor(c)); return ok({ deleted: true }); }, A);
   r.del('/api/accounting/accounts/:id', (c) => { canWrite(c); deleteAccount(ownerOrFail(c, 'remove an account'), c.params.id!, actor(c)); return ok({ deleted: true }); }, A);
 
   r.get('/api/accounting/categories', (c) => { canRead(c); return ok({ items: listCategories(ownerOrFail(c, 'list categories')) }); }, A);
