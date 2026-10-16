@@ -18,9 +18,9 @@ function Shell({ route }: { route: string }) {
   const [openGroups, setOpenGroups] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('daji.deskGroups') || '["Ground","Finance"]'); } catch { return ['Ground', 'Finance']; } });
   const toggleGroup = (g: string) => setOpenGroups((gs) => { const n = gs.includes(g) ? gs.filter((x) => x !== g) : [...gs, g]; try { localStorage.setItem('daji.deskGroups', JSON.stringify(n)); } catch { /* ignore */ } return n; });
   useEffect(() => { setOpen(false); setFly(null); }, [route]);
-  // The menu can fold into a narrow icon rail (remembered in this browser). In the rail, a group opens as a pop-up list beside it.
-  const [rail, setRail] = useState<boolean>(() => { try { return localStorage.getItem('daji.deskRail') === '1'; } catch { return false; } });
-  const setRailSaved = (v: boolean) => { setRail(v); setFly(null); try { localStorage.setItem('daji.deskRail', v ? '1' : '0'); } catch { /* ignore */ } };
+  // The menu starts as a narrow icon rail and the three-line button opens the full menu with names (the choice is remembered in this browser). In the rail, a group opens as a pop-up list beside it.
+  const [rail, setRail] = useState<boolean>(() => { try { return localStorage.getItem('daji.deskRail2') !== '0'; } catch { return true; } });
+  const setRailSaved = (v: boolean) => { setRail(v); setFly(null); try { localStorage.setItem('daji.deskRail2', v ? '1' : '0'); } catch { /* ignore */ } };
   const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 860px)').matches);
   useEffect(() => { const m = matchMedia('(max-width: 860px)'); const f = () => setNarrow(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
   const collapsed = rail && !narrow;
@@ -116,7 +116,7 @@ function Shell({ route }: { route: string }) {
       <main className="main">
         <header className="top">
           <button className="btn ghost sm menu-btn" onClick={() => setOpen(true)} aria-label="Open menu"><Icon name="menu" /></button>
-          <button className="btn ghost sm rail-toggle" onClick={() => setRailSaved(!rail)} aria-label={rail ? 'Show the full menu' : 'Fold the menu'} aria-pressed={rail} title={rail ? 'Show the full menu' : 'Fold the menu'}><Icon name="menu" /></button>
+          <button className="btn ghost sm rail-toggle" onClick={() => setRailSaved(!rail)} aria-label={rail ? 'Open the menu' : 'Fold the menu'} aria-pressed={rail} title={rail ? 'Open the menu' : 'Fold the menu'}><Icon name="menu" /></button>
           {s.me.role === 'super_admin'
             ? <div className="seg hide-sm" role="group" aria-label="Business">{s.owners.map((o) => <button key={o.id} className={o.id === s.ownerId ? 'on' : ''} onClick={() => s.setOwner(o.id)}>{o.businessName || o.name}</button>)}</div>
             : <div className="seg hide-sm" role="group" aria-label="Business"><button className="on">{owner?.businessName || s.me.businessName || 'Daji Cricket Ground'}</button></div>}
