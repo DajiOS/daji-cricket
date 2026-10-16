@@ -5,6 +5,7 @@ import { HttpError, conflict, notFound } from '../errors.ts';
 import { newId } from '../ids.ts';
 import { Validator } from '../input.ts';
 import { addDays, istDate, isValidDate } from '../time.ts';
+import { postToLedger, removeFromLedger, type LedgerRef } from './autopost.ts';
 
 // Staff pay profiles, monthly attendance, advances and deductions, the monthly payroll run (net pay in paise),
 // month locking, salary payments and payslips. Everything is per owner. A month is "open" (worked out live from
@@ -123,6 +124,8 @@ CREATE INDEX ix_payroll_lines_staff ON payroll_lines(owner_id, staff_id, month);
 export const PAY_TYPES = ['monthly', 'daily'] as const;
 export const ATT_STATUSES = ['present', 'half', 'absent', 'leave'] as const;
 export const ADJ_KINDS = ['advance', 'deduction', 'bonus'] as const;
+registerSchema('payroll-2', `ALTER TABLE payroll_lines ADD COLUMN ledger_txn_id TEXT;`);
+
 export const METHODS = ['cash', 'upi', 'bank', 'cheque', 'other'] as const;
 const MAX_PAISE = 100_000_000_00; // 10 crore rupees: a sanity limit, not a business rule
 
@@ -334,7 +337,7 @@ export interface Line {
   id: string | null; staffId: string; staffName: string; staffRole: string; payType: string; ratePaise: number; daysInMonth: number;
   present: number; half: number; absent: number; leave: number; unmarked: number; paidDays: number;
   grossPaise: number; bonusPaise: number; advancePaise: number; deductionPaise: number; netPaise: number; shortfallPaise: number;
-  paidOn: string | null; paidMethod: string | null; paidRef: string | null; paidAt: number | null;
+  paidOn: string | null; paidMethod: string | null; paidRef: string | null; paidAt: number | null; ledgerTxnId: string | null;
 }
 
 /** Work out each person's pay for a month from attendance and adjustments (nothing is saved). */
@@ -363,17 +366,17 @@ export function computeLines(ownerId: string, month: string): Line[] {
     return {
       id: null, staffId: s.id, staffName: s.name, staffRole: s.role, payType: s.pay_type, ratePaise: s.rate_paise, daysInMonth: dim,
       ...c, unmarked, paidDays: units2 / 2, grossPaise: gross, bonusPaise: a.bonus, advancePaise: a.advance, deductionPaise: a.deduction,
-      netPaise: Math.max(0, raw), shortfallPaise: Math.max(0, -raw), paidOn: null, paidMethod: null, paidRef: null, paidAt: null,
+      netPaise: Math.max(0, raw), shortfallPaise: Math.max(0, -raw), paidOn: null, paidMethod: null, paidRef: null, paidAt: null, ledgerTxnId: null,
     };
   });
 }
 
-interface LineRow { id: string; staff_id: string; staff_name: string; staff_role: string; pay_type: string; rate_paise: number; days_in_month: number; present: number; half: number; absent: number; leave: number; unmarked: number; paid_units2: number; gross_paise: number; bonus_paise: number; advance_paise: number; deduction_paise: number; net_paise: number; shortfall_paise: number; paid_on: string | null; paid_method: string | null; paid_ref: string | null; paid_at: number | null }
+interface LineRow { id: string; staff_id: string; staff_name: string; staff_role: string; pay_type: string; rate_paise: number; days_in_month: number; present: number; half: number; absent: number; leave: number; unmarked: number; paid_units2: number; gross_paise: number; bonus_paise: number; advance_paise: number; deduction_paise: number; net_paise: number; shortfall_paise: number; paid_on: string | null; paid_method: string | null; paid_ref: string | null; paid_at: number | null; ledger_txn_id: string | null }
 const toLine = (r: LineRow): Line => ({
   id: r.id, staffId: r.staff_id, staffName: r.staff_name, staffRole: r.staff_role, payType: r.pay_type, ratePaise: r.rate_paise, daysInMonth: r.days_in_month,
   present: r.present, half: r.half, absent: r.absent, leave: r.leave, unmarked: r.unmarked, paidDays: r.paid_units2 / 2,
   grossPaise: r.gross_paise, bonusPaise: r.bonus_paise, advancePaise: r.advance_paise, deductionPaise: r.deduction_paise, netPaise: r.net_paise, shortfallPaise: r.shortfall_paise,
-  paidOn: r.paid_on, paidMethod: r.paid_method, paidRef: r.paid_ref, paidAt: r.paid_at,
+  paidOn: r.paid_on, paidMethod: r.paid_method, paidRef: r.paid_ref, paidAt: r.paid_at, ledgerTxnId: r.ledger_txn_id,
 });
 const storedLines = (runId: string): Line[] => many<LineRow>('SELECT * FROM payroll_lines WHERE run_id = ? AND deleted_at IS NULL ORDER BY staff_name COLLATE NOCASE', runId).map(toLine);
 
@@ -443,7 +446,8 @@ function lineOr404(ownerId: string, month: string, lineId: string): LineRow {
   return r;
 }
 
-export function markPaid(ownerId: string, actor: Actor, month: string, lineId: string, body: unknown): Line {
+/** The salary line as it now stands, plus what happened in the books: `ledger` is null when the owner has no cash/bank account yet (nothing was posted). */
+export function markPaid(ownerId: string, actor: Actor, month: string, lineId: string, body: unknown): Line & { ledger: LedgerRef | null } {
   checkMonth(month);
   const l = lineOr404(ownerId, month, lineId);
   const v = new Validator(body);
@@ -452,17 +456,25 @@ export function markPaid(ownerId: string, actor: Actor, month: string, lineId: s
   v.done();
   if (l.paid_on) throw conflict('ALREADY_PAID', 'This salary is already marked paid');
   const t = now();
-  run('UPDATE payroll_lines SET paid_on = ?, paid_method = ?, paid_ref = ?, paid_at = ?, paid_by = ?, updated_at = ?, updated_by = ? WHERE id = ?', paidOn, method!, ref ?? null, t, actor.id, t, actor.id, lineId);
-  audit(actor, 'payroll.pay', 'payroll_lines', lineId, { month, staffId: l.staff_id, netPaise: l.net_paise, method, paidOn }, ownerId);
-  return toLine(lineOr404(ownerId, month, lineId));
+  // One transaction: if the books refuse (signed-off month: 409 PERIOD_LOCKED) the salary stays unpaid.
+  const ledger = tx(() => {
+    const posted = postToLedger(ownerId, actor, { date: paidOn, amountPaise: -l.net_paise, description: `Salary ${month} ${l.staff_name}`, categoryCode: 'salaries', method: method!, reference: ref });
+    run('UPDATE payroll_lines SET paid_on = ?, paid_method = ?, paid_ref = ?, paid_at = ?, paid_by = ?, ledger_txn_id = ?, updated_at = ?, updated_by = ? WHERE id = ?', paidOn, method!, ref ?? null, t, actor.id, posted?.transactionId ?? null, t, actor.id, lineId);
+    return posted;
+  });
+  audit(actor, 'payroll.pay', 'payroll_lines', lineId, { month, staffId: l.staff_id, netPaise: l.net_paise, method, paidOn, ledgerTxnId: ledger?.transactionId ?? null }, ownerId);
+  return { ...toLine(lineOr404(ownerId, month, lineId)), ledger };
 }
 
 export function unmarkPaid(ownerId: string, actor: Actor, month: string, lineId: string): Line {
   checkMonth(month);
   const l = lineOr404(ownerId, month, lineId);
   if (!l.paid_on) throw conflict('NOT_PAID', 'This salary is not marked paid');
-  run('UPDATE payroll_lines SET paid_on = NULL, paid_method = NULL, paid_ref = NULL, paid_at = NULL, paid_by = NULL, updated_at = ?, updated_by = ? WHERE id = ?', now(), actor.id, lineId);
-  audit(actor, 'payroll.unpay', 'payroll_lines', lineId, { month, staffId: l.staff_id, was: { paidOn: l.paid_on, method: l.paid_method } }, ownerId);
+  tx(() => {
+    removeFromLedger(ownerId, actor, l.ledger_txn_id); // 409 PERIOD_LOCKED if that month is signed off
+    run('UPDATE payroll_lines SET paid_on = NULL, paid_method = NULL, paid_ref = NULL, paid_at = NULL, paid_by = NULL, ledger_txn_id = NULL, updated_at = ?, updated_by = ? WHERE id = ?', now(), actor.id, lineId);
+  });
+  audit(actor, 'payroll.unpay', 'payroll_lines', lineId, { month, staffId: l.staff_id, was: { paidOn: l.paid_on, method: l.paid_method, ledgerTxnId: l.ledger_txn_id } }, ownerId);
   return toLine(lineOr404(ownerId, month, lineId));
 }
 

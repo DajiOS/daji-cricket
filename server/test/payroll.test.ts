@@ -153,3 +153,74 @@ test('payslip carries attendance, adjustments and payment; another owner gets 40
   await h.post(`${P}/runs/${m}/finalise`, {}, owner);
   assert.equal((await h.get(`${P}/payslip?month=${m}&staffId=${id}`, owner)).body.status, 'final');
 });
+
+// ------------------------------------------------------------------ ledger posting
+
+const ACCT = '/api/accounting';
+async function bank(name = 'Main bank', kind = 'bank', token = owner) {
+  const r = await h.post(`${ACCT}/accounts`, { kind, name }, token); assert.equal(r.status, 201, JSON.stringify(r.body)); return r.body.id as string;
+}
+async function finalLine(ratePaise = 60000) {
+  const m = prevMonth();
+  const id = await person('Ravi', 'daily', ratePaise);
+  await h.put(`${ACCT}/payroll/attendance`, { entries: [{ staffId: id, date: `${m}-01`, status: 'present' }, { staffId: id, date: `${m}-02`, status: 'present' }] }, owner);
+  const fin = await h.post(`${P}/runs/${m}/finalise`, {}, owner);
+  assert.equal(fin.status, 200, JSON.stringify(fin.body));
+  const lineId = (await h.get(`${P}/runs/${m}`, owner)).body.lines[0].id as string;
+  return { m, lineId };
+}
+const txns = async () => (await h.get(`${ACCT}/transactions?limit=50`, owner)).body.items as any[];
+
+test('marking a salary paid posts a withdrawal in Salaries; unmarking removes it; paying again does not double post', async () => {
+  const acc = await bank();
+  const { m, lineId } = await finalLine();
+  const pay = await h.post(`${P}/runs/${m}/lines/${lineId}/pay`, { paidOn: `${m}-20`, method: 'upi', reference: 'UTR9' }, owner);
+  assert.equal(pay.status, 200, JSON.stringify(pay.body));
+  assert.equal(pay.body.netPaise, 120000);
+  assert.equal(pay.body.ledger.accountId, acc);
+  assert.equal(pay.body.ledgerTxnId, pay.body.ledger.transactionId);
+  let t = await txns();
+  assert.equal(t.length, 1);
+  assert.equal(t[0].amountPaise, -120000); assert.equal(t[0].date, `${m}-20`); assert.equal(t[0].description, `Salary ${m} Ravi`);
+  assert.equal(t[0].categoryName, 'Salaries & wages'); assert.equal(t[0].accountId, acc);
+  assert.equal((await h.post(`${P}/runs/${m}/lines/${lineId}/pay`, { method: 'upi', reference: 'x' }, owner)).status, 409);
+  assert.equal((await txns()).length, 1, 'a refused second payment posts nothing');
+  const un = await h.del(`${P}/runs/${m}/lines/${lineId}/pay`, owner);
+  assert.equal(un.status, 200); assert.equal(un.body.ledgerTxnId, null);
+  assert.equal((await txns()).length, 0);
+  const again = await h.post(`${P}/runs/${m}/lines/${lineId}/pay`, { paidOn: `${m}-21`, method: 'bank', reference: 'UTR10' }, owner);
+  assert.equal(again.status, 200);
+  t = await txns(); assert.equal(t.length, 1); assert.equal(t[0].date, `${m}-21`);
+});
+
+test('salary payment picks the cash account for cash, a bank account otherwise, and skips quietly with no account', async () => {
+  const { m, lineId } = await finalLine();
+  const none = await h.post(`${P}/runs/${m}/lines/${lineId}/pay`, { method: 'cash' }, owner);
+  assert.equal(none.status, 200); assert.equal(none.body.ledger, null); assert.ok(none.body.paidOn);
+  assert.equal((await txns()).length, 0);
+  assert.equal((await h.del(`${P}/runs/${m}/lines/${lineId}/pay`, owner)).status, 200, 'unmarking a payment that never posted is fine');
+  const b = await bank('Bank', 'bank'), c = await bank('Till', 'cash');
+  const cash = await h.post(`${P}/runs/${m}/lines/${lineId}/pay`, { paidOn: `${m}-20`, method: 'cash' }, owner);
+  assert.equal(cash.body.ledger.accountId, c);
+  await h.del(`${P}/runs/${m}/lines/${lineId}/pay`, owner);
+  const upi = await h.post(`${P}/runs/${m}/lines/${lineId}/pay`, { paidOn: `${m}-20`, method: 'upi', reference: 'U1' }, owner);
+  assert.equal(upi.body.ledger.accountId, b);
+});
+
+test('a signed-off month refuses both the posting and the reversal with 409, and the salary state is unchanged', async () => {
+  await bank();
+  const { m, lineId } = await finalLine();
+  const so = await h.post(`${ACCT}/signoffs`, { month: m }, owner);
+  assert.equal(so.status, 201, JSON.stringify(so.body));
+  const blocked = await h.post(`${P}/runs/${m}/lines/${lineId}/pay`, { paidOn: `${m}-20`, method: 'upi', reference: 'U2' }, owner);
+  assert.equal(blocked.status, 409); assert.equal(blocked.body.error.code, 'PERIOD_LOCKED');
+  assert.equal((await h.get(`${P}/runs/${m}`, owner)).body.lines[0].paidOn, null, 'not marked paid');
+  assert.equal((await txns()).length, 0);
+  await h.post(`${ACCT}/signoffs/reopen`, { month: m, reason: 'Pay the salary' }, owner);
+  assert.equal((await h.post(`${P}/runs/${m}/lines/${lineId}/pay`, { paidOn: `${m}-20`, method: 'upi', reference: 'U2' }, owner)).status, 200);
+  assert.equal((await h.post(`${ACCT}/signoffs`, { month: m }, owner)).status, 201);
+  const undo = await h.del(`${P}/runs/${m}/lines/${lineId}/pay`, owner);
+  assert.equal(undo.status, 409); assert.equal(undo.body.error.code, 'PERIOD_LOCKED');
+  assert.ok((await h.get(`${P}/runs/${m}`, owner)).body.lines[0].paidOn, 'still paid');
+  assert.equal((await txns()).length, 1);
+});
