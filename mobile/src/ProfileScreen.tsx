@@ -13,6 +13,7 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const [name, setName] = useState(user.name); const [email, setEmail] = useState(user.email ?? ''); const [phone, setPhone] = useState(user.phone ?? '');
   const [biz, setBiz] = useState(user.businessName ?? ''); const [upi, setUpi] = useState(user.upiId ?? '');
   const [cur, setCur] = useState(''); const [nw, setNw] = useState('');
+  const [delOpen, setDelOpen] = useState(false); const [delPw, setDelPw] = useState(''); const [delWord, setDelWord] = useState('');
   const [err, setErr] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
   const owner = user.role === 'owner';
 
@@ -31,6 +32,11 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const pw = async () => {
     setErr(''); setNote('');
     try { await api('/api/me/password', { method: 'POST', body: { currentPassword: cur, newPassword: nw } }); setCur(''); setNw(''); setNote('Password changed.'); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
+  };
+
+  const del = async () => {
+    setErr(''); setNote('');
+    try { await api('/api/me/delete', { method: 'POST', body: { confirm: delWord.trim(), ...(delPw ? { password: delPw } : {}) } }); onSignOut(); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
   };
 
   return (
@@ -54,6 +60,15 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
       <Field label="Current password" value={cur} onChangeText={setCur} secureTextEntry />
       <Field label="New password" value={nw} onChangeText={setNw} secureTextEntry />
       <Btn kind="outline" label="Change password" onPress={pw} disabled={!cur || !nw} />
+      {user.role === 'customer' && <>
+        <Section>Delete my account</Section>
+        {!delOpen ? <Btn kind="ghost" label="Delete my account…" onPress={() => setDelOpen(true)} /> : <>
+          <Text style={s.muted}>This removes your name, email, mobile number, picture and sign-in. Past bookings stay in the ground's records without your details. It cannot be undone. Cancel upcoming bookings first.</Text>
+          <Field label="Password (if you have one)" value={delPw} onChangeText={setDelPw} secureTextEntry />
+          <Field label="Type DELETE to confirm" value={delWord} onChangeText={setDelWord} autoCapitalize="characters" />
+          <Btn kind="outline" label="Delete my account for good" onPress={del} disabled={delWord.trim() !== 'DELETE'} />
+        </>}
+      </>}
     </ScrollView>
   );
 }
