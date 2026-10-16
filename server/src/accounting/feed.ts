@@ -54,7 +54,7 @@ export const FEED_SYNC_HOURS = 4;
 const syncing = new Set<string>();
 
 export interface FeedProvider {
-  id: 'yodlee' | 'demo';
+  id: 'yodlee' | 'demo' | 'setu' | 'finvu';
   /** Transactions on or after `since` (YYYY-MM-DD) for the provider's own account id. */
   fetch(ownerId: string, providerRef: string, since: string): Promise<StatementRow[]>;
   /** What the bank says the account's balance is now, in paise (positive for money held, as a card or loan owes it: the amount owed). */
@@ -209,6 +209,26 @@ export function linkAccount(cfg: Config, ownerId: string, actor: Actor, body: un
 const cell = (v: string): string => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 const csv = (rows: StatementRow[]): Buffer => Buffer.from(['Date,Description,Reference,Amount,Balance', ...rows.map((r) => [r.date, r.description, r.reference ?? '', (r.amountPaise / 100).toFixed(2), r.balancePaise === null ? '' : (r.balancePaise / 100).toFixed(2)].map(cell).join(','))].join('\r\n') + '\r\n');
 
+/** Loads rows a provider sent: a line the bank sent before is never added twice, and a line uploaded from a statement earlier (same amount, within a day, no bank id yet) takes the bank's id instead of being doubled. */
+export function ingestFeedRows(ownerId: string, actor: Actor, accountId: string, providerId: string, rows: StatementRow[]): { res: ImportResult; adopted: number; fresh: StatementRow[] } {
+  const a = { id: accountId };
+  let adopted = 0; const fresh: StatementRow[] = [];
+  for (const r of rows) {
+    if (providerId === 'demo' || !r.reference) { fresh.push(r); continue; }
+    if (one('SELECT 1 FROM acct_transactions WHERE account_id = ? AND (ext_id = ? OR reference = ?)', a.id, r.reference, r.reference)) continue;
+    const m = one<{ id: string }>(`SELECT id FROM acct_transactions WHERE account_id = ? AND ext_id IS NULL AND deleted_at IS NULL AND amount_paise = ? AND ABS(julianday(txn_date) - julianday(?)) <= 1
+      ORDER BY ABS(julianday(txn_date) - julianday(?)), seq LIMIT 1`, a.id, r.amountPaise, r.date, r.date);
+    if (m) { run('UPDATE acct_transactions SET ext_id = ? WHERE id = ?', r.reference, m.id); adopted++; continue; }
+    fresh.push(r);
+  }
+  const buf = csv(fresh);
+  const none = { importId: null, dryRun: false, filename: '', rowsTotal: 0, rowsNew: 0, rowsDuplicate: 0, rowsSkipped: 0, periodFrom: null, periodTo: null, categorisedByRules: 0, warnings: [], skipped: [], columns: {}, sample: [], lockedMonthRows: 0, reviewRequired: false, preview: [] } as unknown as ImportResult; // nothing new to load
+  const dry = fresh.length === 0 ? none : importStatement(ownerId, actor, a.id, `feed-${providerId}-${istDate(now())}.csv`, buf, true);
+  const res = dry.rowsNew === 0 ? dry : importStatement(ownerId, actor, a.id, `feed-${providerId}-${istDate(now())}-${now()}.csv`, buf, false);
+  if (providerId !== 'demo' && res.importId) run('UPDATE acct_transactions SET ext_id = reference WHERE import_id = ? AND ext_id IS NULL AND reference IS NOT NULL', res.importId);
+  return { res, adopted, fresh };
+}
+
 /** Pulls the latest transactions for one linked account and loads them through the normal import. */
 export async function syncAccount(cfg: Config, ownerId: string, actor: Actor, accountId: string, f: Fetcher = fetch, trigger: 'manual' | 'schedule' | 'webhook' = 'manual'): Promise<ImportResult & { fetched: number; adopted: number }> {
   const p = providerFor(cfg, f);
@@ -227,21 +247,7 @@ export async function syncAccount(cfg: Config, ownerId: string, actor: Actor, ac
   const finish = (ok: boolean, o: { fetched?: number; rowsNew?: number; rowsDuplicate?: number; matched?: number }, msg: string) => run('UPDATE acct_feed_log SET finished_at = ?, ok = ?, fetched = ?, new_rows = ?, duplicates = ?, matched = ?, message = ? WHERE id = ?', now(), ok ? 1 : 0, o.fetched ?? 0, o.rowsNew ?? 0, o.rowsDuplicate ?? 0, o.matched ?? 0, msg.slice(0, 300), logId);
   try {
     const rows = await p.fetch(ownerId, ref.slice(p.id.length + 1), since);
-    // A line the bank sent before is never added twice. A line that was uploaded from a statement earlier (same amount, within a day, no bank id yet) takes the bank's id instead of being doubled.
-    let adopted = 0; const fresh: StatementRow[] = [];
-    for (const r of rows) {
-      if (p.id !== 'yodlee' || !r.reference) { fresh.push(r); continue; }
-      if (one('SELECT 1 FROM acct_transactions WHERE account_id = ? AND (ext_id = ? OR reference = ?)', a.id, r.reference, r.reference)) continue;
-      const m = one<{ id: string }>(`SELECT id FROM acct_transactions WHERE account_id = ? AND ext_id IS NULL AND deleted_at IS NULL AND amount_paise = ? AND ABS(julianday(txn_date) - julianday(?)) <= 1
-        ORDER BY ABS(julianday(txn_date) - julianday(?)), seq LIMIT 1`, a.id, r.amountPaise, r.date, r.date);
-      if (m) { run('UPDATE acct_transactions SET ext_id = ? WHERE id = ?', r.reference, m.id); adopted++; continue; }
-      fresh.push(r);
-    }
-    const buf = csv(fresh);
-    const none = { importId: null, dryRun: false, filename: '', rowsTotal: 0, rowsNew: 0, rowsDuplicate: 0, rowsSkipped: 0, periodFrom: null, periodTo: null, categorisedByRules: 0, warnings: [], skipped: [], columns: {}, sample: [], lockedMonthRows: 0, reviewRequired: false, preview: [] } as unknown as ImportResult; // nothing new to load
-    const dry = fresh.length === 0 ? none : importStatement(ownerId, actor, a.id, `feed-${p.id}-${istDate(now())}.csv`, buf, true);
-    const res = dry.rowsNew === 0 ? dry : importStatement(ownerId, actor, a.id, `feed-${p.id}-${istDate(now())}-${now()}.csv`, buf, false);
-    if (p.id === 'yodlee' && res.importId) run('UPDATE acct_transactions SET ext_id = reference WHERE import_id = ? AND ext_id IS NULL AND reference IS NOT NULL', res.importId);
+    const { res, adopted, fresh } = ingestFeedRows(ownerId, actor, a.id, p.id, rows);
     const msg = `${res.rowsNew} new, ${rows.length - fresh.length - adopted + res.rowsDuplicate} already in the books${adopted ? `, ${adopted} matched to statement lines` : ''}`;
     mark(true, msg);
     try { // the bank's own balance, to show beside the books' balance; a failure here never fails the sync

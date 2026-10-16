@@ -5,6 +5,7 @@ import { Field, Chip, ErrorBox, Loading, useToast, Icon } from '../../ui';
 import { Section, Note, Grid, Money, useShared } from './kit';
 import { AccountDialog } from './dialogs';
 import { FeedPanel } from './Feed';
+import { AccountAggregator } from './AccountAggregator';
 
 const TAG: Record<string, [string, string]> = { new: ['good', 'New'], duplicate: ['mute', 'Already have'], locked: ['warn', 'Month closed'] };
 let waiting: File | null = null; // a statement chosen before any account existed
@@ -52,6 +53,7 @@ export function Importer() {
   return (
     <div className="stack" style={{ marginTop: 0 }}>
       <FeedPanel onAccountAdded={accountAdded} />
+      <AccountAggregator />
       <Section title="Load a bank statement">
         <Note>For banks with no bank feed: download the statement as PDF, Excel or CSV and drop it here. It is read straight away and checked against the balance column, and you see a preview first. Loading the same lines twice is safe: they are recognised and skipped.</Note>
         <ErrorBox msg={sh.error} />
