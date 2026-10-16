@@ -6,6 +6,7 @@ import { HttpError, conflict, notFound } from '../errors.ts';
 import { newId } from '../ids.ts';
 import { Validator } from '../input.ts';
 import { accountOr404, assertOpen, fingerprint } from './store.ts';
+import { assertAccountActive, assertCategoryActive, effName } from './catprefs.ts';
 import { decodeText, parseCsv, MAX_CSV_BYTES, MAX_CSV_ROWS } from './csv.ts';
 import { readXlsx } from './xlsx.ts';
 import { detectDateOrder, parseAmount, parseDate, excelSerialToDate } from './parse.ts';
@@ -136,7 +137,7 @@ interface RuleRow { id: string; name: string | null; priority: number; field: st
 export interface RuleOut { id: string; name: string | null; priority: number; field: string; matchType: string; pattern: string; direction: string; minPaise: number | null; maxPaise: number | null; categoryId: string; categoryName: string; active: boolean }
 
 export function listRules(ownerId: string): RuleOut[] {
-  return many<RuleRow & { cname: string }>(`SELECT r.*, c.name cname FROM acct_rules r JOIN acct_categories c ON c.id = r.category_id WHERE r.owner_id = ? AND r.deleted_at IS NULL ORDER BY r.priority, r.created_at`, ownerId)
+  return many<RuleRow & { cname: string }>(`SELECT r.*, ${effName('c', 'r.owner_id')} cname FROM acct_rules r JOIN acct_categories c ON c.id = r.category_id WHERE r.owner_id = ? AND r.deleted_at IS NULL ORDER BY r.priority, r.created_at`, ownerId)
     .map((r) => ({ id: r.id, name: r.name, priority: r.priority, field: r.field, matchType: r.match_type, pattern: r.pattern, direction: r.direction, minPaise: r.min_paise, maxPaise: r.max_paise, categoryId: r.category_id, categoryName: r.cname, active: !!r.active }));
 }
 
@@ -161,6 +162,7 @@ function ruleInput(ownerId: string, body: unknown, partial: boolean) {
   if (o.categoryId) {
     const c = one<{ kind: string }>('SELECT kind FROM acct_categories WHERE id = ? AND (owner_id = ? OR owner_id IS NULL) AND deleted_at IS NULL', o.categoryId, ownerId);
     if (!c) throw new HttpError(400, 'VALIDATION_FAILED', 'No such category', { fields: [{ field: 'categoryId', message: 'No such category' }] });
+    assertCategoryActive(ownerId, o.categoryId);
   }
   return o;
 }
@@ -208,7 +210,7 @@ function matches(r: RuleRow, t: Candidate): boolean {
     default: return false;
   }
 }
-const activeRules = (ownerId: string): RuleRow[] => many<RuleRow>('SELECT * FROM acct_rules WHERE owner_id = ? AND active = 1 AND deleted_at IS NULL ORDER BY priority, created_at', ownerId);
+const activeRules = (ownerId: string): RuleRow[] => many<RuleRow>(`SELECT * FROM acct_rules r WHERE r.owner_id = ? AND r.active = 1 AND r.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM acct_category_prefs p WHERE p.owner_id = r.owner_id AND p.category_id = r.category_id AND p.active = 0) ORDER BY r.priority, r.created_at`, ownerId);
 const firstRule = (rules: RuleRow[], t: Candidate): RuleRow | undefined => rules.find((r) => matches(r, t));
 
 /** Applies the rules to transactions that have no category yet. Never overrides a category a person chose. */
@@ -242,6 +244,7 @@ export interface ImportResult { importId: string | null; dryRun: boolean; filena
  */
 export function importStatement(ownerId: string, actor: Actor, accountId: string, filename: string, buf: Buffer, dryRun: boolean, pre?: ParsedStatement): ImportResult {
   accountOr404(ownerId, accountId);
+  assertAccountActive(accountId);
   const parsed = pre ?? parseStatement(filename || 'statement', buf);
   const sha = createHash('sha256').update(buf).digest('hex');
   if (!dryRun && one('SELECT 1 FROM acct_imports WHERE owner_id = ? AND account_id = ? AND sha256 = ? AND undone_at IS NULL', ownerId, accountId, sha))

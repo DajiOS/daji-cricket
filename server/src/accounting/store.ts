@@ -8,6 +8,7 @@ import { Validator } from '../input.ts';
 import { addDays, istDate, monthRange } from '../time.ts';
 import { directory, isBankCode, journalAccounts } from './chart.ts';
 import { categoryId } from './schema.ts';
+import { assertAccountActive, assertCategoryActive, effName } from './catprefs.ts';
 import { profitAndLoss } from './statements.ts';
 
 // Everything an owner can type into the books: bank and cash accounts, individual transactions, categories, journal
@@ -53,20 +54,20 @@ export function updateAcctSettings(ownerId: string, actor: Actor, body: unknown)
 
 export interface AcctAccountOut {
   id: string; kind: 'bank' | 'cash'; name: string; bankName: string | null; last4: string | null; source: string;
-  openingPaise: number; openingDate: string | null; balancePaise: number; transactions: number; uncategorised: number; lastTransactionDate: string | null;
+  openingPaise: number; openingDate: string | null; balancePaise: number; transactions: number; uncategorised: number; lastTransactionDate: string | null; active: boolean;
 }
-interface AccountRow { id: string; kind: 'bank' | 'cash'; name: string; bank_name: string | null; last4: string | null; source: string; opening_paise: number; opening_date: string | null; n: number; net: number; unc: number; last: string | null }
+interface AccountRow { active: number; id: string; kind: 'bank' | 'cash'; name: string; bank_name: string | null; last4: string | null; source: string; opening_paise: number; opening_date: string | null; n: number; net: number; unc: number; last: string | null }
 
 export function listAccounts(ownerId: string): AcctAccountOut[] {
   return many<AccountRow>(
-    `SELECT a.id, a.kind, a.name, a.bank_name, a.last4, a.source, a.opening_paise, a.opening_date,
+    `SELECT a.active, a.id, a.kind, a.name, a.bank_name, a.last4, a.source, a.opening_paise, a.opening_date,
        (SELECT COUNT(*) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL) n,
        (SELECT COALESCE(SUM(t.amount_paise), 0) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL) net,
        (SELECT COUNT(*) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL AND t.category_id IS NULL) unc,
        (SELECT MAX(t.txn_date) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL) last
      FROM acct_accounts a WHERE a.owner_id = ? AND a.deleted_at IS NULL ORDER BY a.created_at, a.name`, ownerId)
     .map((r) => ({ id: r.id, kind: r.kind, name: r.name, bankName: r.bank_name, last4: r.last4, source: r.source, openingPaise: r.opening_paise, openingDate: r.opening_date,
-      balancePaise: r.opening_paise + r.net, transactions: r.n, uncategorised: r.unc, lastTransactionDate: r.last }));
+      balancePaise: r.opening_paise + r.net, transactions: r.n, uncategorised: r.unc, lastTransactionDate: r.last, active: !!r.active }));
 }
 
 export function accountOr404(ownerId: string, id: string): AccountRow & { owner_id: string } {
@@ -129,12 +130,13 @@ export function deleteAccount(ownerId: string, id: string, actor: Actor): void {
 
 // ------------------------------------------------------------------ categories
 
-export interface CategoryOut { id: string; code: string; name: string; kind: string; group: string; builtin: boolean }
+export interface CategoryOut { id: string; code: string; name: string; kind: string; group: string; builtin: boolean; active: boolean }
 
 export function listCategories(ownerId: string): CategoryOut[] {
-  return many<{ id: string; owner_id: string | null; code: string; name: string; kind: string; group_name: string }>(
-    'SELECT id, owner_id, code, name, kind, group_name FROM acct_categories WHERE (owner_id IS NULL OR owner_id = ?) AND deleted_at IS NULL ORDER BY kind, group_name, sort, name', ownerId)
-    .map((c) => ({ id: c.id, code: c.code, name: c.name, kind: c.kind, group: c.group_name, builtin: c.owner_id === null }));
+  return many<{ id: string; owner_id: string | null; code: string; name: string; kind: string; group_name: string; active: number }>(
+    `SELECT c.id, c.owner_id, c.code, ${effName('c', '?')} name, c.kind, c.group_name, COALESCE((SELECT p.active FROM acct_category_prefs p WHERE p.owner_id = ? AND p.category_id = c.id), 1) active
+     FROM acct_categories c WHERE (c.owner_id IS NULL OR c.owner_id = ?) AND c.deleted_at IS NULL ORDER BY c.kind, c.group_name, c.sort, name`, ownerId, ownerId, ownerId)
+    .map((c) => ({ id: c.id, code: c.code, name: c.name, kind: c.kind, group: c.group_name, builtin: c.owner_id === null, active: !!c.active }));
 }
 
 export function createCategory(ownerId: string, actor: Actor, body: unknown): CategoryOut {
@@ -158,6 +160,7 @@ export function createCategory(ownerId: string, actor: Actor, body: unknown): Ca
 function categoryOr400(ownerId: string, id: string): { id: string; code: string; kind: string } {
   const c = one<{ id: string; code: string; kind: string }>('SELECT id, code, kind FROM acct_categories WHERE id = ? AND (owner_id IS NULL OR owner_id = ?) AND deleted_at IS NULL', id, ownerId);
   if (!c) throw new HttpError(400, 'VALIDATION_FAILED', 'No such category', { fields: [{ field: 'categoryId', message: 'No such category' }] });
+  assertCategoryActive(ownerId, id);
   return c;
 }
 
@@ -175,7 +178,7 @@ const toTxn = (r: TxnRow): TxnOut => ({ id: r.id, accountId: r.account_id, accou
   source: r.source, categoryId: r.category_id, categoryName: r.cat_name, categoryKind: r.cat_kind, categoryBy: r.category_by, bookingId: r.booking_id, paymentId: r.payment_id, note: r.note, createdAt: r.created_at });
 
 const TXN_SELECT = `SELECT t.id, t.account_id, a.name account_name, t.txn_date, t.amount_paise, t.balance_paise, t.description, t.counterparty, t.reference, t.source, t.category_id,
-  c.name cat_name, c.kind cat_kind, t.category_by, t.booking_id, t.payment_id, t.note, t.created_at
+  ${effName('c', 't.owner_id')} cat_name, c.kind cat_kind, t.category_by, t.booking_id, t.payment_id, t.note, t.created_at
   FROM acct_transactions t JOIN acct_accounts a ON a.id = t.account_id AND a.deleted_at IS NULL LEFT JOIN acct_categories c ON c.id = t.category_id`;
 
 export interface TxnFilter { accountId?: string; from?: string; to?: string; categorised?: boolean; categoryId?: string; direction?: 'in' | 'out'; q?: string }
@@ -245,6 +248,7 @@ export function addTransaction(ownerId: string, actor: Actor, body: unknown): Tx
   if (date && date > addDays(today(), 1)) v.fail('date', 'Cannot be in the future');
   v.done();
   accountOr404(ownerId, accountId!);
+  assertAccountActive(accountId!);
   if (catId) categoryOr400(ownerId, catId);
   assertOpen(ownerId, date!);
   const id = newId('txn'), t = now();

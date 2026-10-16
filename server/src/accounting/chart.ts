@@ -1,4 +1,5 @@
 import { many } from '../db.ts';
+import { INACTIVE_TAG } from './catprefs.ts';
 
 // The chart of accounts. Everything the books know about is one of these. Money is integer paise.
 // Normal balance: assets and expenses are debit accounts; liabilities, equity and income are credit accounts.
@@ -16,6 +17,8 @@ export interface AcctInfo {
   sort: number;
   /** Cannot be used on a manual journal: these come from real bank data, bookings, payments or credit, and a typed-in entry would break the tie between the books and those records. */
   derivedOnly?: boolean;
+  /** Switched off in the chart of accounts: still on reports for the dates it has data, tagged, but not offered for new entries. */
+  inactive?: boolean;
 }
 
 const A = (code: string, name: string, group: string, sort: number, extra: Partial<AcctInfo> = {}): AcctInfo => ({ code, name, type: 'asset', group, sort, ...extra });
@@ -52,18 +55,20 @@ export const SYSTEM_ACCOUNTS: AcctInfo[] = [
 
 const SYSTEM = new Map(SYSTEM_ACCOUNTS.map((a) => [a.code, a]));
 
-interface CatRow { code: string; name: string; kind: string; group_name: string; sort: number }
+interface CatRow { code: string; name: string; kind: string; group_name: string; sort: number; active: number }
 
 /** Every account an owner's books can contain: the fixed ones, one per category, and one per bank/cash account. */
 export function directory(ownerId: string): Map<string, AcctInfo> {
   const out = new Map(SYSTEM);
-  const cats = many<CatRow>('SELECT code, name, kind, group_name, sort FROM acct_categories WHERE (owner_id IS NULL OR owner_id = ?) AND deleted_at IS NULL', ownerId);
+  const cats = many<CatRow>(`SELECT c.code, COALESCE(p.name, c.name) name, c.kind, c.group_name, c.sort, COALESCE(p.active, 1) active
+    FROM acct_categories c LEFT JOIN acct_category_prefs p ON p.category_id = c.id AND p.owner_id = ? WHERE (c.owner_id IS NULL OR c.owner_id = ?) AND c.deleted_at IS NULL`, ownerId, ownerId);
   for (const c of cats) {
-    if (c.kind === 'income') out.set(`inc:${c.code}`, { code: `inc:${c.code}`, name: c.name, type: 'income', group: c.group_name, sort: c.sort });
-    else if (c.kind === 'expense') out.set(`exp:${c.code}`, { code: `exp:${c.code}`, name: c.name, type: 'expense', group: c.group_name, sort: c.sort });
+    const name = c.active ? c.name : c.name + INACTIVE_TAG, inactive = !c.active;
+    if (c.kind === 'income') out.set(`inc:${c.code}`, { code: `inc:${c.code}`, name, type: 'income', group: c.group_name, sort: c.sort, inactive });
+    else if (c.kind === 'expense') out.set(`exp:${c.code}`, { code: `exp:${c.code}`, name, type: 'expense', group: c.group_name, sort: c.sort, inactive });
   }
-  const accts = many<{ id: string; kind: string; name: string }>('SELECT id, kind, name FROM acct_accounts WHERE owner_id = ? AND deleted_at IS NULL', ownerId);
-  accts.forEach((a, i) => out.set(`bank:${a.id}`, { code: `bank:${a.id}`, name: a.name, type: 'asset', group: 'Cash and bank', sort: i, derivedOnly: true }));
+  const accts = many<{ id: string; kind: string; name: string; active: number }>('SELECT id, kind, name, active FROM acct_accounts WHERE owner_id = ? AND deleted_at IS NULL', ownerId);
+  accts.forEach((a, i) => out.set(`bank:${a.id}`, { code: `bank:${a.id}`, name: a.active ? a.name : a.name + INACTIVE_TAG, type: 'asset', group: 'Cash and bank', sort: i, derivedOnly: true, inactive: !a.active }));
   return out;
 }
 
@@ -71,5 +76,5 @@ export const isBankCode = (code: string): boolean => code.startsWith('bank:');
 
 /** Accounts that can appear on a manual journal entry. */
 export function journalAccounts(ownerId: string): AcctInfo[] {
-  return [...directory(ownerId).values()].filter((a) => !a.derivedOnly).sort((a, b) => a.type.localeCompare(b.type) || a.sort - b.sort || a.name.localeCompare(b.name));
+  return [...directory(ownerId).values()].filter((a) => !a.derivedOnly && !a.inactive).sort((a, b) => a.type.localeCompare(b.type) || a.sort - b.sort || a.name.localeCompare(b.name));
 }

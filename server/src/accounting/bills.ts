@@ -9,6 +9,7 @@ import { newId } from '../ids.ts';
 import { Validator } from '../input.ts';
 import { addDays, istDate } from '../time.ts';
 import { MAX_ATTACHMENT_BYTES, sniff } from './books.ts';
+import { assertCategoryActive, effName } from './catprefs.ts';
 
 // Vendor bills: entered by the team, approved by someone with manage_accounting who did not enter them
 // (the owner may approve their own), then paid. Paying can be tied to a bank transaction already imported.
@@ -160,7 +161,7 @@ export interface BillOut {
   paidDate: string | null; payMethod: string | null; payReference: string | null; transactionId: string | null;
   overdue: boolean; dueInDays: number; fileCount: number;
 }
-const SELECT = `SELECT b.*, v.name vendor_name, v.upi_id vendor_upi, v.phone vendor_phone, c.name category_name, cu.name created_name, du.name decided_name,
+const SELECT = `SELECT b.*, v.name vendor_name, v.upi_id vendor_upi, v.phone vendor_phone, ${effName('c', 'b.owner_id')} category_name, cu.name created_name, du.name decided_name,
     (SELECT COUNT(*) FROM acct_bill_files f WHERE f.bill_id = b.id AND f.deleted_at IS NULL) files
   FROM acct_bills b JOIN acct_vendors v ON v.id = b.vendor_id LEFT JOIN acct_categories c ON c.id = b.category_id
   LEFT JOIN users cu ON cu.id = b.created_by LEFT JOIN users du ON du.id = b.decided_by`;
@@ -253,6 +254,7 @@ function billBody(ownerId: string, raw: unknown) {
   v.done();
   vendorOr404(ownerId, vendorId!);
   if (categoryId && !one("SELECT 1 FROM acct_categories WHERE id = ? AND (owner_id IS NULL OR owner_id = ?) AND deleted_at IS NULL AND kind = 'expense'", categoryId, ownerId)) throw new HttpError(400, 'VALIDATION_FAILED', 'Unknown expense category', { fields: [{ field: 'categoryId', message: 'Unknown expense category' }] });
+  if (categoryId) assertCategoryActive(ownerId, categoryId);
   return { vendorId: vendorId!, billNo: billNo ?? null, billDate: billDate!, dueDate: dueDate!, amount: amount!, categoryId: categoryId ?? null, notes: notes ?? null };
 }
 
