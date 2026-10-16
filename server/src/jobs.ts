@@ -1,7 +1,7 @@
 import { runRecurring } from './accounting/books.ts';
 import { runDepreciation } from './accounting/plus.ts';
 import { runFeedSync } from './accounting/feed.ts';
-import { many, run, tx } from './db.ts';
+import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { audit, SYSTEM } from './audit.ts';
 import { HOUR, MIN } from './time.ts';
@@ -104,12 +104,22 @@ export async function runSweeps(cfg: Config): Promise<SweepResult> {
   return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done };
 }
 
+registerSchema('scheduler-lease-1', `CREATE TABLE scheduler_lease (name TEXT PRIMARY KEY, holder TEXT NOT NULL, until INTEGER NOT NULL);`);
+const instanceId = Math.random().toString(36).slice(2);
+/** Only one server process runs the sweeps and backups at a time: a process takes (or renews) the lease, or skips the round when another holds it. */
+export function takeLease(name: string, ttlMs: number, holder = instanceId): boolean {
+  const t = now();
+  run('INSERT INTO scheduler_lease(name, holder, until) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET holder = excluded.holder, until = excluded.until WHERE scheduler_lease.holder = excluded.holder OR scheduler_lease.until < ?', name, holder, t + ttlMs, t);
+  return one<{ holder: string }>('SELECT holder FROM scheduler_lease WHERE name = ?', name)?.holder === holder;
+}
+
 let timer: ReturnType<typeof setInterval> | null = null;
 export function startScheduler(cfg: Config, onError: (e: unknown) => void = () => {}): void {
   if (timer) return;
   let running = false;
   timer = setInterval(() => {
     if (running) return;
+    if (!takeLease('sweeps', Math.max(120_000, cfg.sweepIntervalSeconds * 3000))) return;
     running = true;
     try { runBackupIfDue(cfg, onError); } catch (e) { onError(e); }
     runSweeps(cfg).catch(onError).finally(() => { running = false; });

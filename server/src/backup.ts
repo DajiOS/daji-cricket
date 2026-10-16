@@ -6,7 +6,8 @@ import { now } from './clock.ts';
 import { audit, SYSTEM, type Actor } from './audit.ts';
 import { istDate, timeOfDay, MIN } from './time.ts';
 import type { Config } from './config.ts';
-import { decryptBytes, encryptBytes } from './vault.ts';
+import { decryptBytes, encryptBytes, keyFingerprint } from './vault.ts';
+import { uploadSnapshot } from './offsite.ts';
 
 // A daily snapshot of everything that would be lost if the server's disk were lost: the database, and the folder of
 // uploaded files (receipts, photos) when there is one. A snapshot is a folder named by its IST date and time:
@@ -31,6 +32,12 @@ export interface BackupInfo {
   integrity: string;
   /** True when BACKUP_PASSPHRASE was set: the files are daji.db.enc and encrypted copies of the uploads, readable only with the passphrase. */
   encrypted?: boolean;
+  /** Fingerprint of FIELD_KEY at backup time (null when no key was set). A restore with a different key cannot read the sealed fields. */
+  keyFingerprint?: string | null;
+  /** Whether the FIELD_KEY running now is the one this backup was made under. */
+  keyMatches?: boolean;
+  /** Result of the copy to the offsite bucket, when one is set up. */
+  offsite?: { at: number; ok: boolean; message: string };
 }
 
 const NAME_RE = /^\d{4}-\d{2}-\d{2}_\d{6}(-\d+)?$/;
@@ -66,7 +73,12 @@ export function listBackups(cfg: Config): BackupInfo[] {
   const out: BackupInfo[] = [];
   for (const name of readdirSync(cfg.backup.dir)) {
     if (!NAME_RE.test(name)) continue;
-    try { out.push({ name, ...(JSON.parse(readFileSync(join(cfg.backup.dir, name, 'manifest.json'), 'utf8')) as Omit<BackupInfo, 'name'>) }); } catch { /* not a finished snapshot */ }
+    try {
+      const info = { name, ...(JSON.parse(readFileSync(join(cfg.backup.dir, name, 'manifest.json'), 'utf8')) as Omit<BackupInfo, 'name'>) } as BackupInfo;
+      try { info.offsite = JSON.parse(readFileSync(join(cfg.backup.dir, name, 'offsite.json'), 'utf8')); } catch { /* not uploaded (yet) */ }
+      info.keyMatches = (info.keyFingerprint ?? null) === keyFingerprint();
+      out.push(info);
+    } catch { /* not a finished snapshot */ }
   }
   return out.sort((a, b) => (a.name < b.name ? 1 : -1));
 }
@@ -95,7 +107,7 @@ export function backupNow(cfg: Config, reason: 'scheduled' | 'manual', actor: Ac
     const dbBytes = statSync(dbFile).size;
     const pass = cfg.backup.passphrase;
     if (pass) { sealTree(work, pass); } // the integrity check above ran on the plain copy; only the encrypted files remain afterwards
-    const info: Omit<BackupInfo, 'name'> = { createdAt: t, date: istDate(t), reason, dbBytes, files, filesBytes, integrity: check.integrity, ...(pass ? { encrypted: true } : {}) };
+    const info: Omit<BackupInfo, 'name'> = { createdAt: t, date: istDate(t), reason, dbBytes, files, filesBytes, integrity: check.integrity, ...(pass ? { encrypted: true } : {}), keyFingerprint: keyFingerprint() };
     writeFileSync(join(work, 'manifest.json'), JSON.stringify(info, null, 2));
     renameSync(work, join(root, name));
     const done: BackupInfo = { name, ...info };
@@ -152,6 +164,10 @@ export function runBackupIfDue(cfg: Config, onError: (e: unknown) => void = () =
   if (listBackups(cfg).some((b) => b.reason === 'scheduled' && b.date === today)) return null;
   if (t - lastTry < 30 * MIN) return null; // a failing disk is retried every half hour, not every minute
   lastTry = t;
-  try { return backupNow(cfg, 'scheduled'); } catch (e) { onError(e); return null; }
+  try {
+    const b = backupNow(cfg, 'scheduled');
+    if (cfg.backup.s3.bucket) setImmediate(() => { uploadSnapshot(cfg, b.name).catch(onError); }); // copied off the server behind the schedule, never blocking it
+    return b;
+  } catch (e) { onError(e); return null; }
 }
 export function resetBackupRetry(): void { lastTry = 0; }
