@@ -60,6 +60,11 @@
       "fallbackToCacheTimeout": 0
     },
     "scheme": "dajicricket",
-    "owner": "akeahms"
+    "owner": "akeahms",
+    "extra": {
+      "eas": {
+        "projectId": "4524510f-b4b7-412f-8025-3f6eec27c847"
+      }
+    }
   }
 }
