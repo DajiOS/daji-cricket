@@ -13,7 +13,7 @@ import { STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { closedDates, setClosed } from '../closures.ts';
 import { integrationStatuses, testIntegration } from '../integrations.ts';
 import { addService, deleteService, listServices, updateService } from '../services.ts';
-import { saveYodleeSettings, testYodlee, viewYodleeSettings } from '../yodleeSettings.ts';
+import { saveYodleeSettings, subscribeYodleeWebhooks, testYodlee, viewYodleeSettings } from '../yodleeSettings.ts';
 import { backupNow, BACKUP_AT, listBackups, nextBackupAt } from '../backup.ts';
 
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
@@ -47,6 +47,7 @@ export function adminRoutes(r: Router): void {
   const SA = { auth: ['super_admin' as const] };
   r.get('/api/admin/yodlee', (c) => ok(viewYodleeSettings(c.cfg)), SA);
   r.put('/api/admin/yodlee', (c) => ok(saveYodleeSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);
+  r.post('/api/admin/yodlee/subscribe', async (c) => { const res = await subscribeYodleeWebhooks(c.cfg); audit({ id: U(c).id, role: U(c).role }, 'yodlee.subscribe', 'yodlee', null, { ok: res.ok }); return ok(res); }, { ...SA, rate: 'auth' });
   r.post('/api/admin/yodlee/test', async (c) => { const res = await testYodlee(c.cfg); audit({ id: U(c).id, role: U(c).role }, 'yodlee.test', 'yodlee', null, { ok: res.ok }); return ok(res); }, { ...SA, rate: 'auth' });
   r.get('/api/admin/integrations', (c) => ok({ items: integrationStatuses(c.cfg) }), SAO);
   r.post('/api/admin/integrations/:id/test', async (c) => ok(await testIntegration(c.cfg, U(c), c.params.id!)), SAO);

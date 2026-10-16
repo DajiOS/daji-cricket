@@ -75,7 +75,8 @@ const FINANCING = new Set(['owner_capital', 'owner_drawings', 'loan']);
 export function cashFlow(ownerId: string, range: DateRange): CashFlow {
   const dir = directory(ownerId);
   const lines = ledgerLines(ownerId, range.to);
-  const cash = (l: { account: string }) => isBankCode(l.account);
+  const owing = new Set([...dir.values()].filter((a) => isBankCode(a.code) && a.type === 'liability').map((a) => a.code)); // credit cards and loans are not cash
+  const cash = (l: { account: string }) => isBankCode(l.account) && !owing.has(l.account);
   const bal = (pred: (d: string) => boolean) => lines.filter((l) => cash(l) && pred(l.date)).reduce((s, l) => s + l.debit - l.credit, 0);
   const opening = bal((d) => d < range.from);
   const closing = bal(() => true);
@@ -83,7 +84,7 @@ export function cashFlow(ownerId: string, range: DateRange): CashFlow {
 
   const rows = many<{ amount: number; kind: string | null; code: string | null; name: string | null }>(
     `SELECT t.amount_paise amount, c.kind, c.code, c.name FROM acct_transactions t
-     JOIN acct_accounts a ON a.id = t.account_id AND a.deleted_at IS NULL
+     JOIN acct_accounts a ON a.id = t.account_id AND a.deleted_at IS NULL AND a.holds = 'bank'
      LEFT JOIN acct_categories c ON c.id = t.category_id
      WHERE t.owner_id = ? AND t.deleted_at IS NULL AND t.txn_date BETWEEN ? AND ?`, ownerId, range.from, range.to);
 

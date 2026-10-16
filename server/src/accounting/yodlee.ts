@@ -2,7 +2,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { many, one } from '../db.ts';
 import { HttpError } from '../errors.ts';
 import type { Config } from '../config.ts';
-import { userToken, yFetch, yodleeConfigured, yodleeLogin } from './feed.ts';
+import { SYSTEM, audit, type Actor } from '../audit.ts';
+import { now } from '../clock.ts';
+import { run } from '../db.ts';
+import { syncAccount, userToken, yFetch, yodleeConfigured, yodleeLogin } from './feed.ts';
 
 // Connecting a bank through Yodlee: register this owner as a Yodlee user, open FastLink (Yodlee's hosted bank-login screen),
 // list the bank accounts the owner connected, and tell the server when Yodlee has fresh data. Pulling the transactions
@@ -140,4 +143,27 @@ export function ownersInWebhook(cfg: Config, body: unknown): string[] {
     for (const o of owners) if (yodleeLogin(cfg, o) === ln) out.add(o);
   }
   return [...out];
+}
+
+// ------------------------------------------------------------------ joining a connected account to the books
+
+export interface AutoLinkResult { linked: { providerId: string; accountId: string; name: string; synced: boolean }[]; needsChoice: string[] }
+
+/** Joins each connected account whose last 4 digits match exactly one unlinked books account of the same kind (bank, card or loan), and starts its first sync.
+ * Anything that matches none or several is left for the person to choose. */
+export async function autoLinkAccounts(cfg: Config, ownerId: string, actor: Actor, f: Fetcher = fetch): Promise<AutoLinkResult> {
+  const out: AutoLinkResult = { linked: [], needsChoice: [] };
+  const holdsOf = { bank: 'bank', creditCard: 'card', loan: 'loan' } as const;
+  for (const pa of await listProviderAccounts(cfg, ownerId, f)) {
+    if (pa.linkedTo) continue;
+    const cands = pa.last4 ? many<{ id: string; name: string }>("SELECT id, name FROM acct_accounts WHERE owner_id = ? AND kind = 'bank' AND holds = ? AND last4 = ? AND provider_ref IS NULL AND deleted_at IS NULL AND active = 1", ownerId, holdsOf[pa.container], pa.last4) : [];
+    if (cands.length !== 1) { out.needsChoice.push(pa.id); continue; }
+    const c = cands[0]!;
+    run("UPDATE acct_accounts SET provider_ref = ?, source = 'yodlee', updated_at = ?, updated_by = ? WHERE id = ?", `yodlee:${pa.id}`, now(), actor.id, c.id);
+    audit(actor, 'feed.autolink', 'acct_account', c.id, { provider: 'yodlee', last4: pa.last4 }, ownerId);
+    let synced = false;
+    try { await syncAccount(cfg, ownerId, SYSTEM, c.id, f, 'manual'); synced = true; } catch { /* the first sync is retried by the schedule */ }
+    out.linked.push({ providerId: pa.id, accountId: c.id, name: c.name, synced });
+  }
+  return out;
 }

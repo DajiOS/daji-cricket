@@ -48,16 +48,16 @@ export function TransferDialog({ accounts, onClose, done }: { accounts: Account[
 export function AccountDialog({ onClose, done }: { onClose: () => void; done: () => void }) {
   const f = useForm({ kind: 'bank', name: '', bankName: '', last4: '', opening: '', openingDate: '' });
   return (
-    <FormModal title="Add a bank account" label="Add account" onClose={onClose} onSubmit={async () => {
+    <FormModal title="Add an account" label="Add account" onClose={onClose} onSubmit={async () => {
       const op = f.v.opening.trim() ? toPaise(f.v.opening) : 0; if (op === null) bad('Enter the opening balance in rupees.');
-      await post('/api/accounting/accounts', { kind: f.v.kind, name: f.v.name.trim(), bankName: f.v.bankName.trim() || undefined, last4: f.v.last4.trim() || undefined, openingPaise: op, openingDate: f.v.openingDate || undefined }); done();
+      await post('/api/accounting/accounts', { kind: f.v.kind === 'cash' ? 'cash' : 'bank', holds: f.v.kind === 'card' || f.v.kind === 'loan' ? f.v.kind : undefined, name: f.v.name.trim(), bankName: f.v.bankName.trim() || undefined, last4: f.v.last4.trim() || undefined, openingPaise: op, openingDate: f.v.openingDate || undefined }); done();
     }}>
       <div className="form-grid">
-        <Field label="Kind"><select className="inp" {...f.bind('kind')}><option value="bank">Bank account</option><option value="cash">Cash in hand</option></select></Field>
+        <Field label="Kind"><select className="inp" {...f.bind('kind')}><option value="bank">Bank account</option><option value="card">Credit card</option><option value="loan">Loan</option><option value="cash">Cash in hand</option></select></Field>
         <Field label="Name"><input className="inp" placeholder="HDFC current account" {...f.bind('name')} /></Field>
         <Field label="Bank (optional)"><input className="inp" placeholder="HDFC Bank" {...f.bind('bankName')} /></Field>
         <Field label="Last 4 digits (optional)"><input className="inp" maxLength={4} placeholder="1234" {...f.bind('last4')} /></Field>
-        <Field label="Opening balance (₹)" hint="What was in the account on the date below."><input className="inp" inputMode="decimal" placeholder="0" {...f.bind('opening')} /></Field>
+        <Field label="Opening balance (₹)" hint={f.v.kind === 'card' || f.v.kind === 'loan' ? 'Enter what is owed as a minus number, for example -25000.' : 'What was in the account on the date below.'}><input className="inp" inputMode="decimal" placeholder="0" {...f.bind('opening')} /></Field>
         <Field label="Opening balance date"><input className="inp" type="date" {...f.bind('openingDate')} /></Field>
       </div>
     </FormModal>

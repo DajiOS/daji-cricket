@@ -22,10 +22,13 @@ npx expo start              # scan the QR code with Expo Go
 ```
 To test on a phone against your own computer, run the server with `DEMO_MODE=1` and put the computer's address (for example `http://192.168.1.20:4000`) in `.env`.
 
+## Expo, builds and store review
+See `docs/APP_REVIEW.md` for the Expo (EAS) setup, the preview-update workflow, what the stores need and the demo login for reviewers.
+
 ## Honest status
 - **Not run on a device or simulator.** The build environment could not install Expo or React Native (the package registry was blocked), so this code was only syntax and logic checked with stand-in type stubs. Expect small fixes on the first run, and run `npx expo install --fix` because the pinned versions may be old.
 - Real Razorpay payment loads Razorpay's checkout page inside a web view and passes the result to the server for signature verification. That is untested; try it with Razorpay test keys first.
-- Store release needs your Apple Developer and Google Play accounts, app icons and screenshots, a privacy policy page, and `eas build`. Apple can also reject apps that are only a web view; the booking, dashboard and Ask AI screens here are native for that reason, the team screens are native too.
+- Store release needs your Apple Developer and Google Play accounts, screenshots and `eas build` (`eas.json` and the privacy and deletion pages are now in the repo). Apple can also reject apps that are only a web view; the booking, dashboard and Ask AI screens here are native for that reason, the team screens are native too.
 - Push notifications are wired (Expo) but need your Expo project id and a physical device to test.
 - The camera and profile-picture picker (`expo-image-picker`) need a real device or simulator with a camera; they could not be run here. The hosted preview replaces the camera with a file chooser.
 - Customers can repeat a booking (daily, weekly, monthly, yearly) and set up auto-debit under Mine. Staff with the right permissions get Academy (attendance, students, monthly report cards) and Matches (ball-by-ball scoring) under More; the owner switches auto-debit on under Booking controls.

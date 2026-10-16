@@ -48,4 +48,9 @@ export async function upload<T = any>(path: string, uri: string, headers: Record
   return data as T;
 }
 /** An image address that needs the sign-in header (task photos). Public pictures (profile) use the plain address. */
-export const authImage = (url: string) => (/^(https?:|data:)/.test(url) ? { uri: url } : { uri: API_URL + url, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+export const authImage = (url: string): { uri: string; headers?: Record<string, string> } => {
+  if (/^(https?:|data:)/.test(url)) return { uri: url };
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return { uri: API_URL + url, headers };
+};

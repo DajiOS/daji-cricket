@@ -1,6 +1,6 @@
 import { deleteCoa, listCoa, patchCoa } from '../accounting/coa.ts';
 import { feedLog, feedStatus, linkAccount, syncAccount } from '../accounting/feed.ts';
-import { disconnectProviderAccount, fastLinkSession, listProviderAccounts, ownersInWebhook, refreshProviderAccount, webhookAuthorised } from '../accounting/yodlee.ts';
+import { autoLinkAccounts, disconnectProviderAccount, fastLinkSession, listProviderAccounts, ownersInWebhook, refreshProviderAccount, webhookAuthorised } from '../accounting/yodlee.ts';
 import { Router, ok, created } from '../http.ts';
 import type { Ctx, Reply } from '../http.ts';
 import { U, page, ownerOrFail } from './helpers.ts';
@@ -252,6 +252,7 @@ export function accountingRoutes(r: Router): void {
     audit(actor(c), 'feed.refresh', 'acct_account', id, { provider: 'yodlee' }, owner);
     return ok({ ok: true });
   }, { ...A, rate: 'auth' });
+  r.post('/api/accounting/feed/yodlee/autolink', async (c) => { canWrite(c); return ok(await autoLinkAccounts(c.cfg, ownerOrFail(c, 'join connected banks'), actor(c))); }, { ...A, rate: 'auth' });
   r.get('/api/accounting/feed/log', (c) => { canRead(c); return ok({ items: feedLog(ownerOrFail(c, 'see the sync record')) }); }, A);
   r.get('/api/accounting/feed/yodlee/accounts', async (c) => { canRead(c); return ok({ accounts: await listProviderAccounts(c.cfg, ownerOrFail(c, 'see connected banks')) }); }, A);
   r.post('/api/accounting/feed/yodlee/disconnect', async (c) => {

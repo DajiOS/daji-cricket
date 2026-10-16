@@ -108,3 +108,26 @@ export async function testYodlee(cfg: Config, f: typeof fetch = fetch): Promise<
     return { ok: false, ms, message: `Yodlee refused the keys (${res.status}${detail ? ': ' + detail : ''}). Check the keys and the API address.` };
   } catch (e) { return { ok: false, message: `Could not use Yodlee: ${(e as Error).message}`.slice(0, 200) }; }
 }
+
+export const WEBHOOK_EVENTS = ['REFRESH', 'DATA_UPDATES', 'AUTO_REFRESH_UPDATES'] as const;
+
+/** Tells Yodlee to call this server's webhook address for each event. A subscription that already exists is updated instead. */
+export async function subscribeYodleeWebhooks(cfg: Config, f: typeof fetch = fetch): Promise<{ ok: boolean; message: string; events: { event: string; ok: boolean; message: string }[] }> {
+  const view = viewYodleeSettings(cfg);
+  if (!yodleeConfigured(cfg)) return { ok: false, message: 'Set up the Yodlee keys first.', events: [] };
+  if (!view.webhookUrl) return { ok: false, message: 'Make the webhook address first.', events: [] };
+  if (!/^https:\/\//i.test(view.webhookUrl)) return { ok: false, message: 'Yodlee only calls https addresses. Set the public address of this server (PUBLIC_URL) to your https domain first.', events: [] };
+  const events: { event: string; ok: boolean; message: string }[] = [];
+  const body = JSON.stringify({ event: { callbackUrl: view.webhookUrl } });
+  for (const ev of WEBHOOK_EVENTS) {
+    try {
+      const path = `/configs/notifications/events/${ev}`, login = cfg.yodlee.adminLoginName || 'daji';
+      let res = await yFetch(cfg, login, path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, f);
+      if (!res.ok && res.status !== 201) res = await yFetch(cfg, login, path, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body }, f);
+      let detail = ''; if (!res.ok) { try { const j = await res.json() as { errorMessage?: string; errorCode?: string }; detail = j.errorMessage || j.errorCode || ''; } catch { /* not JSON */ } }
+      events.push({ event: ev, ok: res.ok, message: res.ok ? 'Subscribed' : `Yodlee said ${res.status}${detail ? ': ' + detail : ''}. Webhooks are only enabled after the Yodlee contract is signed.` });
+    } catch (e) { events.push({ event: ev, ok: false, message: String((e as Error).message).slice(0, 160) }); }
+  }
+  const ok = events.every((e) => e.ok);
+  return { ok, message: ok ? 'Instant updates are on: Yodlee will call this server when a bank has new data.' : events.find((e) => !e.ok)!.message, events };
+}

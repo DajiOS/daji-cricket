@@ -67,8 +67,8 @@ export function directory(ownerId: string): Map<string, AcctInfo> {
     if (c.kind === 'income') out.set(`inc:${c.code}`, { code: `inc:${c.code}`, name, type: 'income', group: c.group_name, sort: c.sort, inactive });
     else if (c.kind === 'expense') out.set(`exp:${c.code}`, { code: `exp:${c.code}`, name, type: 'expense', group: c.group_name, sort: c.sort, inactive });
   }
-  const accts = many<{ id: string; kind: string; name: string; active: number }>('SELECT id, kind, name, active FROM acct_accounts WHERE owner_id = ? AND deleted_at IS NULL', ownerId);
-  accts.forEach((a, i) => out.set(`bank:${a.id}`, { code: `bank:${a.id}`, name: a.active ? a.name : a.name + INACTIVE_TAG, type: 'asset', group: 'Cash and bank', sort: i, derivedOnly: true, inactive: !a.active }));
+  const accts = many<{ id: string; kind: string; name: string; active: number; holds: string }>('SELECT id, kind, name, active, holds FROM acct_accounts WHERE owner_id = ? AND deleted_at IS NULL', ownerId);
+  accts.forEach((a, i) => out.set(`bank:${a.id}`, { code: `bank:${a.id}`, name: a.active ? a.name : a.name + INACTIVE_TAG, type: a.holds === 'bank' ? 'asset' : 'liability', group: a.holds === 'card' ? 'Credit cards' : a.holds === 'loan' ? 'Loans' : 'Cash and bank', sort: i, derivedOnly: true, inactive: !a.active }));
   return out;
 }
 
