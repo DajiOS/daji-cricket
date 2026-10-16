@@ -77,7 +77,7 @@ function Shell({ route }: { route: string }) {
             return (
               <div key={g.group}>
                 {g.group === 'Portfolio' ? <div className="nav-group">{g.group}</div>
-                  : <button className="nav-group nav-toggle" onClick={() => !active && toggleGroup(g.group)} aria-expanded={shown}>{g.group} <span aria-hidden="true">{shown ? '▾' : '▸'}</span>{!shown && <span className="soon-n">{items.length}</span>}</button>}
+                  : <button className="nav-group nav-toggle" onClick={() => !active && toggleGroup(g.group)} aria-expanded={shown}>{g.group} <span aria-hidden="true">{shown ? '▾' : '▸'}</span></button>}
                 {shown && items.map((i) => (
                   <Fragment key={i.to}>
                     <a href={`#${i.to}`} className={isOn(i.to) ? 'on' : ''}>
