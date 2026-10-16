@@ -24,9 +24,9 @@ function Shell({ route }: { route: string }) {
   const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 860px)').matches);
   useEffect(() => { const m = matchMedia('(max-width: 860px)'); const f = () => setNarrow(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
   const collapsed = rail && !narrow;
-  const [fly, setFly] = useState<{ group: string; top: number } | null>(null);
+  const [fly, setFly] = useState<{ key: string; top: number } | null>(null);
   const flyTimer = useRef<number | undefined>(undefined);
-  const openFly = (group: string, el: HTMLElement) => { clearTimeout(flyTimer.current); setFly({ group, top: Math.max(8, Math.min(el.getBoundingClientRect().top, innerHeight - 80)) }); };
+  const openFly = (key: string, el: HTMLElement) => { clearTimeout(flyTimer.current); setFly({ key, top: Math.max(8, Math.min(el.getBoundingClientRect().top, innerHeight - 80)) }); };
   const closeFlySoon = () => { clearTimeout(flyTimer.current); flyTimer.current = window.setTimeout(() => setFly(null), 180); };
   useEffect(() => { if (!fly) return; const f = (e: KeyboardEvent) => e.key === 'Escape' && setFly(null); addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [fly]);
   /** Which section of a page is showing (the first one when the address is just the page). */
@@ -51,20 +51,24 @@ function Shell({ route }: { route: string }) {
       <aside className={`side${open ? ' open' : ''}`} aria-label="Main navigation">
         <a className="brand" href="./" aria-label="Daji Cricket Ground, back to the website">{collapsed ? <Crest size={36} /> : <Logo width={196} />}</a>
         {collapsed ? (
-          <nav className="nav rail-nav" aria-label="Menu groups">
-            {NAV.map((g) => {
+          <nav className="nav rail-nav" aria-label="Menu">
+            {NAV.map((g, gi) => {
               const items = g.items.filter(visible);
               if (!items.length) return null;
-              const active = items.some((i) => isOn(i.to));
-              const waitingHere = items.some((i) => i.count === 'approvals') && waiting > 0;
-              if ((items.length === 1 && !SUBS[items[0]!.to]) || g.group === 'Portfolio') return items.map((i) => (
-                <a key={i.to} href={`#${i.to}`} className={`rail-btn${isOn(i.to) ? ' on' : ''}`} title={i.label} aria-label={i.label}><Icon name={i.icon} /></a>));
               return (
-                <button key={g.group} className={`rail-btn${active ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.group === g.group} aria-label={g.group} title={g.group}
-                  onMouseEnter={(e) => openFly(g.group, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(g.group, e.currentTarget)}
-                  onClick={(e) => openFly(g.group, e.currentTarget)}>
-                  <Icon name={items[0]!.icon} />{waitingHere && <span className="rail-dot" aria-hidden="true" />}
-                </button>);
+                <Fragment key={g.group}>
+                  {gi > 0 && <div className="rail-sep" aria-hidden="true" />}
+                  {items.map((i) => {
+                    const dot = i.count === 'approvals' && waiting > 0;
+                    if (!SUBS[i.to]) return <a key={i.to} href={`#${i.to}`} className={`rail-btn${isOn(i.to) ? ' on' : ''}`} title={i.label} aria-label={i.label}><Icon name={i.icon} />{dot && <span className="rail-dot" aria-hidden="true" />}</a>;
+                    return (
+                      <button key={i.to} className={`rail-btn${isOn(i.to) ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.key === i.to} aria-label={i.label} title={i.label}
+                        onMouseEnter={(e) => openFly(i.to, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(i.to, e.currentTarget)}
+                        onClick={(e) => openFly(i.to, e.currentTarget)}>
+                        <Icon name={i.icon} />
+                      </button>);
+                  })}
+                </Fragment>);
             })}
           </nav>
         ) : (
@@ -98,18 +102,12 @@ function Shell({ route }: { route: string }) {
         </div>
       </aside>
       {collapsed && fly && (() => {
-        const g = NAV.find((x) => x.group === fly.group); const items = g ? g.items.filter(visible) : [];
+        const i = NAV.flatMap((x) => x.items).find((x) => x.to === fly.key);
+        if (!i || !SUBS[i.to]) return null;
         return (
-          <div className="flyout" role="menu" aria-label={fly.group} style={{ top: fly.top }} onMouseEnter={() => clearTimeout(flyTimer.current)} onMouseLeave={closeFlySoon}>
-            <div className="nav-group">{fly.group}</div>
-            {items.map((i) => (
-              <Fragment key={i.to}>
-                <a href={`#${i.to}`} role="menuitem" className={isOn(i.to) ? 'on' : ''} onClick={() => setFly(null)}>
-                  <Icon name={i.icon} />{i.label}
-                  {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
-                </a>
-                {SUBS[i.to]?.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} role="menuitem" className={`sub${isOn(i.to) && subOn(i.to, k) ? ' on' : ''}`} onClick={() => setFly(null)}><Icon name={SUB_ICONS[`${i.to}:${k}`] ?? 'chevron'} size={15} />{l}</a>)}
-              </Fragment>))}
+          <div className="flyout" role="menu" aria-label={i.label} style={{ top: fly.top }} onMouseEnter={() => clearTimeout(flyTimer.current)} onMouseLeave={closeFlySoon}>
+            <div className="nav-group">{i.label}</div>
+            {SUBS[i.to]!.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} role="menuitem" className={`sub${isOn(i.to) && subOn(i.to, k) ? ' on' : ''}`} onClick={() => setFly(null)}><Icon name={SUB_ICONS[`${i.to}:${k}`] ?? 'chevron'} size={15} />{l}</a>)}
           </div>);
       })()}
       {open && <div className="overlay" style={{ zIndex: 35, padding: 0 }} onClick={() => setOpen(false)} />}

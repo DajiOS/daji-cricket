@@ -213,7 +213,10 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .shell.rail { grid-template-columns: 72px 1fr; }
 .shell.rail .side { padding: 16px 10px; align-items: center; overflow: visible; }
 .shell.rail .brand { display: flex; justify-content: center; padding: 4px 0 10px; }
-.rail-nav { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+.rail-nav { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.rail-nav::-webkit-scrollbar { display: none; }
+.rail-sep { width: 26px; height: 1px; background: var(--line); margin: 5px 0; flex: none; }
+.rail-btn { flex: none; }
 .rail-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 12px; border: 1px solid transparent; background: none; color: var(--muted); cursor: pointer; }
 .rail-btn:hover, .rail-btn[aria-expanded="true"] { background: var(--panel); color: var(--ivory); text-decoration: none; }
 .rail-btn.on { background: linear-gradient(90deg, rgba(201,164,76,.16), rgba(201,164,76,.04)); color: var(--gold-hi); border-color: var(--gold-lo); }

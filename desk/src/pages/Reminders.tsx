@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useApi } from '../lib';
+import { useApi, go } from '../lib';
 import { PageHead, Stat, Tabs, Loading, ErrorBox } from '../ui';
 import QueueTab from '../parts/reminders/QueueTab';
 import TemplatesTab from '../parts/reminders/TemplatesTab';
@@ -10,8 +9,9 @@ import type { HistoryRow, Queue, Template } from '../parts/reminders/shared';
 type Tab = 'queue' | 'templates' | 'one' | 'history';
 
 export default function Reminders({ sub }: { sub: string }) {
-  void sub;
-  const [tab, setTab] = useState<Tab>('queue');
+  const first = sub.replace(/^\//, '').split('/')[0] ?? '';
+  const tab: Tab = (['queue', 'templates', 'one', 'history'] as string[]).includes(first) ? (first as Tab) : 'queue';
+  const setTab = (t: Tab) => go(t === 'queue' ? '/reminders' : `/reminders/${t}`);
   const [queue, qErr, reloadQ] = useApi<Queue>('/api/desk/reminders/queue');
   const [tpl, tErr, reloadT] = useApi<{ items: Template[] }>('/api/desk/reminders/templates');
   const [hist, hErr, reloadH] = useApi<{ items: HistoryRow[] }>('/api/desk/reminders/history');

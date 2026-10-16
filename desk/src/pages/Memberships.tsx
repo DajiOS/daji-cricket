@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useApi, qs, inr, fmtDate, fmtDateTime, formatPhone } from '../lib';
+import { useApi, qs, inr, fmtDate, fmtDateTime, formatPhone, go } from '../lib';
 import { PageHead, Stat, Tabs, Table, Chip, Empty, Loading, ErrorBox } from '../ui';
 import PayDialog from '../parts/memberships/PayDialog';
 import PlanDialog from '../parts/memberships/PlanDialog';
@@ -10,8 +10,9 @@ type Tab = 'members' | 'expiring' | 'plans' | 'activity';
 const B = '/api/desk/memberships';
 
 export default function Memberships({ sub }: { sub: string }) {
-  void sub;
-  const [tab, setTab] = useState<Tab>('members');
+  const first = sub.replace(/^\//, '').split('/')[0] ?? '';
+  const tab: Tab = (['members', 'expiring', 'plans', 'activity'] as string[]).includes(first) ? (first as Tab) : 'members';
+  const setTab = (t: Tab) => go(t === 'members' ? '/memberships' : `/memberships/${t}`);
   const [stats, sErr, reloadStats] = useApi<Stats>(`${B}/stats`);
   const [plans, pErr, reloadPlans] = useApi<{ items: Plan[] }>(`${B}/plans`);
   const [sell, setSell] = useState<{ member?: Member } | null>(null);
