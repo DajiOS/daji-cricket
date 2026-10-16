@@ -397,3 +397,10 @@ body { background:
 .nav a.sub, .flyout a.sub { padding: 5px 12px 5px 30px; gap: 9px; font-size: 12.5px; font-weight: 500; }
 .nav a.sub svg, .flyout a.sub svg { width: 15px; height: 15px; flex: none; opacity: .85; }
 .nav a.sub.on, .flyout a.sub.on { box-shadow: none; background: rgba(201,164,76,.1); }
+
+/* three-line button sits at the top of the side menu, above the groups */
+.side-toggle { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; margin: 2px 0 8px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--muted); cursor: pointer; font: inherit; font-weight: 600; font-size: 13px; }
+.side-toggle:hover { background: var(--panel); color: var(--ivory); }
+.side-toggle svg { width: 20px; height: 20px; flex: none; }
+.shell.rail .side-toggle { width: 44px; height: 44px; padding: 0; justify-content: center; margin: 0 0 6px; }
+@media (max-width: 860px) { .side-toggle { display: none; } }
