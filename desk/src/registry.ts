@@ -54,28 +54,26 @@ export const NAV: NavGroup[] = [
   { group: 'Ground', items: [
     { to: '/bookings', label: 'Bookings', icon: 'calendar', perm: 'manage_bookings' },
     { to: '/promos', label: 'Promo codes', icon: 'tag', ownerOnly: true },
-    { to: '/tasks', label: 'Tasks', icon: 'tasks', perm: 'manage_tasks' },
     { to: '/matches', label: 'Matches', icon: 'ball', perm: 'manage_matches' },
-    { to: '/contacts', label: 'Contacts', icon: 'users', perm: 'view_customers' },
-    { to: '/cards', label: 'Business cards', icon: 'card', perm: 'view_customers' },
-  ] },
-  { group: 'MP13 Academy', items: [{ to: '/academy', label: 'MP13 Academy', icon: 'grad', perm: 'manage_academy' }] },
-  { group: 'Members & Events', items: [
     { to: '/memberships', label: 'Memberships', icon: 'card', perm: 'manage_bookings' },
     { to: '/tournaments', label: 'Tournaments', icon: 'trophy', perm: 'manage_matches' },
   ] },
+  { group: 'Task Management', items: [{ to: '/tasks', label: 'Tasks', icon: 'tasks', perm: 'manage_tasks' }] },
+  { group: 'People & Messages', items: [
+    { to: '/contacts', label: 'Contacts', icon: 'users', perm: 'view_customers' },
+    { to: '/cards', label: 'Business cards', icon: 'card', perm: 'view_customers' },
+    { to: '/reminders', label: 'WhatsApp reminders', icon: 'chat', perm: 'send_broadcasts' },
+  ] },
+  { group: 'MP13 Academy', items: [{ to: '/academy', label: 'MP13 Academy', icon: 'grad', perm: 'manage_academy' }] },
   { group: 'Finance', items: [
     { to: '/approvals', label: 'Approvals', icon: 'check', perm: 'manage_accounting', count: 'approvals' },
     { to: '/bills', label: 'Bills', icon: 'billing', perm: 'manage_accounting' },
     { to: '/transactions', label: 'Transactions', icon: 'swap', perm: 'manage_accounting' },
     { to: '/bank', label: 'Bank import', icon: 'upload', perm: 'manage_accounting' },
     { to: '/accounting', label: 'Accounting', icon: 'accounts', perm: 'view_reports' },
-  ] },
-  { group: 'People & Messages', items: [
     { to: '/payroll', label: 'Staff & payroll', icon: 'payroll', ownerOnly: true },
-    { to: '/reminders', label: 'WhatsApp reminders', icon: 'chat', perm: 'send_broadcasts' },
   ] },
-  { group: 'Administration', items: [
+  { group: 'Settings', items: [
     { to: '/team', label: 'Users & Access', icon: 'shield', ownerOnly: true },
     { to: '/settings', label: 'Settings', icon: 'settings', ownerOnly: true },
     { to: '/platform', label: 'Platform', icon: 'vault', superOnly: true },
