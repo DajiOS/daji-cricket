@@ -1110,3 +1110,21 @@ html:not([data-embed]):not([data-embed-section]) #view-home{
 @media(prefers-reduced-motion:reduce){
   html:not([data-embed]):not([data-embed-section]) #view-home{header.hero::before,header.hero::after{animation:none}.ln > span,header.hero p.lead,.cta,.facts{animation:none}}
 }
+
+/* The ground, layer by layer: a pinned line drawing that lifts apart on scroll */
+#anatomy{padding:0;border-top:1px solid var(--line)}
+.an-track{height:380vh;position:relative}
+.an-stage{position:sticky;top:0;height:100vh;height:100svh;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);align-items:center;gap:clamp(24px,4vw,80px);padding:0 clamp(20px,4vw,72px);overflow:hidden}
+.an-copy h2{font-size:clamp(34px,3.6vw,58px);line-height:1.04;margin:0 0 clamp(24px,5vh,56px)}
+.an-list{list-style:none;margin:0;padding:0;max-width:30em}
+.an-list li{display:grid;grid-template-columns:8.5em 1fr;gap:20px;padding:18px 0;border-top:1px solid var(--line);color:var(--text-faint);transition:color .5s var(--ease);cursor:pointer;font-size:14px;line-height:1.55}
+.an-list li:last-child{border-bottom:1px solid var(--line)}
+.an-list li b{font-weight:400;font-family:var(--font-display)}
+.an-list li.on{color:var(--text)}.an-list li.on b{color:var(--gold-bright)}
+#an-svg{width:100%;height:min(94svh,100%);justify-self:center;overflow:visible}
+#an-svg path{fill:none;stroke:var(--text);stroke-width:1;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
+#an-svg .an-l{opacity:.78;transition:opacity .5s var(--ease)}
+#an-svg .an-l.dim{opacity:.22}
+#an-svg .an-l.on{opacity:1}#an-svg .an-l.on path{stroke:var(--gold-bright)}
+@media(max-width:860px){.an-stage{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto;align-content:center;gap:8px;padding:72px 20px 24px}.an-copy{display:contents}.an-copy h2{margin:0;font-size:30px}.an-list{grid-row:3}.an-list li{grid-template-columns:6.5em 1fr;padding:10px 0;font-size:12.5px}.an-list li:not(.on) span{display:none}.an-list li:not(.on){padding:8px 0}#an-svg{grid-row:2;height:100%}}
+html[data-embed] #anatomy{display:none!important}
