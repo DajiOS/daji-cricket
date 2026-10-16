@@ -1,10 +1,10 @@
 // One day at the ground: every session, grouped by ground, in time order.
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Loading, ErrorBox, Empty } from '../../ui';
 import { useApi, fmtDay, todayISO, addDaysISO, inr } from '../../lib';
 import { type Booking, type Page, BookingChip, timeRange, whatOf } from './common';
 import { BookingDetail } from './Detail';
-import { DayTimeline, ViewToggle, useView } from './BookingCalendar';
+import { DayTimeline, groundColor, ViewToggle, useView } from './BookingCalendar';
 
 export function DayView({ version, onChanged }: { version: number; onChanged: () => void }) {
   const [date, setDate] = useState(todayISO());
@@ -31,8 +31,8 @@ export function DayView({ version, onChanged }: { version: number; onChanged: ()
               <div className="card-head"><h3>{g}</h3><span className="muted small">{live.filter((b) => b.groundName === g).length} sessions</span></div>
               <div className="day-list">
                 {live.filter((b) => b.groundName === g).map((b) => (
-                  <button key={b.id} className="day-row" onClick={() => setOpen(b.id)}>
-                    <span className="day-time tabular">{timeRange(b)}</span>
+                  <button key={b.id} className="day-row" style={{ ['--c' as string]: groundColor(b.groundName) } as CSSProperties} onClick={() => setOpen(b.id)}>
+                    <span className="day-time tabular"><i className="cal-dot" />{timeRange(b)}</span>
                     <span className="day-who"><b>{b.customerName}</b><span className="small muted">{whatOf(b)}{b.balancePaise > 0 && b.status === 'confirmed' ? ` · ${inr(b.balancePaise)} to collect` : ''}</span></span>
                     <BookingChip b={b} />
                   </button>))}
