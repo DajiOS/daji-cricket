@@ -6,6 +6,7 @@ import { type Booking, type Page, BookingChip, METHOD_LABEL, PAY_STATUS, STATUS_
 import { BookingDetail } from '../parts/dash/Detail';
 import { NewBooking } from '../parts/dash/NewBooking';
 import { DayView } from '../parts/dash/DayView';
+import { MonthCalendar, ViewToggle, useView } from '../parts/dash/BookingCalendar';
 
 type Tab = 'list' | 'day' | 'approvals' | 'payments';
 const SECTIONS = ['day', 'approvals', 'payments'];
@@ -50,6 +51,7 @@ function List({ version, preset }: { version: number; preset: string }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(0);
+  const [view, setView] = useView();
   const [grounds] = useApi<{ items: { id: string; name: string }[] }>('/api/staff/grounds');
   useEffect(() => { const t = setTimeout(() => { setDq(q.trim()); setPage(0); }, 300); return () => clearTimeout(t); }, [q]);
   const params = { q: dq, status, groundId, from, to, ...(preset === 'review' ? { needsReview: 1 } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}), limit: PAGE, offset: page * PAGE };
@@ -67,18 +69,19 @@ function List({ version, preset }: { version: number; preset: string }) {
           <option value="">Any status</option>{Object.entries(STATUS_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
         <select className="inp" aria-label="Ground" value={groundId} onChange={set(setGroundId)}>
           <option value="">All grounds</option>{(grounds?.items || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
-        <input className="inp" type="date" aria-label="From date" value={from} onChange={set(setFrom)} />
-        <input className="inp" type="date" aria-label="To date" value={to} onChange={set(setTo)} />
+        {view === 'list' && <><input className="inp" type="date" aria-label="From date" value={from} onChange={set(setFrom)} />
+        <input className="inp" type="date" aria-label="To date" value={to} onChange={set(setTo)} /></>}
       </div>
       <div className="card-pad row filters-foot">
-        <button className="btn sm" onClick={() => quick(todayISO(), todayISO())}>Today</button>
+        <ViewToggle value={view} onChange={setView} />
+        {view === 'list' && <><button className="btn sm" onClick={() => quick(todayISO(), todayISO())}>Today</button>
         <button className="btn sm" onClick={() => quick(todayISO(), addDaysISO(todayISO(), 7))}>Next 7 days</button>
-        <button className="btn sm" onClick={() => quick(addDaysISO(todayISO(), -30), todayISO())}>Last 30 days</button>
+        <button className="btn sm" onClick={() => quick(addDaysISO(todayISO(), -30), todayISO())}>Last 30 days</button></>}
         {preset === 'review' && <Chip tone="warn">Needs review</Chip>}{preset === 'choosing' && <Chip tone="info">Customers yet to choose</Chip>}
         {filtered && <button className="btn ghost sm" onClick={clear}>Clear filters</button>}
-        <span className="muted small" style={{ marginLeft: 'auto' }}>{d ? `${d.total} ${d.total === 1 ? 'booking' : 'bookings'}` : ''}</span>
+        {view === 'list' && <span className="muted small" style={{ marginLeft: 'auto' }}>{d ? `${d.total} ${d.total === 1 ? 'booking' : 'bookings'}` : ''}</span>}
       </div>
-      {err ? <div className="card-pad"><ErrorBox msg={err} /></div> : !d ? <div className="card-pad"><Loading h={240} /></div> : (
+      {view === 'calendar' ? <div className="card-pad"><MonthCalendar filters={{ q: dq, status, groundId, ...(preset === 'review' ? { needsReview: '1' } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}) }} onOpen={(id) => go(`/bookings/${id}`)} /></div> : err ? <div className="card-pad"><ErrorBox msg={err} /></div> : !d ? <div className="card-pad"><Loading h={240} /></div> : (
         <>
           <Table rows={d.items} onRow={(b) => go(`/bookings/${b.id}`)} empty={filtered ? 'No bookings match those filters.' : 'No bookings yet. New ones appear here.'} cols={[
             { head: 'When', cell: (b) => <><div className="strong">{fmtDay(b.date)}</div><div className="small muted tabular">{timeRange(b)}</div></> },
