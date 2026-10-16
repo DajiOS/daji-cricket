@@ -2,6 +2,7 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { startHarness, grounds, dayFromNow, T0, DAY, type Harness, type GroundLite } from './helpers.ts';
 import { many } from '../src/db.ts';
+import { setAlertSender } from '../src/notifications.ts';
 
 let h: Harness;
 let g: GroundLite;
@@ -27,6 +28,24 @@ test('anyone can send an enquiry without an account; it lands with the ground\'s
   assert.equal(r.body.customerId, null);
   const list = await h.get('/api/staff/enquiries', staff);
   assert.equal(list.body.total, 1);
+});
+
+test('a new enquiry is sent to the contact number on WhatsApp', async () => {
+  const sent: { to: string; vars: string[] }[] = [];
+  setAlertSender(async (to, vars) => { sent.push({ to, vars }); return true; });
+  try {
+    const r = await h.post('/api/enquiries', anon());
+    assert.equal(r.status, 201);
+    await new Promise((res) => setTimeout(res, 20));
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0]!.vars.slice(0, 2), ['Corporate Events', '9898989898']);
+    assert.match(sent[0]!.vars[2]!, /company tournament/);
+  } finally { setAlertSender(null); }
+});
+
+test('an enquiry is still saved when the WhatsApp alert fails', async () => {
+  setAlertSender(async () => { throw new Error('down'); });
+  try { assert.equal((await h.post('/api/enquiries', anon())).status, 201); } finally { setAlertSender(null); }
 });
 
 test('an enquiry needs a ground, a contact number and a message', async () => {

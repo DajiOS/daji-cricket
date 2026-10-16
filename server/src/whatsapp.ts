@@ -1,5 +1,5 @@
 import type { Config } from './config.ts';
-import type { OtpSender } from './notifications.ts';
+import type { OtpSender, AlertSender } from './notifications.ts';
 
 type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
 
@@ -54,5 +54,27 @@ export function msg91OtpSender(cfg: Config, fetchImpl: Fetch = fetch as unknown 
     const ok = res.ok && type !== 'error';
     if (!ok) console.error(JSON.stringify({ level: 'error', where: 'msg91-otp', status: res.status, body: text.slice(0, 300) }));
     return ok;
+  };
+}
+
+/**
+ * Tells the ground's contact person about a new enquiry, with a WhatsApp "utility" template through Meta's Cloud API.
+ * The template (default name daji_enquiry_alert, category Utility, three text variables: name, phone, message) must be approved in Meta Business Manager first.
+ */
+export function whatsappAlertSender(cfg: Config, fetchImpl: Fetch = fetch as unknown as Fetch): AlertSender | null {
+  const w = cfg.whatsapp;
+  if (!w.token || !w.phoneId) return null;
+  return async (phone, vars) => {
+    const res = await fetchImpl(`${w.apiUrl}/${encodeURIComponent(w.phoneId)}/messages`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${w.token}`, 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify({
+        messaging_product: 'whatsapp', to: waNumber(phone), type: 'template',
+        template: { name: w.alertTemplate, language: { code: w.lang }, components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text: text.replace(/[\r\n\t]+/g, ' ').slice(0, 300) || '-' })) }] },
+      }),
+    });
+    if (!res.ok) console.error(JSON.stringify({ level: 'error', where: 'whatsapp-alert', status: res.status, body: (await res.text()).slice(0, 300) }));
+    return res.ok;
   };
 }
