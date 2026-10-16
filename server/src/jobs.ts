@@ -1,6 +1,7 @@
 import { runRecurring } from './accounting/books.ts';
 import { runDepreciation } from './accounting/plus.ts';
 import { runFeedSync } from './accounting/feed.ts';
+import { runAaSync } from './accounting/aa.ts';
 import { billingDaily } from './billing.ts';
 import { many, run, tx } from './db.ts';
 import { now } from './clock.ts';
@@ -97,6 +98,7 @@ export async function runSweeps(cfg: Config): Promise<SweepResult> {
   runRecurring(null, null);
   runDepreciation(null, SYSTEM);
   await runFeedSync(cfg, (e) => console.error(JSON.stringify({ level: 'error', where: 'bank-feed', error: String((e as Error)?.message ?? e) })));
+  await runAaSync(cfg, (e) => console.error(JSON.stringify({ level: 'error', where: 'account-aggregator', error: String((e as Error)?.message ?? e) })));
   await billingDaily(cfg, SYSTEM).catch((e) => console.error(JSON.stringify({ level: 'error', where: 'billing', error: String((e as Error)?.message ?? e) })));
   return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done };
 }

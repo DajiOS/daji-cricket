@@ -15,6 +15,7 @@ import { STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { closedDates, setClosed } from '../closures.ts';
 import { integrationStatuses, testIntegration } from '../integrations.ts';
 import { addService, deleteService, listServices, updateService } from '../services.ts';
+import { saveAaSettings, viewAaSettings } from '../accounting/aa.ts';
 import { saveYodleeSettings, subscribeYodleeWebhooks, testYodlee, viewYodleeSettings } from '../yodleeSettings.ts';
 import { backupNow, BACKUP_AT, listBackups, nextBackupAt } from '../backup.ts';
 
@@ -48,6 +49,8 @@ export function adminRoutes(r: Router): void {
   // ---- software billing: what the platform costs to build and run (software owner only)
   const SAFILE = { auth: ['super_admin' as const], maxBody: MAX_ATTACHMENT_BYTES + 1024 };
   const qv = (c: Ctx, k: string): string | undefined => c.query.get(k) ?? undefined;
+  r.get('/api/admin/aa', (c) => ok(viewAaSettings(c.cfg)), SA);
+  r.put('/api/admin/aa', (c) => ok(saveAaSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);
   r.get('/api/admin/billing', (c) => ok({ summary: costSummary(), services: listSwServices(), settings: viewBillingSettings(c.cfg), catalogSize: CATALOG.length }), SA);
   r.get('/api/admin/billing/invoices', (c) => ok({ items: listInvoices({ serviceId: qv(c, 'service'), from: qv(c, 'from'), to: qv(c, 'to'), status: qv(c, 'status') }) }), SA);
   r.post('/api/admin/billing/services/catalog', (c) => ok(addUsualServices({ id: U(c).id, role: U(c).role })), SA);

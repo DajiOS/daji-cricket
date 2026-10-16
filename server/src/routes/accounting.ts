@@ -1,5 +1,6 @@
 import { deleteCoa, listCoa, patchCoa } from '../accounting/coa.ts';
 import { feedLog, feedStatus, linkAccount, syncAccount } from '../accounting/feed.ts';
+import { aaWebhookAuthorised, createConsent, handleAaWebhook, listConsents, mapAccount, revokeLocal, syncConsent, viewAaSettings } from '../accounting/aa.ts';
 import { autoLinkAccounts, disconnectProviderAccount, fastLinkSession, listProviderAccounts, ownersInWebhook, refreshProviderAccount, webhookAuthorised } from '../accounting/yodlee.ts';
 import { Router, ok, created } from '../http.ts';
 import type { Ctx, Reply } from '../http.ts';
@@ -274,6 +275,19 @@ export function accountingRoutes(r: Router): void {
       setImmediate(async () => { for (const id of ids) { try { await syncAccount(c.cfg, o, SYSTEM, id, fetch, 'webhook'); } catch (e) { if ((e as { code?: string }).code === 'SYNC_RUNNING') continue; console.error(JSON.stringify({ level: 'error', where: 'yodlee-webhook', error: String((e as Error)?.message ?? e) })); } } });
     }
     return ok({ received: true, owners: owners.length });
+  }, { rate: 'none', maxBody: 1024 * 1024 });
+  // ---- Account Aggregator (Setu, Finvu): the account holder approves on the gateway's page, then the data arrives like any other bank feed
+  r.get('/api/accounting/aa', (c) => { canRead(c); const s = viewAaSettings(c.cfg); return ok({ providers: { setu: s.setuReady, finvu: false }, consents: listConsents(ownerOrFail(c, 'see bank consents')) }); }, A);
+  r.post('/api/accounting/aa/consents', async (c) => { canWrite(c); return created(await createConsent(c.cfg, ownerOrFail(c, 'ask for bank access'), actor(c), c.json())); }, { ...A, rate: 'auth' });
+  r.post('/api/accounting/aa/consents/:id/sync', async (c) => { canWrite(c); return ok(await syncConsent(c.cfg, ownerOrFail(c, 'get the latest'), actor(c), c.params.id!)); }, { ...A, rate: 'auth' });
+  r.post('/api/accounting/aa/consents/:id/forget', (c) => { canWrite(c); revokeLocal(ownerOrFail(c, 'stop a bank consent'), actor(c), c.params.id!); return ok({ ok: true }); }, A);
+  r.put('/api/accounting/aa/accounts/:id', (c) => { canWrite(c); mapAccount(ownerOrFail(c, 'join a bank account'), actor(c), c.params.id!, c.json()); return ok({ ok: true }); }, A);
+  r.post('/api/webhooks/aa/:provider', (c) => {
+    if (!aaWebhookAuthorised(c.query.get('token') ?? undefined)) throw new HttpError(401, 'UNAUTHORISED', 'Not allowed');
+    const provider = c.params.provider; if (provider !== 'setu' && provider !== 'finvu') throw new HttpError(404, 'NOT_FOUND', 'Unknown provider');
+    let body: unknown = null; try { body = JSON.parse(c.raw.toString('utf8')); } catch { throw new HttpError(400, 'BAD_REQUEST', 'The webhook body is not valid'); }
+    setImmediate(() => { handleAaWebhook(c.cfg, provider, body).catch((e) => console.error(JSON.stringify({ level: 'error', where: 'aa-webhook', error: String((e as Error)?.message ?? e) }))); });
+    return ok({ received: true });
   }, { rate: 'none', maxBody: 1024 * 1024 });
   r.get('/api/accounting/budgets', (c) => { canRead(c); return ok(listBudgets(ownerOrFail(c, 'see budgets'))); }, A);
   r.put('/api/accounting/budgets', (c) => { canWrite(c); return ok(setBudgets(ownerOrFail(c, 'set budgets'), actor(c), c.json())); }, A);
