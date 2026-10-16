@@ -1131,3 +1131,44 @@ html[data-embed] #anatomy{display:none!important}
 
 /* the hero's entrance waits under the intro cover and plays as the cover fades */
 html.splash-on:not(.splash-reveal) #view-home :is(.ln > span,header.hero p.lead,.cta,.facts){animation-play-state:paused}
+
+/* ===== Split screen: the booking panel stays on the left, the story scrolls on the right ===== */
+.resbar{display:none}
+@media (min-width:1021px){
+  html:not([data-embed]):not([data-embed-section]) #view-home{--split:clamp(380px,33vw,500px);padding-left:var(--split)}
+  html:not([data-embed]):not([data-embed-section]) #view-home .hero .panel,
+  html:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{
+    position:fixed;left:0;top:0;bottom:0;width:var(--split);max-width:none;margin:0;zoom:1;box-sizing:border-box;z-index:40;
+    padding:36px clamp(24px,2.8vw,44px) 28px;overflow-y:auto;overscroll-behavior:contain;
+    background:#0d0f0e;border:0;border-right:1px solid rgba(236,230,216,.12);border-radius:0;box-shadow:none}
+  html:not([data-embed]):not([data-embed-section]) #view-home .panel h3{font-size:clamp(34px,3.2vw,46px);margin:0 0 6px}
+  html:not([data-embed]):not([data-embed-section]) #view-home header.hero{min-height:calc(100svh - 104px)}
+  html:not([data-embed]):not([data-embed-section]) #view-home header.hero h1{font-size:clamp(52px,6.9vw,124px);max-width:none}
+  html:not([data-embed]):not([data-embed-section]) #view-home header.hero .cta [data-jump]{display:none}
+  html:not([data-embed]):not([data-embed-section]) #view-home header.hero::before{left:-6vw}
+  html:not([data-embed]):not([data-embed-section]) #view-home header.hero::after{right:-6vw}
+  html:not([data-embed]):not([data-embed-section]) #view-home .head p{max-width:22em}
+}
+/* phones and tablets: the page reads top to bottom, with one bar that takes you to the booking */
+@media (max-width:1020px){
+  html:not([data-embed]):not([data-embed-section]) .resbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;align-items:center;justify-content:center;height:56px;margin:0 16px 16px;background:#b89a5e;color:#0a0a08;font:500 14px var(--font-body);letter-spacing:.02em;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  html.splash-on .resbar{display:none!important}
+  html:not([data-embed]):not([data-embed-section]) #view-home{padding-bottom:84px}
+}
+@media (min-width:1021px){
+  html:not([data-embed]):not([data-embed-section]) #view-home nav{gap:20px}
+  html:not([data-embed]):not([data-embed-section]) #view-home .wm-nav{height:54px}
+  html:not([data-embed]):not([data-embed-section]) #view-home .links{gap:clamp(14px,1.7vw,26px);font-size:12px;white-space:nowrap;flex-wrap:nowrap}
+  html:not([data-embed]):not([data-embed-section]) #view-home .links a{white-space:nowrap}
+  html:not([data-embed]):not([data-embed-section]) #view-home .links .btn{height:46px;padding:0 22px}
+}
+@media (min-width:1021px) and (max-width:1320px){
+  html:not([data-embed]):not([data-embed-section]) #view-home .links{gap:12px;font-size:11px;letter-spacing:.1em}
+  html:not([data-embed]):not([data-embed-section]) #view-home .wm-nav{height:44px}
+  html:not([data-embed]):not([data-embed-section]) #view-home .links .btn{padding:0 16px;height:42px}
+  html:not([data-embed]):not([data-embed-section]) #view-home .links a[data-instagram]{display:none}
+}
+@media (max-width:1020px){html:not([data-embed]):not([data-embed-section]) #view-home header.hero .cta [data-jump]{display:none}}
+@media (min-width:1021px){
+  html:not([data-embed]):not([data-embed-section]) #view-home #p-hold{position:sticky;bottom:0;z-index:2;box-shadow:0 -18px 18px -6px #0d0f0e}
+}
