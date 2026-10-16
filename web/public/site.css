@@ -1034,7 +1034,7 @@ html:not([data-embed]):not([data-embed-section]) #view-home{
   header.hero::after{right:calc(50% - 50vw - 6vw);transform-origin:50% 0;transform:scaleX(-1);animation:lux-sweep2 31s ease-in-out infinite alternate}
   header.hero > div:first-child{min-height:calc(100svh - 104px);display:flex;flex-direction:column;justify-content:flex-end;padding:0 0 64px;z-index:1}
   header.hero h1{font-size:clamp(52px,10.4vw,184px);line-height:.94;margin:0 0 40px;max-width:11em}
-  .ln{display:block;overflow:hidden;padding-bottom:.08em}
+  .ln{display:block;overflow:hidden;padding:.16em 0 .36em;margin:-.16em 0 -.36em}
   .ln > span{display:block;animation:lux-rise 1.5s cubic-bezier(.2,.7,.1,1) both}
   .ln + .ln > span{animation-delay:.18s;font-style:italic;color:var(--gold-bright)}
   header.hero p.lead{font-size:19px;color:var(--text-muted);max-width:26em;margin:0;line-height:1.6;animation:lux-fade 1.6s .7s both}
