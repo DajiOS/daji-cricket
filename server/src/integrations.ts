@@ -65,6 +65,13 @@ registerIntegration({
   },
 });
 registerIntegration({
+  id: 'yodlee', name: 'Yodlee (bank feed)', what: 'Connects bank accounts and brings in new transactions by themselves.',
+  setup: 'In Platform, Bank connection, enter the Yodlee API address, FastLink address, issuer and private key, then add the webhook address shown there in Yodlee.',
+  env: ['YODLEE_API_URL', 'YODLEE_FASTLINK_URL', 'YODLEE_ISSUER', 'YODLEE_PRIVATE_KEY'],
+  have: (c) => ({ YODLEE_API_URL: !!c.yodlee.apiUrl, YODLEE_FASTLINK_URL: !!c.yodlee.fastLinkUrl, YODLEE_ISSUER: !!c.yodlee.issuer, YODLEE_PRIVATE_KEY: !!c.yodlee.privateKeyPem }),
+  test: async (c) => (await import('./yodleeSettings.ts')).testYodlee(c),
+});
+registerIntegration({
   id: 'expo', name: 'Expo push notifications', what: 'Alerts to the owner\'s and customers\' phones from the mobile app.',
   setup: 'Create an Expo account, build the app with EAS, and set its project ID in the app. No server setting is needed; a phone registers itself when someone signs in.',
   env: [], have: () => ({}),
