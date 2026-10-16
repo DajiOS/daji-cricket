@@ -6,7 +6,7 @@ import { seal, unseal, vaultOn } from './vault.ts';
 import { HttpError } from './errors.ts';
 import { Validator } from './input.ts';
 import type { Config } from './config.ts';
-import { yodleeConfigured, yodleeLogin, yodleeToken } from './accounting/feed.ts';
+import { yFetch, yodleeConfigured, yodleeLogin } from './accounting/feed.ts';
 
 // The software owner's Yodlee keys, kept in the database (secret ones encrypted when FIELD_KEY is set) so they can be changed from the
 // screen without editing the server file. A value saved here wins over the same value in the server settings; clearing it falls back.
@@ -22,7 +22,7 @@ CREATE TABLE yodlee_settings (
 `);
 
 type Y = Config['yodlee'];
-const TEXT = ['apiUrl', 'fastLinkUrl', 'clientId', 'adminLoginName', 'issuer', 'keyId'] as const;
+const TEXT = ['apiUrl', 'fastLinkUrl', 'clientId', 'adminLoginName', 'issuer', 'keyId', 'configName', 'userLogin'] as const;
 const SECRET = ['privateKeyPem', 'secret', 'webhookSecret'] as const;
 type Field = (typeof TEXT)[number] | (typeof SECRET)[number];
 const ALL: readonly Field[] = [...TEXT, ...SECRET];
@@ -94,15 +94,17 @@ export function saveYodleeSettings(cfg: Config, actor: Actor, body: unknown): Yo
   return viewYodleeSettings(cfg);
 }
 
-/** A check that changes nothing: signs a token with the saved key and asks Yodlee for one provider. A 2xx means the keys are accepted. */
-export async function testYodlee(cfg: Config, f: typeof fetch = fetch): Promise<{ ok: boolean; message: string }> {
-  const y = cfg.yodlee;
-  const missing = [!y.apiUrl && 'API address', !y.privateKeyPem && 'private key', !y.issuer && 'issuer', !y.fastLinkUrl && 'FastLink address'].filter(Boolean);
+/** A check that changes nothing: signs in the way the saved keys say, and asks Yodlee for one provider. A 2xx means the keys are accepted. */
+export async function testYodlee(cfg: Config, f: typeof fetch = fetch): Promise<{ ok: boolean; message: string; ms?: number }> {
+  const y = cfg.yodlee, started = Date.now();
+  const ccKeys = !!(y.clientId && y.secret), pkKeys = !!(y.privateKeyPem && y.issuer);
+  const missing = [!y.apiUrl && 'API address', !ccKeys && !pkKeys && 'client ID and secret (or issuer and private key)', !y.fastLinkUrl && 'FastLink address'].filter(Boolean);
   if (missing.length) return { ok: false, message: `Not set up yet. Missing: ${missing.join(', ')}.` };
   try {
-    const res = await f(`${y.apiUrl}/providers?top=1`, { headers: { 'Api-Version': '1.1', Authorization: `Bearer ${yodleeToken(cfg, yodleeLogin(cfg, 'test'))}`, ...(y.clientId ? { 'Cobrand-Name': y.clientId } : {}) }, signal: AbortSignal.timeout(15_000) });
-    if (res.ok) return { ok: true, message: 'Yodlee accepted the keys.' };
+    const res = await yFetch(cfg, y.userLogin || y.adminLoginName || 'daji', '/providers?top=1', {}, f);
+    const ms = Date.now() - started;
+    if (res.ok) return { ok: true, ms, message: `Yodlee accepted the keys (${ccKeys ? 'client ID and secret' : 'private key'}, ${ms} ms).` };
     let detail = ''; try { const j = await res.json() as { errorMessage?: string; errorCode?: string }; detail = j.errorMessage || j.errorCode || ''; } catch { /* not JSON */ }
-    return { ok: false, message: `Yodlee refused the keys (${res.status}${detail ? ': ' + detail : ''}). Check the issuer, the private key and the API address.` };
-  } catch (e) { return { ok: false, message: `Could not reach Yodlee: ${(e as Error).message}`.slice(0, 200) }; }
+    return { ok: false, ms, message: `Yodlee refused the keys (${res.status}${detail ? ': ' + detail : ''}). Check the keys and the API address.` };
+  } catch (e) { return { ok: false, message: `Could not use Yodlee: ${(e as Error).message}`.slice(0, 200) }; }
 }

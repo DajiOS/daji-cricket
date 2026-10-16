@@ -1,6 +1,6 @@
 import { deleteCoa, listCoa, patchCoa } from '../accounting/coa.ts';
-import { feedStatus, linkAccount, syncAccount } from '../accounting/feed.ts';
-import { disconnectProviderAccount, fastLinkSession, listProviderAccounts, ownersInWebhook, webhookAuthorised } from '../accounting/yodlee.ts';
+import { feedLog, feedStatus, linkAccount, syncAccount } from '../accounting/feed.ts';
+import { disconnectProviderAccount, fastLinkSession, listProviderAccounts, ownersInWebhook, refreshProviderAccount, webhookAuthorised } from '../accounting/yodlee.ts';
 import { Router, ok, created } from '../http.ts';
 import type { Ctx, Reply } from '../http.ts';
 import { U, page, ownerOrFail } from './helpers.ts';
@@ -238,7 +238,21 @@ export function accountingRoutes(r: Router): void {
     return ok(await syncAccount(c.cfg, owner, actor(c), accountId));
   }, { ...A, rate: 'auth' });
   // ---- Yodlee: connect a bank (FastLink), see what was connected, disconnect, and the webhook Yodlee calls with fresh data
-  r.post('/api/accounting/feed/yodlee/session', async (c) => { canWrite(c); return ok(await fastLinkSession(c.cfg, ownerOrFail(c, 'connect a bank'))); }, { ...A, rate: 'auth' });
+  r.post('/api/accounting/feed/yodlee/session', async (c) => {
+    canWrite(c);
+    const b = (c.json() ?? {}) as { flow?: unknown; providerAccountId?: unknown };
+    const flow = b.flow === 'edit' || b.flow === 'refresh' ? b.flow : undefined;
+    return ok(await fastLinkSession(c.cfg, ownerOrFail(c, 'connect a bank'), { flow, providerAccountId: b.providerAccountId === undefined ? undefined : String(b.providerAccountId) }));
+  }, { ...A, rate: 'auth' });
+  r.post('/api/accounting/feed/yodlee/refresh', async (c) => {
+    canWrite(c);
+    const owner = ownerOrFail(c, 'refresh a bank');
+    const id = String((c.json() as { providerAccountId?: unknown })?.providerAccountId ?? '');
+    await refreshProviderAccount(c.cfg, owner, id);
+    audit(actor(c), 'feed.refresh', 'acct_account', id, { provider: 'yodlee' }, owner);
+    return ok({ ok: true });
+  }, { ...A, rate: 'auth' });
+  r.get('/api/accounting/feed/log', (c) => { canRead(c); return ok({ items: feedLog(ownerOrFail(c, 'see the sync record')) }); }, A);
   r.get('/api/accounting/feed/yodlee/accounts', async (c) => { canRead(c); return ok({ accounts: await listProviderAccounts(c.cfg, ownerOrFail(c, 'see connected banks')) }); }, A);
   r.post('/api/accounting/feed/yodlee/disconnect', async (c) => {
     canWrite(c);
@@ -256,7 +270,7 @@ export function accountingRoutes(r: Router): void {
     // answer Yodlee at once; the pull runs behind it, and a failure is recorded against the account
     for (const o of owners) {
       const ids = many<{ id: string }>("SELECT id FROM acct_accounts WHERE owner_id = ? AND provider_ref LIKE 'yodlee:%' AND deleted_at IS NULL", o).map((x) => x.id);
-      setImmediate(async () => { for (const id of ids) { try { await syncAccount(c.cfg, o, SYSTEM, id); } catch (e) { console.error(JSON.stringify({ level: 'error', where: 'yodlee-webhook', error: String((e as Error)?.message ?? e) })); } } });
+      setImmediate(async () => { for (const id of ids) { try { await syncAccount(c.cfg, o, SYSTEM, id, fetch, 'webhook'); } catch (e) { if ((e as { code?: string }).code === 'SYNC_RUNNING') continue; console.error(JSON.stringify({ level: 'error', where: 'yodlee-webhook', error: String((e as Error)?.message ?? e) })); } } });
     }
     return ok({ received: true, owners: owners.length });
   }, { rate: 'none', maxBody: 1024 * 1024 });
