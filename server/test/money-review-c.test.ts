@@ -1,7 +1,7 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { startHarness, grounds, hold, dayFromNow, setting, advance, MIN, HOUR, sendWebhook, capturedEvent, type Harness, type GroundLite } from './helpers.ts';
-import { many, one } from '../src/db.ts';
+import { many, one, run } from '../src/db.ts';
 import { processRefunds } from '../src/payments.ts';
 
 let h: Harness; let g: GroundLite; let cust: string; let staff: string;
@@ -34,6 +34,8 @@ test('F4 refund.processed webhook before rp_refund_id saved is dropped as unknow
   await h.post(`/api/bookings/${r.body.booking.id}/cancel`, {}, cust);
   const rf = one<any>('SELECT * FROM refunds')!;
   console.log('refund', rf.status, rf.mode, rf.amount_paise);
+  // refunds wait for the super admin's authorisation before anything is sent
+  run('UPDATE refunds SET approved_at = ? WHERE approved_at IS NULL', Date.now());
   // webhook arrives before processRefunds stored the id
   const wh = await sendWebhook(h, { event: 'refund.processed', payload: { refund: { entity: { id: 'rfnd_x1' } } } }, { eventId: 'evt1' });
   console.log('webhook', wh.body);
