@@ -1351,3 +1351,6 @@ html[data-theme="ivory"] #splash-skip{color:#14573e;background:transparent;borde
 html[data-theme="ivory"] aside.panel#book .chip2{color:#0f3d2e;background:#fbf8f0;border-color:rgba(255,255,255,.5)}
 html[data-theme="ivory"] aside.panel#book .chip2 small{color:#0f3d2e;opacity:.7}
 html[data-theme="ivory"] aside.panel#book .chip2.on{background:#fff;border-color:#c9a96b;color:#0f3d2e}
+
+/* date numbers: clear figures (the display face draws 1 like a capital I) */
+.day b{font-family:var(--font-body);font-weight:600;font-feature-settings:"lnum","tnum";font-variant-numeric:lining-nums tabular-nums}
