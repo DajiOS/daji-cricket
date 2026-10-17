@@ -31,7 +31,7 @@ export default function Media() {
       x.upload.onprogress = (e) => { if (e.lengthComputable) patchJob(key, { pct: Math.round((e.loaded / e.total) * 100) }); };
       x.onload = () => {
         if (x.status === 201) patchJob(key, { pct: 100, state: 'done' });
-        else { let m = 'Upload failed'; try { m = JSON.parse(x.responseText).error.message; } catch { /* keep default */ } patchJob(key, { state: 'fail', msg: m }); }
+        else { let m = `Upload failed (${x.status || 'no answer'})`; try { m = JSON.parse(x.responseText).error.message; } catch { /* keep default */ } patchJob(key, { state: 'fail', msg: m }); }
         resolve();
       };
       x.onerror = () => { patchJob(key, { state: 'fail', msg: 'Connection lost. Try this file again.' }); resolve(); };

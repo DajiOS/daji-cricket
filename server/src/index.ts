@@ -27,6 +27,8 @@ setAlertSender(whatsappAlertSender(cfg));
 setOtpSmsSender(msg91OtpSender(cfg));
 const server = buildServer(cfg);
 startScheduler(cfg, (e) => console.error(JSON.stringify({ level: 'error', where: 'sweep', error: String((e as Error)?.stack ?? e) })));
+// Node closes any request that takes longer than 5 minutes to arrive, which cuts off big photo and video uploads on a slow connection.
+server.requestTimeout = 2 * 60 * 60 * 1000;
 server.listen(cfg.port, cfg.host, () => console.log(`Daji Cricket Ground API listening on ${cfg.host}:${cfg.port} (${cfg.publicUrl})`));
 
 async function shutdown(sig: string): Promise<void> {
