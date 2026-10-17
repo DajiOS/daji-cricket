@@ -51,3 +51,15 @@ test('first and last name are accepted for an enquiry and a profile edit', async
   const p = await h.patch('/api/me', { firstName: 'Priya', lastName: 'Menon' }, me);
   assert.equal(p.status, 200); assert.equal(p.body.user.name, 'Priya Menon'); assert.equal(p.body.user.lastName, 'Menon');
 });
+
+test('a booking can be made with nothing received, single or multi-day; the whole amount stays due', async () => {
+  const staff = await h.login('owner1'), g = (await grounds(h))[0]!;
+  const one = await h.post('/api/staff/bookings', { groundId: g.id, date: dayFromNow(80), startTime: '10:00', slots: 1, customer: { firstName: 'Nil', lastName: 'Advance', phone: '9833333333' }, payment: { method: 'cash', amountPaise: 0 } }, staff);
+  assert.equal(one.status, 201, JSON.stringify(one.body));
+  assert.equal(one.body.booking.status, 'confirmed'); assert.equal(one.body.booking.paidPaise, 0); assert.ok(one.body.booking.balancePaise > 0);
+  const many = await h.post('/api/staff/bookings/block', { groundId: g.id, fromDate: dayFromNow(90), toDate: dayFromNow(92), startTime: '08:00', endTime: '12:00', totalPaise: 900000, customer: { firstName: 'Nil', lastName: 'Block', phone: '9833333334' }, payment: { method: 'cash', amountPaise: 0 } }, staff);
+  assert.equal(many.status, 201, JSON.stringify(many.body));
+  assert.ok(many.body.bookings.every((b: any) => b.status === 'confirmed' && b.paidPaise === 0));
+  const neg = await h.post('/api/staff/bookings', { groundId: g.id, date: dayFromNow(81), startTime: '10:00', slots: 1, customer: { firstName: 'A', lastName: 'B', phone: '9833333335' }, payment: { method: 'cash', amountPaise: -5 } }, staff);
+  assert.equal(neg.status, 400);
+});
