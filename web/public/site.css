@@ -1362,3 +1362,5 @@ html[data-theme="ivory"] aside.panel#book .chip2.on{background:#fff;border-color
 .datebar .datepick,html:not([data-embed]):not([data-embed-section]) #view-home #book .datepick{width:76px;height:76px;min-height:76px;border-radius:16px;background-size:40px}
 .day b{font-family:'Barlow Semi Condensed','Inter',system-ui,sans-serif;font-weight:700;font-size:30px;line-height:1.1;letter-spacing:.01em}
 @media (max-width:560px){.day b{font-size:26px}}
+html[data-theme="ivory"] #view-home aside.panel#book .chip2,html[data-theme="ivory"] #view-home aside.panel#book .chip2 small{color:#0f3d2e!important}
+html[data-theme="ivory"] #view-home aside.panel#book .chip2{background:#fbf8f0;font-weight:600}
