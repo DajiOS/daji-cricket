@@ -6,7 +6,7 @@ import { getSettings } from '../settings.ts';
 import { availability, getGroundOr404, listGrounds, toGround } from '../grounds.ts';
 import { Validator } from '../input.ts';
 import { HttpError } from '../errors.ts';
-import { checkPasswordStrength, createUser, login, signToken, toUser, userByPhone, userRow } from '../auth.ts';
+import { checkPasswordStrength, createUser, login, revokeAllTokens, revokeToken, signToken, toUser, userByPhone, userRow } from '../auth.ts';
 import { checkOtp, requestOtp } from '../otp.ts';
 import { audit } from '../audit.ts';
 import { createEnquiry } from '../enquiries.ts';
@@ -94,6 +94,10 @@ export function publicRoutes(r: Router): void {
     const fresh = userRow(row.id)!;
     return created({ token: signToken(c.cfg, fresh), user: toUser(fresh) });
   }, { rate: 'auth' });
+
+  // Sign out on the server: this token stops working everywhere, immediately. Safe to call with an expired or missing token.
+  r.post('/api/auth/logout', (c) => { const done = revokeToken(c.cfg, c.req.headers.authorization); if (done && c.user) audit({ id: c.user.id, role: c.user.role }, 'auth.logout', 'user', c.user.id, {}); return ok({ signedOut: true }); }, { rate: 'auth' });
+  r.post('/api/auth/logout-all', (c) => { revokeAllTokens(c.user!.id); audit({ id: c.user!.id, role: c.user!.role }, 'auth.logout_all', 'user', c.user!.id, {}); return ok({ signedOut: true }); }, { auth: 'user' });
 
   r.post('/api/auth/login', (c) => {
     const v = new Validator(c.json());

@@ -15,6 +15,11 @@ export async function setToken(t: string | null): Promise<void> {
   try { if (t) await SecureStore.setItemAsync(KEY, t); else await SecureStore.deleteItemAsync(KEY); } catch { /* the session just will not survive a restart */ }
 }
 export const currentToken = (): string | null => token;
+/** Ends the session on the server too, so a copied token stops working. Never throws. */
+export async function serverSignOut(): Promise<void> {
+  if (!token) return;
+  try { await fetch(API_URL + '/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch { /* offline: the token still expires */ }
+}
 
 export class ApiError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } }
 

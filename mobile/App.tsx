@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { api, loadToken, setToken, setViewOwner } from './src/api';
+import { api, loadToken, serverSignOut, setToken, setViewOwner } from './src/api';
 import type { Booking, HoldResponse, User } from './src/types';
 import { AuthScreen } from './src/AuthScreen';
 import { BookScreen } from './src/BookScreen';
@@ -58,7 +58,7 @@ export default function App() {
       .catch(() => {});
   }, [user?.role]);
   useEffect(() => onNotificationTap(() => { setHold(null); setDone(null); setMore(null); setTab(user && user.role !== 'customer' ? 'tasks' : 'me'); }), [user?.role]);
-  const signOut = useCallback(async () => { await unregisterPush(); await setToken(null); setViewOwner(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('book'); }, []);
+  const signOut = useCallback(async () => { await unregisterPush(); await serverSignOut(); await setToken(null); setViewOwner(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('book'); }, []);
 
   if (user === undefined) return <View style={s.screen}><Loading /></View>;
   if (user === null && ADMIN_APP) return <><StatusBar style="light" /><AuthScreen admin onUser={setUser} /></>;

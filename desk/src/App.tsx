@@ -41,7 +41,7 @@ function Shell({ route }: { route: string }) {
   const [counts, , reloadCounts] = useApi<{ count: number }>(can(s.me, 'manage_accounting') && s.ownerId ? '/api/accounting/approvals/count' : null, [route, s.ownerId]);
   const waiting = counts?.count ?? 0;
   s.refreshCounts = reloadCounts;
-  const signOut = () => { setToken(null); location.href = './'; };
+  const signOut = () => { const t = getToken(); const done = () => { setToken(null); location.href = './'; }; if (!t) return done(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + t } }).catch(() => {}).finally(done); };
   const all = NAV.flatMap((g) => g.items);
   const bottom = ['/', '/bookings', '/bills', '/approvals', '/settings'].map((to) => all.find((i) => i.to === to)).filter((i): i is NavItem => !!i && visible(i));
   const owner = s.owners.find((o) => o.id === s.ownerId);
