@@ -34,3 +34,8 @@
 /* opening animation: played by intro.js (the same film as the website) */
 #intro { position: fixed; inset: 0; z-index: 400; }
 @media (prefers-reduced-motion: reduce) { #intro { display: none; } }
+
+/* The action buttons of a pop-up stay in view at the bottom, so a long form (like Multi-day booking) never hides its Save button. */
+.modal-foot { position: sticky; bottom: 0; background: var(--panel); border-radius: 0 0 18px 18px; z-index: 2; }
+.overlay { padding-bottom: 0; }
+@media (max-width: 760px) { .overlay { padding: 12px 10px 0; } .modal-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom)); flex-wrap: wrap; } .modal-foot .btn { flex: 1 1 auto; } }
