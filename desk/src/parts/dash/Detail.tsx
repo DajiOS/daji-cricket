@@ -61,7 +61,7 @@ export function BookingDetail({ id, onClose, onChanged }: { id: string; onClose:
         <div className="grid g3">
           <div className="miniStat"><span>Total</span><b>{inr(b.totalPaise)}</b></div>
           <div className="miniStat"><span>Paid</span><b className="gold">{inr(b.paidPaise)}</b></div>
-          <div className="miniStat"><span>Balance</span><b style={b.status === 'confirmed' && b.balancePaise > 0 ? { color: '#e9c06a' } : undefined}>{inr(b.status === 'cancelled' || b.status === 'expired' ? 0 : b.balancePaise)}</b></div>
+          <div className="miniStat"><span>Balance</span><b style={b.status === 'confirmed' && b.balancePaise > 0 ? { color: '#a8720f' } : undefined}>{inr(b.status === 'cancelled' || b.status === 'expired' ? 0 : b.balancePaise)}</b></div>
         </div>
 
         <div>
