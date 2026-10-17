@@ -1,4 +1,5 @@
 import { many, one, registerSchema, run, tx } from '../db.ts';
+import { seal, unseal } from '../vault.ts';
 import { now } from '../clock.ts';
 import { audit, type Actor } from '../audit.ts';
 import { HttpError, conflict, notFound } from '../errors.ts';
@@ -194,8 +195,11 @@ export interface PayStaff {
   joinedOn: string; leftOn: string | null; active: boolean; notes: string | null; createdAt: number;
   pf: boolean; esi: boolean; pt: boolean; tds: boolean; tdsFixedPaise: number; uan: string | null; esicNo: string | null; pan: string | null;
 }
+/** A PAN is sealed with FIELD_KEY when one is set, so it is not readable in the database file or a stolen backup. */
+const sealPan = (v: string | null): string | null => (v ? seal(v) : v);
+const openPan = (v: string | null): string | null => { if (!v) return v; try { return unseal(v); } catch { return null; } };
 interface StaffRow { id: string; owner_id: string; name: string; role: string; phone: string | null; pay_type: string; rate_paise: number; joined_on: string; left_on: string | null; active: number; notes: string | null; created_at: number; pf: number; esi: number; pt: number; tds: number; tds_fixed_paise: number; uan: string | null; esic_no: string | null; pan: string | null }
-const toStaff = (r: StaffRow): PayStaff => ({ id: r.id, name: r.name, role: r.role, phone: r.phone, payType: r.pay_type, ratePaise: r.rate_paise, joinedOn: r.joined_on, leftOn: r.left_on, active: !!r.active, notes: r.notes, createdAt: r.created_at, pf: !!r.pf, esi: !!r.esi, pt: !!r.pt, tds: !!r.tds, tdsFixedPaise: r.tds_fixed_paise, uan: r.uan, esicNo: r.esic_no, pan: r.pan });
+const toStaff = (r: StaffRow): PayStaff => ({ id: r.id, name: r.name, role: r.role, phone: r.phone, payType: r.pay_type, ratePaise: r.rate_paise, joinedOn: r.joined_on, leftOn: r.left_on, active: !!r.active, notes: r.notes, createdAt: r.created_at, pf: !!r.pf, esi: !!r.esi, pt: !!r.pt, tds: !!r.tds, tdsFixedPaise: r.tds_fixed_paise, uan: r.uan, esicNo: r.esic_no, pan: openPan(r.pan) });
 
 export function listStaff(ownerId: string, includeInactive = true): PayStaff[] {
   return many<StaffRow>(`SELECT * FROM payroll_staff WHERE owner_id = ? AND deleted_at IS NULL ${includeInactive ? '' : 'AND active = 1'} ORDER BY active DESC, name COLLATE NOCASE`, ownerId).map(toStaff);
@@ -217,7 +221,7 @@ export function createStaff(ownerId: string, actor: Actor, body: unknown): PaySt
   v.done();
   const id = newId('pst'), t = now();
   run(`INSERT INTO payroll_staff(id, owner_id, name, role, phone, pay_type, rate_paise, joined_on, active, notes, pf, esi, pt, tds, tds_fixed_paise, uan, esic_no, pan, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    id, ownerId, name!, role, phone ?? null, payType!, rate!, joinedOn, notes ?? null, sf.pf ?? 0, sf.esi ?? 0, sf.pt ?? 0, sf.tds ?? 0, sf.tdsFixed ?? 0, sf.uan ?? null, sf.esicNo ?? null, sf.pan ?? null, t, actor.id, t, actor.id);
+    id, ownerId, name!, role, phone ?? null, payType!, rate!, joinedOn, notes ?? null, sf.pf ?? 0, sf.esi ?? 0, sf.pt ?? 0, sf.tds ?? 0, sf.tdsFixed ?? 0, sf.uan ?? null, sf.esicNo ?? null, sealPan(sf.pan ?? null), t, actor.id, t, actor.id);
   audit(actor, 'payroll.staff.create', 'payroll_staff', id, { name, payType, ratePaise: rate }, ownerId);
   return toStaff(staffOr404(ownerId, id));
 }
@@ -243,7 +247,7 @@ export function updateStaff(ownerId: string, actor: Actor, id: string, body: unk
   run(`UPDATE payroll_staff SET name = ?, role = ?, phone = ?, pay_type = ?, rate_paise = ?, joined_on = ?, left_on = ?, active = ?, notes = ?, pf = ?, esi = ?, pt = ?, tds = ?, tds_fixed_paise = ?, uan = ?, esic_no = ?, pan = ?, updated_at = ?, updated_by = ? WHERE id = ?`,
     name ?? cur.name, role ?? cur.role, b.phone === '' ? null : phone ?? cur.phone, payType ?? cur.pay_type, rate ?? cur.rate_paise, nextJoined, nextLeft, nextActive,
     b.notes === '' ? null : notes ?? cur.notes, sf.pf ?? cur.pf, sf.esi ?? cur.esi, sf.pt ?? cur.pt, sf.tds ?? cur.tds, sf.tdsFixed ?? cur.tds_fixed_paise,
-    b.uan === '' ? null : sf.uan ?? cur.uan, b.esicNo === '' ? null : sf.esicNo ?? cur.esic_no, b.pan === '' ? null : sf.pan ?? cur.pan, now(), actor.id, id);
+    b.uan === '' ? null : sf.uan ?? cur.uan, b.esicNo === '' ? null : sf.esicNo ?? cur.esic_no, b.pan === '' ? null : sf.pan ? sealPan(sf.pan) : cur.pan, now(), actor.id, id);
   audit(actor, 'payroll.staff.update', 'payroll_staff', id, { changed: Object.keys(b) }, ownerId);
   return toStaff(staffOr404(ownerId, id));
 }
@@ -526,7 +530,7 @@ export function payslip(ownerId: string, month: string, staffId: string) {
   const biz = one<{ business_name: string | null; name: string }>('SELECT business_name, name FROM users WHERE id = ?', ownerId);
   return {
     month, status: r.status, finalisedAt: r.finalisedAt, employer: biz?.business_name || biz?.name || 'Daji Cricket Ground',
-    staff: st ? { name: st.name, role: st.role, phone: st.phone, joinedOn: st.joined_on, uan: st.uan, esicNo: st.esic_no, pan: st.pan } : { name: line.staffName, role: line.staffRole, phone: null, joinedOn: null, uan: null, esicNo: null, pan: null },
+    staff: st ? { name: st.name, role: st.role, phone: st.phone, joinedOn: st.joined_on, uan: st.uan, esicNo: st.esic_no, pan: openPan(st.pan) } : { name: line.staffName, role: line.staffRole, phone: null, joinedOn: null, uan: null, esicNo: null, pan: null },
     line, marks, adjustments: listAdjustments(ownerId, month, staffId),
   };
 }
