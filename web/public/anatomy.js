@@ -33,7 +33,7 @@
         for (let z = 10; z < 40; z += 10) { seg([-100, y0, z], [100, y0, z], g, { opacity: 0.35 }); }
       }
     } },
-    { name: 'Floodlights', note: 'Four towers light the whole ground for evening play.', draw(g) {
+    { name: 'Floodlights', note: 'Four towers light the whole ground from dusk to late night.', draw(g) {
       for (const d of [45, 135, 225, 315]) {
         const t = (d * Math.PI) / 180, x = 285 * Math.cos(t), y = 285 * Math.sin(t);
         seg([x, y, 0], [x, y, 190], g); box(x - 16, y - 16, 190, x + 16, y + 16, 206, g);
