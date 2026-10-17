@@ -1284,3 +1284,7 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand{left:clamp(28px,3vw,56px);right:auto;top:14px}
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .links{position:absolute;top:0;height:84px;display:flex;align-items:center;right:calc(var(--split) + clamp(28px,3vw,56px));left:auto;margin:0}
 }
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .links [data-book]{display:none}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home #book>.eyebrow{font-size:13px;letter-spacing:.2em;color:var(--gold-bright)}
+}
