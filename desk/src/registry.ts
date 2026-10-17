@@ -20,6 +20,7 @@ import Reminders from './pages/Reminders';
 import Team from './pages/Team';
 import Settings from './pages/Settings';
 import Platform from './pages/Platform';
+import Media from './pages/Media';
 
 export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals' }
 /** The sections inside a page (the pills at its top), so the side menu can list them too. The first one is the page's own address. */
@@ -45,7 +46,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/accounting', page: Accounting }, { path: '/transactions', page: Transactions }, { path: '/bank', page: BankImport },
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
-  { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform },
+  { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media },
 ];
 export const HOME = Dashboard;
 
@@ -75,6 +76,7 @@ export const NAV: NavGroup[] = [
   ] },
   { group: 'Settings', items: [
     { to: '/team', label: 'Users & Access', icon: 'shield', ownerOnly: true },
+    { to: '/media', label: 'Photos & videos', icon: 'upload', ownerOnly: true },
     { to: '/settings', label: 'Settings', icon: 'settings', ownerOnly: true },
     { to: '/platform', label: 'Platform', icon: 'vault', superOnly: true },
   ] },

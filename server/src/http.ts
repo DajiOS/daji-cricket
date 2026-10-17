@@ -6,6 +6,7 @@ import { authenticate, type UserRow } from './auth.ts';
 import { HttpError, forbidden } from './errors.ts';
 import { now } from './clock.ts';
 import { serveWeb } from './site.ts';
+import { serveLibraryFile } from './library.ts';
 
 export interface Reply {
   status: number;
@@ -35,6 +36,8 @@ export interface RouteOpts {
   /** 'user' = any signed-in user; a role list restricts to those roles; omitted = public. */
   auth?: 'user' | Role[];
   maxBody?: number;
+  /** The handler reads the request itself (a large upload streamed to disk); the body is not buffered. */
+  stream?: boolean;
   rate?: 'auth' | 'none';
 }
 interface Route { method: string; re: RegExp; keys: string[]; handler: Handler; opts: RouteOpts }
@@ -204,6 +207,9 @@ export function createApp(cfg: Config, router: Router): Server {
         return;
       }
 
+      if (url.pathname.startsWith('/media/') && (method === 'GET' || method === 'HEAD')) {
+        if (serveLibraryFile(cfg.dataDir, req, res, url.pathname)) { status = res.statusCode; return; }
+      }
       if (!url.pathname.startsWith('/api/') && url.pathname !== '/api') {
         if (method !== 'GET' && method !== 'HEAD') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use GET');
         // Validate any % escapes before the static layer sees the path.
@@ -238,7 +244,7 @@ export function createApp(cfg: Config, router: Router): Server {
         if (a !== 'user' && !a.includes(user.role)) throw forbidden();
       }
 
-      const raw = method === 'GET' || method === 'HEAD' ? Buffer.alloc(0) : await readBody(req, route.opts.maxBody ?? DEFAULT_BODY);
+      const raw = method === 'GET' || method === 'HEAD' || route.opts.stream ? Buffer.alloc(0) : await readBody(req, route.opts.maxBody ?? DEFAULT_BODY);
       let parsed: unknown;
       const ctx: Ctx = {
         req, res, url, params, query: url.searchParams, ip, cfg, user, raw,

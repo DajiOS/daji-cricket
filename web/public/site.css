@@ -1381,3 +1381,11 @@ html[data-theme="ivory"] #view-home h1.display{font-family:'Bodoni Moda','Playfa
 /* dropdown lists: dark readable text on a solid background everywhere (was pale on white) */
 select option,select optgroup{color:#16201b!important;background:#ffffff!important}
 select option:checked,select option:hover{background:#e8dfc6!important;color:#0f3d2e!important}
+
+/* uploaded banner (photo or video) at the top of the home page, and video tiles in the gallery */
+.hero-media{margin:22px 0 4px;border-radius:18px;overflow:hidden;background:#0f3d2e;aspect-ratio:16/9;max-height:46vh;width:100%}
+.hero-media video,.hero-media img{width:100%;height:100%;object-fit:cover;display:block}
+#gal-grid button.is-video{position:relative}
+#gal-grid button.is-video video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+#gal-grid button.is-video::after{content:"";position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(15,61,46,.72) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f6f2e9' d='M9 7v10l8-5z'/%3E%3C/svg%3E") center/26px no-repeat}
+.lightbox video{max-width:100%;max-height:82vh;border-radius:10px}
