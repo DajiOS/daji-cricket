@@ -5,3 +5,15 @@
 	header -Server
 	log
 }
+
+# The public website itself: dajicricket.com serves the same app (the pages call the API on their own address).
+# HTTPS certificates start working once the DNS records for these names point at this server.
+{$SITE_HOST:dajicricket.com} {
+	encode zstd gzip
+	reverse_proxy api:4000
+	header -Server
+	log
+}
+www.{$SITE_HOST:dajicricket.com} {
+	redir https://{$SITE_HOST:dajicricket.com}{uri} permanent
+}

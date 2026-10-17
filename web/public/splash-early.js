@@ -5,7 +5,7 @@
   try {
     var seen = false; try { seen = sessionStorage.getItem('daji.splash') === '1'; } catch (e) { /* private mode: just play */ }
     var framed = window.parent !== window || /[?&]embed=/.test(location.search);
-    if (framed) d.setAttribute('data-theme', 'onyx-slate'); // pages Wix embeds keep the dark look they were built with
+    if (framed) d.setAttribute('data-theme', 'ivory'); // the Wix widgets follow the ivory and green look
     var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (seen || framed || reduce || (location.hash && location.hash !== '#top')) return;
     d.classList.add('splash-on');

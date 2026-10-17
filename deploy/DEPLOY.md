@@ -31,3 +31,12 @@ This build uses SQLite (one file, safe for one server and one owner's traffic, w
 
 ## Updating
 Copy the new files, then repeat step 3. Data lives in the `daji-data` volume and survives rebuilds.
+
+## Making dajicricket.com open this site (instead of Wix)
+
+1. Merge and deploy, so Caddy knows the names `dajicricket.com` and `www.dajicricket.com`.
+2. In Wix Domains, if the domain is connected to the Wix site, disconnect it from the site first (Domains, the domain's menu, Manage, remove the connection), so the DNS records can be changed.
+3. Manage DNS Records: change the **A record for `@`** to this server's IP, and make `www` a **CNAME to `dajicricket.com`** (or an A record to the same IP). **Leave every MX and TXT record as it is** so email keeps working.
+4. Wait for DNS (minutes to a few hours), then open `https://dajicricket.com`. Caddy gets the certificate on the first visit.
+5. To go back to Wix: put the original Wix records back and reconnect the domain to the Wix site.
+6. The `api.` address keeps working for the apps and Razorpay. Set `PUBLIC_URL=https://dajicricket.com` (already the example value).

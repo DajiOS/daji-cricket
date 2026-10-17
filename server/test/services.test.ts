@@ -34,7 +34,7 @@ test('add, edit (clearing a field), and remove a service', async () => {
 });
 
 test('a secret key pasted into the notes is refused', async () => {
-  const r = await h.post('/api/admin/services', { name: 'Some API', notes: 'key is ' + 'sk_' + 'live_51Hh3kJ9aBcDeFgHiJkLmNoPqRsTuVwXyZ123456' }, admin);
+  const r = await h.post('/api/admin/services', { name: 'Some API', notes: 'key is ' + 'sk_' + 'x'.repeat(20) + 'AbCdEf0123456789' }, admin);
   assert.equal(r.status, 400); assert.equal(r.body.error.code, 'LOOKS_LIKE_A_KEY');
   assert.equal((await h.post('/api/admin/services', { name: 'Bad link', loginUrl: 'msg91.com' }, admin)).status, 400);
 });
