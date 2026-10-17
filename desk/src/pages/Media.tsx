@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PageHead, Stat, Loading, ErrorBox, useToast } from '../ui';
 import { useApi, del, patch, getToken } from '../lib';
 import { errText } from '../parts/admin/common';
@@ -18,6 +18,9 @@ export default function Media() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+  // while previews and light copies are still being made, look again every 20 seconds
+  const busy = !!lib && lib.items.some((i) => !i.thumb || (i.kind === 'video' && !i.web));
+  useEffect(() => { if (!busy) return; const t = setInterval(reload, 20000); return () => clearInterval(t); }, [busy]);
 
   const patchJob = (key: string, p: Partial<Job>) => setJobs((j) => j.map((x) => (x.key === key ? { ...x, ...p } : x)));
   function send(file: File): Promise<void> {

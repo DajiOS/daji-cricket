@@ -44,10 +44,12 @@ const dir = (dataDir: string) => join(dataDir, 'library');
 // Small preview pictures (the first frame of a video, or a shrunken photo) so the website and the desk never have to load a huge original
 // just to draw a tile. Made one at a time in the background with ffmpeg; when ffmpeg is not installed the original is used instead.
 const queue: Array<() => Promise<void>> = [];
+const slow: Array<() => Promise<void>> = [];
 let working = false;
+// quick preview pictures always go first; the slow video copies wait until none are left
 async function drain(): Promise<void> {
   if (working) return; working = true;
-  while (queue.length) { try { await queue.shift()!(); } catch { /* a failed preview is not an error */ } }
+  while (queue.length || slow.length) { try { await (queue.length ? queue : slow).shift()!(); } catch { /* a failed preview is not an error */ } }
   working = false;
 }
 function ffmpeg(args: string[]): Promise<boolean> {
@@ -63,6 +65,10 @@ export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boo
     const vf = ['-vf', 'scale=720:-2', '-frames:v', '1', '-q:v', '4', out];
     const ok = isVideo ? (await ffmpeg(['-ss', '1', '-i', src, ...vf])) || (await ffmpeg(['-i', src, ...vf])) : await ffmpeg(['-i', src, ...vf]);
     if (!ok) { try { unlinkSync(out); } catch { /* none made */ } }
+  });
+  if (isVideo) slow.push(async () => {
+    const src = pathOf(dataDir, id, ext);
+    if (!existsSync(src)) return;
     // a light copy for playing on the website: 720p, about 3 Mbit/s, starts playing before it has fully downloaded
     const web = webPath(dataDir, id);
     if (isVideo && !existsSync(web)) {
