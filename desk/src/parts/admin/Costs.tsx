@@ -1,7 +1,7 @@
 // Software costs: what the platform costs to build and run, from every service's invoices. Fetched automatically where the service has an API.
 import { useRef, useState } from 'react';
 import { useApi, post, put, patch, del, sendFile, download, inr, fmtDate, todayISO } from '../../lib';
-import { Loading, ErrorBox, Table, Chip, Field, Modal, useForm, useToast } from '../../ui';
+import { Loading, ErrorBox, Table, Chip, Field, Modal, useForm, useToast, DateInput } from '../../ui';
 import { Panel, errText } from './common';
 
 const CATS: Record<string, string> = { hosting: 'Hosting', domain: 'Domain', website: 'Website', payments: 'Payments', messaging: 'Messages', banking: 'Bank feeds', ai: 'AI', app: 'App stores', tools: 'Tools', other: 'Other' };
@@ -124,7 +124,7 @@ function ServiceDialog({ svc, onClose, done }: { svc: any; onClose: () => void; 
         <Field label="Currency"><select className="inp" {...f.bind('currency')}><option value="INR">Rupees</option><option value="USD">US dollars</option></select></Field>
         <Field label="Usual amount" hint="Before GST. Leave empty for usage bills."><input className="inp" inputMode="decimal" {...f.bind('expected')} /></Field>
         <Field label="GST %" hint="18 for Indian companies, 0 for foreign ones."><input className="inp" inputMode="decimal" {...f.bind('gst')} /></Field>
-        <Field label="Next due date" hint="A fixed fee makes an Expected invoice on this date."><input className="inp" type="date" {...f.bind('nextDue')} /></Field>
+        <Field label="Next due date" hint="A fixed fee makes an Expected invoice on this date."><DateInput className="inp" {...f.bind('nextDue')} /></Field>
         <Field label="Invoices come from"><select className="inp" {...f.bind('source')}><option value="manual">I enter them</option><option value="aws">AWS Cost Explorer</option><option value="anthropic">Anthropic cost report</option><option value="razorpay">Razorpay payments</option></select></Field>
         {f.v.source === 'aws' && <Field label="AWS service name" hint="For example Amazon Lightsail. Empty means the whole AWS bill."><input className="inp" {...f.bind('sourceRef')} /></Field>}
         <Field label="Notes" full><input className="inp" {...f.bind('notes')} /></Field>
@@ -156,12 +156,12 @@ function InvoiceDialog({ invoice, services, rate, onClose, done }: { invoice: an
       <div className="form-grid">
         <Field label="Service"><select className="inp" disabled={editing} {...f.bind('serviceId')}>{services.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
         <Field label="Invoice number"><input className="inp" {...f.bind('invoiceNo')} /></Field>
-        <Field label="Invoice date"><input className="inp" type="date" {...f.bind('invoiceDate')} /></Field>
+        <Field label="Invoice date"><DateInput className="inp" {...f.bind('invoiceDate')} /></Field>
         <Field label={`Amount before GST (${svc?.currency === 'USD' ? 'US$' : '₹'})`}><input className="inp" inputMode="decimal" {...f.bind('amount')} /></Field>
         <Field label="GST" hint={svc?.gstPercent ? `Left empty it is ${svc.gstPercent}% of the amount.` : 'Leave empty for none.'}><input className="inp" inputMode="decimal" {...f.bind('gst')} /></Field>
         {svc?.currency === 'USD' && <Field label="Dollar rate (₹ per US$)" hint="The rate on the day, from your card or bank statement."><input className="inp" inputMode="decimal" {...f.bind('fx')} /></Field>}
         <Field label="Status"><select className="inp" {...f.bind('status')}><option value="due">To pay</option><option value="paid">Paid</option><option value="expected">Expected (not counted yet)</option></select></Field>
-        {f.v.status === 'paid' && <Field label="Paid on"><input className="inp" type="date" {...f.bind('paidOn')} /></Field>}
+        {f.v.status === 'paid' && <Field label="Paid on"><DateInput className="inp" {...f.bind('paidOn')} /></Field>}
         <Field label="Notes" full><input className="inp" {...f.bind('notes')} /></Field>
       </div>
       {editing && <div className="row" style={{ gap: 8, marginTop: 12 }}>

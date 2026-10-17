@@ -1,6 +1,6 @@
 // Projects group tasks; milestones show how far a project has got.
 import { useState } from 'react';
-import { Modal, useToast } from '../../ui';
+import { Modal, useToast, DateInput } from '../../ui';
 import { fmtDate, patch, post } from '../../lib';
 import { errMsg } from './common';
 import type { Project } from './taskTypes';
@@ -40,7 +40,7 @@ function ProjectBox({ p, run }: { p: Project; run: (fn: () => Promise<unknown>) 
       ))}
       <div className="row kmadd">
         <input className="inp" maxLength={100} placeholder="New milestone, e.g. Poles installed" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <input className="inp" type="date" aria-label="Milestone due day" value={due} onChange={(e) => setDue(e.target.value)} />
+        <DateInput className="inp" aria-label="Milestone due day" value={due} onChange={(e) => setDue(e.target.value)} />
         <button className="btn sm" onClick={() => run(async () => { await post(`/api/projects/${encodeURIComponent(p.id)}/milestones`, { title: title.trim(), dueDate: due || undefined }); setTitle(''); setDue(''); })}>Add milestone</button>
       </div>
     </div>

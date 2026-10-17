@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { ProgressCard, Student } from './types';
-import { Badge, Btn, Chip, Field, KV, Loading, Section, s, NameFields } from './ui';
+import { Badge, Btn, Chip, Field, KV, Loading, Section, s, NameFields, DateField } from './ui';
 import { C } from './theme';
 
 type Tab = 'attendance' | 'students' | 'progress';
@@ -42,7 +42,7 @@ function Attendance() {
   const markAll = (p: boolean) => setRows((r) => (r ?? []).map((x) => ({ ...x, present: p })));
   return (
     <ScrollView contentContainerStyle={s.pad} keyboardShouldPersistTaps="handled">
-      <Field label="Day (YYYY-MM-DD)" value={date} onChangeText={setDate} />
+      <DateField label="Day" value={date} onChange={setDate} />
       <View style={{ flexDirection: 'row' }}><Chip label="All present" onPress={() => markAll(true)} /><Chip label="All absent" onPress={() => markAll(false)} /></View>
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       {rows === null ? <Loading /> : !rows.length ? <Text style={s.muted}>No active students for this day.</Text> : rows.map((r) => (
@@ -84,7 +84,7 @@ function Students() {
       {adding && (<View style={s.card}>
         <NameFields value={f.name} onChange={set('name')} firstLabel="Student first name" lastLabel="Student last name" /><NameFields value={f.guardianName} onChange={set('guardianName')} firstLabel="Parent first name" lastLabel="Parent last name" />
         <Field label="Parent email" value={f.guardianEmail} onChangeText={set('guardianEmail')} keyboardType="email-address" /><Field label="Parent phone" value={f.guardianPhone} onChangeText={set('guardianPhone')} keyboardType="phone-pad" />
-        <Field label="Batch" value={f.batch} onChangeText={set('batch')} autoCapitalize="words" /><Field label="Born on (YYYY-MM-DD)" value={f.bornOn} onChangeText={set('bornOn')} />
+        <Field label="Batch" value={f.batch} onChangeText={set('batch')} autoCapitalize="words" /><DateField label="Born on" value={f.bornOn} onChange={set('bornOn')} />
         <Btn label="Save student" onPress={add} busy={busy} />
       </View>)}
       <Field label="Search" value={q} onChangeText={setQ} placeholder="Name" />

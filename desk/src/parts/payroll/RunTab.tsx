@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { post, del, inr, fmtDate, todayISO, fmtDateTime } from '../../lib';
-import { Stat, Table, Chip, Modal, Field, ErrorBox, Confirm, useToast, useForm } from '../../ui';
+import { Stat, Table, Chip, Modal, Field, ErrorBox, Confirm, useToast, useForm, DateInput } from '../../ui';
 import { StatutoryDues } from './StatutoryDues';
 import { PAY, METHOD_LABEL, days, monthName, type Line, type Run } from './common';
 
@@ -74,7 +74,7 @@ function PayForm({ month, line, onClose, onSaved }: { month: string; line: Line;
   return (
     <Modal title={`Pay ${line.staffName}`} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={save}>Mark {inr(line.netPaise)} paid</button></>}>
       <div className="form-grid">
-        <Field label="Date paid"><input className="inp" type="date" {...f.bind('paidOn')} /></Field>
+        <Field label="Date paid"><DateInput className="inp" {...f.bind('paidOn')} /></Field>
         <Field label="Method"><select className="inp" {...f.bind('method')}>{Object.entries(METHOD_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
         <Field label="Reference" full hint="UPI reference, transfer number or cheque number (optional)"><input className="inp" {...f.bind('reference')} /></Field>
       </div>

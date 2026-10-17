@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApi, qs, inr, fmtDate, go } from '../lib';
-import { PageHead, Stat, Tabs, Empty, ErrorBox, Loading, Icon, Filters } from '../ui';
+import { PageHead, Stat, Tabs, Empty, ErrorBox, Loading, Icon, Filters, DateInput } from '../ui';
 import { BillChip, DueText, type Bill, type Stats } from '../parts/bills/common';
 import { BillForm } from '../parts/bills/BillForm';
 import { BillDetail } from '../parts/bills/BillDetail';
@@ -45,8 +45,8 @@ function BillList({ view }: { view: View }) {
               <Filters active={(week ? 1 : 0) + (cat ? 1 : 0) + (from || to ? 1 : 0)}>
                 <label className="row small muted" style={{ gap: 6 }}><input type="checkbox" checked={week} onChange={(e) => setWeek(e.target.checked)} />Due in 7 days</label>
                 <select className="inp" style={{ width: 170 }} aria-label="Category" value={cat} onChange={(e) => setCat(e.target.value)}><option value="">Any category</option>{[...new Set((data?.items ?? []).map((b) => b.categoryName ?? 'No category'))].sort().map((c) => <option key={c} value={c}>{c}</option>)}</select>
-                <input className="inp" style={{ width: 140 }} type="date" aria-label="Bills from" value={from} onChange={(e) => setFrom(e.target.value)} />
-                <input className="inp" style={{ width: 140 }} type="date" aria-label="Bills to" value={to} onChange={(e) => setTo(e.target.value)} />
+                <DateInput className="inp" style={{ width: 140 }} aria-label="Bills from" value={from} onChange={(e) => setFrom(e.target.value)} />
+                <DateInput className="inp" style={{ width: 140 }} aria-label="Bills to" value={to} onChange={(e) => setTo(e.target.value)} />
               </Filters>
             </div>
           </div>

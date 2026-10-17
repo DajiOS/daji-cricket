@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Chip, Confirm, ErrorBox, Field, Modal, Table, useForm, useToast } from '../../ui';
+import { Chip, Confirm, ErrorBox, Field, Modal, Table, useForm, useToast, DateInput } from '../../ui';
 import { del, fmtDateTime, patch, post, go } from '../../lib';
 import { API, splitIst, type Detail, type Fixture } from './shared';
 
@@ -27,7 +27,7 @@ function FixtureForm({ d, fx, onClose, onSaved }: { d: Detail; fx?: Fixture; onC
         <Field label="Team B"><select className="inp" disabled={locked} {...bind('teamBId')}>{d.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
         <Field label="Round"><input className="inp" type="number" min={1} max={99} {...bind('round')} /></Field>
         <Field label="Ground"><select className="inp" {...bind('groundId')}><option value="">Not set</option>{d.grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
-        <Field label="Date"><input className="inp" type="date" {...bind('date')} /></Field>
+        <Field label="Date"><DateInput className="inp" {...bind('date')} /></Field>
         <Field label="Time"><input className="inp" type="time" {...bind('time')} /></Field>
       </div>
     </Modal>
@@ -93,7 +93,7 @@ function GenerateForm({ d, onClose, onSaved }: { d: Detail; onClose: () => void;
       {n < 2 && <div className="err">Add at least two teams first.</div>}
       {has && <div className="hint" style={{ marginBottom: 12 }}>This replaces the {d.fixtures.length} fixtures already here. It is only allowed while none has a result.</div>}
       <div className="form-grid">
-        <Field label="First round on"><input className="inp" type="date" {...bind('startDate')} /></Field>
+        <Field label="First round on"><DateInput className="inp" {...bind('startDate')} /></Field>
         <Field label="Start time"><input className="inp" type="time" {...bind('time')} /></Field>
         <Field label="Days between rounds"><input className="inp" type="number" min={0} max={60} {...bind('gap')} /></Field>
         <Field label="Ground"><select className="inp" {...bind('groundId')}><option value="">Not set</option>{d.grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApi, post, patch, inr, toPaise, rupees, fmtDate, todayISO } from '../../lib';
-import { Table, Chip, Modal, Field, ErrorBox, Loading, NameField, useToast, useForm } from '../../ui';
+import { Table, Chip, Modal, Field, ErrorBox, Loading, NameField, useToast, useForm, DateInput } from '../../ui';
 import { PAY, type PayStaff } from './common';
 
 export function StaffTab({ onChanged }: { onChanged: () => void }) {
@@ -75,7 +75,7 @@ function StaffForm({ staff, onClose, onSaved }: { staff: PayStaff | null; onClos
         <Field label={f.v.payType === 'monthly' ? 'Monthly salary (rupees)' : 'Daily wage (rupees)'} hint={f.v.payType === 'monthly' ? 'Cut pro rata for unpaid days in the month' : 'Paid for each day present; half day is half'}>
           <input className="inp" inputMode="decimal" {...f.bind('rate')} />
         </Field>
-        <Field label="Joining date"><input className="inp" type="date" {...f.bind('joinedOn')} /></Field>
+        <Field label="Joining date"><DateInput className="inp" {...f.bind('joinedOn')} /></Field>
         <Field label="Phone"><input className="inp" inputMode="tel" {...f.bind('phone')} /></Field>
         <Field label="Notes" full><input className="inp" {...f.bind('notes')} /></Field>
       </div>

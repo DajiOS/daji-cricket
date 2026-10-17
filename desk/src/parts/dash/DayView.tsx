@@ -1,6 +1,6 @@
 // One day at the ground: every session, grouped by ground, in time order.
 import { useState, type CSSProperties } from 'react';
-import { Loading, ErrorBox, Empty } from '../../ui';
+import { Loading, ErrorBox, Empty, DateInput } from '../../ui';
 import { useApi, fmtDay, todayISO, addDaysISO, inr } from '../../lib';
 import { type Booking, type Page, BookingChip, timeRange, whatOf } from './common';
 import { BookingDetail } from './Detail';
@@ -17,7 +17,7 @@ export function DayView({ version, onChanged }: { version: number; onChanged: ()
     <div className="stack">
       <div className="row">
         <button className="btn sm" onClick={() => setDate(addDaysISO(date, -1))} aria-label="Previous day">←</button>
-        <input className="inp" type="date" style={{ width: 170 }} value={date} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Day" />
+        <DateInput className="inp" style={{ width: 170 }} value={date} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Day" />
         <button className="btn sm" onClick={() => setDate(addDaysISO(date, 1))} aria-label="Next day">→</button>
         {date !== todayISO() && <button className="btn ghost sm" onClick={() => setDate(todayISO())}>Today</button>}
         <b className="gold" style={{ marginLeft: 6 }}>{fmtDay(date)}</b>

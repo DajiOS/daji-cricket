@@ -1,6 +1,6 @@
 // Academy: the student list, add/edit, parent and student logins, and monthly progress cards.
 import { useState } from 'react';
-import { Chip, Confirm, Field, Modal, Table, NameField, useToast } from '../../ui';
+import { Chip, Confirm, Field, Modal, Table, NameField, useToast, DateInput } from '../../ui';
 import { post, put, patch, thisMonth, useApi, qs } from '../../lib';
 import { Async, FilterBar, Select, errMsg, monthName, useDebounced } from './common';
 
@@ -57,7 +57,7 @@ function StudentDialog({ s, onClose, onSaved }: { s: Student | null; onClose: ()
     <Modal title={s ? 'Edit student' : 'Add a student'} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={save}>Save</button></>}>
       <div className="form-grid">
         <NameField value={f.name} onChange={(n) => setF((x) => ({ ...x, name: n }))} />
-        <Field label="Date of birth"><input className="inp" type="date" value={f.bornOn} onChange={set('bornOn')} /></Field>
+        <Field label="Date of birth"><DateInput className="inp" value={f.bornOn} onChange={set('bornOn')} /></Field>
         <Field label="Batch"><input className="inp" value={f.batch} onChange={set('batch')} placeholder="U-14 weekday" /></Field>
         <NameField value={f.guardianName} onChange={(n) => setF((x) => ({ ...x, guardianName: n }))} firstLabel="Parent first name" lastLabel="Parent last name" />
         <Field label="Parent phone"><input className="inp" inputMode="tel" value={f.guardianPhone} onChange={set('guardianPhone')} /></Field>

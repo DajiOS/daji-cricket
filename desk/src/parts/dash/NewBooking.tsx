@@ -1,6 +1,6 @@
 // A booking taken at the desk (walk-in or phone): pick the ground, day and session, add the customer and the money received.
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Field, ErrorBox, Loading, NameField, splitName } from '../../ui';
+import { Modal, Field, ErrorBox, Loading, NameField, splitName, DateInput } from '../../ui';
 import { api, post, useApi, inr, toPaise, todayISO } from '../../lib';
 import { HAND_METHODS, errText, useCustomerMatch, MatchNote } from './common';
 
@@ -95,7 +95,7 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
         <div className="stack" style={{ gap: 18 }}>
           <div className="form-grid">
             <Field label="Ground"><select className="inp" value={groundId} onChange={(e) => setGroundId(e.target.value)}>{grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
-            <Field label="Date"><input className="inp" type="date" value={date} min={todayISO()} onChange={(e) => setDate(e.target.value)} /></Field>
+            <Field label="Date"><DateInput className="inp" value={date} min={todayISO()} onChange={(e) => setDate(e.target.value)} /></Field>
           </div>
 
           <div>

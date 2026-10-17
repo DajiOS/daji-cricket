@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { post, useApi, inr, fmtDate, todayISO } from '../../lib';
-import { Modal, Field, ErrorBox, useToast, Chip } from '../../ui';
+import { Modal, Field, ErrorBox, useToast, Chip, DateInput } from '../../ui';
 import { METHOD, type Bill } from './common';
 
 interface Link { id: string; date: string; description: string; amountPaise: number; reference: string | null; accountName: string }
@@ -27,7 +27,7 @@ export function PayModal({ bill, onClose, onDone }: { bill: Bill; onClose: () =>
           <div className="small muted">{bill.billNo ? `Bill ${bill.billNo}` : 'No bill number'} · {inr(bill.amountPaise)}</div>
           {bill.vendorUpi && <div className="small">Pay to UPI <span className="gold">{bill.vendorUpi}</span></div>}</div>
         <div className="form-grid">
-          <Field label="Paid on"><input className="inp" type="date" max={todayISO()} value={v.paidDate} onChange={set('paidDate')} /></Field>
+          <Field label="Paid on"><DateInput className="inp" max={todayISO()} value={v.paidDate} onChange={set('paidDate')} /></Field>
           <Field label="Method"><select className="inp" value={v.method} onChange={set('method')}>{Object.entries(METHOD).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
           <Field label={v.method === 'cash' ? 'Reference (optional)' : 'UTR or reference'} full><input className="inp" value={v.reference} onChange={set('reference')} placeholder={v.method === 'upi' ? '12-digit UPI reference' : ''} /></Field>
           {v.method === 'cash' && bill.amountPaise > 10_000_00 && <Field label="Why cash? (needed above ₹10,000)" hint="Cash above ₹10,000 to one person in a day is not an allowed expense unless an exception applies. Pay by UPI or bank if you can." full><input className="inp" value={v.cashReason} onChange={set('cashReason')} placeholder="For example: no bank within reach, rule 6DD" /></Field>}

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 // ---------- icons (1.6px line, gold via currentColor) ----------
 const P: Record<string, string> = {
@@ -191,4 +191,48 @@ export function Confirm({ label, ask, onYes, className = 'btn sm' }: { label: Re
   const [on, setOn] = useState(false);
   if (!on) return <button className={className} onClick={() => setOn(true)}>{label}</button>;
   return <span className="row" style={{ gap: 6 }}><span className="small muted">{ask}</span><button className="btn sm primary" onClick={() => { setOn(false); onYes(); }}>Yes</button><button className="btn sm ghost" onClick={() => setOn(false)}>No</button></span>;
+}
+
+// ---------- dates the Indian way: dd/mm/yyyy ----------
+const showDate = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? `${iso.slice(8)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+const isoDate = (txt: string) => {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(txt); if (!m) return null;
+  const d = +m[1]!, mo = +m[2]!, y = +m[3]!, dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d ? `${m[3]}-${m[2]}-${m[1]}` : null;
+};
+const maskDate = (raw: string) => { const d = raw.replace(/\D/g, '').slice(0, 8); return d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d; };
+
+/** A date field that reads and writes dd/mm/yyyy, with a calendar to pick from. Same props as the browser's date input; value stays yyyy-mm-dd. */
+export function DateInput({ value, onChange, min, max, disabled, className, style, id, autoFocus, 'aria-label': ariaLabel }: {
+  value?: string; onChange?: (e: { target: { value: string; type: string } }) => void; min?: string; max?: string; disabled?: boolean;
+  className?: string; style?: CSSProperties; id?: string; autoFocus?: boolean; 'aria-label'?: string;
+}) {
+  const [txt, setTxt] = useState(showDate(value || '')); const [bad, setBad] = useState('');
+  const picker = useRef<HTMLInputElement>(null);
+  useEffect(() => { if ((isoDate(txt) ?? '') !== (value || '') && !(txt.length > 0 && txt.length < 10)) setTxt(showDate(value || '')); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const emit = (v: string) => onChange?.({ target: { value: v, type: 'date' } });
+  const type = (raw: string) => {
+    const t = maskDate(raw); setTxt(t);
+    if (!t) { setBad(''); emit(''); return; }
+    if (t.length < 10) { setBad(''); return; }
+    const iso = isoDate(t);
+    if (!iso) { setBad('Not a real date'); return; }
+    if ((min && iso < min) || (max && iso > max)) { setBad('That day is outside the dates allowed'); return; }
+    setBad(''); emit(iso);
+  };
+  const w = style && style.width ? { width: style.width } : undefined;
+  return (
+    <span className="dx" style={{ position: 'relative', display: w ? 'inline-block' : 'block', ...w }}>
+      <input className={className} style={{ ...style, width: '100%', paddingRight: 34, ...(bad ? { borderColor: '#c0392b' } : null) }} id={id} type="text" inputMode="numeric" autoComplete="off" maxLength={10}
+        placeholder="dd/mm/yyyy" title={bad || undefined} aria-label={ariaLabel} aria-invalid={bad ? true : undefined} autoFocus={autoFocus} disabled={disabled} value={txt}
+        onChange={(e) => type(e.target.value)} onBlur={() => { if (bad || (txt && txt.length < 10)) { setTxt(showDate(value || '')); setBad(''); } }} />
+      <button type="button" className="dx-b" aria-label="Open calendar" disabled={disabled} onClick={() => { try { picker.current?.showPicker?.(); } catch { /* no native picker */ } }}
+        style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', width: 26, height: 26, display: 'grid', placeItems: 'center', border: 0, background: 'none', color: 'inherit', opacity: disabled ? 0.3 : 0.7, cursor: disabled ? 'default' : 'pointer' }}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
+      </button>
+      <input ref={picker} type="date" tabIndex={-1} aria-hidden="true" value={value || ''} min={min} max={max} disabled={disabled}
+        onChange={(e) => { setTxt(showDate(e.target.value)); setBad(''); emit(e.target.value); }}
+        style={{ position: 'absolute', left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none', border: 0, padding: 0 }} />
+    </span>
+  );
 }

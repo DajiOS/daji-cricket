@@ -1,6 +1,6 @@
 // One task card: edit it, move it, add camera photos and talk about it.
 import { useEffect, useRef, useState } from 'react';
-import { Field, Modal, useToast } from '../../ui';
+import { Field, Modal, useToast, DateInput } from '../../ui';
 import { fmtDateTime, getToken, patch, post, sendFile, useApi } from '../../lib';
 import { Select, errMsg } from './common';
 import { COLS, PRI, type Project, type Task, type TaskPhoto } from './taskTypes';
@@ -43,7 +43,7 @@ export default function TaskDialog({ task, projects, team, manager, defaultProje
         <Field label="Details" full><textarea className="inp" rows={3} maxLength={1000} placeholder="Details (optional)" disabled={!editable} value={f.details} onChange={set('details')} /></Field>
         <Field label="Assigned to"><Select disabled={!editable} value={f.who} onChange={(v) => setF((x) => ({ ...x, who: v }))} options={[['', 'Anyone on the team'], ...team.map((m) => [m.id, m.name] as [string, string])]} /></Field>
         <Field label="Priority"><Select disabled={!editable} value={f.pri} onChange={(v) => setF((x) => ({ ...x, pri: v as Task['priority'] }))} options={Object.entries(PRI)} /></Field>
-        <Field label="Due day"><input className="inp" type="date" disabled={!editable} value={f.due} onChange={set('due')} /></Field>
+        <Field label="Due day"><DateInput className="inp" disabled={!editable} value={f.due} onChange={set('due')} /></Field>
         <Field label="Photos needed"><input className="inp" type="number" min={0} max={10} disabled={!editable} value={f.need} onChange={set('need')} /></Field>
         <Field label="Project"><Select disabled={!editable} value={f.proj} onChange={(v) => setF((x) => ({ ...x, proj: v, mile: '' }))} options={[['', 'No project'], ...projects.filter((p) => p.status === 'active' || p.id === t?.projectId).map((p) => [p.id, p.name] as [string, string])]} /></Field>
         <Field label="Milestone"><Select disabled={!editable} value={f.mile} onChange={(v) => setF((x) => ({ ...x, mile: v }))} options={[['', 'No milestone'], ...(proj?.milestones ?? []).map((m) => [m.id, m.title + (m.done ? ' (done)' : '')] as [string, string])]} /></Field>

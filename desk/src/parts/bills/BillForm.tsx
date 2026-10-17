@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { post, patch, sendFile, useApi, toPaise, rupees, todayISO, addDaysISO } from '../../lib';
-import { Modal, Field, ErrorBox, useToast } from '../../ui';
+import { Modal, Field, ErrorBox, useToast, DateInput } from '../../ui';
 import type { Bill, Vendor } from './common';
 
 interface Cat { id: string; name: string; kind: string; group: string }
@@ -42,8 +42,8 @@ export function BillForm({ bill, vendorId, onClose, onSaved }: { bill?: Bill; ve
           <Field label="Vendor" hint="Not listed? Add it under the Vendors tab first.">
             <select className="inp" value={v.vendorId} onChange={set('vendorId')}><option value="">Choose a vendor</option>{(vendors?.items ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
           <Field label="Bill number"><input className="inp" value={v.billNo} onChange={set('billNo')} placeholder="As printed on the bill" /></Field>
-          <Field label="Bill date"><input className="inp" type="date" value={v.billDate} onChange={set('billDate')} /></Field>
-          <Field label="Due date"><input className="inp" type="date" value={v.dueDate} onChange={set('dueDate')} /></Field>
+          <Field label="Bill date"><DateInput className="inp" value={v.billDate} onChange={set('billDate')} /></Field>
+          <Field label="Due date"><DateInput className="inp" value={v.dueDate} onChange={set('dueDate')} /></Field>
           <Field label="Amount (rupees)"><input className="inp" inputMode="decimal" value={v.amount} onChange={set('amount')} placeholder="12500.00" /></Field>
           <Field label="Category"><select className="inp" value={v.categoryId} onChange={set('categoryId')}><option value="">None</option>{expense.map((c) => <option key={c.id} value={c.id}>{c.group} / {c.name}</option>)}</select></Field>
           <Field label="Notes" full><textarea className="inp" value={v.notes} onChange={set('notes')} /></Field>

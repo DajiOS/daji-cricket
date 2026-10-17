@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Field, Modal, ErrorBox, NameFields, useForm, useToast } from '../../ui';
+import { Field, Modal, ErrorBox, NameFields, useForm, useToast, DateInput } from '../../ui';
 import { post, patch, toPaise, todayISO, addDaysISO, useApi } from '../../lib';
 import { HAND_METHODS } from '../dash/common';
 import { API, FORMATS, STATUS, paiseToRupees, type Tournament } from './shared';
@@ -43,8 +43,8 @@ export function TournamentForm({ t, onClose, onSaved }: { t?: Tournament; onClos
       <ErrorBox msg={err} />
       <div className="form-grid">
         <Field label="Name" full><input className="inp" {...bind('name')} placeholder="Diwali Cup 2026" autoFocus /></Field>
-        <Field label="Starts"><input className="inp" type="date" {...bind('startDate')} /></Field>
-        <Field label="Ends"><input className="inp" type="date" {...bind('endDate')} /></Field>
+        <Field label="Starts"><DateInput className="inp" {...bind('startDate')} /></Field>
+        <Field label="Ends"><DateInput className="inp" {...bind('endDate')} /></Field>
         <Field label="Format"><select className="inp" {...bind('format')}>{FORMATS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
         <Field label="Status"><select className="inp" {...bind('status')}>{Object.entries(STATUS).map(([k, [, l]]) => <option key={k} value={k}>{l}</option>)}</select></Field>
         <Field label="Overs per side"><input className="inp" type="number" min={1} max={50} {...bind('overs')} /></Field>

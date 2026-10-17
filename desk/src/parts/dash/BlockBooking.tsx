@@ -1,7 +1,7 @@
 // A custom multi-day programme (camp, tournament, shoot): the same hours on a run of days for one agreed total.
 // Normally this follows an enquiry and a quotation; staff enter it here once the customer has agreed.
 import { useState } from 'react';
-import { Modal, Field, ErrorBox, NameField, splitName } from '../../ui';
+import { Modal, Field, ErrorBox, NameField, splitName, DateInput } from '../../ui';
 import { post, useApi, inr, toPaise, todayISO, addDaysISO } from '../../lib';
 import { HAND_METHODS, errText, useCustomerMatch, MatchNote } from './common';
 
@@ -62,8 +62,8 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
       <p className="small muted">For a custom programme agreed with the customer. One booking is made for each day, and the agreed total is shared across the days. The first day's advance must be received now.</p>
       <div className="form-grid">
         <Field label="Ground" full><select className="inp" value={gid} onChange={(e) => setGroundId(e.target.value)}>{grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
-        <Field label="First day"><input className="inp" type="date" value={from} min={todayISO()} onChange={(e) => { setFrom(e.target.value); if (to < e.target.value) setTo(e.target.value); }} /></Field>
-        <Field label="Last day"><input className="inp" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></Field>
+        <Field label="First day"><DateInput className="inp" value={from} min={todayISO()} onChange={(e) => { setFrom(e.target.value); if (to < e.target.value) setTo(e.target.value); }} /></Field>
+        <Field label="Last day"><DateInput className="inp" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></Field>
         <Field label="From"><select className="inp" value={start} onChange={(e) => setStart(Number(e.target.value))}>{HOURS.map((h) => <option key={h} value={h}>{label(h)}</option>)}</select></Field>
         <Field label="Until"><select className="inp" value={end} onChange={(e) => setEnd(Number(e.target.value))}>{HOURS.filter((h) => h > start).map((h) => <option key={h} value={h}>{label(h)}</option>)}</select></Field>
         <Field label="Agreed total for all days (rupees)" hint={totalPaise && days ? `${days} days, about ${inr(Math.round(totalPaise / days))} a day` : undefined}><input className="inp" inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value)} /></Field>

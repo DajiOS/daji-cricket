@@ -1,6 +1,6 @@
 // Academy: attendance, fees with the coach's share, the progress-card skills and the coaching staff.
 import { useEffect, useRef, useState } from 'react';
-import { Field, Modal, Stat, Status, Table, NameField, useToast } from '../../ui';
+import { Field, Modal, Stat, Status, Table, NameField, useToast, DateInput } from '../../ui';
 import { inr, post, put, sendFile, todayISO, toPaise, rupees, useApi } from '../../lib';
 import { Async, Select, errMsg, monthName } from './common';
 
@@ -27,7 +27,7 @@ export function Attendance() {
       </div>
       <div className="card">
         <div className="card-head"><h3>Attendance</h3>
-          <div className="row"><input className="inp" type="date" aria-label="Day" value={date} max={todayISO()} onChange={(e) => e.target.value && setDate(e.target.value)} />
+          <div className="row"><DateInput className="inp" aria-label="Day" value={date} max={todayISO()} onChange={(e) => e.target.value && setDate(e.target.value)} />
             <button className="btn ghost sm" onClick={() => setMarks(Object.fromEntries(rows.map((r) => [r.id, true])))}>Everyone present</button></div></div>
         <Async data={att && pupils} error={aErr || pErr}>{() => (
           <>
@@ -108,7 +108,7 @@ function RaiseDialog({ month, onClose, onSaved }: { month: string; onClose: () =
     <Modal title={'Raise fees for ' + monthName(month)} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" onClick={go}>Raise fees</button></>}>
       <div className="form-grid">
         <Field label="Fee per student (₹)"><input className="inp" inputMode="decimal" placeholder="Monthly fee in rupees" value={amt} onChange={(e) => setAmt(e.target.value)} /></Field>
-        <Field label="Due date"><input className="inp" type="date" value={due} onChange={(e) => setDue(e.target.value)} /></Field>
+        <Field label="Due date"><DateInput className="inp" value={due} onChange={(e) => setDue(e.target.value)} /></Field>
       </div>
       {err && <div className="err" role="alert" style={{ marginTop: 12 }}>{err}</div>}
     </Modal>
@@ -126,7 +126,7 @@ function PayDialog({ f, onClose, onSaved }: { f: Fee; onClose: () => void; onSav
       <div className="form-grid">
         <Field label="Amount (₹)"><input className="inp" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)} /></Field>
         <Field label="How paid"><Select value={mode} onChange={setMode} options={[['cash', 'Cash'], ['upi', 'UPI'], ['bank', 'Bank transfer'], ['cheque', 'Cheque'], ['card', 'Card']]} /></Field>
-        <Field label="Received on"><input className="inp" type="date" value={on} onChange={(e) => setOn(e.target.value)} /></Field>
+        <Field label="Received on"><DateInput className="inp" value={on} onChange={(e) => setOn(e.target.value)} /></Field>
       </div>
       {err && <div className="err" role="alert" style={{ marginTop: 12 }}>{err}</div>}
     </Modal>
