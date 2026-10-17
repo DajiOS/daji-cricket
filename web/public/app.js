@@ -66,6 +66,8 @@ function dayRange(days) {
   for (let i = 0; i < on.length;) { let j = i; while (j + 1 < on.length && order.indexOf(on[j + 1]) === order.indexOf(on[j]) + 1) j++; parts.push(j - i >= 1 ? (j - i === 1 ? `${DAY_NAMES[on[i]]}, ${DAY_NAMES[on[j]]}` : `${DAY_NAMES[on[i]]}–${DAY_NAMES[on[j]]}`) : DAY_NAMES[on[i]]); i = j + 1; }
   return parts.join(', ');
 }
+// "7 pm" slot starting at 19:00 reads "7–8 pm"; the suffix is repeated only when it changes ("11 pm–12 am").
+const hourSpan = (t) => { const [a, b] = t.split(':').map(Number); const m = (a % 24) * 60 + (b || 0), e = (m + 60) % 1440, f = (x) => { const hh = Math.floor(x / 60), mm = x % 60; return [`${hh % 12 || 12}${mm ? ':' + pad(mm) : ''}`, hh < 12 ? 'am' : 'pm']; }; const [s1, s2] = f(m), [e1, e2] = f(e); return s2 === e2 ? `${s1}–${e1} ${s2}` : `${s1} ${s2}–${e1} ${e2}`; };
 const niceHour = (t) => { const [a, b] = t.split(':').map(Number), x = a % 24; return `${x % 12 || 12}${b ? ':' + pad(b) : ''} ${x < 12 ? 'am' : 'pm'}`; };
 const BALL_SHORT = { combo: 'Red & White combo ball', leather: 'Leather ball', red: 'Leather ball', white: 'Leather ball', tennis: 'Tennis ball', practice: 'Practice session' };
 const money = (paise) => inr(paise);
@@ -672,7 +674,7 @@ function renderRates() {
     const sel = state.hr && state.hr.ruleId === o.ruleId ? state.hr.idx : [];
     o.slots.forEach((sl, i) => {
       const on = sel.includes(i), ok = sl.state === 'available';
-      grid.append(h('button', { class: 'slot ' + (on ? 'sel' : ok ? 'av' : sl.state), type: 'button', disabled: !ok && !on, 'aria-pressed': on ? 'true' : 'false', onclick: () => clickHour(o, i) }, niceHour(sl.time), h('small', {}, ok || on ? inr(sl.pricePaise) : STATE[sl.state] || sl.state)));
+      grid.append(h('button', { class: 'slot ' + (on ? 'sel' : ok ? 'av' : sl.state), type: 'button', disabled: !ok && !on, 'aria-pressed': on ? 'true' : 'false', onclick: () => clickHour(o, i) }, hourSpan(sl.time), h('small', {}, ok || on ? inr(sl.pricePaise) : STATE[sl.state] || sl.state)));
     });
   }
   renderSummary();
