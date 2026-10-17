@@ -1290,3 +1290,26 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after
 @media (min-width:1021px){
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .links [data-reserve]{display:none}
 }
+
+/* ===== Smooth edges: rounded frame, panel, buttons ===== */
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after{inset:10px;border:1px solid rgba(15,61,46,.3);border-radius:22px;box-shadow:none!important;animation:frame-soft 1s .2s ease both}
+@keyframes frame-soft{from{opacity:0;inset:0}to{opacity:1;inset:10px}}
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .btn,
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .slot,
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .day,
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .tabs button,
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .datepick input,
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .legend{border-radius:12px}
+html[data-theme="ivory"] .resbar{border-radius:16px}
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .hero .panel,
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{top:10px;bottom:10px;right:10px;width:calc(var(--split) - 10px);border-radius:22px}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home #p-hold{border-radius:12px}
+}
+
+/* ===== No outer frame: the panel runs edge to edge ===== */
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after{display:none!important}
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .hero .panel,
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{top:0;bottom:0;right:0;width:var(--split);border-radius:0}
+}
