@@ -531,6 +531,8 @@ export interface Page<T> {
 export interface RefundRow {
   /** Set when the super admin has authorised it; no money moves before then. */
   approvedAt?: number | null;
+  /** How the customer originally paid. Decides how the money goes back: Razorpay through the gateway, anything else by hand. */
+  paymentMethod?: string | null;
   id: string;
   paymentId: string;
   bookingId: string;

@@ -1,5 +1,5 @@
 import { useEffect, useState, type DragEvent } from 'react';
-import { PageHead, ErrorBox, Loading, useToast } from '../ui';
+import { PageHead, ErrorBox, Loading, Filters, useToast } from '../ui';
 import { api, can, fmtDate, post } from '../lib';
 import { useSession } from '../App';
 import { errMsg } from '../parts/club/common';
@@ -13,7 +13,7 @@ export default function Tasks({ sub }: { sub: string }) {
   void sub;
   const { me } = useSession(); const toast = useToast(); const manager = can(me, 'manage_tasks');
   const [tasks, setTasks] = useState<Task[] | null>(null); const [projects, setProjects] = useState<Project[]>([]); const [team, setTeam] = useState<{ id: string; name: string }[]>([]);
-  const [error, setError] = useState<string | null>(null); const [projectId, setProjectId] = useState('');
+  const [error, setError] = useState<string | null>(null); const [projectId, setProjectId] = useState(''); const [who, setWho] = useState(''); const [pri, setPri] = useState('');
   const [open, setOpen] = useState<string | 'new' | null>(null); const [projDlg, setProjDlg] = useState(false); const [over, setOver] = useState<string | null>(null);
   const load = async () => {
     try {
@@ -37,7 +37,7 @@ export default function Tasks({ sub }: { sub: string }) {
     move(id, stage, index);
   };
 
-  const visible = (tasks ?? []).filter((t) => t.status !== 'cancelled' && (!projectId || t.projectId === projectId));
+  const visible = (tasks ?? []).filter((t) => t.status !== 'cancelled' && (!projectId || t.projectId === projectId) && (!who || (who === 'none' ? !t.assignedTo : t.assignedTo === who)) && (!pri || t.priority === pri));
   const current = open && open !== 'new' ? (tasks ?? []).find((t) => t.id === open) ?? null : null;
   return (
     <div className="stack">
@@ -49,6 +49,10 @@ export default function Tasks({ sub }: { sub: string }) {
         <select className="inp kproj-sel" aria-label="Project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
           <option value="">All projects</option>{projects.filter((p) => p.status === 'active').map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        <Filters active={(who ? 1 : 0) + (pri ? 1 : 0)}>
+          <select className="inp" style={{ width: 170 }} aria-label="Assigned to" value={who} onChange={(e) => setWho(e.target.value)}><option value="">Anyone</option><option value="none">Open to the whole team</option>{team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
+          <select className="inp" style={{ width: 140 }} aria-label="Priority" value={pri} onChange={(e) => setPri(e.target.value)}><option value="">Any priority</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+        </Filters>
         <span className="muted small">{(tasks ?? []).filter((t) => t.status === 'open').length} open</span>
       </div>
       <ErrorBox msg={error} />

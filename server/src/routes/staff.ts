@@ -9,7 +9,7 @@ import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
 import { cancelBlock, settleBlock, settleForCustomer } from '../cancellation.ts';
-import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
+import { lookupCustomer, createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
 import { cancelBooking, previewCancel } from '../cancellation.ts';
 import { createPromos, listPromos, setPromoActive } from '../promo.ts';
 import { completeManualRefund, listPayments, listRefunds, paymentHistory, paymentOr404, recordOffline, verifyUpi } from '../payments.ts';
@@ -52,7 +52,7 @@ export function staffRoutes(r: Router): void {
   r.get('/api/staff/bookings/:id', (c) => {
     const b = accessBooking(U(c), c.params.id!, 'manage_bookings');
     const payments = bookingPayments(b.id);
-    return ok({ booking: viewBooking(b.id), block: b.series_id ? blockOf(b.series_id) : null, payments, refunds: listRefunds(b.owner_id).filter((x) => x.bookingId === b.id), audit: listAudit({ entity: 'booking', entityId: b.id, limit: 100 }).items });
+    return ok({ booking: viewBooking(b.id), block: b.series_id ? blockOf(b.series_id) : null, payments, refunds: listRefunds(b.owner_id).filter((x) => x.bookingId === b.id || (b.series_id && seriesBookingIds(b.series_id).includes(x.bookingId))), audit: listAudit({ entity: 'booking', entityId: b.id, limit: 100 }).items });
   }, A);
 
   r.post('/api/staff/bookings', (c) => created({ booking: createStaffBooking(U(c), parseWalkIn(c.json())) }), A);
@@ -274,6 +274,13 @@ export function staffRoutes(r: Router): void {
     return ok(customerList(owner, c.query.get('q') ?? undefined, limit, offset));
   }, A);
 
+  // Is this phone or email already a customer? Used by New booking to prefill and to avoid a second account.
+  r.get('/api/staff/customers/lookup', (c) => {
+    const u = U(c);
+    const owner = u.role === 'super_admin' ? (c.query.get('ownerId') || null) : scopeOwnerId(u);
+    return ok(lookupCustomer(owner, { phone: c.query.get('phone'), email: c.query.get('email') }));
+  }, A);
+
   r.get('/api/staff/customers/:id', (c) => {
     const u = U(c);
     requirePermission(u, 'view_customers');
@@ -358,6 +365,8 @@ export function staffRoutes(r: Router): void {
     const review = owner ? one<{ n: number }>('SELECT COUNT(*) n FROM bookings WHERE owner_id = ? AND needs_review = 1', owner)!.n : one<{ n: number }>('SELECT COUNT(*) n FROM bookings WHERE needs_review = 1')!.n;
     return ok({ date: today, bookings: list.items.filter((b) => b.status !== 'cancelled' && b.status !== 'expired'), awaitingVerification: awaiting, needsReview: review });
   }, A);
+
+  const seriesBookingIds = (sid: string): string[] => many<{ id: string }>('SELECT id FROM bookings WHERE series_id = ?', sid).map((x) => x.id);
 
   // ---- team (owner manages their staff)
   r.get('/api/staff/team', (c) => {

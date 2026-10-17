@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Field, ErrorBox, Loading } from '../../ui';
 import { api, post, useApi, inr, toPaise, todayISO } from '../../lib';
-import { HAND_METHODS, errText } from './common';
+import { HAND_METHODS, errText, useCustomerMatch, MatchNote } from './common';
 
 interface Ground { id: string; name: string; maxSlots: number; active: boolean }
 interface SlotView { start: number; time: string; pricePaise: number; state: string }
@@ -22,6 +22,7 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
   const [fixed, setFixed] = useState<string | null>(null);              // key of a chosen fixed session
   const [hr, setHr] = useState<{ group: string; start: number; n: number } | null>(null); // hourly: group, first slot index, hours
   const [cust, setCust] = useState({ name: '', phone: '', email: '' });
+  const match = useCustomerMatch(cust, setCust);
   const [method, setMethod] = useState('cash');
   const [amount, setAmount] = useState('');
   const [touched, setTouched] = useState(false);
@@ -132,6 +133,7 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
               <Field label="Name"><input className="inp" value={cust.name} onChange={(e) => setCust({ ...cust, name: e.target.value })} autoComplete="off" /></Field>
               <Field label="Mobile" hint="An existing customer is found by this number."><input className="inp" inputMode="tel" value={cust.phone} onChange={(e) => setCust({ ...cust, phone: e.target.value })} /></Field>
               <Field label="Email (optional)"><input className="inp" type="email" value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} /></Field>
+              <MatchNote m={match} />
               <Field label="Players (optional)"><input className="inp" inputMode="numeric" value={players} onChange={(e) => setPlayers(e.target.value.replace(/\D/g, ''))} /></Field>
               <Field label="Note (optional)" full><input className="inp" maxLength={300} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
             </div>

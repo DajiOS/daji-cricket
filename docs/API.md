@@ -166,6 +166,7 @@ Generated from `server/src/routes`. All bodies are JSON unless noted; errors use
 | POST | `/api/staff/contacts/:id/opt-out` | contacts |
 | GET | `/api/staff/contacts/export` | contacts |
 | GET | `/api/staff/customers` | staff |
+| GET | `/api/staff/customers/lookup` | staff |
 | GET | `/api/staff/customers/:id` | staff |
 | POST | `/api/staff/customers/:id/credit` | staff |
 | GET | `/api/staff/enquiries` | staff |

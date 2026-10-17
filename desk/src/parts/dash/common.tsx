@@ -1,7 +1,7 @@
 // Shared bits for the Dashboard and Bookings pages: status chips, the cancel dialog and small helpers.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Chip, Modal, Field, ErrorBox, type Tone } from '../../ui';
-import { post, inr, fmtDay, fmtTime, useApi, ApiError } from '../../lib';
+import { api, post, inr, fmtDay, fmtTime, useApi, ApiError } from '../../lib';
 
 export interface BlockDay { id: string; ref: string; date: string; startAt: number; endAt: number; status: string; totalPaise: number; paidPaise: number; balancePaise: number }
 /** A multi-day booking seen as one: dates, money across every day and (in the detail) each day. */
@@ -104,3 +104,77 @@ export function SettleChoice({ value, onChange, paid }: { value: string; onChang
 
 /** Pay-method choices that staff may record by hand. */
 export const HAND_METHODS: [string, string][] = [['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['bank_transfer', 'Bank transfer']];
+
+export interface CustomerMatch { found: boolean; hasAccount: boolean; known: boolean; id?: string; name?: string; phone?: string | null; email?: string | null; matchedOn: string[]; conflict: boolean }
+type Cust = { name: string; phone: string; email: string };
+
+/** Looks the customer up by phone and email as staff type. An existing customer fills the blanks; nothing typed is overwritten. */
+export function useCustomerMatch(cust: Cust, setCust: (c: Cust) => void): CustomerMatch | null {
+  const [m, setM] = useState<CustomerMatch | null>(null);
+  const phone = cust.phone.replace(/\D/g, '').slice(-10), email = cust.email.trim();
+  useEffect(() => {
+    const okPhone = phone.length === 10, okEmail = /^\S+@\S+\.\S+$/.test(email);
+    if (!okPhone && !okEmail) { setM(null); return; }
+    let live = true;
+    const t = setTimeout(() => {
+      api<CustomerMatch>('/api/staff/customers/lookup?' + new URLSearchParams({ ...(okPhone ? { phone } : {}), ...(okEmail ? { email } : {}) }))
+        .then((r) => {
+          if (!live) return;
+          setM(r.found ? r : null);
+          if (r.found && r.known) setCust({ name: cust.name.trim() ? cust.name : r.name || '', phone: cust.phone.trim() ? cust.phone : r.phone || '', email: cust.email.trim() ? cust.email : r.email || '' });
+        }).catch(() => { if (live) setM(null); });
+    }, 350);
+    return () => { live = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, email]);
+  return m;
+}
+
+export function MatchNote({ m }: { m: CustomerMatch | null }) {
+  if (!m) return null;
+  return (
+    <div className="card card-pad small" role="status" style={{ gridColumn: '1 / -1' }}>
+      <b>{m.known ? `Existing customer: ${m.name}` : 'This number or email already belongs to a customer'}</b>
+      {m.known ? ' — details filled in; this booking is added to them.' : ' — the booking will be added to them.'}
+      {m.conflict && <div className="small">The phone and the email belong to two different customers. Check them before you save.</div>}
+      {m.hasAccount && <div className="small">They already have an account. Don't make a new one: ask them to sign in with a code sent to their mobile, or reset their password.</div>}
+    </div>
+  );
+}
+
+export interface RefundItem { id: string; amountPaise: number; status: string; mode: string | null; createdAt: number; approvedAt?: number | null; paymentMethod?: string | null; reference?: string | null; completedAt?: number | null }
+const BYHAND: Record<string, string> = { cash: 'Hand the cash back', upi: 'Send it by UPI to the customer', card: 'Return it to the card by hand', bank_transfer: 'Send it by bank transfer' };
+
+/** Where each refund stands and how it goes back: Razorpay payments return by themselves, everything else is paid by hand and marked done here. */
+export function RefundList({ refunds, canPay, onChanged }: { refunds: RefundItem[]; canPay: boolean; onChanged: () => void }) {
+  const [refs, setRefs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  if (!refunds.length) return null;
+  async function paid(r: RefundItem) {
+    setBusy(r.id); setErr(null);
+    try { await post(`/api/staff/refunds/${encodeURIComponent(r.id)}/complete`, { reference: (refs[r.id] || '').trim() }); onChanged(); } catch (e) { setErr(errText(e)); } finally { setBusy(null); }
+  }
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="eyebrow">Refunds</div>
+      <ErrorBox msg={err} />
+      {refunds.map((r) => {
+        const auto = r.mode === 'gateway', done = r.status === 'done';
+        const how = auto ? 'Back to the customer\'s card or UPI through Razorpay, automatically' : (BYHAND[r.paymentMethod || ''] || 'Pay it back by hand');
+        const state = done ? 'Paid back' : !r.approvedAt ? 'Waiting for the super admin to authorise' : auto ? 'Authorised, being sent to Razorpay' : 'Authorised, ready to pay';
+        return (
+          <div className="card card-pad stack" style={{ gap: 6 }} key={r.id}>
+            <div className="row" style={{ justifyContent: 'space-between' }}><b>{inr(r.amountPaise)}</b><Chip tone={done ? 'good' : r.approvedAt ? 'info' : 'warn'}>{state}</Chip></div>
+            <div className="small muted">{how}{r.paymentMethod ? ` (paid by ${(METHOD_LABEL[r.paymentMethod] || r.paymentMethod).toLowerCase()})` : ''}{done && r.reference ? ` · ref ${r.reference}` : ''}</div>
+            {!auto && !done && !!r.approvedAt && canPay && (
+              <div className="row" style={{ gap: 6 }}>
+                <input className="inp" style={{ flex: '1 1 200px', width: 'auto' }} placeholder={r.paymentMethod === 'cash' ? 'Who received it, or a note' : 'UTR or payout reference'} aria-label="Payout reference" value={refs[r.id] || ''} onChange={(e) => setRefs({ ...refs, [r.id]: e.target.value })} />
+                <button className="btn primary sm" disabled={busy === r.id || !(refs[r.id] || '').trim()} onClick={() => paid(r)}>Mark as paid</button>
+              </div>)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}

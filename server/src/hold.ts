@@ -331,6 +331,33 @@ export function findOrCreateCustomer(c: { name: string; phone: string; email?: s
   return createUser({ role: 'customer', name: c.name, phone, email: c.email ?? null });
 }
 
+export interface CustomerMatch {
+  found: boolean; hasAccount: boolean; known: boolean; id?: string; name?: string; phone?: string | null; email?: string | null;
+  matchedOn: ('phone' | 'email')[]; conflict: boolean;
+}
+/**
+ * Looks for an existing customer by phone and email, the same way a booking will. `hasAccount` means they can already sign in
+ * (so they should reset their password, not get a second account). Details are only returned for someone this owner has booked before.
+ * `conflict` means the phone and the email belong to two different people.
+ */
+export function lookupCustomer(ownerId: string | null, q: { phone?: string | null; email?: string | null }): CustomerMatch {
+  const phone = q.phone ? normalizePhone(q.phone) : null;
+  const email = q.email?.trim() || null;
+  const byEmail = email ? one<UserRow>("SELECT * FROM users WHERE lower(email) = lower(?) AND role = 'customer'", email) : undefined;
+  const byPhone = phone ? one<UserRow>("SELECT * FROM users WHERE phone = ? AND role = 'customer' ORDER BY (password_hash IS NOT NULL) DESC, created_at LIMIT 1", phone) : undefined;
+  const row = byEmail ?? byPhone;
+  const matchedOn: ('phone' | 'email')[] = [];
+  if (byPhone) matchedOn.push('phone');
+  if (byEmail) matchedOn.push('email');
+  if (!row) return { found: false, hasAccount: false, known: false, matchedOn, conflict: false };
+  const known = !ownerId || !!one('SELECT 1 FROM bookings WHERE customer_id = ? AND owner_id = ? LIMIT 1', row.id, ownerId);
+  const conflict = !!(byEmail && byPhone && byEmail.id !== byPhone.id);
+  const hasAccount = !!(byEmail?.password_hash || byPhone?.password_hash);
+  return known
+    ? { found: true, hasAccount, known, id: row.id, name: row.name, phone: row.phone, email: row.email, matchedOn, conflict }
+    : { found: true, hasAccount, known, matchedOn, conflict };
+}
+
 /**
  * Staff step: pick slots, record the customer and the payment, confirm. Nothing is held unless the advance is recorded.
  */

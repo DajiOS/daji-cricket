@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Modal, Field, ErrorBox } from '../../ui';
 import { post, useApi, inr, toPaise, todayISO, addDaysISO } from '../../lib';
-import { HAND_METHODS, errText } from './common';
+import { HAND_METHODS, errText, useCustomerMatch, MatchNote } from './common';
 
 interface Ground { id: string; name: string; active: boolean }
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5); // 5 am to 11 pm
@@ -19,6 +19,7 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
   const [start, setStart] = useState(7), [end, setEnd] = useState(19);
   const [total, setTotal] = useState('');
   const [cust, setCust] = useState({ name: '', phone: '', email: '' });
+  const match = useCustomerMatch(cust, setCust);
   const [method, setMethod] = useState('upi');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
@@ -63,6 +64,7 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
         <Field label="Customer name"><input className="inp" value={cust.name} onChange={(e) => setCust({ ...cust, name: e.target.value })} /></Field>
         <Field label="Phone"><input className="inp" inputMode="tel" value={cust.phone} onChange={(e) => setCust({ ...cust, phone: e.target.value })} /></Field>
         <Field label="Email (optional)"><input className="inp" value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} /></Field>
+        <MatchNote m={match} />
         <Field label="Received now (rupees)"><input className="inp" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
         <Field label="Paid by"><select className="inp" value={method} onChange={(e) => setMethod(e.target.value)}>{Object.entries(HAND_METHODS).map(([k, l]) => <option key={k} value={k}>{l as string}</option>)}</select></Field>
         <Field label="Reference (UTR, cheque no.)"><input className="inp" value={reference} onChange={(e) => setReference(e.target.value)} /></Field>

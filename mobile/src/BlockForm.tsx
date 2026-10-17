@@ -20,6 +20,17 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
   const [total, setTotal] = useState(''); const [name, setName] = useState(''); const [phone, setPhone] = useState('');
   const [method, setMethod] = useState<'upi' | 'bank_transfer' | 'card' | 'cash'>('upi'); const [amount, setAmount] = useState(''); const [ref, setRef] = useState('');
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [match, setMatch] = useState<{ known: boolean; hasAccount: boolean; name?: string } | null>(null);
+  // An existing customer is found by phone; their name is filled in and, if they already have an account, staff are told not to make another.
+  useEffect(() => {
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    if (digits.length !== 10) { setMatch(null); return; }
+    let live = true;
+    api<{ found: boolean; known: boolean; hasAccount: boolean; name?: string }>('/api/staff/customers/lookup?phone=' + digits)
+      .then((r) => { if (!live) return; setMatch(r.found ? r : null); if (r.found && r.known && r.name) setName((cur) => cur.trim() ? cur : r.name!); })
+      .catch(() => { if (live) setMatch(null); });
+    return () => { live = false; };
+  }, [phone]);
   useEffect(() => { api<{ items: Ground[] }>('/api/staff/grounds').then((r) => { const g = r.items.filter((x) => x.active); setGrounds(g); if (g[0]) setGroundId(g[0].id); }).catch((e: any) => setErr(e.message)); }, []);
 
   const n = /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) ? days(from, to) : 0;
@@ -50,6 +61,7 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
       {n > 0 && totalPaise > 0 && <Text style={s.muted}>{n} day{n === 1 ? '' : 's'}, about {inr(Math.round(totalPaise / n))} a day</Text>}
       <Field label="Customer name" value={name} onChangeText={setName} autoCapitalize="words" />
       <Field label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+      {match && <Text style={s.muted}>{match.known ? `Existing customer: ${match.name}. Details filled in.` : 'This number already belongs to a customer.'}{match.hasAccount ? ' They already have an account: ask them to sign in with a mobile code or reset their password, do not make a new one.' : ''}</Text>}
       <Text style={s.muted}>Paid by</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{(['upi', 'bank_transfer', 'card', 'cash'] as const).map((m) => <Chip key={m} label={m.replace('_', ' ')} on={method === m} onPress={() => setMethod(m)} />)}</View>
       <Field label="Received now (₹)" value={amount} onChangeText={setAmount} keyboardType="numeric" />

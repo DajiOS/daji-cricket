@@ -1,24 +1,25 @@
 import { useState } from 'react';
 import { useApi, post, patch, del, inr, formatPhone } from '../../lib';
-import { Modal, Field, ErrorBox, Table, Loading, Icon, Confirm, useToast } from '../../ui';
+import { Modal, Field, ErrorBox, Table, Loading, Icon, Confirm, Filters, useToast } from '../../ui';
 import type { Vendor } from './common';
 
 export function VendorsTab({ onBill }: { onBill: (vendorId: string) => void }) {
   const toast = useToast();
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(''); const [has, setHas] = useState('');
   const [data, err, reload] = useApi<{ items: Vendor[] }>(`/api/accounting/vendors${q ? `?q=${encodeURIComponent(q)}` : ''}`);
   const [edit, setEdit] = useState<Vendor | 'new' | null>(null);
   const remove = async (v: Vendor) => { try { await del(`/api/accounting/vendors/${v.id}`); toast('Vendor removed'); reload(); } catch (e: any) { toast(e.message); } };
   return (
     <div className="stack">
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <input className="inp bills-search" placeholder="Search vendors" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search vendors" />
+        <span className="row"><input className="inp bills-search" placeholder="Search vendors" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search vendors" />
+          <Filters active={has ? 1 : 0}><select className="inp" style={{ width: 170 }} aria-label="Details on file" value={has} onChange={(e) => setHas(e.target.value)}><option value="">Any details</option><option value="upi">Has a UPI ID</option><option value="gstin">Has a GSTIN</option><option value="phone">Has a phone</option></select></Filters></span>
         <button className="btn primary" onClick={() => setEdit('new')}><Icon name="plus" />Add vendor</button>
       </div>
       <ErrorBox msg={err} />
       <div className="card">
         {!data ? <div className="card-pad"><Loading /></div> : (
-          <Table rows={data.items} empty={q ? 'No vendor matches that search.' : 'No vendors yet. Add the people you pay: turf suppliers, electricity, cleaners.'} cols={[
+          <Table rows={data.items.filter((v: any) => !has || (has === 'upi' ? v.upiId : has === 'gstin' ? v.gstin : v.phone))} empty={q || has ? 'No vendor matches that search.' : 'No vendors yet. Add the people you pay: turf suppliers, electricity, cleaners.'} cols={[
             { head: 'Vendor', cell: (v) => <div><div className="strong">{v.name}</div>{v.gstin && <div className="small faint">GSTIN {v.gstin}</div>}</div> },
             { head: 'Phone', cell: (v) => formatPhone(v.phone) || '—' },
             { head: 'UPI', cell: (v) => v.upiId || '—' },

@@ -14,7 +14,7 @@ const CHAN: Record<string, string> = { whatsapp: 'WhatsApp', email: 'Email', sms
 export default function Contacts({ sub }: { sub: string }) {
   void sub;
   const { me } = useSession(); const toast = useToast();
-  const [who, setWho] = useState('played'); const [ground, setGround] = useState(''); const [inactive, setInactive] = useState(''); const [min, setMin] = useState(''); const [q, setQ] = useState(''); const [offset, setOffset] = useState(0);
+  const [who, setWho] = useState('booked'); const [ground, setGround] = useState(''); const [inactive, setInactive] = useState(''); const [min, setMin] = useState(''); const [q, setQ] = useState(''); const [offset, setOffset] = useState(0);
   const [templates, setTemplates] = useState<Awaited<ReturnType<typeof loadTemplates>> | null>(null); const [sent, setSent] = useState(0);
   const dq = useDebounced(q), dmin = useDebounced(min);
   const filter: Record<string, string | number> = { who };
@@ -31,7 +31,7 @@ export default function Contacts({ sub }: { sub: string }) {
   const today = todayISO();
   return (
     <div className="stack">
-      <PageHead eyebrow="Ground" title="Contacts" lede="People who have played, and messages to them. Only people who said yes to a channel are messaged.">
+      <PageHead eyebrow="Ground" title="Contacts" lede="Everyone who has booked or played, and messages to them. Only people who said yes to a channel are messaged.">
         <button className="btn" onClick={csv}>Download CSV</button>
         {can(me, 'send_broadcasts') && <button className="btn primary" onClick={compose}>Message these people</button>}
       </PageHead>
@@ -42,7 +42,7 @@ export default function Contacts({ sub }: { sub: string }) {
         <Stat label="Can text" value={data?.summary.reachableSms ?? '—'} />
       </div>
       <div className="card">
-        <div className="card-head"><h3>People who have played</h3></div>
+        <div className="card-head"><h3>Customers</h3></div>
         <div className="card-pad">
           <FilterBar>
             <Field label="Show"><Select value={who} onChange={(v) => change(() => setWho(v))} options={[['played', 'Have played'], ['booked', 'Played or booked ahead'], ['all', 'Everyone who booked']]} /></Field>

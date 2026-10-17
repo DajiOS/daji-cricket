@@ -393,6 +393,7 @@ export function completeManualRefund(staff: UserRow, refundId: string, reference
 export const toRefund = (r: any): RefundRow => ({
   id: r.id, paymentId: r.payment_id, bookingId: r.booking_id, amountPaise: r.amount_paise, status: r.status, mode: r.mode, reference: r.reference,
   reason: r.reason, createdAt: r.created_at, completedAt: r.completed_at, approvedAt: r.approved_at ?? null,
+  paymentMethod: one<{ method: string }>('SELECT method FROM payments WHERE id = ?', r.payment_id)?.method ?? null,
 });
 
 /** The super admin authorises a refund (gateway ones are then sent by the next sweep; manual ones can be paid out and marked done). */

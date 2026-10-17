@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { Modal, Chip, Loading, ErrorBox, Field, Status, Table, Confirm, useToast } from '../../ui';
 import { useApi, post, api, go, inr, toPaise, rupees, fmtDay, fmtDateTime, formatPhone, can } from '../../lib';
 import { useSession } from '../../App';
-import { type Booking, type Block, BookingChip, CancelDialog, SettleChoice, HAND_METHODS, METHOD_LABEL, PAY_STATUS, SOURCE_LABEL, STATUS_LABEL, cancellable, errText, timeRange, whatOf } from './common';
+import { type Booking, type Block, type RefundItem, RefundList, BookingChip, CancelDialog, SettleChoice, HAND_METHODS, METHOD_LABEL, PAY_STATUS, SOURCE_LABEL, STATUS_LABEL, cancellable, errText, timeRange, whatOf } from './common';
 
 interface Pay { id: string; method: string; status: string; purpose: string; amountPaise: number; refundedPaise: number; reference: string | null; createdAt: number; rejectReason: string | null }
-interface Detail { booking: Booking; block: Block | null; payments: Pay[]; refunds: { id: string; amountPaise: number; status: string; mode: string | null; createdAt: number }[]; audit: { id: number; at: number; action: string; actorRole: string | null }[] }
+interface Detail { booking: Booking; block: Block | null; payments: Pay[]; refunds: RefundItem[]; audit: { id: number; at: number; action: string; actorRole: string | null }[] }
 
 const ACTION_LABEL = (a: string) => a.replace(/^booking\./, '').replace(/[._]/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
@@ -84,8 +84,9 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
             { head: 'Amount', num: true, cell: (p) => <>{inr(p.amountPaise)}{p.refundedPaise > 0 && <div className="small muted">{inr(p.refundedPaise)} back</div>}</> },
             { head: '', cell: (p) => (p.status === 'submitted' && p.method === 'upi' && can(me, 'verify_payments') ? <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}><button className="btn sm primary" onClick={() => verify(p, true)}>Verify</button><button className="btn sm" onClick={() => verify(p, false)}>Reject</button></span> : null) },
           ]} /></div>
-          {d.refunds.length > 0 && <div className="small muted" style={{ marginTop: 8 }}>Refunds: {d.refunds.map((r) => `${inr(r.amountPaise)} (${r.status})`).join(', ')}</div>}
         </div>
+
+        <RefundList refunds={d.refunds} canPay={can(me, 'record_payments')} onChanged={changed} />
 
         {d.audit.length > 0 && (
           <details>
@@ -206,6 +207,7 @@ function BlockDetail({ d, onClose, onChanged }: { d: Detail; onClose: () => void
               { head: 'Amount', num: true, cell: (p) => <>{inr(p.amountPaise)}{p.refundedPaise > 0 && <div className="small muted">{inr(p.refundedPaise)} back</div>}</> },
             ]} /></div>
           </div>
+          <RefundList refunds={d.refunds} canPay={can(me, 'record_payments')} onChanged={onChanged} />
         </div>
       </Modal>
       {cancelAll && <CancelBlock k={k} b={b} onClose={() => setCancelAll(false)} onDone={() => { setCancelAll(false); toast('All days cancelled.'); onChanged(); }} />}

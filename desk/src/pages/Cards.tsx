@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Chip, Field, Modal, PageHead, Table, useForm, useToast } from '../ui';
+import { Chip, Field, Filters, Modal, PageHead, Table, useForm, useToast } from '../ui';
 import { ApiError, del, download, getToken, getViewOwner, patch, post, qs, sendFile, useApi } from '../lib';
 import { Async, errMsg, useDebounced } from '../parts/club/common';
 
@@ -73,6 +73,7 @@ function Editor({ card, draft, photo, dup, onClose, onSaved }: { card?: Card; dr
 
 export default function Cards({ sub }: { sub: string }) {
   void sub; const toast = useToast();
+  const [has, setHas] = useState('');
   const [q, setQ] = useState(''); const [offset, setOffset] = useState(0); const dq = useDebounced(q);
   const [data, error, reload] = useApi<{ items: Card[]; total: number }>('/api/staff/cards' + qs({ q: dq.trim(), limit: LIMIT, offset }));
   const [status] = useApi<{ ocr: boolean }>('/api/staff/cards/status');
@@ -103,10 +104,11 @@ export default function Cards({ sub }: { sub: string }) {
       {status?.ocr === false && <div className="note warn">Reading cards from photos is not switched on yet (the server needs ANTHROPIC_API_KEY). You can still type contacts in.</div>}
       <div className="card">
         <div className="card-head"><h3>Saved contacts {data ? <Chip>{data.total}</Chip> : null}</h3></div>
-        <div className="card-pad"><input className="inp" type="search" placeholder="Search name, company, phone or email" value={q} onChange={(e) => { setQ(e.target.value); setOffset(0); }} /></div>
+        <div className="card-pad row"><input className="inp" style={{ flex: '1 1 220px', width: 'auto' }} type="search" placeholder="Search name, company, phone or email" value={q} onChange={(e) => { setQ(e.target.value); setOffset(0); }} />
+          <Filters active={has ? 1 : 0}><select className="inp" style={{ width: 170 }} aria-label="Details on file" value={has} onChange={(e) => setHas(e.target.value)}><option value="">Any details</option><option value="phone">Has a phone</option><option value="email">Has an email</option><option value="address">Has an address</option><option value="photo">Has a card photo</option></select></Filters></div>
         <Async data={data} error={error}>{(d) => (
           <>
-            <Table rows={d.items} empty="No contacts yet. Scan a card to add the first." onRow={(c) => setEdit({ card: c })} cols={[
+            <Table rows={d.items.filter((c) => !has || (has === 'phone' ? c.phones.length : has === 'email' ? c.emails.length : has === 'address' ? c.address : c.hasImage))} empty="No contacts yet. Scan a card to add the first." onRow={(c) => setEdit({ card: c })} cols={[
               { head: 'Person', cell: (c) => <><span className="strong">{c.name}</span><div className="muted small">{[c.title, c.company].filter(Boolean).join(' · ')}</div></> },
               { head: 'Reach', cell: (c) => <div className="small">{[...c.phones, ...c.emails].slice(0, 3).join(' · ')}</div> },
               { head: '', cell: (c) => <span className="row" onClick={(e) => e.stopPropagation()}>
