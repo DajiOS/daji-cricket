@@ -1332,3 +1332,6 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) nav .menu{b
 /* ===== No shadow under the Reserve bar ===== */
 html[data-theme="ivory"] .resbar{box-shadow:none!important}
 html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) .resbar{box-shadow:none!important}
+@media (max-width:1020px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .facts{border-top:0}
+}
