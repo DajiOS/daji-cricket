@@ -1393,3 +1393,16 @@ select option:checked,select option:hover{background:#e8dfc6!important;color:#0f
 /* full screen shows the whole picture, never a cropped one */
 video:fullscreen,video:-webkit-full-screen{object-fit:contain!important;background:#000}
 .lightbox video{object-fit:contain;background:#000}
+
+/* ===== Opening animation: stumps, ball and the logo being written ===== */
+html[data-theme] #splash::before,#splash::before{background:radial-gradient(ellipse at 50% 58%,#1a6a4b 0%,#0f3d2e 46%,#082a1f 100%)!important;background-attachment:scroll!important;opacity:1}
+#sp-scene{position:absolute;inset:0;perspective:1000px;perspective-origin:50% 40%;overflow:hidden;z-index:1}
+#sp-scene .sp-logo,#sp-scene .sp-st,#sp-scene .sp-bail,#sp-scene .sp-ball,#sp-scene .sp-ring,#sp-scene .sp-glow{position:absolute}
+.sp-st{background:linear-gradient(90deg,#f6e9bf,#c9a96b 55%,#8c6f2a);border-radius:.5vmin .5vmin 0 0;transform-origin:50% 100%;box-shadow:0 0 18px rgba(201,169,107,.35);opacity:0}
+.sp-bail{background:linear-gradient(180deg,#f6e9bf,#c9a96b);border-radius:3px;box-shadow:0 0 10px rgba(246,233,191,.5);opacity:0}
+.sp-ball{border-radius:50%;background:radial-gradient(circle at 32% 28%,#ef6a5a,#b3261e 52%,#5e0f0a);box-shadow:inset -4px -6px 12px rgba(0,0,0,.4),0 14px 24px rgba(0,0,0,.45);opacity:0}
+.sp-ball::after{content:"";position:absolute;left:-1%;right:-1%;top:46%;height:6%;background:repeating-linear-gradient(90deg,#f5e9cc 0 .8vmin,transparent .8vmin 1.5vmin);border-radius:3px;opacity:.9}
+.sp-ring{border-radius:50%;border:2px solid #e8d9b0;opacity:0}
+.sp-glow{background:radial-gradient(ellipse at center,rgba(232,217,176,.35),transparent 70%)}
+.sp-logo svg{display:block}
+html #splash #splash-skip{color:#e8d9b0;border:1px solid rgba(232,217,176,.45);background:transparent;border-radius:99px;z-index:2}
