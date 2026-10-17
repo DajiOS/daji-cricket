@@ -36,8 +36,7 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
 
   const n = /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) ? days(from, to) : 0;
   const totalPaise = Math.round(Number(total) * 100), payPaise = Math.round(Number(amount) * 100);
-  const cashTooHigh = method === 'cash' && payPaise >= 20_000_000;
-  const ready = n >= 1 && n <= 31 && totalPaise >= 100 && amount.trim() !== '' && payPaise >= 0 && splitName(name).first && splitName(name).last && phone.trim() && (!isT || tName.trim().length >= 3) && groundId && !cashTooHigh;
+  const ready = n >= 1 && n <= 31 && totalPaise >= 100 && amount.trim() !== '' && payPaise >= 0 && splitName(name).first && splitName(name).last && phone.trim() && (!isT || tName.trim().length >= 3) && groundId;
 
   async function save() {
     setErr(''); setBusy(true);
@@ -69,7 +68,6 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{(['upi', 'bank_transfer', 'card', 'cash'] as const).map((m) => <Chip key={m} label={m.replace('_', ' ')} on={method === m} onPress={() => setMethod(m)} />)}</View>
       <Field label="Received now (₹)" value={amount} onChangeText={setAmount} keyboardType="numeric" />
       {method !== 'cash' && <Field label="Reference (UTR)" value={ref} onChangeText={setRef} />}
-      {cashTooHigh && <Text style={[s.err, { marginBottom: 8 }]}>Cash of ₹2,00,000 or more cannot be taken (Income-tax Act). Use UPI, bank transfer or cheque.</Text>}
       {!!err && <Text style={s.err}>{err}</Text>}
       <Btn label={`Book ${n || ''} day${n === 1 ? '' : 's'}`} disabled={!ready} busy={busy} onPress={save} />
     </View>
