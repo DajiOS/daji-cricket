@@ -1335,3 +1335,19 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) .resbar{box
 @media (max-width:1020px){
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .facts{border-top:0}
 }
+
+/* ===== Opening animation drawn on the page: ivory cover, brass logo wipes in, then glides to the menu bar ===== */
+html[data-theme="ivory"] #splash::before{background-color:var(--bg);background-image:none}
+#splash video{display:none}
+#splash-logo.draw{animation:logo-wipe 1.5s .15s cubic-bezier(.3,.7,.2,1) both}
+@keyframes logo-wipe{from{clip-path:inset(0 100% 0 0);transform:translateY(10px);filter:blur(3px)}to{clip-path:inset(0 0 0 0);transform:none;filter:none}}
+#splash-logo.move{clip-path:none}
+html[data-theme="ivory"] #splash-skip{color:#14573e;background:transparent;border:1px solid rgba(20,87,62,.35);border-radius:99px}
+
+/* smooth panel edge + readable ball chips on the green panel */
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{border-radius:28px 0 0 28px;box-shadow:-10px 0 30px rgba(15,61,46,.12)}
+}
+html[data-theme="ivory"] aside.panel#book .chip2{color:#0f3d2e;background:#fbf8f0;border-color:rgba(255,255,255,.5)}
+html[data-theme="ivory"] aside.panel#book .chip2 small{color:#0f3d2e;opacity:.7}
+html[data-theme="ivory"] aside.panel#book .chip2.on{background:#fff;border-color:#c9a96b;color:#0f3d2e}
