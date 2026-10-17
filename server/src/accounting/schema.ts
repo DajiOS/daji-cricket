@@ -236,3 +236,6 @@ export function ensureBuiltinCategories(): void {
 }
 
 registerSchema('accounting-1', ACCOUNTING_SCHEMA + '\n' + seedSql());
+
+// The chart of accounts page asks "is this account used?" once per account, so look it up by code.
+registerSchema('accounting-perf-1', `CREATE INDEX IF NOT EXISTS ix_acct_journal_lines_code ON acct_journal_lines(account_code);`);
