@@ -2142,13 +2142,13 @@ async function renderMyDash(el) {
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (seen || framed || reduce || (location.hash && location.hash !== '#top') || !box.animate) { root.classList.remove('splash-on'); box.remove(); return; }
   root.classList.add('splash-on'); box.hidden = false; window.scrollTo(0, 0);
-  const anims = []; let done = false;
+  const anims = []; let done = false; let disposeGL = null;
   const A = (elm, kf, opt) => { const a = elm.animate(kf, { fill: 'both', ...opt }); anims.push(a); return a; };
   const finish = () => {
     if (done) return; done = true;
     try { sessionStorage.setItem('daji.splash', '1'); } catch { /* ignore */ }
     root.classList.add('splash-reveal'); box.classList.add('out');
-    setTimeout(() => { anims.forEach((a) => { try { a.cancel(); } catch { /* gone */ } }); root.classList.remove('splash-on', 'splash-reveal'); box.remove(); }, 900);
+    setTimeout(() => { anims.forEach((a) => { try { a.cancel(); } catch { /* gone */ } }); root.classList.remove('splash-on', 'splash-reveal'); if (disposeGL) disposeGL(); box.remove(); }, 900);
   };
   skip.addEventListener('click', finish);
   setTimeout(finish, 12000);
@@ -2198,6 +2198,22 @@ async function renderMyDash(el) {
       { transform: tf(end, sc, 720), opacity: 1, offset: 1 },
     ], { duration: TD, delay: T0, easing: 'cubic-bezier(.55,0,.9,.55)' });
     const H = T0 + TD * hitAt, L = T0 + TD;     // moment of the hit, moment the ball lands
+
+    // real-time 3D: splash-gl.js draws the stumps, bails and ball in WebGL, following where these page elements are each frame
+    if (window.DajiSplashGL) {
+      try {
+        const rd = (el) => { const cs = getComputedStyle(el), m = new DOMMatrix(cs.transform === 'none' ? undefined : cs.transform); return { cs, m, a: parseFloat(cs.opacity) }; };
+        const gl = window.DajiSplashGL.start(scene, vw, vh, () => {
+          const out = [];
+          stumps.forEach((el) => { const { m, a } = rd(el), sy = Math.hypot(m.c, m.d) || 1; out.push({ kind: 'stump', alpha: a, x: parseFloat(el.style.left) + sW / 2 + m.e, y: base + m.f, w: sW, h: sH * sy, rot: Math.atan2(m.b, m.a) }); });
+          bails.forEach((el) => { const { m, a } = rd(el), w = parseFloat(el.style.width), h = parseFloat(el.style.height); out.push({ kind: 'bail', alpha: a, x: parseFloat(el.style.left) + w / 2 + m.e, y: parseFloat(el.style.top) + h / 2 + m.f, w, t: h * 1.6, rot: Math.atan2(m.b, m.a) }); });
+          { const { m, a } = rd(bl), s2 = Math.hypot(m.a, m.b) || 1; out.push({ kind: 'ball', alpha: a, x: cx + m.e, y: cy + m.f, r: D / 2 * s2, rot: Math.atan2(m.b, m.a) }); }
+          const sh = rd(scene).m; out.forEach((p) => { p.x += sh.e; p.y += sh.f; });
+          return out;
+        });
+        if (gl) { scene.classList.add('gl'); disposeGL = gl.dispose; }
+      } catch { /* keep the plain version */ }
+    }
 
     // the hit: bails fly off, stumps fall, the scene shudders
     A(bails[0], [{ transform: 'none', opacity: 1 }, { transform: `translate(${-22 * u}px,${-16 * u}px) rotate(-620deg)`, opacity: 0 }], { duration: 900, delay: H, easing: 'cubic-bezier(.2,.7,.4,1)' });
