@@ -1220,3 +1220,15 @@ html[data-theme="ivory"] .resbar{box-shadow:0 0 0 1px rgba(201,169,107,.5)}
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book .legend,
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book .legend *{color:#b9c9be}
 }
+
+/* ===== Logo lives on the green panel (right); white frame ===== */
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after{box-shadow:inset 0 0 0 10px #fff,inset 0 0 0 11px rgba(15,61,46,.28)}
+@keyframes frame-in{from{box-shadow:inset 0 0 0 0 #fff,inset 0 0 0 0 rgba(15,61,46,0);opacity:0}to{box-shadow:inset 0 0 0 10px #fff,inset 0 0 0 11px rgba(15,61,46,.28);opacity:1}}
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand{position:fixed;top:10px;right:10px;width:calc(var(--split) - 10px);z-index:45;box-sizing:border-box;padding:26px clamp(24px,2.8vw,44px) 0;background:#0f3d2e;margin:0}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .wm-nav{height:84px}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand-tag{display:none}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .hero .panel,
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{padding-top:140px}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav{justify-content:flex-start}
+}
