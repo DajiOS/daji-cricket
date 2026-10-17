@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View,
 import { C } from './theme';
 import { API_URL } from './api';
 
-export const s = StyleSheet.create({
+const build = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   pad: { padding: 18, paddingBottom: 40 },
   eyebrow: { color: C.gold, fontSize: 11, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 8 },
@@ -16,6 +16,9 @@ export const s = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, gap: 10 },
   input: { backgroundColor: C.bg, borderColor: C.line, borderWidth: 1, borderRadius: 8, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
 });
+/** The shared styles. They are built again (in place) when the theme changes, see refreshStyles. */
+export const s: ReturnType<typeof build> = build();
+export function refreshStyles(): void { Object.assign(s, build()); }
 
 export function Btn({ label, onPress, kind = 'primary', disabled, busy, style }: { label: string; onPress: () => void; kind?: 'primary' | 'outline' | 'ghost'; disabled?: boolean; busy?: boolean; style?: ViewStyle }) {
   const p = kind === 'primary';

@@ -2235,12 +2235,23 @@ async function renderMyDash(el) {
     const len = daji.getTotalLength ? daji.getTotalLength() : 0;
     daji.setAttribute('stroke', '#0f3d2e'); daji.setAttribute('stroke-width', '34'); daji.setAttribute('stroke-linejoin', 'round'); daji.setAttribute('stroke-linecap', 'round');
     daji.style.strokeDasharray = len + ' ' + len;
-    A(daji, [{ strokeDashoffset: len, fillOpacity: 0, strokeOpacity: 1 }, { strokeDashoffset: 0, fillOpacity: 0, strokeOpacity: 1 }], { duration: 1500, delay: W + 100, easing: 'cubic-bezier(.45,.05,.4,1)' });
+    A(daji, [{ strokeDashoffset: len, fillOpacity: 0, strokeOpacity: 1 }, { strokeDashoffset: 0, fillOpacity: 0, strokeOpacity: 1 }], { duration: 1500, delay: W + 100, easing: 'steps(18, jump-end)' });
     A(daji, [{ fillOpacity: 0, strokeOpacity: 1 }, { fillOpacity: 1, strokeOpacity: 0 }], { duration: 900, delay: W + 1500, composite: 'replace' });
     const letters = [...(rowC ? rowC.children : []), ...(rowG ? rowG.children : []), chunk].filter(Boolean);
-    letters.forEach((e, i) => A(e, [{ opacity: 0, transform: 'translateY(160px)' }, { opacity: 1, transform: 'none' }], { duration: 520, delay: W + 1900 + i * 55, easing: 'cubic-bezier(.2,.8,.2,1)' }));
-    [tag, rl, rr].forEach((e) => { if (e) A(e, [{ opacity: 0 }, { opacity: 1 }], { duration: 700, delay: W + 1900 + letters.length * 55 }); });
-    setTimeout(finish, W + 1900 + letters.length * 55 + 700 + 700);
+    // kinetic type: each letter drops in tilted, overshoots, squashes and settles, photographed at about 12 frames a second like stop-motion
+    letters.forEach((e, i) => {
+      e.style.transformBox = 'fill-box'; e.style.transformOrigin = '50% 100%';
+      const tilt = i % 2 ? 16 : -16;
+      A(e, [
+        { opacity: 0, transform: `translateY(-190px) rotate(${tilt}deg) scale(.7,1.25)`, offset: 0 },
+        { opacity: 1, transform: `translateY(14px) rotate(${-tilt / 2}deg) scale(1.22,.7)`, offset: .5 },
+        { transform: `translateY(-26px) rotate(${tilt / 3}deg) scale(.94,1.1)`, offset: .72 },
+        { transform: 'translateY(0) rotate(0) scale(1.04,.97)', offset: .88 },
+        { opacity: 1, transform: 'none', offset: 1 },
+      ], { duration: 720, delay: W + 1900 + i * 70, easing: 'steps(9, jump-end)' });
+    });
+    [tag, rl, rr].forEach((e) => { if (e) A(e, [{ opacity: 0 }, { opacity: 1 }], { duration: 700, delay: W + 1900 + letters.length * 70 }); });
+    setTimeout(finish, W + 1900 + letters.length * 70 + 720 + 700);
   }
 })();
 

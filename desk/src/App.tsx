@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState, Fragment, Suspense } from 'react';
 import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
 import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
+import { ThemeToggle } from './ThemeToggle';
+import { Intro } from './Intro';
 import { HOME, NAV, PAGES, SUBS, SUB_ICONS, subHref, type NavItem } from './registry';
 
 // ---------- session shared by every page ----------
@@ -125,6 +127,7 @@ function Shell({ route }: { route: string }) {
           <div className="spacer" />
           <a className="btn ghost sm hide-sm" href="./">View website</a>
           <span className="badge b-gold hide-sm">{roleLabel(s.me)}</span>
+          <ThemeToggle />
         </header>
         <div className="page" key={route}><Suspense fallback={<p className="muted" style={{ padding: 24 }}>Loading…</p>}><Page sub={sub} /></Suspense></div>
       </main>

@@ -33,13 +33,16 @@
     + 'gl_Position=vec4(w.x/uRes.x*2.0-1.0,1.0-w.y/uRes.y*2.0,-(w.z+uZ)/2000.0,1.0);}';
   var FS = 'precision mediump float;varying vec3 vN;varying vec3 vO;uniform vec3 uCol;uniform vec3 uShade;uniform float uInk;uniform float uBall;uniform float uAlpha;uniform float uSeed;'
     + 'float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}'
-    + 'void main(){if(uInk>0.5){gl_FragColor=vec4(vec3(0.04,0.14,0.11),uAlpha);return;}'
-    + 'vec3 n=normalize(vN);vec3 L=normalize(vec3(-0.78,-0.45,0.55));float d=dot(n,L);'
-    + 'float band=d>0.55?1.0:(d>0.05?0.72:0.45);vec3 c=mix(uShade,uCol,band);'
-    + 'if(d>0.93)c=mix(c,vec3(1.0),0.85);' // hard highlight, like a painted shine
-    + 'if(uBall>0.5){float s=abs(vO.y);if(s<0.07)c=vec3(0.97,0.93,0.82);float st=step(0.5,fract(vO.x*9.0+vO.z*9.0));if(s<0.17&&s>0.1&&st>0.5)c=vec3(0.97,0.93,0.82);}'
-    + 'float rim=pow(1.0-max(n.z,0.0),3.0);c=mix(c,uShade*0.7,rim*0.5);'
-    + 'float g=h(gl_FragCoord.xy*0.5+uSeed)*0.07-0.035;gl_FragColor=vec4(c+g,uAlpha);}';
+    + 'float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}'
+    + 'void main(){'
+    + 'vec3 n=normalize(vN);' // clay: thumbprint dents and soft lumps bend the normal a little
+    + 'float b1=vn(vO.xy*7.0+vO.z*5.0),b2=vn(vO.zx*17.0+vO.y*3.0);n=normalize(n+vec3(b1-0.5,b2-0.5,(b1+b2)*0.5-0.5)*0.32);'
+    + 'vec3 L=normalize(vec3(-0.6,-0.55,0.62));float d=dot(n,L)*0.5+0.5;' // wrapped light, matte
+    + 'vec3 c=mix(uShade,uCol,smoothstep(0.12,0.85,d));'
+    + 'c+=vec3(0.07,0.05,0.04)*pow(max(dot(n,normalize(L+vec3(0.0,0.0,1.0))),0.0),14.0);' // a faint waxy sheen, never a hard shine
+    + 'if(uBall>0.5){float s=abs(vO.y);float g=smoothstep(0.075,0.05,s);c=mix(c,uShade*0.55,g);float st=step(0.5,fract(vO.x*9.0+vO.z*9.0));if(s<0.19&&s>0.11&&st>0.5)c=mix(c,uShade*0.6,0.8);}'
+    + 'float rim=pow(1.0-max(n.z,0.0),2.5);c=mix(c,uCol*1.12,rim*0.25);'
+    + 'float g2=(h(gl_FragCoord.xy*0.7+uSeed)-0.5)*0.05;gl_FragColor=vec4(c+g2,uAlpha);}';
 
   function start(scene, vw, vh, getParts) {
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -74,29 +77,30 @@
     gl.viewport(0, 0, cv.width, cv.height); gl.uniform2f(U.uRes, vw, vh);
     scene.insertBefore(cv, scene.firstChild);
 
-    var GOLD = [0.93, 0.78, 0.38], GOLD_S = [0.52, 0.36, 0.10], RED = [0.84, 0.17, 0.12], RED_S = [0.36, 0.04, 0.03];
+    var GOLD = [0.96, 0.74, 0.30], GOLD_S = [0.72, 0.42, 0.14], RED = [0.88, 0.24, 0.17], RED_S = [0.52, 0.10, 0.08];
     var raf = 0, alive = true, t0 = performance.now();
+    var lastF = -1, snap = [];
+    function jit(f, k) { var v = Math.abs(Math.sin(f * 12.9898 + k * 78.233) * 43758.5453); return (v % 1) - 0.5; }
     function frame(now) {
       if (!alive) return;
-      var f = Math.floor((now - t0) / 83), wob = function (k) { return 0.55 + 0.9 * (Math.abs(Math.sin(f * 12.9898 + k * 78.233) * 43758.5453) % 1); }; // line boil, 12 times a second
+      var f = Math.floor((now - t0) / 83);                 // stop-motion: the scene is photographed 12 times a second
+      if (f !== lastF) { lastF = f; snap = getParts(); }
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      var parts = getParts(), k = 0;
-      parts.forEach(function (p) {
+      var k = 0;
+      snap.forEach(function (p) {
         if (p.alpha <= 0.01) return; k++;
-        var th = 2.2 * wob(k);
+        var jx = jit(f, k) * 2.4, jy = jit(f, k + 40) * 2.0, jr = jit(f, k + 80) * 0.05, js = 1 + jit(f, k + 120) * 0.045; // hands moving the clay between shots
         if (p.kind === 'ball') {
-          var r = p.r, M = mat(p.x, p.y, 0, p.rot, p.rot * 0.8, r, r, r), MI = mat(p.x, p.y, -6, p.rot, p.rot * 0.8, r + th, r + th, r + th);
-          draw(SPH, MI, GOLD, GOLD, 1, 0, p.alpha, 0, 0); draw(SPH, M, RED, RED_S, 0, 1, p.alpha, 0, f);
+          var r = p.r * js; draw(SPH, mat(p.x + jx, p.y + jy, 0, p.rot + jr, p.rot * 0.8, r, r * (2 - js), r), RED, RED_S, 0, 1, p.alpha, 0, f);
         } else if (p.kind === 'stump') {
-          var Ms = mat(p.x, p.y, 0, p.rot, 0, p.w / 2, -p.h, p.w / 2), Mi = mat(p.x, p.y + th, -6, p.rot, 0, p.w / 2 + th, -p.h - 2 * th, p.w / 2 + th);
-          draw(CYL, Mi, GOLD, GOLD, 1, 0, p.alpha, 0, 0); draw(CYL, Ms, GOLD, GOLD_S, 0, 0, p.alpha, 0, f);
-        } else { // a bail lies on its side: a short cylinder turned to run left to right
-          var cx = p.x, cy = p.y, len = p.w, rad = p.t / 2;
-          var Mb = mat(cx, cy, 0, p.rot + Math.PI / 2, 0, rad, len, rad), Mbi = mat(cx, cy, -6, p.rot + Math.PI / 2, 0, rad + th, len + 2 * th, rad + th);
-          // translate so the cylinder is centred (its base sits at y = 0): shift half a length along its own axis
-          var ax = Math.cos(p.rot + Math.PI / 2), ay = Math.sin(p.rot + Math.PI / 2);
-          Mb[12] = cx - ax * (-len / 2) * -1; Mb[13] = cy - ay * (-len / 2) * -1; Mbi[12] = Mb[12]; Mbi[13] = Mb[13];
-          draw(CYL, Mbi, GOLD, GOLD, 1, 0, p.alpha, 0, 0); draw(CYL, Mb, GOLD, GOLD_S, 0, 0, p.alpha, 0, f);
+          draw(CYL, mat(p.x + jx, p.y + jy, 0, p.rot + jr, 0, p.w / 2 * js, -p.h, p.w / 2 * js), GOLD, GOLD_S, 0, 0, p.alpha, 0, f);
+        } else {
+          var len = p.w, rad = p.t / 2, ang = p.rot + jr + Math.PI / 2, M = mat(p.x + jx, p.y + jy, 0, ang, 0, rad * js, len, rad * js);
+          M[12] = p.x + jx + Math.cos(ang) * len / 2 * -1 * -1; M[13] = p.y + jy + Math.sin(ang) * len / 2 * -1 * -1;
+          M[12] = p.x + jx - (-Math.sin(ang)) * 0 + (Math.cos(ang + Math.PI / 2) * 0); M[13] = p.y + jy;
+          // centre the cylinder on (x, y): its base is at y = 0 and its length runs along the turned axis
+          var ax = -Math.sin(ang), ay = Math.cos(ang); M[12] = p.x + jx - ax * len / 2; M[13] = p.y + jy - ay * len / 2;
+          draw(CYL, M, GOLD, GOLD_S, 0, 0, p.alpha, 0, f);
         }
       });
       raf = requestAnimationFrame(frame);
