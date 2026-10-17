@@ -38,7 +38,7 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
     if (!gid) return setErr('Choose a ground');
     if (days < 1 || days > 31) return setErr('Choose 1 to 31 days');
     if (!totalPaise || totalPaise < 100) return setErr('Enter the agreed total for all days, in rupees');
-    if (!payPaise || payPaise < 1) return setErr('Enter the amount received now');
+    if (payPaise === null || payPaise < 0) return setErr('Enter the amount received now. Type 0 if nothing has been received yet.');
     const nm = splitName(cust.name);
     if (!nm.first || !nm.last || !cust.phone.trim()) return setErr('Enter the customer first name, last name and phone');
     if (isT && tName.trim().length < 3) return setErr('Give the tournament a name');
@@ -59,7 +59,7 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
   return (
     <Modal title="Multi-day booking" wide onClose={onClose}
       foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || cashTooHigh} onClick={save}>Book {days || ''} day{days === 1 ? '' : 's'}</button></>}>
-      <p className="small muted">For a custom programme agreed with the customer. One booking is made for each day, and the agreed total is shared across the days. The first day's advance must be received now.</p>
+      <p className="small muted">For a custom programme agreed with the customer. One booking is made for each day, and the agreed total is shared across the days. Enter 0 in Received now if nothing has been received yet; the whole amount then stays due.</p>
       <div className="form-grid">
         <Field label="Ground" full><select className="inp" value={gid} onChange={(e) => setGroundId(e.target.value)}>{grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
         <Field label="First day"><DateInput className="inp" value={from} min={todayISO()} onChange={(e) => { setFrom(e.target.value); if (to < e.target.value) setTo(e.target.value); }} /></Field>

@@ -75,7 +75,7 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
   const submit = async () => {
     if (!picked) return setErr('Choose a session or the hours first.');
     const paise = toPaise(amount);
-    if (!paise || paise <= 0) return setErr('Enter the amount received now, in rupees.');
+    if (paise === null || paise < 0) return setErr('Enter the amount received now, in rupees. Type 0 if nothing has been received yet.');
     if (paise > picked.total) return setErr(`That is more than the booking total of ${inr(picked.total)}.`);
     setBusy(true); setErr(null);
     try {

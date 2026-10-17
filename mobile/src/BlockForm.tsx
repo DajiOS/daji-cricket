@@ -37,7 +37,7 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
   const n = /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) ? days(from, to) : 0;
   const totalPaise = Math.round(Number(total) * 100), payPaise = Math.round(Number(amount) * 100);
   const cashTooHigh = method === 'cash' && payPaise >= 20_000_000;
-  const ready = n >= 1 && n <= 31 && totalPaise >= 100 && payPaise >= 1 && splitName(name).first && splitName(name).last && phone.trim() && (!isT || tName.trim().length >= 3) && groundId && !cashTooHigh;
+  const ready = n >= 1 && n <= 31 && totalPaise >= 100 && amount.trim() !== '' && payPaise >= 0 && splitName(name).first && splitName(name).last && phone.trim() && (!isT || tName.trim().length >= 3) && groundId && !cashTooHigh;
 
   async function save() {
     setErr(''); setBusy(true);
@@ -49,7 +49,7 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
 
   return (
     <View>
-      <Text style={s.muted}>For a custom programme agreed with the customer. One booking is made for each day and the agreed total is shared across the days. The first day's advance must be received now.</Text>
+      <Text style={s.muted}>For a custom programme agreed with the customer. One booking is made for each day and the agreed total is shared across the days. Enter 0 in Received now if nothing has been received yet; the whole amount then stays due.</Text>
       <Text style={[s.muted, { marginTop: 10 }]}>Ground</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{grounds.map((g) => <Chip key={g.id} label={g.name} on={groundId === g.id} onPress={() => setGroundId(g.id)} />)}</View>
       <DateField label="First day" value={from} onChange={(v) => { setFrom(v); if (v && to < v) setTo(v); }} />

@@ -310,10 +310,10 @@ export function parseWalkIn(body: unknown): WalkInInput {
   else {
     const pv = new Validator(pay);
     const method = pv.oneOf('method', ['cash', 'card', 'upi', 'bank_transfer'] as const, true);
-    const amountPaise = pv.int('amountPaise', { required: true, min: 1 });
+    const amountPaise = pv.int('amountPaise', { required: true, min: 0 });
     const reference = pv.str('reference', { max: 60 });
     for (const f of pv.fields) v.fail(`payment.${f.field}`, f.message);
-    if (method && amountPaise) payment = { method, amountPaise, reference };
+    if (method && amountPaise !== undefined) payment = { method, amountPaise, reference }; // 0 is allowed: booked with nothing received yet
   }
   v.done();
   return { groundId: groundId!, date: date!, startTime: startTime!, slots, formatId, ruleId, customer: customer!, payment: payment!, players, notes };
@@ -385,7 +385,8 @@ export function createStaffBooking(staff: UserRow, input: WalkInInput): Booking 
 
   return tx(() => {
     const t = now();
-    const advance = Math.min(advanceFor(ground, total, plan.starts[0]!, t), total);
+    const noMoney = input.payment.amountPaise === 0; // staff may book with nothing received; the whole amount stays due
+    const advance = noMoney ? 0 : Math.min(advanceFor(ground, total, plan.starts[0]!, t), total);
     if (input.payment.amountPaise < advance) {
       throw new HttpError(409, 'ADVANCE_NOT_MET', `At least the advance of ${advance} paise must be recorded to confirm this booking`, { advancePaise: advance, totalPaise: total });
     }
@@ -393,6 +394,7 @@ export function createStaffBooking(staff: UserRow, input: WalkInInput): Booking 
     const id = insertBooking({ ground, customerId: customer.id, date: plan.date, starts: plan.starts, totalPaise: total, advancePaise: advance, status: 'held', source, payMethod: null, holdExpiresAt: t + 5 * MIN, players: input.players, notes: input.notes ?? null, createdBy: staff.id, enquiryId: input.enquiryId ?? null, format: plan.format });
     takeSlots(id, ground, plan.starts);
     audit(actor, source === 'enquiry' ? 'booking.from_enquiry' : 'booking.walk_in', 'booking', id, { totalPaise: total, advancePaise: advance, customerId: customer.id }, ground.owner_id);
+    if (noMoney) { confirmBooking(id, actor, { via: 'offline', noAdvance: true }); return viewBooking(id); }
     const r = recordOffline(staff, id, { method: input.payment.method, amountPaise: input.payment.amountPaise, reference: input.payment.reference });
     if (r.outcome !== 'confirmed') throw new HttpError(409, 'ADVANCE_NOT_MET', 'The recorded payment did not reach the advance');
     return viewBooking(id);
@@ -428,9 +430,9 @@ export function parseBlock(body: unknown): BlockInput {
   if (!pay || typeof pay !== 'object') v.fail('payment', 'Required');
   else {
     const pv = new Validator(pay);
-    const method = pv.oneOf('method', ['cash', 'card', 'upi', 'bank_transfer'] as const, true), amountPaise = pv.int('amountPaise', { required: true, min: 1 }), reference = pv.str('reference', { max: 60 });
+    const method = pv.oneOf('method', ['cash', 'card', 'upi', 'bank_transfer'] as const, true), amountPaise = pv.int('amountPaise', { required: true, min: 0 }), reference = pv.str('reference', { max: 60 });
     for (const f of pv.fields) v.fail(`payment.${f.field}`, f.message);
-    if (method && amountPaise) payment = { method, amountPaise, reference };
+    if (method && amountPaise !== undefined) payment = { method, amountPaise, reference }; // 0 is allowed: booked with nothing received yet
   }
   if (fromDate && toDate && toDate < fromDate) v.fail('toDate', 'Cannot be before the first day');
   if (startTime && endTime && endTime <= startTime) v.fail('endTime', 'Must be after the start time');
@@ -480,7 +482,8 @@ export function createStaffBlock(staff: UserRow, input: BlockInput): { series: {
       const hit = p.starts.find((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x));
       if (hit) throw new HttpError(409, 'SLOT_TAKEN', `${p.date} is not free for those hours (${timeOfDay(hit)} is taken or blocked). Pick other dates or hours.`, { date: p.date });
     }
-    const advance = Math.min(advanceFor(ground, dayTotal(0), plans[0]!.starts[0]!, t), dayTotal(0));
+    const noMoney = input.payment.amountPaise === 0; // staff may book with nothing received; the whole amount stays due
+    const advance = noMoney ? 0 : Math.min(advanceFor(ground, dayTotal(0), plans[0]!.starts[0]!, t), dayTotal(0));
     if (input.payment.amountPaise < advance) throw new HttpError(409, 'ADVANCE_NOT_MET', `At least ${advance} paise must be recorded for the first day to confirm the block`, { advancePaise: advance, totalPaise: dayTotal(0) });
 
     const seriesId = newId('ser');
@@ -495,6 +498,7 @@ export function createStaffBlock(staff: UserRow, input: BlockInput): { series: {
     audit(actor, 'booking.block', 'booking', ids[0]!, { days: n, from: input.fromDate, to: input.toDate, totalPaise: input.totalPaise, customerId: customer.id }, ground.owner_id);
     // The payment goes to the first day up to what it costs, then onward. The first day confirms the whole block.
     let left = input.payment.amountPaise;
+    if (noMoney) confirmBooking(ids[0]!, actor, { via: 'offline', noAdvance: true });
     for (let i = 0; i < ids.length && left > 0; i++) {
       const put = Math.min(left, dayTotal(i));
       const r = recordOffline(staff, ids[i]!, { method: input.payment.method, amountPaise: put, reference: i === 0 ? input.payment.reference : undefined });

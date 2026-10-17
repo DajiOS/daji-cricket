@@ -26,7 +26,7 @@ export function TournamentForm({ t, onClose, onSaved }: { t?: Tournament; onClos
       const total = toPaise(v.total), got = toPaise(v.received);
       if (!org.firstName || !org.lastName || !org.phone) return setErr('To reserve the ground, enter the organiser\'s first name, last name and phone');
       if (!total || total < 100) return setErr('Enter the agreed ground charge for all days, in rupees');
-      if (!got || got < 1) return setErr('Enter the amount received now');
+      if (got === null || got < 0) return setErr('Enter the amount received now. Type 0 if nothing has been received yet.');
       booking = { groundId: v.groundId || grounds[0]?.id, startTime: v.startTime, endTime: v.endTime, totalPaise: total, payment: { method: v.method, amountPaise: got, reference: v.reference.trim() || undefined } };
     }
     setBusy(true); setErr(null);
