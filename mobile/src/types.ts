@@ -33,7 +33,8 @@ export interface Child {
 export interface StaffBooking {
   id: string; ref: string; groundName: string; customerName: string; customerPhone: string | null; date: string; startAt: number; endAt: number; slotCount: number; formatLabel: string | null;
   status: 'held' | 'confirmed' | 'cancelled' | 'expired' | 'no_show' | 'completed'; totalPaise: number; paidPaise: number; balancePaise: number; needsReview: boolean; approval: 'pending' | 'approved';
-  cancelledByOwner: boolean; resolution: string | null; promoCode: string | null;
+  cancelledByOwner: boolean; resolution: string | null; promoCode: string | null; seriesId?: string | null; seriesIndex?: number | null;
+  block?: { tournament?: { id: string; name: string } | null; seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number } | null;
 }
 export interface PaymentRow { id: string; bookingId: string; method: string; status: string; purpose: string; amountPaise: number; reference: string | null }
 export interface TaskPhoto { id: string; url: string; takenAt: number; uploadedByName: string | null; note: string | null; source: string }
