@@ -7,7 +7,7 @@ import { audit, type Actor } from './audit.ts';
 import { Validator, normalizePhone } from './input.ts';
 import { getSettings } from './settings.ts';
 import { MIN, DAY, addDays, istMidnight, timeOfDay } from './time.ts';
-import { advanceFor, bookingOr404, confirmBooking, loadBooking, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
+import { accessBooking, blockOf, advanceFor, bookingOr404, confirmBooking, loadBooking, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
 import { getGroundOr404, slotPrice, slotStarts, type GroundRow } from './grounds.ts';
 import { createUser, requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
 import { insertPayment, logEvent, recordOffline, type PaymentRow } from './payments.ts';
@@ -446,7 +446,7 @@ export function createStaffBlock(staff: UserRow, input: BlockInput): { series: {
     const ids: string[] = [];
     plans.forEach((p, i) => {
       const id = insertBooking({ ground, customerId: customer.id, date: p.date, starts: p.starts, totalPaise: dayTotal(i), advancePaise: i === 0 ? advance : 0, status: 'held', source: input.enquiryId ? 'enquiry' : 'walk_in', payMethod: null, holdExpiresAt: i === 0 ? t + 5 * MIN : null, players: undefined, notes: input.notes ?? null, createdBy: staff.id, enquiryId: input.enquiryId ?? null });
-      if (i === 0) run('INSERT INTO booking_series(id, owner_id, customer_id, ground_id, frequency, requested, first_booking_id, created_at) VALUES(?,?,?,?,?,?,?,?)', seriesId, ground.owner_id, customer.id, ground.id, 'daily', n, id, t);
+      if (i === 0) run('INSERT INTO booking_series(id, owner_id, customer_id, ground_id, frequency, requested, first_booking_id, created_at, kind) VALUES(?,?,?,?,?,?,?,?,?)', seriesId, ground.owner_id, customer.id, ground.id, 'daily', n, id, t, 'block');
       takeSlots(id, ground, p.starts);
       run('UPDATE bookings SET series_id = ?, series_index = ? WHERE id = ?', seriesId, i, id);
       ids.push(id);
@@ -472,3 +472,27 @@ export function bookingDetail(id: string) {
   return { booking: b, paymentRows: payments };
 }
 
+
+/** One payment against a whole block: it goes to the earliest day that still owes money, then the next, and so on. */
+export function recordBlockPayment(staff: UserRow, seriesId: string, input: { method: 'cash' | 'card' | 'upi' | 'bank_transfer'; amountPaise: number; reference?: string; note?: string }) {
+  const days = many<{ id: string; total_paise: number; paid_paise: number }>("SELECT id, total_paise, paid_paise FROM bookings WHERE series_id = ? AND status IN ('held','confirmed') ORDER BY series_index", seriesId);
+  if (!days.length || !one("SELECT 1 FROM booking_series WHERE id = ? AND kind = 'block'", seriesId)) throw new HttpError(404, 'NOT_FOUND', 'Multi-day booking not found');
+  accessBooking(staff, days[0]!.id, 'record_payments');
+  const owing = days.reduce((a, d) => a + (d.total_paise - d.paid_paise), 0);
+  if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0) throw new HttpError(400, 'VALIDATION_FAILED', 'Amount must be a positive whole number of paise');
+  if (input.amountPaise > owing) throw new HttpError(409, 'OVERPAYMENT', `Only ${owing} paise is outstanding on this multi-day booking`);
+  return tx(() => {
+    let left = input.amountPaise, first = true;
+    for (const d of days) {
+      if (left <= 0) break;
+      const put = Math.min(left, d.total_paise - d.paid_paise);
+      if (put <= 0) continue;
+      // a payment reference (UTR) can be used once, so it is kept on the first day and noted on the rest
+      const note = first ? input.note : [input.note, input.reference ? `Part of payment ${input.reference}` : 'Part of one multi-day payment'].filter(Boolean).join(' · ').slice(0, 200);
+      recordOffline(staff, d.id, { method: input.method, amountPaise: put, reference: first ? input.reference : undefined, note });
+      first = false;
+      left -= put;
+    }
+    return blockOf(seriesId)!;
+  });
+}

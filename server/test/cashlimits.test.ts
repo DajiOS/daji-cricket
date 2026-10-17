@@ -64,3 +64,23 @@ test('cash for a multi-day block cannot be split over its days to get round the 
   const ok = await h.post(`/api/staff/bookings/${second}/payments`, { method: 'upi', amountPaise: 5_000_000, reference: 'UTRSPLIT0001' }, staff);
   assert.equal(ok.status, 201, JSON.stringify(ok.body));
 });
+
+test('a multi-day block is one row in the staff list, opens with every day, and takes one payment for all days', async () => {
+  const staff = await h.login('staff1'), g = (await grounds(h))[0]!;
+  const r = await h.post('/api/staff/bookings/block', { groundId: g.id, fromDate: dayFromNow(90), toDate: dayFromNow(93), startTime: '07:00', endTime: '19:00', totalPaise: 4_000_000, customer: { name: 'Camp Group', phone: '9890000044' }, payment: { method: 'upi', amountPaise: 1_000_000, reference: 'UTRGROUP0001' } }, staff);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const list = await h.get('/api/staff/bookings?q=Camp%20Group', staff);
+  assert.equal(list.body.total, 1); assert.equal(list.body.items.length, 1);
+  const row = list.body.items[0];
+  assert.equal(row.block.days, 4); assert.equal(row.block.totalPaise, 4_000_000); assert.equal(row.block.paidPaise, 1_000_000); assert.equal(row.block.balancePaise, 3_000_000);
+  assert.equal(row.block.fromDate, dayFromNow(90)); assert.equal(row.block.toDate, dayFromNow(93));
+  const inRange = await h.get(`/api/staff/bookings?from=${dayFromNow(92)}&to=${dayFromNow(92)}&q=Camp%20Group`, staff);
+  assert.equal(inRange.body.items.length, 1, 'a date inside the block finds it');
+  const detail = await h.get(`/api/staff/bookings/${row.id}`, staff);
+  assert.equal(detail.body.block.items.length, 4);
+  const pay = await h.post(`/api/staff/bookings/block/${row.block.seriesId}/payments`, { method: 'upi', amountPaise: 3_000_000, reference: 'UTRGROUP0002' }, staff);
+  assert.equal(pay.status, 201, JSON.stringify(pay.body));
+  assert.equal(pay.body.block.balancePaise, 0); assert.equal(pay.body.block.paidPaise, 4_000_000);
+  const over = await h.post(`/api/staff/bookings/block/${row.block.seriesId}/payments`, { method: 'upi', amountPaise: 100, reference: 'UTRGROUP0003' }, staff);
+  assert.equal(over.status, 409);
+});

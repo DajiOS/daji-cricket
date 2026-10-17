@@ -1,16 +1,16 @@
 // One booking: who, when, money, payments, and everything staff can do to it.
 import { useState } from 'react';
 import { Modal, Chip, Loading, ErrorBox, Field, Status, Table, Confirm, useToast } from '../../ui';
-import { useApi, post, api, inr, toPaise, rupees, fmtDay, fmtDateTime, formatPhone, can } from '../../lib';
+import { useApi, post, api, go, inr, toPaise, rupees, fmtDay, fmtDateTime, formatPhone, can } from '../../lib';
 import { useSession } from '../../App';
-import { type Booking, BookingChip, CancelDialog, HAND_METHODS, METHOD_LABEL, PAY_STATUS, SOURCE_LABEL, cancellable, errText, timeRange, whatOf } from './common';
+import { type Booking, type Block, BookingChip, CancelDialog, HAND_METHODS, METHOD_LABEL, PAY_STATUS, SOURCE_LABEL, STATUS_LABEL, cancellable, errText, timeRange, whatOf } from './common';
 
 interface Pay { id: string; method: string; status: string; purpose: string; amountPaise: number; refundedPaise: number; reference: string | null; createdAt: number; rejectReason: string | null }
-interface Detail { booking: Booking; payments: Pay[]; refunds: { id: string; amountPaise: number; status: string; mode: string | null; createdAt: number }[]; audit: { id: number; at: number; action: string; actorRole: string | null }[] }
+interface Detail { booking: Booking; block: Block | null; payments: Pay[]; refunds: { id: string; amountPaise: number; status: string; mode: string | null; createdAt: number }[]; audit: { id: number; at: number; action: string; actorRole: string | null }[] }
 
 const ACTION_LABEL = (a: string) => a.replace(/^booking\./, '').replace(/[._]/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
-export function BookingDetail({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; asDay?: boolean; onClose: () => void; onChanged: () => void }) {
   const { me } = useSession();
   const toast = useToast();
   const [d, err, reload] = useApi<Detail>(`/api/staff/bookings/${encodeURIComponent(id)}`);
@@ -29,6 +29,7 @@ export function BookingDetail({ id, onClose, onChanged }: { id: string; onClose:
   };
 
   if (!d) return <Modal title="Booking" onClose={onClose}>{err ? <ErrorBox msg={err} /> : <Loading h={180} />}</Modal>;
+  if (d.block && !asDay) return <BlockDetail d={d} onClose={onClose} onChanged={changed} />;
   const b = d.booking;
   const canPay = can(me, 'record_payments') && (b.status === 'confirmed' || b.status === 'held') && b.balancePaise > 0;
   const started = b.startAt <= Date.now();
@@ -48,6 +49,7 @@ export function BookingDetail({ id, onClose, onChanged }: { id: string; onClose:
         <div className="row"><BookingChip b={b} />{b.needsReview && <Chip tone="warn">Needs review</Chip>}<Chip tone="mute">{SOURCE_LABEL[b.source] || b.source}</Chip>
           {b.status === 'held' && b.holdExpiresAt && <span className="small muted">Hold ends {fmtDateTime(b.holdExpiresAt)}</span>}</div>
         <ErrorBox msg={msg} />
+        {d.block && <div><button className="btn ghost sm" onClick={() => go(`/bookings/${b.id}`)}>← Whole multi-day booking ({d.block.days} days)</button></div>}
         <div className="facts">
           <div><span>Ground</span><b>{b.groundName}</b></div>
           <div><span>When</span><b>{fmtDay(b.date)}, {timeRange(b)}</b></div>
@@ -133,6 +135,80 @@ function RecordPayment({ b, onClose, onDone }: { b: Booking; onClose: () => void
       <div className="form-grid">
         <Field label="Method"><select className="inp" value={method} onChange={(e) => setMethod(e.target.value)}>{HAND_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
         <Field label="Amount received (₹)" hint={`Balance is ${inr(b.balancePaise)}`}><input className="inp" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+        <Field label={method === 'upi' ? 'UPI reference (UTR)' : 'Reference (optional)'}><input className="inp" maxLength={60} value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
+        <Field label="Note (optional)"><input className="inp" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        <div className="full"><ErrorBox msg={err} /></div>
+      </div>
+    </Modal>
+  );
+}
+
+/** A multi-day booking as one: dates, money for every day, and each day to open on its own. */
+function BlockDetail({ d, onClose, onChanged }: { d: Detail; onClose: () => void; onChanged: () => void }) {
+  const { me } = useSession();
+  const toast = useToast();
+  const b = d.booking, k = d.block!;
+  const [pay, setPay] = useState(false);
+  const days = k.items || [];
+  const live = days.filter((x) => x.status !== 'cancelled' && x.status !== 'expired');
+  const canPay = can(me, 'record_payments') && k.balancePaise > 0 && live.some((x) => x.status === 'confirmed' || x.status === 'held');
+  return (
+    <>
+      <Modal title={`Multi-day booking ${b.ref}`} onClose={onClose} wide
+        foot={<>{canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}<button className="btn ghost" onClick={onClose}>Close</button></>}>
+        <div className="stack" style={{ gap: 18 }}>
+          <div className="row"><Chip tone="info">Multi-day</Chip><Chip tone="mute">{SOURCE_LABEL[b.source] || b.source}</Chip><span className="small muted">{k.days} days, one agreed total</span></div>
+          <div className="facts">
+            <div><span>Ground</span><b>{b.groundName}</b></div>
+            <div><span>Dates</span><b>{fmtDay(k.fromDate)} – {fmtDay(k.toDate)}</b><div className="small muted">{k.days} days</div></div>
+            <div><span>Hours</span><b>{timeRange(b)}</b><div className="small muted">every day</div></div>
+            <div><span>Customer</span><b>{b.customerName}</b>{b.customerPhone && <div className="small muted">{formatPhone(b.customerPhone)}</div>}</div>
+            <div><span>Created</span><b>{fmtDateTime(b.createdAt)}</b></div>
+            {b.notes && <div><span>Note</span><b>{b.notes}</b></div>}
+          </div>
+          <div className="grid g3">
+            <div className="miniStat"><span>Total</span><b>{inr(k.totalPaise)}</b></div>
+            <div className="miniStat"><span>Paid</span><b className="gold">{inr(k.paidPaise)}</b></div>
+            <div className="miniStat"><span>Balance</span><b style={k.balancePaise > 0 ? { color: '#a8720f' } : undefined}>{inr(k.balancePaise)}</b></div>
+          </div>
+          <div>
+            <div className="eyebrow">Each day</div>
+            <div className="card"><Table rows={days} onRow={(x) => go(`/bookings/${x.id}/day`)} empty="No days." cols={[
+              { head: 'Date', cell: (x) => <><div className="strong">{fmtDay(x.date)}</div><div className="small muted mono">{x.ref}</div></> },
+              { head: 'Status', cell: (x) => <Chip tone={x.status === 'confirmed' || x.status === 'completed' ? 'good' : x.status === 'held' ? 'warn' : 'mute'}>{STATUS_LABEL[x.status] || x.status}</Chip> },
+              { head: 'Total', num: true, cell: (x) => inr(x.totalPaise) },
+              { head: 'Paid', num: true, cell: (x) => inr(x.paidPaise) },
+              { head: 'Balance', num: true, cell: (x) => (x.balancePaise > 0 && x.status !== 'cancelled' && x.status !== 'expired' ? <b className="warnText">{inr(x.balancePaise)}</b> : <span className="muted">—</span>) },
+            ]} /></div>
+            <div className="small muted" style={{ marginTop: 8 }}>Open a day to see its payments, or to cancel just that day.</div>
+          </div>
+        </div>
+      </Modal>
+      {pay && <RecordBlockPayment k={k} onClose={() => setPay(false)} onDone={() => { setPay(false); toast('Payment recorded.'); onChanged(); }} />}
+    </>
+  );
+}
+
+function RecordBlockPayment({ k, onClose, onDone }: { k: Block; onClose: () => void; onDone: () => void }) {
+  const [method, setMethod] = useState('cash');
+  const [amount, setAmount] = useState(rupees(k.balancePaise).replace(/\.00$/, ''));
+  const [reference, setReference] = useState('');
+  const [note, setNote] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    const paise = toPaise(amount);
+    if (!paise || paise <= 0) return setErr('Enter the amount received in rupees.');
+    setBusy(true); setErr(null);
+    try { await post(`/api/staff/bookings/block/${encodeURIComponent(k.seriesId)}/payments`, { method, amountPaise: paise, reference: reference.trim() || undefined, note: note.trim() || undefined }); onDone(); }
+    catch (e) { setErr(errText(e)); setBusy(false); }
+  };
+  return (
+    <Modal title="Record a payment" onClose={onClose}
+      foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={submit}>Save payment</button></>}>
+      <div className="form-grid">
+        <Field label="Method"><select className="inp" value={method} onChange={(e) => setMethod(e.target.value)}>{HAND_METHODS.map(([k2, l]) => <option key={k2} value={k2}>{l}</option>)}</select></Field>
+        <Field label="Amount received (₹)" hint={`Balance across all days is ${inr(k.balancePaise)}. It fills the earliest days first.`}><input className="inp" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
         <Field label={method === 'upi' ? 'UPI reference (UTR)' : 'Reference (optional)'}><input className="inp" maxLength={60} value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
         <Field label="Note (optional)"><input className="inp" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
         <div className="full"><ErrorBox msg={err} /></div>

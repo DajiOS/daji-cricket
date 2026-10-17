@@ -3,7 +3,11 @@ import { useState } from 'react';
 import { Chip, Modal, Field, ErrorBox, type Tone } from '../../ui';
 import { post, inr, fmtDay, fmtTime, useApi, ApiError } from '../../lib';
 
+export interface BlockDay { id: string; ref: string; date: string; startAt: number; endAt: number; status: string; totalPaise: number; paidPaise: number; balancePaise: number }
+/** A multi-day booking seen as one: dates, money across every day and (in the detail) each day. */
+export interface Block { seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; items?: BlockDay[] }
 export interface Booking {
+  block?: Block | null;
   id: string; ref: string; groundId: string; groundName: string; customerId: string; customerName: string; customerPhone: string | null;
   date: string; startAt: number; endAt: number; slotCount: number; formatLabel: string | null; ball: string | null;
   status: 'held' | 'confirmed' | 'cancelled' | 'expired' | 'no_show' | 'completed'; source: 'online' | 'walk_in' | 'enquiry';

@@ -39,29 +39,30 @@ export function StaffScreen({ user }: { user: User }) {
   const flip = (k: string) => setOffers((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
 
   const card = (b: StaffBooking) => {
-    const on = open === b.id, money = b.paidPaise > 0;
+    const on = open === b.id, blk = b.block ?? null, money = b.paidPaise > 0, balance = blk ? blk.balancePaise : b.balancePaise;
     return (
       <View key={b.id} style={s.card}>
-        <View style={s.row}><Text style={[s.text, { fontWeight: '700' }]}>{hhmm(b.startAt)} – {hhmm(b.endAt)}  ·  {niceDate(b.date)}</Text><Text style={s.muted}>{b.ref}</Text></View>
+        <View style={s.row}><Text style={[s.text, { fontWeight: '700' }]}>{blk ? `${niceDate(blk.fromDate)} – ${niceDate(blk.toDate)}  ·  ${blk.days} days` : `${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${niceDate(b.date)}`}</Text><Text style={s.muted}>{b.ref}</Text></View>
         <Text style={s.text}>{b.customerName}{b.customerPhone ? `  ·  ${b.customerPhone}` : ''}</Text>
-        <Text style={[s.muted, { marginBottom: 6 }]}>{b.groundName}{b.formatLabel ? `  ·  ${b.formatLabel}` : ''}</Text>
+        <Text style={[s.muted, { marginBottom: 6 }]}>{b.groundName}{blk ? `  ·  Multi-day, ${hhmm(b.startAt)} – ${hhmm(b.endAt)} daily` : b.formatLabel ? `  ·  ${b.formatLabel}` : ''}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           <Badge tone={b.status === 'confirmed' ? 'ok' : b.status === 'cancelled' || b.status === 'no_show' ? 'danger' : 'muted'} label={b.status.replace('_', ' ')} />
           {b.approval === 'pending' && <Badge tone="gold" label="Needs approval" />}{b.needsReview && <Badge tone="danger" label="Review" />}{!!b.promoCode && <Badge label={b.promoCode} />}
-          {b.balancePaise > 0 && b.status === 'confirmed' && <Badge tone="gold" label={`Balance ${inr(b.balancePaise)}`} />}
+          {balance > 0 && b.status === 'confirmed' && <Badge tone="gold" label={`Balance ${inr(balance)}`} />}
         </View>
-        <KV k="Total" v={inr(b.totalPaise)} /><KV k="Paid" v={inr(b.paidPaise)} />
-        <Btn kind="ghost" label={on ? 'Close' : 'Actions'} onPress={() => { setOpen(on ? '' : b.id); setMode(''); setAmount(b.balancePaise > 0 ? String(b.balancePaise / 100) : ''); setErr(''); }} />
+        <KV k="Total" v={inr(blk ? blk.totalPaise : b.totalPaise)} /><KV k="Paid" v={inr(blk ? blk.paidPaise : b.paidPaise)} />
+        <Btn kind="ghost" label={on ? 'Close' : 'Actions'} onPress={() => { setOpen(on ? '' : b.id); setMode(''); setAmount(balance > 0 ? String(balance / 100) : ''); setErr(''); }} />
         {on && !mode && (<>
-          {b.approval === 'pending' && b.status !== 'cancelled' && can(user, 'manage_bookings') && <Btn label="Approve booking" onPress={() => run(`/api/staff/bookings/${b.id}/approve`, {}, 'Approved.')} />}
-          {b.status === 'confirmed' && b.balancePaise > 0 && can(user, 'record_payments') && <Btn kind="outline" label="Record a payment" onPress={() => setMode('pay')} />}
-          {b.status === 'confirmed' && can(user, 'manage_bookings') && <Btn kind="outline" label="Mark no-show" onPress={() => run(`/api/staff/bookings/${b.id}/no-show`, {}, 'Marked as no-show.')} />}
-          {b.status !== 'cancelled' && b.status !== 'expired' && can(user, 'manage_bookings') && <Btn kind="ghost" label="Cancel booking" onPress={() => setMode('cancel')} />}
+          {!blk && b.approval === 'pending' && b.status !== 'cancelled' && can(user, 'manage_bookings') && <Btn label="Approve booking" onPress={() => run(`/api/staff/bookings/${b.id}/approve`, {}, 'Approved.')} />}
+          {b.status === 'confirmed' && balance > 0 && can(user, 'record_payments') && <Btn kind="outline" label="Record a payment" onPress={() => setMode('pay')} />}
+          {!blk && b.status === 'confirmed' && can(user, 'manage_bookings') && <Btn kind="outline" label="Mark no-show" onPress={() => run(`/api/staff/bookings/${b.id}/no-show`, {}, 'Marked as no-show.')} />}
+          {blk && <Text style={s.muted}>To cancel or change a single day, open this booking on the desk.</Text>}
+          {!blk && b.status !== 'cancelled' && b.status !== 'expired' && can(user, 'manage_bookings') && <Btn kind="ghost" label="Cancel booking" onPress={() => setMode('cancel')} />}
         </>)}
         {on && mode === 'pay' && (<>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{(['cash', 'upi', 'card', 'bank_transfer'] as const).map((m) => <Chip key={m} label={m.replace('_', ' ')} on={method === m} onPress={() => setMethod(m)} />)}</View>
           <Field label="Amount received (₹)" value={amount} onChangeText={setAmount} keyboardType="numeric" />
-          <Btn label="Save payment" disabled={!Number(amount)} onPress={() => run(`/api/staff/bookings/${b.id}/payments`, { method, amountPaise: Math.round(Number(amount) * 100) }, 'Payment recorded.')} />
+          <Btn label="Save payment" disabled={!Number(amount)} onPress={() => run(blk ? `/api/staff/bookings/block/${blk.seriesId}/payments` : `/api/staff/bookings/${b.id}/payments`, { method, amountPaise: Math.round(Number(amount) * 100) }, 'Payment recorded.')} />
           <Btn kind="ghost" label="Back" onPress={() => setMode('')} />
         </>)}
         {on && mode === 'cancel' && (<>

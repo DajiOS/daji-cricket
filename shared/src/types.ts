@@ -215,6 +215,10 @@ export type PaymentStatus =
   | 'refunded'
   | 'partially_refunded';
 
+export interface BlockDay { id: string; ref: string; date: string; startAt: number; endAt: number; status: string; totalPaise: number; paidPaise: number; balancePaise: number }
+/** A multi-day booking (camp, tournament) seen as one: dates, money across every day, and (in the detail) each day. */
+export interface BlockSummary { seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; items?: BlockDay[] }
+
 export interface Booking {
   id: string;
   ref: string;
@@ -249,6 +253,8 @@ export interface Booking {
   /** Set when the booking belongs to a repeating series; index 0 is the first one. */
   seriesId?: string | null;
   seriesIndex?: number | null;
+  /** Set on the first day of a multi-day block in staff lists: the whole block as one booking. */
+  block?: BlockSummary | null;
   discountPaise: number;
   cancelOffers: ('refund' | 'half' | 'credit')[];
   cancelReason: string | null;

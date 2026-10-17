@@ -7,8 +7,8 @@ import { checkPasswordStrength, createUser, hasPermission, listStaff, requirePer
 import { one, many, run } from '../db.ts';
 import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
-import { accessBooking, approveBooking, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
-import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn } from '../hold.ts';
+import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
+import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
 import { cancelBooking, previewCancel } from '../cancellation.ts';
 import { createPromos, listPromos, setPromoActive } from '../promo.ts';
 import { completeManualRefund, listPayments, listRefunds, paymentHistory, paymentOr404, recordOffline, verifyUpi } from '../payments.ts';
@@ -44,20 +44,31 @@ export function staffRoutes(r: Router): void {
     const { limit, offset } = page(c);
     return ok(listBookings({
       ownerId: ownerFilter(c), groundId: c.query.get('groundId') ?? undefined, status: c.query.get('status') ?? undefined, from: c.query.get('from') ?? undefined,
-      to: c.query.get('to') ?? undefined, q: c.query.get('q') ?? undefined, needsReview: c.query.get('needsReview') === '1', approval: c.query.get('approval') === 'pending' ? 'pending' : undefined, resolution: c.query.get('resolution') === 'awaiting' ? 'awaiting' : undefined, limit, offset,
+      to: c.query.get('to') ?? undefined, q: c.query.get('q') ?? undefined, needsReview: c.query.get('needsReview') === '1', collapse: true, approval: c.query.get('approval') === 'pending' ? 'pending' : undefined, resolution: c.query.get('resolution') === 'awaiting' ? 'awaiting' : undefined, limit, offset,
     }));
   }, A);
 
   r.get('/api/staff/bookings/:id', (c) => {
     const b = accessBooking(U(c), c.params.id!, 'manage_bookings');
     const payments = bookingPayments(b.id);
-    return ok({ booking: viewBooking(b.id), payments, refunds: listRefunds(b.owner_id).filter((x) => x.bookingId === b.id), audit: listAudit({ entity: 'booking', entityId: b.id, limit: 100 }).items });
+    return ok({ booking: viewBooking(b.id), block: b.series_id ? blockOf(b.series_id) : null, payments, refunds: listRefunds(b.owner_id).filter((x) => x.bookingId === b.id), audit: listAudit({ entity: 'booking', entityId: b.id, limit: 100 }).items });
   }, A);
 
   r.post('/api/staff/bookings', (c) => created({ booking: createStaffBooking(U(c), parseWalkIn(c.json())) }), A);
 
   // One booking per day for a run of days at one agreed total (camps, tournaments, shoots)
   r.post('/api/staff/bookings/block', (c) => created(createStaffBlock(U(c), parseBlock(c.json()))), A);
+
+  // One payment for a whole multi-day booking: it fills the earliest days first
+  r.post('/api/staff/bookings/block/:seriesId/payments', (c) => {
+    const v = new Validator(c.json());
+    const method = v.oneOf('method', ['cash', 'card', 'upi', 'bank_transfer'] as const, true);
+    const amountPaise = v.int('amountPaise', { required: true, min: 1 });
+    const reference = v.str('reference', { max: 60 });
+    const note = v.str('note', { max: 200 });
+    v.done();
+    return created({ block: recordBlockPayment(U(c), c.params.seriesId!, { method: method!, amountPaise: amountPaise!, reference, note }) });
+  }, A);
 
   r.post('/api/staff/bookings/:id/payments', (c) => {
     const v = new Validator(c.json());

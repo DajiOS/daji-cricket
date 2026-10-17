@@ -24,6 +24,7 @@ export default function Bookings({ sub }: { sub: string }) {
   const showNew = key === 'new';
   const showBlock = key === 'block';
   const openId = key && !SECTIONS.includes(key) && !['new', 'block', 'review', 'choosing'].includes(key) ? key : null;
+  const asDay = sub.split('/')[1] === 'day';
   const canVerify = can(me, 'verify_payments') || can(me, 'record_payments');
   const [pendingN] = useApi<Page<Booking>>('/api/staff/bookings?approval=pending&limit=1', [version]);
   const tabs: [Tab, string][] = [['list', 'All bookings'], ['day', 'Day view'], ['approvals', `Approvals${pendingN?.total ? ` (${pendingN.total})` : ''}`], ...(canVerify ? [['payments', 'UPI to verify'] as [Tab, string]] : [])];
@@ -40,7 +41,7 @@ export default function Bookings({ sub }: { sub: string }) {
       {tab === 'day' && <DayView version={version} onChanged={bump} />}
       {tab === 'approvals' && <Approvals version={version} onChanged={bump} />}
       {tab === 'payments' && <UpiQueue version={version} onChanged={bump} />}
-      {openId && <BookingDetail id={openId} onClose={toList} onChanged={bump} />}
+      {openId && <BookingDetail id={openId} asDay={asDay} onClose={toList} onChanged={bump} />}
       {showBlock && <BlockBooking onClose={toList} onDone={(id) => { bump(); go(`/bookings/${id}`); }} />}
       {showNew && <NewBooking onClose={toList} onDone={(id) => { bump(); go(`/bookings/${id}`); }} />}
     </div>
@@ -88,13 +89,13 @@ function List({ version, preset }: { version: number; preset: string }) {
       {view === 'calendar' ? <div className="card-pad"><MonthCalendar filters={{ q: dq, status, groundId, ...(preset === 'review' ? { needsReview: '1' } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}) }} onOpen={(id) => go(`/bookings/${id}`)} /></div> : err ? <div className="card-pad"><ErrorBox msg={err} /></div> : !d ? <div className="card-pad"><Loading h={240} /></div> : (
         <>
           <Table rows={d.items} onRow={(b) => go(`/bookings/${b.id}`)} empty={filtered ? 'No bookings match those filters.' : 'No bookings yet. New ones appear here.'} cols={[
-            { head: 'When', cell: (b) => <><div className="strong">{fmtDay(b.date)}</div><div className="small muted tabular">{timeRange(b)}</div></> },
+            { head: 'When', cell: (b) => b.block ? <><div className="strong">{fmtDay(b.block.fromDate)} – {fmtDay(b.block.toDate)}</div><div className="small muted tabular">{b.block.days} days · {timeRange(b)} daily</div></> : <><div className="strong">{fmtDay(b.date)}</div><div className="small muted tabular">{timeRange(b)}</div></> },
             { head: 'Customer', cell: (b) => <><div className="strong">{b.customerName}</div><div className="small muted">{formatPhone(b.customerPhone)}</div></> },
-            { head: 'Ground', cell: (b) => <>{b.groundName}<div className="small muted">{whatOf(b)}</div></> },
-            { head: 'Status', cell: (b) => <span className="row" style={{ gap: 6 }}><BookingChip b={b} />{b.needsReview && <Chip tone="warn">Review</Chip>}</span> },
-            { head: 'Total', num: true, cell: (b) => inr(b.totalPaise) },
-            { head: 'Paid', num: true, cell: (b) => inr(b.paidPaise) },
-            { head: 'Balance', num: true, cell: (b) => (b.status === 'confirmed' && b.balancePaise > 0 ? <b className="warnText">{inr(b.balancePaise)}</b> : <span className="muted">—</span>) },
+            { head: 'Ground', cell: (b) => <>{b.groundName}<div className="small muted">{b.block ? 'Multi-day booking' : whatOf(b)}</div></> },
+            { head: 'Status', cell: (b) => <span className="row" style={{ gap: 6 }}><BookingChip b={b} />{b.block && <Chip tone="info">Multi-day</Chip>}{b.needsReview && <Chip tone="warn">Review</Chip>}</span> },
+            { head: 'Total', num: true, cell: (b) => inr(b.block ? b.block.totalPaise : b.totalPaise) },
+            { head: 'Paid', num: true, cell: (b) => inr(b.block ? b.block.paidPaise : b.paidPaise) },
+            { head: 'Balance', num: true, cell: (b) => { const bal = b.block ? b.block.balancePaise : b.balancePaise; return (b.status === 'confirmed' && bal > 0 ? <b className="warnText">{inr(bal)}</b> : <span className="muted">—</span>); } },
             { head: 'Ref', cell: (b) => <span className="mono small muted">{b.ref}</span> },
           ]} />
           {d.total > PAGE && (
