@@ -191,6 +191,7 @@ export function answerBuiltin(input: AskInput): Built {
 
   switch (intent) {
     case 'revenue': case 'expenses': case 'profit': case 'pnl': {
+      T.need(ctx, 'reports'); // money answers need "Can see revenue" as well as a reports permission
       if (future) return futureMoney(ctx, intent, p, done);
       if (ground && intent === 'revenue') return groundRevenue(ctx, ground, p, done);
       if (ground) notes.push(`Expenses and other income are not recorded per ground, so this is for all of your grounds.`);

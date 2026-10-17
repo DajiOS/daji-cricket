@@ -1,3 +1,4 @@
+import { checkCashSingle } from './taxrules.ts';
 import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { audit, listAudit, type Actor } from './audit.ts';
@@ -191,6 +192,7 @@ function payInput(v: Validator) {
 function addPayment(ownerId: string, actor: Actor, membershipId: string, memberName: string, plan: PlanRow, kind: 'sale' | 'renewal', start: string, pay: { method: string; reference?: string; amountPaise?: number }): { end: string; ledger: LedgerRef | null } {
   const end = addDays(start, plan.duration_days - 1);
   const amount = pay.amountPaise ?? plan.price_paise;
+  checkCashSingle(pay.method, amount);
   // Income in the books, 'memberships' category. `ledger` is null when the owner has no cash/bank account (or the amount is 0): the payment stands either way.
   const ledger = postToLedger(ownerId, actor, { date: today(), amountPaise: amount, description: `Membership ${kind} ${plan.name} ${memberName}`, categoryCode: 'memberships', method: pay.method, reference: pay.reference });
   run(`INSERT INTO membership_payments(id, owner_id, membership_id, plan_id, kind, amount_paise, method, reference, period_start, period_end, paid_on, ledger_txn_id, created_at, created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,

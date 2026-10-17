@@ -236,6 +236,21 @@ export const fingerprint = (date: string, amountPaise: number, description: stri
   createHash('sha256').update(`${date}|${amountPaise}|${description.replace(/\s+/g, ' ').trim().toLowerCase()}|${balance ?? ''}`).digest('hex').slice(0, 32);
 
 /** A transaction typed in by hand: cash spent at the ground, a payment the bank feed does not show. Positive = money in, negative = money out. */
+/**
+ * India's cash limits (see taxrules.ts) for one entry on a cash account. Used when an entry is added and again when it is
+ * recategorised, so a loan or a payment cannot dodge the check by being filed under another heading afterwards.
+ * Salaries and moving cash to the bank are not "payments to a person" for the Rs 10,000 rule. Returns a note to keep, or null.
+ */
+function cashRules(ownerId: string, e: { kind: string; date: string; amount: number; catId: string | null; who: string; reason?: unknown; exceptId?: string }): string | null {
+  if (e.kind !== 'cash') return null;
+  if (e.catId === categoryId('loan')) { checkCashLoanDeposit(Math.abs(e.amount), e.amount > 0 ? 'A loan received' : 'A loan repayment'); return null; }
+  if (e.amount >= 0 || e.catId === categoryId('salaries') || e.catId === categoryId('cash_deposit')) return null;
+  const who = e.who.trim().toLowerCase();
+  const same = one<{ s: number }>("SELECT COALESCE(SUM(-t.amount_paise), 0) s FROM acct_transactions t JOIN acct_accounts a ON a.id = t.account_id WHERE t.owner_id = ? AND a.kind = 'cash' AND t.amount_paise < 0 AND t.txn_date = ? AND lower(COALESCE(t.counterparty, t.description)) = ? AND t.deleted_at IS NULL AND t.id <> ? AND COALESCE(t.category_id, '') NOT IN (?, ?)", ownerId, e.date, who, e.exceptId ?? '', categoryId('salaries'), categoryId('cash_deposit'))!.s;
+  const why = checkCashExpense({ amountPaise: -e.amount, alreadyPaidTodayPaise: same, reason: e.reason });
+  return why ? `Cash exception (40A(3)): ${why}`.slice(0, 300) : null;
+}
+
 export function addTransaction(ownerId: string, actor: Actor, body: unknown): TxnOut {
   const v = new Validator(body);
   const accountId = v.str('accountId', { required: true, max: 60 });
@@ -254,15 +269,8 @@ export function addTransaction(ownerId: string, actor: Actor, body: unknown): Tx
   assertAccountActive(accountId!);
   if (catId) categoryOr400(ownerId, catId);
   assertOpen(ownerId, date!);
-  if (acct.kind === 'cash') { // India's cash limits (see taxrules.ts); salaries and moving cash to the bank are not "payments to a person" for this rule
-    if (catId === categoryId('loan')) checkCashLoanDeposit(Math.abs(amount!), amount! > 0 ? 'A loan received' : 'A loan repayment');
-    else if (amount! < 0 && catId !== categoryId('salaries') && catId !== categoryId('cash_deposit')) {
-      const who = (counterparty ?? description!).trim().toLowerCase();
-      const same = one<{ s: number }>("SELECT COALESCE(SUM(-t.amount_paise), 0) s FROM acct_transactions t JOIN acct_accounts a ON a.id = t.account_id WHERE t.owner_id = ? AND a.kind = 'cash' AND t.amount_paise < 0 AND t.txn_date = ? AND lower(COALESCE(t.counterparty, t.description)) = ? AND t.deleted_at IS NULL AND COALESCE(t.category_id, '') NOT IN (?, ?)", ownerId, date!, who, categoryId('salaries'), categoryId('cash_deposit'))!.s;
-      const why = checkCashExpense({ amountPaise: -amount!, alreadyPaidTodayPaise: same, reason: cashReason });
-      if (why) note = `Cash exception (40A(3)): ${why}`.slice(0, 300);
-    }
-  }
+  const cashNote = cashRules(ownerId, { kind: acct.kind, date: date!, amount: amount!, catId: catId ?? null, who: (counterparty ?? description!), reason: cashReason });
+  if (cashNote) note = cashNote;
   const id = newId('txn'), t = now();
   run(`INSERT INTO acct_transactions(id, owner_id, account_id, source, txn_date, amount_paise, description, counterparty, reference, fingerprint, seq, category_id, category_by, note, created_at, created_by, updated_at, updated_by)
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, ownerId, accountId!, 'manual', date!, amount!, description!, counterparty ?? null, reference ?? null, `manual:${id}`, 0, catId ?? null, catId ? 'manual' : null, note ?? null, t, actor.id, t, actor.id);
@@ -281,6 +289,10 @@ export function updateTransaction(ownerId: string, id: string, actor: Actor, bod
   assertOpen(ownerId, t.txn_date);
   if (catId) categoryOr400(ownerId, catId);
   if (hasCat) {
+    const acct = one<{ kind: string }>('SELECT kind FROM acct_accounts WHERE id = ?', t.account_id);
+    const reason = (v.src as Record<string, unknown>).cashReason;
+    const cashNote = cashRules(ownerId, { kind: acct?.kind ?? 'bank', date: t.txn_date, amount: t.amount_paise, catId: catId ?? null, who: t.counterparty ?? t.description, reason, exceptId: id });
+    if (cashNote && note === undefined) run('UPDATE acct_transactions SET note = ? WHERE id = ?', cashNote, id);
     run('UPDATE acct_transactions SET category_id = ?, category_by = ?, rule_id = NULL, updated_at = ?, updated_by = ? WHERE id = ?', catId ?? null, catId ? 'manual' : null, now(), actor.id, id);
     audit(actor, 'acct.txn.categorise', 'acct_transaction', id, { from: t.category_id, to: catId ?? null }, ownerId);
   }

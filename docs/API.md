@@ -239,6 +239,13 @@ Response adds `series: {id, frequency, created, skipped:[{date, reason}]}`. Book
 - `GET /api/bookings/:id/series` returns every date of the series.
 - `POST /api/bookings/:id/cancel-series` `{reason?}` cancels the upcoming dates with no money on them and returns `{cancelled, kept}`.
 
+## Multi-day bookings (custom programmes)
+A camp, tournament or shoot over consecutive days is agreed through an enquiry and quotation, then entered by staff on the web desk (Bookings > Multi-day booking).
+
+- `POST /api/staff/bookings/block` `{ groundId, fromDate, toDate, startTime, endTime, totalPaise, customer, payment, notes }` makes one booking per day (up to 31) for the same hours. The agreed total is shared across the days; the first day's advance must be received now. It is all or nothing, and ignores the ground's maximum hours and weekly closed day.
+- `POST /api/staff/enquiries/:id/convert-block` does the same from an enquiry and marks it converted.
+- Cash is counted for the whole block as one event (section 269ST): cash of Rs 2,00,000 or more across all its days is refused (`CASH_LIMIT_269ST`). Take the rest by UPI, bank transfer or cheque.
+
 ## Auto-debit (UPI AutoPay)
 
 Off until the owner turns on `autoDebitEnabled`. Needs Recurring Payments on the Razorpay account; test it in test mode first. Customers only.

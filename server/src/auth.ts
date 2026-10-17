@@ -63,6 +63,8 @@ export function revokeToken(cfg: Config, header: string | undefined): boolean {
   if (!header?.startsWith('Bearer ')) return false;
   const p = verifyToken(cfg, header.slice(7).trim());
   if (!p) return false;
+  const who = userRow(p.sub);
+  if (!who || who.token_version !== p.tv) return true; // already dead: nothing to revoke, and an old token cannot sign anyone out
   const t = now();
   run('DELETE FROM revoked_tokens WHERE expires_at < ?', Math.floor(t / 1000));
   if (p.jti) run('INSERT OR IGNORE INTO revoked_tokens(jti, user_id, expires_at, revoked_at) VALUES(?,?,?,?)', p.jti, p.sub, p.exp, t);

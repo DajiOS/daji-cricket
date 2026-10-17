@@ -65,7 +65,7 @@ export function statutory(i: StatInput): StatOutput {
   }
   const covered = (i.contractMonthlyPaise ?? wages) <= ESI.coverageCeilingPaise;
   if (i.esi && covered) {
-    const daily = wages / Math.max(1, i.paidDays);
+    const daily = i.grossPaise / Math.max(1, i.paidDays); // the exemption looks at the day's wage, not a one-off bonus
     out.esiEmployeePaise = daily <= ESI.exemptDailyWagePaise ? 0 : ceilRupee(wages * ESI.employeeRate);
     out.esiEmployerPaise = ceilRupee(wages * ESI.employerRate);
   }

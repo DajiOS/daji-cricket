@@ -139,3 +139,17 @@ test('enquiry history is written as notes and the audit log', async () => {
   assert.ok(detail.notes.some((n: any) => n.kind === 'status'));
   assert.ok(many("SELECT 1 FROM audit_log WHERE entity = 'enquiry' AND entity_id = ?", e.id).length >= 1);
 });
+
+test('a custom multi-day programme: enquiry, quotation, then staff add one booking per day at the quoted total', async () => {
+  const e = (await h.post('/api/enquiries', { groundId: g.id, message: 'Eight-day cricket camp, 7am to 7pm every day.', players: 40, preferredDate: dayFromNow(30) }, cust)).body;
+  const q = await h.post(`/api/staff/enquiries/${e.id}/quotations`, { amountPaise: 25_500_000, details: '8 days, 7am to 7pm' }, staff);
+  const qid = q.body.quotations[0].id;
+  await h.post(`/api/my/enquiries/${e.id}/quotations/${qid}/respond`, { accept: true }, cust);
+  const conv = await h.post(`/api/staff/enquiries/${e.id}/convert-block`, { fromDate: dayFromNow(30), toDate: dayFromNow(37), startTime: '07:00', endTime: '19:00', quotationId: qid, payment: { method: 'bank_transfer', amountPaise: 4_000_000, reference: 'NEFT0001' } }, staff);
+  assert.equal(conv.status, 201, JSON.stringify(conv.body));
+  assert.equal(conv.body.status, 'converted');
+  const list = (await h.get(`/api/staff/bookings?limit=50`, staff)).body.items.filter((b: any) => b.source === 'enquiry' && b.customerId === e.customerId);
+  assert.equal(list.length, 8);
+  assert.equal(list.reduce((a: number, b: any) => a + b.totalPaise, 0), 25_500_000);
+  assert.equal((await h.post(`/api/staff/enquiries/${e.id}/convert-block`, { fromDate: dayFromNow(40), toDate: dayFromNow(41), startTime: '07:00', endTime: '19:00', totalPaise: 100000, payment: { method: 'upi', amountPaise: 100000, reference: 'x1234567' } }, staff)).status, 409, 'cannot convert twice');
+});

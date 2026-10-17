@@ -8,7 +8,7 @@ export interface Member {
   status: MStatus; daysLeft: number; paidPaise: number; renewals: number; since: number;
 }
 export interface Payment { id: string; kind: string; amountPaise: number; method: string; reference: string; planName: string; periodStart: string; periodEnd: string; paidOn: string; at: number }
-export interface Stats { active: number; expiring: number; expired: number; total: number; revenueMonthPaise: number; revenueLastMonthPaise: number; salesThisMonth: number; renewalsThisMonth: number; month: string }
+export interface Stats { active: number; expiring: number; expired: number; total: number; revenueMonthPaise: number | null; revenueLastMonthPaise: number | null; salesThisMonth: number; renewalsThisMonth: number; month: string }
 export interface AuditRow { id: number; at: number; actorId: string | null; actorRole: string | null; action: string; entityId: string | null; detail: Record<string, any> | null }
 
 export const METHODS: [string, string][] = [['cash', 'Cash'], ['upi', 'UPI'], ['bank_transfer', 'Bank transfer'], ['card', 'Card'], ['other', 'Other']];

@@ -33,9 +33,17 @@ export function checkCashReceipt(i: { ownerId: string; customerId: string; booki
     i.ownerId, i.customerId, istMidnight(i.date), istMidnight(i.date) + 86_400_000)!.s;
   if (day + i.amountPaise >= CASH_LIMITS.receiptPaise) refuse('CASH_LIMIT_269ST', '269ST',
     `This would bring cash from this customer to ${inr(day + i.amountPaise)} today. A business cannot take ${inr(CASH_LIMITS.receiptPaise)} or more in cash in a day`);
-  const event = one<{ s: number }>(`SELECT COALESCE(SUM(amount_paise), 0) s FROM payments WHERE booking_id = ? AND ${cash}`, i.bookingId)!.s;
+  // One event: this booking, plus every day of the same multi-day block or repeat series (a camp over several days is one occasion).
+  const event = one<{ s: number }>(`SELECT COALESCE(SUM(amount_paise), 0) s FROM payments WHERE ${cash} AND booking_id IN (
+      SELECT id FROM bookings WHERE id = ?1 OR (series_id IS NOT NULL AND series_id = (SELECT series_id FROM bookings WHERE id = ?1)))`, i.bookingId)!.s;
   if (event + i.amountPaise >= CASH_LIMITS.receiptPaise) refuse('CASH_LIMIT_269ST', '269ST',
     `Cash for this one booking would reach ${inr(event + i.amountPaise)}. A business cannot take ${inr(CASH_LIMITS.receiptPaise)} or more in cash for one event`);
+}
+
+/** One cash payment taken outside the booking flow (academy fees, memberships): on its own it must stay below the receipt limit. */
+export function checkCashSingle(method: string, amountPaise: number): void {
+  if (method !== 'cash') return;
+  if (amountPaise >= CASH_LIMITS.receiptPaise) refuse('CASH_LIMIT_269ST', '269ST', `A cash payment of ${inr(amountPaise)} is at or above the ${inr(CASH_LIMITS.receiptPaise)} limit for cash received`);
 }
 
 /**

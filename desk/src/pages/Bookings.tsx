@@ -5,6 +5,7 @@ import { useApi, api, post, go, inr, fmtDay, fmtDateTime, formatPhone, can, qs, 
 import { type Booking, type Page, BookingChip, METHOD_LABEL, PAY_STATUS, STATUS_LABEL, errText, timeRange, whatOf } from '../parts/dash/common';
 import { BookingDetail } from '../parts/dash/Detail';
 import { NewBooking } from '../parts/dash/NewBooking';
+import { BlockBooking } from '../parts/dash/BlockBooking';
 import { DayView } from '../parts/dash/DayView';
 import { MonthCalendar, ViewToggle, useView } from '../parts/dash/BookingCalendar';
 
@@ -21,7 +22,8 @@ export default function Bookings({ sub }: { sub: string }) {
   const filterPreset = key === 'review' ? 'review' : key === 'choosing' ? 'choosing' : '';
   const tab: Tab = key === 'day' ? 'day' : key === 'approvals' ? 'approvals' : key === 'payments' ? 'payments' : 'list';
   const showNew = key === 'new';
-  const openId = key && !SECTIONS.includes(key) && !['new', 'review', 'choosing'].includes(key) ? key : null;
+  const showBlock = key === 'block';
+  const openId = key && !SECTIONS.includes(key) && !['new', 'block', 'review', 'choosing'].includes(key) ? key : null;
   const canVerify = can(me, 'verify_payments') || can(me, 'record_payments');
   const [pendingN] = useApi<Page<Booking>>('/api/staff/bookings?approval=pending&limit=1', [version]);
   const tabs: [Tab, string][] = [['list', 'All bookings'], ['day', 'Day view'], ['approvals', `Approvals${pendingN?.total ? ` (${pendingN.total})` : ''}`], ...(canVerify ? [['payments', 'UPI to verify'] as [Tab, string]] : [])];
@@ -30,6 +32,7 @@ export default function Bookings({ sub }: { sub: string }) {
   return (
     <div className="stack">
       <PageHead eyebrow="Ground" title="Bookings" lede="Every session at the ground: who is playing, what has been paid and what is still to collect.">
+        <button className="btn" onClick={() => go('/bookings/block')}><Icon name="calendar" />Multi-day booking</button>
         <button className="btn primary" onClick={() => go('/bookings/new')}><Icon name="plus" />New booking</button>
       </PageHead>
       <div><Tabs value={tab} onChange={(t) => go(t === 'list' ? '/bookings' : `/bookings/${t}`)} items={tabs} label="Sections" /></div>
@@ -38,6 +41,7 @@ export default function Bookings({ sub }: { sub: string }) {
       {tab === 'approvals' && <Approvals version={version} onChanged={bump} />}
       {tab === 'payments' && <UpiQueue version={version} onChanged={bump} />}
       {openId && <BookingDetail id={openId} onClose={toList} onChanged={bump} />}
+      {showBlock && <BlockBooking onClose={toList} onDone={(id) => { bump(); go(`/bookings/${id}`); }} />}
       {showNew && <NewBooking onClose={toList} onDone={(id) => { bump(); go(`/bookings/${id}`); }} />}
     </div>
   );

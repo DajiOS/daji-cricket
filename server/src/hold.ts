@@ -6,7 +6,7 @@ import { HttpError } from './errors.ts';
 import { audit, type Actor } from './audit.ts';
 import { Validator, normalizePhone } from './input.ts';
 import { getSettings } from './settings.ts';
-import { MIN, DAY, istMidnight, timeOfDay } from './time.ts';
+import { MIN, DAY, addDays, istMidnight, timeOfDay } from './time.ts';
 import { advanceFor, bookingOr404, confirmBooking, loadBooking, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
 import { getGroundOr404, slotPrice, slotStarts, type GroundRow } from './grounds.ts';
 import { createUser, requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
@@ -27,10 +27,10 @@ export const MAX_ACTIVE_HOLDS = 3;
 interface Plan { ground: GroundRow; date: string; starts: number[]; totalPaise: number; format?: { label: string; ball: BallType } }
 
 /** Checks the requested slots are real, consecutive, in the future and within limits; prices them. */
-export function planSlots(ground: GroundRow, date: string, startTime: string, slots: number, at = now()): Plan {
+export function planSlots(ground: GroundRow, date: string, startTime: string, slots: number, at = now(), opts: { ignoreMaxSlots?: boolean } = {}): Plan {
   if (!ground.active) throw new HttpError(409, 'GROUND_INACTIVE', 'This ground is not taking bookings right now');
   if (istMidnight(date) > at + MAX_DAYS_AHEAD * DAY) throw new HttpError(400, 'TOO_FAR_AHEAD', `Bookings open ${MAX_DAYS_AHEAD} days ahead`);
-  if (slots > ground.max_slots) throw new HttpError(400, 'TOO_MANY_SLOTS', `At most ${ground.max_slots} slots can be booked together here`);
+  if (slots > ground.max_slots && !opts.ignoreMaxSlots) throw new HttpError(400, 'TOO_MANY_SLOTS', `At most ${ground.max_slots} slots can be booked together here`);
   const all = slotStarts(ground, date);
   const first = all.findIndex((s) => timeOfDay(s) === startTime);
   if (first < 0 || first + slots > all.length) throw new HttpError(400, 'INVALID_SLOT', 'Those slots are outside the ground\'s opening hours', { open: ground.open_time, close: ground.close_time, slotMinutes: ground.slot_minutes });
@@ -360,6 +360,107 @@ export function createStaffBooking(staff: UserRow, input: WalkInInput): Booking 
     const r = recordOffline(staff, id, { method: input.payment.method, amountPaise: input.payment.amountPaise, reference: input.payment.reference });
     if (r.outcome !== 'confirmed') throw new HttpError(409, 'ADVANCE_NOT_MET', 'The recorded payment did not reach the advance');
     return viewBooking(id);
+  });
+}
+
+// ---------------------------------------------------------------- multi-day block (owner and staff)
+
+export interface BlockInput {
+  groundId: string; fromDate: string; toDate: string; startTime: string; endTime: string; totalPaise: number;
+  customer: { name: string; phone: string; email?: string };
+  payment: { method: Exclude<PayMethod, 'razorpay' | 'credit'>; amountPaise: number; reference?: string };
+  notes?: string; enquiryId?: string; customerId?: string;
+}
+export const MAX_BLOCK_DAYS = 31;
+
+export function parseBlock(body: unknown): BlockInput {
+  const v = new Validator(body);
+  const groundId = v.str('groundId', { required: true });
+  const fromDate = v.date('fromDate', true), toDate = v.date('toDate', true);
+  const startTime = v.time('startTime', true), endTime = v.time('endTime', true);
+  const totalPaise = v.int('totalPaise', { required: true, min: 100, max: 100_000_000_00 });
+  const notes = v.str('notes', { max: 300 });
+  const cust = (body as any)?.customer, pay = (body as any)?.payment;
+  let customer: BlockInput['customer'] | undefined, payment: BlockInput['payment'] | undefined;
+  if (!cust || typeof cust !== 'object') v.fail('customer', 'Required');
+  else {
+    const cv = new Validator(cust);
+    const name = cv.str('name', { required: true, min: 2, max: 80 }), phone = cv.phone('phone', true), email = cv.email('email');
+    for (const f of cv.fields) v.fail(`customer.${f.field}`, f.message);
+    if (name && phone) customer = { name, phone, email };
+  }
+  if (!pay || typeof pay !== 'object') v.fail('payment', 'Required');
+  else {
+    const pv = new Validator(pay);
+    const method = pv.oneOf('method', ['cash', 'card', 'upi', 'bank_transfer'] as const, true), amountPaise = pv.int('amountPaise', { required: true, min: 1 }), reference = pv.str('reference', { max: 60 });
+    for (const f of pv.fields) v.fail(`payment.${f.field}`, f.message);
+    if (method && amountPaise) payment = { method, amountPaise, reference };
+  }
+  if (fromDate && toDate && toDate < fromDate) v.fail('toDate', 'Cannot be before the first day');
+  if (startTime && endTime && endTime <= startTime) v.fail('endTime', 'Must be after the start time');
+  v.done();
+  return { groundId: groundId!, fromDate: fromDate!, toDate: toDate!, startTime: startTime!, endTime: endTime!, totalPaise: totalPaise!, customer: customer!, payment: payment!, notes };
+}
+
+/**
+ * One booking per day for the same hours across a run of days, for one agreed total (a camp, a tournament, a shoot).
+ * The total is split across the days (any odd paise go to the first days). The payment is applied from the first day onward;
+ * the first day's advance must be met and the rest are confirmed with it, their balance due later. Everything is booked
+ * or nothing is: a day that is already taken stops the whole block and says which. The ground's usual hour limit and closed
+ * weekdays do not apply, because the owner or staff are choosing this deliberately.
+ */
+export function createStaffBlock(staff: UserRow, input: BlockInput): { series: { id: string; days: number }; bookings: Booking[] } {
+  if (staff.role === 'customer') throw new HttpError(403, 'FORBIDDEN', 'Not allowed');
+  const ground = getGroundOr404(input.groundId);
+  if (staff.role !== 'super_admin' && scopeOwnerId(staff) !== ground.owner_id) throw new HttpError(404, 'NOT_FOUND', 'Ground not found');
+  requirePermission(staff, 'manage_bookings');
+  requirePermission(staff, 'record_payments');
+  const dates: string[] = [];
+  for (let d = input.fromDate; d <= input.toDate; d = addDays(d, 1)) { dates.push(d); if (dates.length > MAX_BLOCK_DAYS) throw new HttpError(400, 'BLOCK_TOO_LONG', `A block can cover at most ${MAX_BLOCK_DAYS} days`); }
+  const n = dates.length;
+  if (input.payment.amountPaise > input.totalPaise) throw new HttpError(409, 'OVERPAYMENT', 'The payment is more than the agreed total');
+  const share = Math.floor(input.totalPaise / n), extra = input.totalPaise - share * n;
+  const dayTotal = (i: number) => share + (i < extra ? 1 : 0);
+  const actor: Actor = { id: staff.id, role: staff.role };
+
+  return tx(() => {
+    const t = now();
+    const customer = input.customerId ? one<UserRow>('SELECT * FROM users WHERE id = ?', input.customerId)! : findOrCreateCustomer(input.customer);
+    const open = { ...ground, closed_days: '[]' }; // the owner is choosing these days on purpose, so the weekly closed day does not stop it
+    const plans = dates.map((date) => {
+      const all = slotStarts(open, date);
+      const first = all.findIndex((s) => timeOfDay(s) === input.startTime);
+      if (first < 0) throw new HttpError(400, 'INVALID_SLOT', `${date}: the ground has no slot starting at ${input.startTime}`);
+      const count = all.slice(first).filter((s) => timeOfDay(s) < input.endTime).length;
+      if (count < 1) throw new HttpError(400, 'INVALID_SLOT', `${date}: nothing falls between ${input.startTime} and ${input.endTime}`);
+      return planSlots(open, date, input.startTime, count, t, { ignoreMaxSlots: true });
+    });
+    for (const p of plans) {
+      const hit = p.starts.find((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x));
+      if (hit) throw new HttpError(409, 'SLOT_TAKEN', `${p.date} is not free for those hours (${timeOfDay(hit)} is taken or blocked). Pick other dates or hours.`, { date: p.date });
+    }
+    const advance = Math.min(advanceFor(ground, dayTotal(0), plans[0]!.starts[0]!, t), dayTotal(0));
+    if (input.payment.amountPaise < advance) throw new HttpError(409, 'ADVANCE_NOT_MET', `At least ${advance} paise must be recorded for the first day to confirm the block`, { advancePaise: advance, totalPaise: dayTotal(0) });
+
+    const seriesId = newId('ser');
+    const ids: string[] = [];
+    plans.forEach((p, i) => {
+      const id = insertBooking({ ground, customerId: customer.id, date: p.date, starts: p.starts, totalPaise: dayTotal(i), advancePaise: i === 0 ? advance : 0, status: 'held', source: input.enquiryId ? 'enquiry' : 'walk_in', payMethod: null, holdExpiresAt: i === 0 ? t + 5 * MIN : null, players: undefined, notes: input.notes ?? null, createdBy: staff.id, enquiryId: input.enquiryId ?? null });
+      if (i === 0) run('INSERT INTO booking_series(id, owner_id, customer_id, ground_id, frequency, requested, first_booking_id, created_at) VALUES(?,?,?,?,?,?,?,?)', seriesId, ground.owner_id, customer.id, ground.id, 'daily', n, id, t);
+      takeSlots(id, ground, p.starts);
+      run('UPDATE bookings SET series_id = ?, series_index = ? WHERE id = ?', seriesId, i, id);
+      ids.push(id);
+    });
+    audit(actor, 'booking.block', 'booking', ids[0]!, { days: n, from: input.fromDate, to: input.toDate, totalPaise: input.totalPaise, customerId: customer.id }, ground.owner_id);
+    // The payment goes to the first day up to what it costs, then onward. The first day confirms the whole block.
+    let left = input.payment.amountPaise;
+    for (let i = 0; i < ids.length && left > 0; i++) {
+      const put = Math.min(left, dayTotal(i));
+      const r = recordOffline(staff, ids[i]!, { method: input.payment.method, amountPaise: put, reference: i === 0 ? input.payment.reference : undefined });
+      if (i === 0 && r.outcome !== 'confirmed') throw new HttpError(409, 'ADVANCE_NOT_MET', 'The recorded payment did not reach the advance');
+      left -= put;
+    }
+    return { series: { id: seriesId, days: n }, bookings: ids.map((id) => viewBooking(id)) };
   });
 }
 

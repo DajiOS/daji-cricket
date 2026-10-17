@@ -557,12 +557,13 @@ export function statutoryDues(ownerId: string, month: string) {
   const nx = new Date(Date.UTC(y!, m!, 1)); // first of next month
   const ym = nx.toISOString().slice(0, 7);
   const due = (d: number) => `${ym}-${String(d).padStart(2, '0')}`;
+  const tdsDue = m === 3 ? `${y}-04-30` : due(7); // March TDS is due on 30 April, every other month on the 7th
   return {
     month, status: r.status, rulesCheckedOn: STATUTORY_RULES_CHECKED,
     pf: { employeePaise: t.pfPaise, employerPaise: t.pfEmployerPaise, totalPaise: t.pfPaise + t.pfEmployerPaise, dueOn: due(15), where: 'EPFO portal, ECR and challan' },
     esi: { employeePaise: t.esiPaise, employerPaise: t.esiEmployerPaise, totalPaise: t.esiPaise + t.esiEmployerPaise, dueOn: due(15), where: 'ESIC portal' },
     pt: { totalPaise: t.ptPaise, dueOn: due(15), where: 'Gujarat Professional Tax (GSTN-linked portal)' },
-    tds: { totalPaise: t.tdsPaise, dueOn: due(7), where: 'TRACES / Income Tax challan 281 (code 92B)' },
+    tds: { totalPaise: t.tdsPaise, dueOn: tdsDue, where: 'TRACES / Income Tax challan 281 (code 92B)' },
     lines: r.lines.map((l) => ({ staffId: l.staffId, name: l.staffName, pfEmployeePaise: l.pfEmployeePaise, pfEmployerPaise: l.pfEmployerPaise + l.pfAdminPaise, esiEmployeePaise: l.esiEmployeePaise, esiEmployerPaise: l.esiEmployerPaise, ptPaise: l.ptPaise, tdsPaise: l.tdsPaise })),
     note: r.status === 'final' ? null : 'Month still open: these figures can change until you finalise.',
   };

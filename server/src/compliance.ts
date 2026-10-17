@@ -1,4 +1,4 @@
-import { many, one, registerSchema, run } from './db.ts';
+import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
 import { HttpError, notFound } from './errors.ts';
@@ -125,13 +125,15 @@ export function logChange(actor: Actor, body: unknown): ChangeEntry {
 /** Changes one of the cash limits after a change in the law. It is applied at once and written to the law-change log. */
 export function setLimit(actor: Actor, code: string, body: unknown): RegisterItem {
   ensureSeeded();
-  if (!(code in LIMIT_DEFAULTS)) throw new HttpError(400, 'VALIDATION_FAILED', 'That rule has a fixed value', { fields: [{ field: 'code', message: 'Only the cash limits can be changed' }] });
+  if (!Object.hasOwn(LIMIT_DEFAULTS, code)) throw new HttpError(400, 'VALIDATION_FAILED', 'That rule has a fixed value', { fields: [{ field: 'code', message: 'Only the cash limits can be changed' }] });
   const v = new Validator(body);
   const value = v.int('valuePaise', { required: true, min: 100, max: 100_000_000_00 }), source = v.str('source', { required: true, min: 3, max: 300 });
   v.done();
   const old = limitOf(code as LimitCode);
-  run('INSERT INTO compliance_values(code, value_paise, set_by, set_at) VALUES(?,?,?,?) ON CONFLICT(code) DO UPDATE SET value_paise = excluded.value_paise, set_by = excluded.set_by, set_at = excluded.set_at', code, value!, actor.id, now());
-  logChange(actor, { code, summary: 'Limit changed in the software', oldValue: inr(old), newValue: inr(value!), source });
+  tx(() => {
+    run('INSERT INTO compliance_values(code, value_paise, set_by, set_at) VALUES(?,?,?,?) ON CONFLICT(code) DO UPDATE SET value_paise = excluded.value_paise, set_by = excluded.set_by, set_at = excluded.set_at', code, value!, actor.id, now());
+    logChange(actor, { code, summary: 'Limit changed in the software', oldValue: inr(old), newValue: inr(value!), source });
+  });
   return register().find((x) => x.code === code)!;
 }
 
@@ -146,8 +148,9 @@ export const isCheckDay = (date: string): boolean => date.endsWith('-01') || dat
 /** The twice-monthly check. Runs at most once per check day; `force` runs it any day (for the "Run the check now" button). */
 export function runCheck(opts: { force?: boolean } = {}): { ran: boolean; ranOn: string; dueCount: number; due: string[] } {
   const ranOn = istDate(now());
-  if (!opts.force && !isCheckDay(ranOn)) return { ran: false, ranOn, dueCount: 0, due: [] };
-  if (!opts.force && one('SELECT 1 FROM compliance_checks WHERE ran_on = ?', ranOn)) return { ran: false, ranOn, dueCount: 0, due: [] };
+  // The check is owed for the latest 1st or 16th. If the server was down on that day, it still runs on the next call.
+  const owedDay = ranOn.slice(8) >= '16' ? `${ranOn.slice(0, 8)}16` : `${ranOn.slice(0, 8)}01`;
+  if (!opts.force && one('SELECT 1 FROM compliance_checks WHERE ran_on >= ?', owedDay)) return { ran: false, ranOn, dueCount: 0, due: [] };
   const due = register().filter((r) => r.status === 'due').map((r) => r.code);
   run('INSERT INTO compliance_checks(id, ran_on, due_count, due_codes, created_at) VALUES(?,?,?,?,?) ON CONFLICT(ran_on) DO UPDATE SET due_count = excluded.due_count, due_codes = excluded.due_codes, created_at = excluded.created_at', newId('ccx'), ranOn, due.length, due.join(','), now());
   audit(SYSTEM, 'compliance.check', 'compliance', ranOn, { due });

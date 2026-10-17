@@ -123,10 +123,10 @@ const STATES: Record<string, string> = { '24': 'Gujarat (24)', '27': 'Maharashtr
 
 /** The invoice for a booking, issued once (the same booking always gives the same invoice and number). */
 export function invoiceForBooking(ownerId: string, actor: Actor, bookingId: string): Invoice {
-  const have = one<InvRow>('SELECT * FROM gst_invoices WHERE booking_id = ?', bookingId);
+  const have = one<InvRow>('SELECT * FROM gst_invoices WHERE booking_id = ? AND owner_id = ?', bookingId, ownerId);
   if (have) return toInvoice(have);
   return tx(() => {
-    const again = one<InvRow>('SELECT * FROM gst_invoices WHERE booking_id = ?', bookingId);
+    const again = one<InvRow>('SELECT * FROM gst_invoices WHERE booking_id = ? AND owner_id = ?', bookingId, ownerId);
     if (again) return toInvoice(again);
     const b = one<{ id: string; owner_id: string; total_paise: number; paid_paise: number; status: string; date: string; ref: string; customer_name: string; ground_name: string; format_label: string | null }>(
       `SELECT b.id, b.owner_id, b.total_paise, b.paid_paise, b.status, b.date, b.ref, u.name customer_name, g.name ground_name, b.format_label FROM bookings b JOIN users u ON u.id = b.customer_id JOIN grounds g ON g.id = b.ground_id WHERE b.id = ?`, bookingId);
@@ -136,7 +136,8 @@ export function invoiceForBooking(ownerId: string, actor: Actor, bookingId: stri
     const registered = !!p.gstin;
     const pct = registered ? gstPercent(ownerId) : 0;
     const total = b.total_paise, gst = registered ? gstInside(total, pct) : 0;
-    const cgst = Math.floor(gst / 2), sgst = gst - cgst;
+    const half = Math.round(gst / 2), cgst = half, sgst = half; // equal halves; the odd paise goes to the taxable value so the lines still add up
+    const taxable = total - 2 * half;
     const issuedOn = istDate(now()), fy = financialYear(issuedOn);
     const seq = (one<{ m: number | null }>('SELECT MAX(seq) m FROM gst_invoices WHERE owner_id = ? AND fy = ?', ownerId, fy)?.m ?? 0) + 1;
     const number = invoiceNumber(p.prefix, fy, seq);
@@ -144,7 +145,7 @@ export function invoiceForBooking(ownerId: string, actor: Actor, bookingId: stri
     const id = newId('inv');
     run(`INSERT INTO gst_invoices(id, owner_id, booking_id, fy, seq, number, kind, issued_on, sac, gst_percent, taxable_paise, cgst_paise, sgst_paise, total_paise, reverse_charge, supplier_name, supplier_gstin, supplier_address, buyer_name, description, place_of_supply, created_at)
          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)`,
-      id, ownerId, bookingId, fy, seq, number, registered ? 'tax_invoice' : 'receipt', issuedOn, p.sac, pct, total - gst, cgst, sgst, total, supplier, p.gstin ?? null, p.address ?? null, b.customer_name,
+      id, ownerId, bookingId, fy, seq, number, registered ? 'tax_invoice' : 'receipt', issuedOn, p.sac, pct, taxable, cgst, sgst, total, supplier, p.gstin ?? null, p.address ?? null, b.customer_name,
       `Ground hire, ${b.ground_name}${b.format_label ? `, ${b.format_label}` : ''}, session on ${b.date} (booking ${b.ref})`, STATES[p.stateCode] ?? p.stateCode, now());
     audit(actor, 'gst.invoice.issue', 'gst_invoice', id, { bookingId, number }, ownerId);
     return toInvoice(one<InvRow>('SELECT * FROM gst_invoices WHERE id = ?', id)!);

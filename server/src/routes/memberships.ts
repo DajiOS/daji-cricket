@@ -2,7 +2,7 @@ import { Router, ok, created } from '../http.ts';
 import type { Ctx } from '../http.ts';
 import { U, ownerOrFail, page } from './helpers.ts';
 import { forbidden } from '../errors.ts';
-import { hasPermission } from '../auth.ts';
+import { canSeeRevenue, hasPermission } from '../auth.ts';
 import { createPlan, deletePlan, expiringSoon, getMember, listMembers, listPlans, membershipAudit, renewMembership, sellMembership, stats, updateMember, updatePlan } from '../memberships.ts';
 
 const A = { auth: ['owner', 'staff', 'super_admin'] as ('owner' | 'staff' | 'super_admin')[] };
@@ -30,6 +30,6 @@ export function membershipsRoutes(r: Router): void {
   r.post(`${B}/members/:id/renew`, (c) => { const n = need(c); return ok(renewMembership(n.owner, n.actor, c.params.id!, c.json())); }, A);
 
   r.get(`${B}/expiring`, (c) => ok({ items: expiringSoon(need(c).owner, Number(c.query.get('days') ?? 14)) }), A);
-  r.get(`${B}/stats`, (c) => ok(stats(need(c).owner)), A);
+  r.get(`${B}/stats`, (c) => { const s = stats(need(c).owner); return ok(canSeeRevenue(U(c)) ? s : { ...s, revenueMonthPaise: null, revenueLastMonthPaise: null }); }, A);
   r.get(`${B}/audit`, (c) => { const n = need(c); const p = page(c, 50); return ok(membershipAudit(n.owner, p.limit, p.offset)); }, A);
 }

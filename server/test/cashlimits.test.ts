@@ -36,3 +36,31 @@ test('269ST: cash that would reach Rs 2,00,000 for one customer is refused on a 
   const online = await h.post(`/api/staff/bookings/${id}/payments`, { method: 'upi', amountPaise: 200000, reference: 'UTR000333444' }, staff);
   assert.equal(online.status, 201, JSON.stringify(online.body));
 });
+
+test('multi-day block: 8 days, 7am to 7pm, one agreed total, split across the days; cash over Rs 2 lakh refused', async () => {
+  const staff = await h.login('staff1'), g = (await grounds(h))[0]!;
+  const body = { groundId: g.id, fromDate: dayFromNow(60), toDate: dayFromNow(67), startTime: '07:00', endTime: '19:00', totalPaise: 25_500_000, customer: { name: 'Camp Organiser', phone: '9890000099' } };
+  const cash = await h.post('/api/staff/bookings/block', { ...body, payment: { method: 'cash', amountPaise: 20_000_000 } }, staff);
+  assert.equal(cash.status, 422, JSON.stringify(cash.body)); assert.equal(cash.body.error.code, 'CASH_LIMIT_269ST');
+  const low = await h.post('/api/staff/bookings/block', { ...body, payment: { method: 'upi', amountPaise: 100, reference: 'UTRLOW000001' } }, staff);
+  assert.equal(low.status, 409);
+  const ok = await h.post('/api/staff/bookings/block', { ...body, payment: { method: 'upi', amountPaise: 4_000_000, reference: 'UTRBLOCK00001' } }, staff);
+  assert.equal(ok.status, 201, JSON.stringify(ok.body));
+  assert.equal(ok.body.bookings.length, 8);
+  assert.equal(ok.body.bookings.reduce((a: number, b: any) => a + b.totalPaise, 0), 25_500_000);
+  assert.ok(ok.body.bookings.every((b: any) => b.status === 'confirmed'));
+  assert.equal(ok.body.bookings.reduce((a: number, b: any) => a + b.paidPaise, 0), 4_000_000);
+  const clash = await h.post('/api/staff/bookings/block', { ...body, fromDate: dayFromNow(66), toDate: dayFromNow(68), customer: { name: 'Other', phone: '9890000098' }, payment: { method: 'upi', amountPaise: 4_000_000, reference: 'UTRBLOCK00002' } }, staff);
+  assert.equal(clash.status, 409);                                              // overlaps two booked days: nothing is created
+});
+
+test('cash for a multi-day block cannot be split over its days to get round the Rs 2 lakh limit', async () => {
+  const staff = await h.login('staff1'), g = (await grounds(h))[0]!;
+  const r = await h.post('/api/staff/bookings/block', { groundId: g.id, fromDate: dayFromNow(80), toDate: dayFromNow(81), startTime: '07:00', endTime: '19:00', totalPaise: 25_500_000, customer: { name: 'Camp', phone: '9890000055' }, payment: { method: 'cash', amountPaise: 15_000_000 } }, staff);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const second = r.body.bookings[1].id as string;
+  const bad = await h.post(`/api/staff/bookings/${second}/payments`, { method: 'cash', amountPaise: 5_000_000 }, staff);
+  assert.equal(bad.status, 422); assert.equal(bad.body.error.code, 'CASH_LIMIT_269ST');
+  const ok = await h.post(`/api/staff/bookings/${second}/payments`, { method: 'upi', amountPaise: 5_000_000, reference: 'UTRSPLIT0001' }, staff);
+  assert.equal(ok.status, 201, JSON.stringify(ok.body));
+});
