@@ -765,6 +765,7 @@ function renderCreditRow() {
   row.hidden = !show;
   if (show) { $('#p-credit').checked = state.useCredit; $('#p-credit-text').textContent = `Use my account credit (${inr(state.creditPaise)} available)`; }
 }
+$('#p-date').addEventListener('click', (e) => { try { e.target.showPicker && e.target.showPicker(); } catch { /* native picker not available */ } });
 $('#p-date').addEventListener('change', (e) => { const v = e.target.value; if (!v) return; const t = firstDay(), mx = lastDay(); state.date = v < t ? t : v > mx ? mx : v; if (shutDay(state.date)) toast('Online booking is closed on that day. Please pick another, or call us.', true); state.sel = []; state.win = null; state.hr = null; renderPanel(); });
 $('#p-promo-apply').addEventListener('click', async () => {
   const s = selection(), msg = $('#p-promo-msg'), code = $('#p-promo').value.trim();
