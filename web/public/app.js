@@ -589,7 +589,7 @@ function renderFormats() {
   const fs = g.formats.filter((f) => f.ball === state.ball);
   if (!fs.some((f) => f.id === state.fmt)) state.fmt = fs.length === 1 ? fs[0].id : null;
   const f = fs.find((x) => x.id === state.fmt);
-  box.append(h('div', { class: 'fmtrow' }, h('span', { class: 'lbl' }, 'Ball'), h('div', { class: 'chips2' }, balls.map((b) => h('button', { type: 'button', class: 'chip2 ball-' + b + (b === state.ball ? ' on' : ''), onclick: () => { state.ball = b; state.fmt = null; state.win = null; renderFormats(); } }, BALL_NAMES[b])))));
+  box.append(h('div', { class: 'fmtrow' }, h('span', { class: 'lbl' }, 'Choose ball'), h('div', { class: 'chips2' }, balls.map((b) => h('button', { type: 'button', class: 'chip2 ball-' + b + (b === state.ball ? ' on' : ''), onclick: () => { state.ball = b; state.fmt = null; state.win = null; renderFormats(); } }, BALL_NAMES[b])))));
   if (state.ball) box.append(h('div', { class: 'fmtrow' }, h('span', { class: 'lbl' }, 'Match'), h('div', { class: 'chips2' }, fs.map((x) => h('button', { type: 'button', class: 'chip2' + (x.id === state.fmt ? ' on' : ''), onclick: () => { state.fmt = x.id; state.win = null; renderFormats(); } }, x.label, h('small', {}, lenText(x.minutes)))))));
   if (!f) { hint.className = 'hint'; hint.textContent = state.ball ? 'Choose the match length to see the sessions.' : 'Choose the ball you want to play with.'; renderSummary(); return; }
   const wins = (a.formats.find((x) => x.formatId === f.id) || { windows: [] }).windows;
@@ -608,7 +608,7 @@ function renderRates() {
   box.hidden = false;
   const balls = ['leather', 'tennis', 'practice'].filter((b) => g.rates.some((r) => r.ball === b));
   if (!balls.includes(state.ball)) state.ball = balls.length === 1 ? balls[0] : null;
-  box.append(h('div', { class: 'fmtrow' }, h('span', { class: 'lbl' }, 'Play'), h('div', { class: 'chips2' }, balls.map((b) => h('button', { type: 'button', class: 'chip2 ball-' + b + (b === state.ball ? ' on' : ''), onclick: () => { state.ball = b; state.win = null; state.hr = null; renderRates(); } }, BALL_NAMES[b])))));
+  box.append(h('div', { class: 'fmtrow' }, h('span', { class: 'lbl' }, 'Choose ball & session'), h('div', { class: 'chips2' }, balls.map((b) => h('button', { type: 'button', class: 'chip2 ball-' + b + (b === state.ball ? ' on' : ''), onclick: () => { state.ball = b; state.win = null; state.hr = null; renderRates(); } }, BALL_NAMES[b])))));
   hint.className = 'hint';
   if (a.closed) { hint.textContent = 'The ground is closed on this day. Please pick another day.'; renderSummary(); return; }
   if (!state.ball) { hint.textContent = 'Choose the ball you want to play with.'; renderSummary(); return; }
