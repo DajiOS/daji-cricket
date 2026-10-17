@@ -175,9 +175,9 @@ export function login(cfg: Config, identifier: string, password: string, code?: 
   const lockKey = identifier.trim().toLowerCase().slice(0, 120);
   lockCheck(lockKey);
   const found = candidatesFor(identifier);
-  let r = found[0];
-  for (const c of found) if (c.password_hash && verifyPassword(password, c.password_hash)) { r = c; break; }
-  const ok = verifyPassword(password, r?.password_hash ?? DUMMY);
+  let r = found[0], ok = false;
+  for (const c of found) if (c.password_hash && verifyPassword(password, c.password_hash)) { r = c; ok = true; break; }
+  if (!ok && !found.some((c) => c.password_hash)) verifyPassword(password, DUMMY); // same time whether or not the account exists
   if (!r || !ok || !r.password_hash) { lockFail(lockKey); throw new HttpError(401, 'INVALID_LOGIN', 'Email, mobile number or password is not right'); }
   if (!r.active) throw new HttpError(403, 'ACCOUNT_DISABLED', 'This account has been disabled');
   if (mfaEnabled(r.id)) {

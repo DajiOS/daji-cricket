@@ -68,3 +68,11 @@ export function checkCashLoanDeposit(amountPaise: number, what: string): void {
 
 function istMidnight(date: string): number { return Date.parse(`${date}T00:00:00+05:30`); }
 export { istDate };
+
+// Indexes for the reports and dashboards that filter by owner and date.
+registerSchema('perf-indexes-1', `
+CREATE INDEX IF NOT EXISTS ix_refunds_owner_created ON refunds(owner_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_credit_ledger_owner_created ON credit_ledger(owner_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_credit_lots_owner_expires ON credit_lots(owner_id, expires_at);
+CREATE INDEX IF NOT EXISTS ix_payments_booking ON payments(booking_id);
+CREATE INDEX IF NOT EXISTS ix_payments_customer_created ON payments(customer_id, created_at);`);
