@@ -20,7 +20,6 @@
     },
     "android": {
       "package": "com.dajicricket.app",
-      "useNextNotificationsApi": true,
       "permissions": [
         "CAMERA",
         "READ_MEDIA_IMAGES",
