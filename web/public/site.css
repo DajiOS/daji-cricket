@@ -1390,3 +1390,6 @@ select option:checked,select option:hover{background:#e8dfc6!important;color:#0f
 #gal-grid button.is-video::after{content:"";position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(15,61,46,.72) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f6f2e9' d='M9 7v10l8-5z'/%3E%3C/svg%3E") center/26px no-repeat}
 .lightbox video{max-width:100%;max-height:82vh;border-radius:10px}
 #gal-grid .vid-fallback{width:100%;height:100%;min-height:120px;background:#0f3d2e}
+/* full screen shows the whole picture, never a cropped one */
+video:fullscreen,video:-webkit-full-screen{object-fit:contain!important;background:#000}
+.lightbox video{object-fit:contain;background:#000}
