@@ -454,8 +454,44 @@ function fillGallery() {
   urls.forEach((u, i) => grid.append(h('button', { type: 'button', class: feature && i === 0 ? 'feature' : null, 'aria-label': `Open photo ${i + 1}`, onclick: () => openModal([h('div', { class: 'lightbox' }, h('img', { src: u, alt: 'Daji Cricket Ground photo' }))], { photo: true }) }, h('img', { src: u, alt: '', loading: 'lazy' }))));
 }
 
+// Photos and videos uploaded in the admin desk (Photos and videos): the "top banner" ones play at the top of the home page,
+// the "gallery" ones join the gallery grid. A video plays muted in the banner and with controls when opened from the gallery.
+async function fillLibrary() {
+  let items = [];
+  try { const r = await fetch(API + '/api/library/public'); if (r.ok) items = (await r.json()).items || []; } catch { return; }
+  if (!items.length) return;
+  const src = (it) => API + it.url;
+  const hero = items.filter((i) => i.tag === 'hero').reverse()[0];
+  const lead = $('#top .lead');
+  if (hero && lead && !$('#hero-media')) {
+    const box = h('div', { id: 'hero-media', class: 'hero-media' });
+    if (hero.kind === 'video') {
+      const v = h('video', { muted: '', loop: '', playsinline: '', autoplay: '', preload: 'metadata', 'aria-label': 'The ground' });
+      v.muted = true; v.defaultMuted = true; v.setAttribute('playsinline', ''); v.src = src(hero);
+      box.append(v); v.play && v.play().catch(() => {});
+    } else box.append(h('img', { src: src(hero), alt: 'The ground', loading: 'eager' }));
+    lead.parentNode.insertBefore(box, lead);
+  }
+  const grid = $('#gal-grid');
+  const pics = items.filter((i) => i.tag === 'gallery').reverse();
+  if (grid && pics.length) {
+    const none = grid.querySelector('.none'); if (none) none.remove();
+    for (const it of pics) {
+      const open = () => openModal([h('div', { class: 'lightbox' }, it.kind === 'video'
+        ? h('video', { src: src(it), controls: '', autoplay: '', playsinline: '', preload: 'auto' })
+        : h('img', { src: src(it), alt: 'Daji Cricket Ground photo' }))], { photo: true });
+      const thumb = it.kind === 'video'
+        ? h('video', { src: src(it) + '#t=0.5', preload: 'metadata', muted: '', playsinline: '', tabindex: '-1' })
+        : h('img', { src: src(it), alt: '', loading: 'lazy' });
+      if (it.kind === 'video') thumb.muted = true;
+      grid.append(h('button', { type: 'button', class: it.kind === 'video' ? 'is-video' : null, 'aria-label': it.kind === 'video' ? 'Play video' : 'Open photo', onclick: open }, thumb));
+    }
+  }
+}
+
 function fillStatic() {
   fillGallery();
+  fillLibrary();
   const c = state.config, gs = state.grounds, g0 = gs[0];
   for (const el of $$('[data-tagline]')) el.textContent = c.tagline;
   const minPrice = gs.length ? Math.min(...gs.map((g) => (g.rates && g.rates.length ? fromPrice(g).paise : g.pricePaise))) : 0;

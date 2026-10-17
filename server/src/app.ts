@@ -1,3 +1,4 @@
+import { libraryRoutes } from './routes/library.ts';
 import { cardRoutes } from './routes/cards.ts';
 import { mediaRoutes } from './routes/media.ts';
 import type { Server } from 'node:http';
@@ -41,6 +42,7 @@ export function buildRouter(): Router {
   tournamentsRoutes(r);
   remindersRoutes(r);
   mediaRoutes(r);
+  libraryRoutes(r);
   cardRoutes(r);
   return r;
 }
