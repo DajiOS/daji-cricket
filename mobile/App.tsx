@@ -17,6 +17,7 @@ import { PlatformScreen } from './src/PlatformScreen';
 import { AccountsScreen } from './src/AccountsScreen';
 import { AcademyScreen } from './src/AcademyScreen';
 import { MatchesScreen } from './src/MatchesScreen';
+import { DeskScreen } from './src/DeskScreen';
 import { Avatar, Btn, Chip, Loading, s, refreshStyles } from './src/ui';
 import * as SecureStore from 'expo-secure-store';
 import { Intro } from './src/Intro';
@@ -32,7 +33,7 @@ import { ADMIN_APP } from './src/variant';
 //   owner        the same, plus Promo codes, Team and Booking controls under More
 //   super admin  the same as the owner, working inside the owner chosen under More
 type Tab = 'book' | 'me' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'accounts' | 'more';
-type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches';
+type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk';
 
 function AppInner({ theme }: { theme: Mode }) {
   void theme; // a new value makes the whole app draw again with the new colours
@@ -112,6 +113,7 @@ function AppInner({ theme }: { theme: Mode }) {
       if (more === 'promo') body = <PromoScreen key={deskKey} />;
       else if (more === 'team') body = <TeamScreen key={deskKey} />;
       else if (more === 'platform') body = <PlatformScreen />;
+      else if (more === 'desk' && boss) body = <DeskScreen key={deskKey} />;
       else if (more === 'academy' && perm('manage_academy')) body = <AcademyScreen key={deskKey} />;
       else if (more === 'matches' && perm('manage_matches')) body = <MatchesScreen key={deskKey} />;
       else if (more === 'profile') body = <ProfileScreen user={user} onUser={setUser} onSignOut={signOut} />;
@@ -129,6 +131,7 @@ function AppInner({ theme }: { theme: Mode }) {
           )}
           {perm('manage_academy') && <Btn kind="outline" label="Academy: attendance and report cards" onPress={() => setMore('academy')} />}
           {perm('manage_matches') && <Btn kind="outline" label="Matches and live scoring" onPress={() => setMore('matches')} />}
+          {boss && <Btn kind="outline" label="Desk: tournaments, members, contacts, bills, transactions" onPress={() => setMore('desk')} />}
           {boss && <Btn kind="outline" label="Promo codes" onPress={() => setMore('promo')} />}
           {boss && <Btn kind="outline" label="Team" onPress={() => setMore('team')} />}
           {boss && <Btn kind="outline" label="Booking controls" onPress={() => setMore('platform')} />}
