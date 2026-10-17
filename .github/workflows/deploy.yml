@@ -57,8 +57,8 @@ jobs:
             chmod -R a+rX server web shared
             cd deploy
             sudo docker compose up -d --build
-            # Caddy reads its config once; make it pick up changes to the Caddyfile (new host names), restarting if the reload is refused
-            sudo docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || sudo docker compose restart caddy
+            # Caddy reads its config once and retries failed HTTPS certificates slowly; restarting makes it pick up Caddyfile changes and ask for certificates straight away
+            sudo docker compose restart caddy
             sudo docker image prune -f
             sudo docker compose ps
           '
