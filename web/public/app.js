@@ -1589,6 +1589,7 @@ function openTerms() {
         'A full refund or full credit is offered when the cancellation is the ground\'s doing: weather or ground condition, a tournament that does not go ahead, or a ground-side problem. A part refund may be offered where the booking is cancelled because of the customer, for example breaking the ground rules.',
         'Nothing is paid out or credited until you choose. Refunds go back to the original payment method and may take 5 to 7 working days to show.'),
       sec('Weather and play', 'If rain stops play before it starts, the ground may cancel and you will be offered a full refund or credit. Play stopped part-way is not refunded unless the ground says so.'),
+      sec('Safety and liability', 'Cricket carries a risk of injury and you play at your own risk. The full terms of use, ground rules, limits on liability and grievance officer are on the Legal notices page (legal.html). By booking you accept them.'),
       sec('Contact', `Questions about a booking: ${contact.name || 'the ground'}${contact.phone ? ' on ' + formatPhone(contact.phone) : ''}.`)),
     h('button', { class: 'btn ghost block', type: 'button', style: 'margin-top:12px', onclick: () => closeModal() }, 'Close')]);
 }
