@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, Fragment } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, Fragment, Suspense } from 'react';
 import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
 import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
 import { HOME, NAV, PAGES, SUBS, SUB_ICONS, subHref, type NavItem } from './registry';
@@ -126,7 +126,7 @@ function Shell({ route }: { route: string }) {
           <a className="btn ghost sm hide-sm" href="./">View website</a>
           <span className="badge b-gold hide-sm">{roleLabel(s.me)}</span>
         </header>
-        <div className="page" key={route}><Page sub={sub} /></div>
+        <div className="page" key={route}><Suspense fallback={<p className="muted" style={{ padding: 24 }}>Loading…</p>}><Page sub={sub} /></Suspense></div>
       </main>
       <nav className="bottom-nav" aria-label="Quick navigation">
         {bottom.map((i) => <a key={i.to} href={`#${i.to}`} className={isOn(i.to) ? 'on' : ''}><Icon name={i.icon} />{i.label}</a>)}

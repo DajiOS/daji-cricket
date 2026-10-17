@@ -11,7 +11,7 @@ const TYPES: Record<string, string> = {
 };
 
 /** Serves the built website, falling back to index.html for client-side routes. */
-export function serveWeb(cfg: Config, url: URL): Reply {
+export function serveWeb(cfg: Config, url: URL, ifNoneMatch?: string): Reply {
   let p = decodeURIComponent(url.pathname);
   if (p.includes('\0')) return { status: 400, body: { error: { code: 'BAD_URL', message: 'Bad address' } } };
   const root = normalize(cfg.webDir);
@@ -20,12 +20,15 @@ export function serveWeb(cfg: Config, url: URL): Reply {
   if (existsSync(file) && statSync(file).isFile()) {
     const ext = extname(file).toLowerCase();
     const hashed = /\.[0-9A-Za-z_-]{8,}\.(js|css)$/.test(file);
-    const headers: Record<string, string> = { 'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache' };
+    const st = statSync(file);
+    const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+    const headers: Record<string, string> = { 'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache', ETag: etag };
     // The Wix custom element loads its script from here, so /embed/* is readable from any site. It is public code with no credentials.
     if (file.startsWith(join(root, 'embed') + sep)) {
       headers['Access-Control-Allow-Origin'] = '*';
       headers['Cross-Origin-Resource-Policy'] = 'cross-origin';
     }
+    if (ifNoneMatch && ifNoneMatch.split(',').some((t) => t.trim() === etag)) return { status: 304, headers };
     return { status: 200, raw: readFileSync(file), contentType: TYPES[ext] ?? 'application/octet-stream', headers };
   }
   if (extname(p)) return { status: 404, body: { error: { code: 'NOT_FOUND', message: 'Not found' } } };

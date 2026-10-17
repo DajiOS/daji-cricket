@@ -277,6 +277,25 @@ export function staffRoutes(r: Router): void {
     return ok(overview(ownerFilter(c), range));
   }, A);
 
+  // The last few months in one request, for the dashboard trend (it used to make one call per month).
+  r.get('/api/staff/reports/overview-series', (c) => {
+    const u = U(c);
+    requirePermission(u, 'view_reports');
+    requireRevenue(u);
+    const n = Math.min(12, Math.max(1, Number(c.query.get('months')) || 6));
+    const t = new Date(Date.now() + 330 * 60000);
+    let y = t.getUTCFullYear(), m = t.getUTCMonth() + 1;
+    const out: { period: string; overview: ReturnType<typeof overview> }[] = [];
+    const owner = ownerFilter(c);
+    for (let i = 0; i < n; i++) {
+      const period = `${y}-${String(m).padStart(2, '0')}`;
+      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      out.unshift({ period, overview: overview(owner, parseRange(`${period}-01`, `${period}-${String(last).padStart(2, '0')}`, null)) });
+      if (--m === 0) { m = 12; y--; }
+    }
+    return ok({ items: out });
+  }, A);
+
   r.get('/api/staff/today', (c) => {
     const u = U(c);
     if (u.role === 'staff') requirePermission(u, 'manage_bookings');
