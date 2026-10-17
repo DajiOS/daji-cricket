@@ -1,6 +1,18 @@
 # Putting the server online (api.dajicricket.com)
 
-Honest status: these files are written but **not yet run on a real server** (no Docker daemon or public address in the build environment). Expect to fix small things on the first real run.
+Status: this setup is live (www.dajicricket.com, Caddy and Docker on AWS Lightsail, Mumbai).
+
+## Updating the live server
+
+```
+cd ~/daji-cricket-new
+git pull origin main
+git log --oneline -1
+sudo cp ~/cricket-booking/deploy/.env deploy/.env
+sudo docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+Then hard-refresh the site and the desk (Ctrl+Shift+R). Secrets (WhatsApp, payment and SMS keys) belong only in `deploy/.env`, never in chat or in git. The phone app is rebuilt separately with EAS (`mobile/`).
 
 ## What you need
 - A small Linux server (1 vCPU, 1 GB RAM is plenty to start) with Docker and the Compose plugin, ports 80 and 443 open.
