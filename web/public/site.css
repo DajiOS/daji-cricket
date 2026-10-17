@@ -1233,11 +1233,15 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav{justify-content:flex-start}
 }
 
-/* ===== Panel back on the left ===== */
+
+/* ===== Logo on the right of the information side, brass on ivory ===== */
 @media (min-width:1021px){
-  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home{padding-right:0;padding-left:var(--split)}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand{position:static;order:3;margin:0 0 0 auto;width:auto;padding:0;background:none;z-index:auto}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .wm-nav{height:76px}
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .hero .panel,
-  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{left:0;right:auto;padding-right:clamp(24px,2.8vw,44px);padding-left:calc(clamp(24px,2.8vw,44px) + 10px)}
-  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand{right:auto;left:10px;padding-left:calc(clamp(24px,2.8vw,44px) + 10px)}
-  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home header.hero::before{left:-6vw;right:auto}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{padding-top:46px}
+}
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand{margin:0 56px 0 auto}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .wm-nav{height:62px;margin:0}
 }
