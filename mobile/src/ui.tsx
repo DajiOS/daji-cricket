@@ -46,7 +46,7 @@ export function NameFields({ value, onChange, firstLabel = 'First name', lastLab
   const [p, setP] = React.useState(() => splitName(value));
   React.useEffect(() => { if (joinName(p.first, p.last) !== (value || '').trim()) setP(splitName(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k: 'first' | 'last') => (v: string) => { const n = { ...p, [k]: v }; setP(n); onChange(joinName(n.first, n.last)); };
-  return (<><Field label={firstLabel} value={p.first} onChangeText={set('first')} autoCapitalize="words" autoComplete="given-name" /><Field label={lastLabel} value={p.last} onChangeText={set('last')} autoCapitalize="words" autoComplete="family-name" /></>);
+  return (<><Field label={firstLabel} value={p.first} onChangeText={set('first')} autoCapitalize="words" autoComplete="name-given" /><Field label={lastLabel} value={p.last} onChangeText={set('last')} autoCapitalize="words" autoComplete="name-family" /></>);
 }
 
 export function Chip({ label, on, onPress, disabled }: { label: string; on?: boolean; onPress?: () => void; disabled?: boolean }) {
