@@ -1287,3 +1287,6 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after
 @media (min-width:1021px){
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .links [data-book]{display:none}
 }
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .links [data-reserve]{display:none}
+}

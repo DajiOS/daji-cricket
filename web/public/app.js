@@ -339,7 +339,7 @@ function renderAuth() {
   // each nav bar gets its own fresh elements, because the buttons carry click handlers
   for (const el of $$('#authlinks')) { clear(el); el.append(...buildAuthItems()); }
   for (const el of $$('#profile-slot')) clear(el); // the profile button now takes the place of the Sign in button
-  for (const el of $$('[data-navclone]')) { clear(el); el.append(h('a', { href: '#top', 'data-home': true, onclick: goHome }, 'Home'), ...buildAuthItems()); }
+  for (const el of $$('[data-navclone]')) { clear(el); el.append(h('a', { href: '#top', 'data-home': true, onclick: goHome }, 'Home'), h('a', { href: '#book', 'data-jump': 'book' }, 'Reserve'), ...buildAuthItems()); }
 }
 function buildAuthItems() {
   const u = state.user;
