@@ -24,7 +24,7 @@ The server takes an encrypted snapshot daily at 03:15 IST and keeps `BACKUP_KEEP
 BACKUP_PASSPHRASE=... docker compose -f deploy/docker-compose.yml run --rm -e BACKUP_PASSPHRASE api \
   node scripts/restore-backup.ts /data/backups/<snapshot> /data/restored
 ```
-It prints the integrity check and the user and booking counts. Then stop the `api` container, copy `daji.db` and `uploads/` from `/data/restored` into `/data`, and start it again. Do a practice restore once before you need one.
+It prints the integrity check and the user and booking counts. Then stop the `api` container, copy `daji.db` and the folders `uploads/`, `task-photos/`, `avatars/`, `cards/`, `library/` and `media/` from `/data/restored` into `/data`, and start it again. Do a practice restore once before you need one.
 
 ## Database
 This build uses SQLite (one file, safe for one server and one owner's traffic, with the snapshots above). A move to Postgres is only worth it for many tenants or several servers; it is **not done**, and `db/postgres` is empty.
