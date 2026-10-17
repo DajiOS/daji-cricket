@@ -260,7 +260,7 @@ function createTournamentIn(actor: Actor, ownerId: string, src: unknown, staff?:
     const groundId = bv.str('groundId', { required: true }), startTime = bv.time('startTime', true), endTime = bv.time('endTime', true);
     const totalPaise = bv.int('totalPaise', { required: true, min: 100, max: 100_000_000_00 });
     const pay = bk.payment, pv = new Validator(pay && typeof pay === 'object' ? pay : {});
-    const method = pv.oneOf('method', ['cash', 'card', 'upi', 'bank_transfer'] as const, true), amountPaise = pv.int('amountPaise', { required: true, min: 1 }), reference = pv.str('reference', { max: 60 });
+    const method = pv.oneOf('method', ['cash', 'card', 'upi', 'bank_transfer'] as const, true), amountPaise = pv.int('amountPaise', { required: true, min: 0 }), reference = pv.str('reference', { max: 60 });
     for (const f of [...bv.fields, ...pv.fields.map((x) => ({ ...x, field: `payment.${x.field}` }))]) throw new HttpError(400, 'VALIDATION_FAILED', f.message, { fields: [{ field: `booking.${f.field}`, message: f.message }] });
     const out = createStaffBlock(staff, {
       groundId: groundId!, fromDate: startDate!, toDate: endDate!, startTime: startTime!, endTime: endTime!, totalPaise: totalPaise!,

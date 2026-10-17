@@ -1,4 +1,5 @@
 import { many, one } from './db.ts';
+import { slotStarts, type GroundRow } from './grounds.ts';
 import { DAY, addDays, istMidnight, monthRange } from './time.ts';
 import { HttpError } from './errors.ts';
 import { isValidDate } from './time.ts';
@@ -32,17 +33,14 @@ export function overview(ownerId: string | null, range: Range) {
   const cancellations = many<{ kind: string; n: number; refund: number; credit: number }>(
     `SELECT b.cancel_kind kind, COUNT(*) n, SUM(b.refund_paise) refund, SUM(b.credit_paise) credit FROM bookings b WHERE b.status = 'cancelled' AND b.date BETWEEN ? AND ? ${ob.sql} GROUP BY b.cancel_kind`, from, to, ...ob.p);
 
-  const days = (istMidnight(to) - istMidnight(from)) / DAY + 1;
-  const grounds = many<{ id: string; name: string; open_time: string; close_time: string; slot_minutes: number }>(
-    `SELECT g.id, g.name, g.open_time, g.close_time, g.slot_minutes FROM grounds g WHERE 1 = 1 ${own('g.owner_id', ownerId).sql} ORDER BY g.name`, ...own('g.owner_id', ownerId).p);
+  const grounds = many<GroundRow>(`SELECT g.* FROM grounds g WHERE 1 = 1 ${own('g.owner_id', ownerId).sql} ORDER BY g.name`, ...own('g.owner_id', ownerId).p);
   const booked = many<{ ground_id: string; slots: number }>(
     `SELECT b.ground_id, SUM(b.slot_count) slots FROM bookings b WHERE b.status IN ('confirmed','completed','no_show') AND b.date BETWEEN ? AND ? ${ob.sql} GROUP BY b.ground_id`, from, to, ...ob.p);
   const bookedMap = new Map(booked.map((r) => [r.ground_id, r.slots]));
   const utilization = grounds.map((g) => {
-    const [oh, om] = g.open_time.split(':').map(Number) as [number, number];
-    const [ch, cm] = g.close_time.split(':').map(Number) as [number, number];
-    const perDay = Math.floor(((ch * 60 + cm) - (oh * 60 + om)) / g.slot_minutes);
-    const available = perDay * days;
+    // Count the slots that were really open: winter hours and weekly closed days included.
+    let available = 0;
+    for (let d = from; d <= to; d = addDays(d, 1)) available += slotStarts(g, d).length;
     const used = bookedMap.get(g.id) ?? 0;
     return { groundId: g.id, groundName: g.name, availableSlots: available, bookedSlots: used, utilization: available ? Math.round((used / available) * 1000) / 10 : 0 };
   });
@@ -50,7 +48,7 @@ export function overview(ownerId: string | null, range: Range) {
   const payments = many<{ method: string; n: number; amount: number; refunded: number }>(
     `SELECT p.method, COUNT(*) n, SUM(p.amount_paise) amount, SUM(p.refunded_paise) refunded FROM payments p WHERE p.status IN ('captured','refunded','partially_refunded') AND p.created_at >= ? AND p.created_at < ? ${op.sql} GROUP BY p.method`, fromMs, toMs, ...op.p);
   const awaiting = one<{ n: number; amount: number }>(`SELECT COUNT(*) n, COALESCE(SUM(p.amount_paise),0) amount FROM payments p WHERE p.status = 'submitted' ${op.sql}`, ...op.p)!;
-  const outstanding = one<{ n: number; amount: number }>(`SELECT COUNT(*) n, COALESCE(SUM(b.total_paise - b.paid_paise),0) amount FROM bookings b WHERE b.status = 'confirmed' AND b.total_paise > b.paid_paise AND b.date BETWEEN ? AND ? ${ob.sql}`, from, to, ...ob.p)!;
+  const outstanding = one<{ n: number; amount: number }>(`SELECT COUNT(*) n, COALESCE(SUM(b.total_paise - b.paid_paise),0) amount FROM bookings b WHERE b.status IN ('confirmed','completed') AND b.total_paise > b.paid_paise AND b.date BETWEEN ? AND ? ${ob.sql}`, from, to, ...ob.p)!;
   const refunds = many<{ status: string; n: number; amount: number }>(`SELECT r.status, COUNT(*) n, SUM(r.amount_paise) amount FROM refunds r WHERE r.created_at >= ? AND r.created_at < ? ${own('r.owner_id', ownerId).sql} GROUP BY r.status`, fromMs, toMs, ...own('r.owner_id', ownerId).p);
   const advances = one<{ n: number; advance: number }>(`SELECT COUNT(*) n, COALESCE(SUM(b.advance_paise),0) advance FROM bookings b WHERE b.status IN ('confirmed','completed','no_show') AND b.date BETWEEN ? AND ? ${ob.sql}`, from, to, ...ob.p)!;
 

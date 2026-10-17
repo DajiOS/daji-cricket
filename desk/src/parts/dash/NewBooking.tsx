@@ -143,7 +143,7 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
             <div className="eyebrow">Money received now</div>
             <div className="form-grid">
               <Field label="Method"><select className="inp" value={method} onChange={(e) => setMethod(e.target.value)}>{HAND_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
-              <Field label="Amount (₹)" hint="Part payment is fine; the rest is collected later."><input className="inp" inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setTouched(true); }} /></Field>
+              <Field label="Amount (₹)" hint="Type 0 if nothing is received yet, or at least the advance. The rest is collected later."><input className="inp" inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setTouched(true); }} /></Field>
               <Field label={method === 'upi' ? 'UPI reference (UTR)' : 'Reference (optional)'}><input className="inp" maxLength={60} value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
             </div>
           </div>

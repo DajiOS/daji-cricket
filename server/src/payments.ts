@@ -225,12 +225,13 @@ export function recordOffline(staff: UserRow, bookingId: string, input: { method
   if (staff.role === 'customer') throw new HttpError(403, 'FORBIDDEN', 'Customers cannot record payments');
   return tx(() => {
     const b = bookingOr404(b0.id);
-    if (b.status !== 'held' && b.status !== 'confirmed') throw new HttpError(409, 'BAD_STATE', `A ${b.status} booking cannot take a payment`);
+    // A played (completed) booking can still be paid: the customer may settle the balance after the match.
+    if (b.status !== 'held' && b.status !== 'confirmed' && b.status !== 'completed') throw new HttpError(409, 'BAD_STATE', `A ${b.status} booking cannot take a payment`);
     const outstanding = b.total_paise - b.paid_paise;
     if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0) throw new HttpError(400, 'VALIDATION_FAILED', 'Amount must be a positive whole number of paise', { fields: [{ field: 'amountPaise', message: 'Must be a positive whole number of paise' }] });
     if (input.amountPaise > outstanding) throw new HttpError(409, 'OVERPAYMENT', `Only ${outstanding} paise is outstanding on this booking`);
     if (input.method === 'cash') checkCashReceipt({ ownerId: b.owner_id, customerId: b.customer_id, bookingId: b.id, date: istDate(now()), amountPaise: input.amountPaise });
-    const purpose = b.status === 'confirmed' ? 'balance' : input.amountPaise >= b.total_paise ? 'full' : 'advance';
+    const purpose = b.status === 'confirmed' || b.status === 'completed' ? 'balance' : input.amountPaise >= b.total_paise ? 'full' : 'advance';
     let id: string;
     try {
       id = insertPayment(b, { method: input.method, status: 'created', purpose, amountPaise: input.amountPaise, reference: input.reference ?? null, recordedBy: staff.id });

@@ -2,6 +2,16 @@ import { istDate } from './time.ts';
 import { assertOpen } from './accounting/store.ts';
 import type { BlockPayment, BlockSummary, Booking, BookingStatus, Page, Payment } from '@daji/shared';
 import { many, one, run, registerSchema } from './db.ts';
+
+// Lookups the reports, the staff home page and the enquiry list make all the time.
+registerSchema('perf-indexes-review-1', `
+CREATE INDEX IF NOT EXISTS ix_bookings_owner_date ON bookings(owner_id, date);
+CREATE INDEX IF NOT EXISTS ix_bookings_date ON bookings(date);
+CREATE INDEX IF NOT EXISTS ix_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS ix_quotations_enquiry ON quotations(enquiry_id);
+CREATE INDEX IF NOT EXISTS ix_enquiry_notes_enquiry ON enquiry_notes(enquiry_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_credit_lots_expiry ON credit_lots(expires_at) WHERE expired_at IS NULL AND remaining_paise > 0;
+`);
 import { now } from './clock.ts';
 import { HttpError, forbidden, notFound } from './errors.ts';
 import { audit, type Actor } from './audit.ts';

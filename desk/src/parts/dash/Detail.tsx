@@ -31,7 +31,7 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
   if (!d) return <Modal title="Booking" onClose={onClose}>{err ? <ErrorBox msg={err} /> : <Loading h={180} />}</Modal>;
   if (d.block && !asDay) return <BlockDetail d={d} onClose={onClose} onChanged={changed} />;
   const b = d.booking;
-  const canPay = can(me, 'record_payments') && (b.status === 'confirmed' || b.status === 'held') && b.balancePaise > 0;
+  const canPay = can(me, 'record_payments') && (b.status === 'confirmed' || b.status === 'held' || b.status === 'completed') && b.balancePaise > 0;
   const started = b.startAt <= Date.now();
   return (
     <>
@@ -71,7 +71,7 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
 
         <div className="grid g3">
           <div className="miniStat"><span>Total</span><b>{inr(b.totalPaise)}</b></div>
-          <div className="miniStat"><span>Paid</span><b className="gold">{inr(b.status === 'cancelled' && b.resolution && b.resolution !== 'awaiting' ? Math.max(b.paidPaise - b.refundPaise - b.creditPaise, 0) : b.paidPaise)}</b></div>
+          <div className="miniStat"><span>Paid</span><b className="gold">{inr(b.status === 'cancelled' && b.resolution !== 'awaiting' ? Math.max(b.paidPaise - b.refundPaise - b.creditPaise, 0) : b.paidPaise)}</b></div>
           <div className="miniStat"><span>Balance</span><b style={b.status === 'confirmed' && b.balancePaise > 0 ? { color: '#a8720f' } : undefined}>{inr(b.status === 'cancelled' || b.status === 'expired' ? 0 : b.balancePaise)}</b></div>
         </div>
 

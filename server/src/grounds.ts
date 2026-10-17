@@ -191,12 +191,14 @@ function parseGround(body: unknown, existing?: GroundRow) {
   const c = closeTime ?? existing?.close_time ?? '22:00';
   const sm = slotMinutes ?? existing?.slot_minutes ?? 60;
   if (minutesOf(o)! >= 1440) v.fail('openTime', 'Opening time must be between 00:00 and 23:59');
+  else if (minutesOf(o)! % sm !== 0) v.fail('openTime', `Opening time must fall on a ${sm}-minute step from midnight (for example 06:00 or ${String(Math.floor(Math.ceil(minutesOf(o)! / sm) * sm / 60) % 24).padStart(2, '0')}:${String(Math.ceil(minutesOf(o)! / sm) * sm % 60).padStart(2, '0')}), so booking slots and price lines line up`);
   if (minutesOf(o)! + sm > minutesOf(c)!) v.fail('closeTime', 'Closing time must leave room for at least one slot after opening');
   const wo = clearWinter ? null : winterOpenTime ?? existing?.winter_open ?? null;
   const wc = clearWinter ? null : winterCloseTime ?? existing?.winter_close ?? null;
   if ((wo === null) !== (wc === null)) v.fail('winterCloseTime', 'Set both the winter opening and closing time, or neither');
   else if (wo !== null && wc !== null) {
     if (minutesOf(wo)! >= 1440) v.fail('winterOpenTime', 'Opening time must be between 00:00 and 23:59');
+    else if (minutesOf(wo)! % sm !== 0) v.fail('winterOpenTime', `Winter opening time must fall on a ${sm}-minute step from midnight`);
     if (minutesOf(wo)! + sm > minutesOf(wc)!) v.fail('winterCloseTime', 'Winter closing time must leave room for at least one slot after opening');
   }
   const seasonRow = { open_time: o, close_time: c, winter_open: wo, winter_close: wc, winter_from_month: 11, winter_to_month: 2 };

@@ -26,6 +26,11 @@ CREATE TABLE acct_feed_state (
 );
 `);
 
+// A sync checks every new bank row against the account's history by reference and by amount.
+registerSchema('accounting-feed-perf-1', `
+CREATE INDEX IF NOT EXISTS ix_acct_txn_account_ref ON acct_transactions(account_id, reference) WHERE reference IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ix_acct_txn_account_amount ON acct_transactions(account_id, amount_paise);
+`);
 registerSchema('accounting-feed-2', `
 CREATE TABLE acct_feed_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
