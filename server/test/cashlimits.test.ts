@@ -84,3 +84,11 @@ test('a multi-day block is one row in the staff list, opens with every day, and 
   const over = await h.post(`/api/staff/bookings/block/${row.block.seriesId}/payments`, { method: 'upi', amountPaise: 100, reference: 'UTRGROUP0003' }, staff);
   assert.equal(over.status, 409);
 });
+
+test('a block of 7 am to 7 pm on a ground open past midnight books only those 12 hours, not the early-morning slots', async () => {
+  const staff = await h.login('staff1'), g = (await grounds(h))[0]!;
+  run("UPDATE grounds SET open_time = '07:00', close_time = '27:00', winter_open = NULL, winter_close = NULL WHERE id = ?", g.id);
+  const r = await h.post('/api/staff/bookings/block', { groundId: g.id, fromDate: dayFromNow(100), toDate: dayFromNow(101), startTime: '07:00', endTime: '19:00', totalPaise: 2_000_000, customer: { name: 'Late Ground', phone: '9890000033' }, payment: { method: 'upi', amountPaise: 2_000_000, reference: 'UTRLATE00001' } }, staff);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  for (const b of r.body.bookings) assert.equal(b.slotCount, 12, 'only 7 am to 7 pm is booked');
+});

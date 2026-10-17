@@ -1444,3 +1444,11 @@ html.splash-on .kn .k{animation-play-state:paused}
 .theme-toggle:hover{transform:translateY(-1px)}
 .theme-toggle:active{transform:scale(1.05,.94)}
 @media (max-width:900px){.theme-toggle{top:14px;right:calc(max(16px,env(safe-area-inset-right,0px)) + 56px);width:40px;height:40px}}
+
+/* ---- booking boxes grow with their words (a long session name, a time range and a price used to spill out of a fixed-height box) ---- */
+.slot{height:auto;min-height:60px;min-width:0;padding:7px 8px;line-height:1.25;text-align:center;overflow-wrap:anywhere}
+.slot.wide{padding:9px 12px;min-height:64px}
+.slot.wide .sname{overflow-wrap:anywhere}
+@media(max-width:700px){.slot{min-height:56px}}
+html:not([data-embed]):not([data-embed-section]) #view-home #book .slot{height:auto;min-height:clamp(42px,5.6vh,52px)}
+.chip2{max-width:100%}

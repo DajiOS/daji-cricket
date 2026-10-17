@@ -4,7 +4,7 @@ declare global { interface Window { DajiIntro?: { play: (box: HTMLElement, o: { 
 
 /** The opening animation, once per visit. The sequence itself is in the website's intro.js, so the website and the desk play the same film. */
 export function Intro() {
-  const [on, setOn] = useState(() => { try { return sessionStorage.getItem('daji.desk.intro') !== '1' && !matchMedia('(prefers-reduced-motion: reduce)').matches && !!window.DajiIntro; } catch { return false; } });
+  const [on, setOn] = useState(() => { try { return sessionStorage.getItem('daji.desk.intro') !== '1' && sessionStorage.getItem('daji.splash') !== '1' && !matchMedia('(prefers-reduced-motion: reduce)').matches && !!window.DajiIntro; } catch { return false; } });
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!on || !box.current) return;

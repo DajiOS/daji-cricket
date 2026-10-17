@@ -431,7 +431,12 @@ export function createStaffBlock(staff: UserRow, input: BlockInput): { series: {
       const all = slotStarts(open, date);
       const first = all.findIndex((s) => timeOfDay(s) === input.startTime);
       if (first < 0) throw new HttpError(400, 'INVALID_SLOT', `${date}: the ground has no slot starting at ${input.startTime}`);
-      const count = all.slice(first).filter((s) => timeOfDay(s) < input.endTime).length;
+      // measured from midnight, so a ground that stays open past midnight does not count its 12 am to 2 am slots as "before 7 pm"
+      const base = istMidnight(date), toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+      const startMin = (all[first]! - base) / MIN;
+      let endMin = toMin(input.endTime);
+      if (endMin <= startMin) endMin += 24 * 60;                                   // an end like 02:00 means the next morning
+      const count = all.slice(first).filter((s) => (s - base) / MIN < endMin).length;
       if (count < 1) throw new HttpError(400, 'INVALID_SLOT', `${date}: nothing falls between ${input.startTime} and ${input.endTime}`);
       return planSlots(open, date, input.startTime, count, t, { ignoreMaxSlots: true });
     });
