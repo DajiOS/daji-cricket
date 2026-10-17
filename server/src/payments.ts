@@ -9,7 +9,8 @@ import { notify } from './notifications.ts';
 import { accessBooking, bookingOr404, confirmBooking, toPayment, type BookingRow } from './bookings.ts';
 import { requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
 import { getSettings } from './settings.ts';
-import { MIN } from './time.ts';
+import { MIN, istDate } from './time.ts';
+import { checkCashReceipt } from './taxrules.ts';
 import type { Config } from './config.ts';
 import { getGateway, verifyWebhookSignature, webhookSecretFor } from './gateway.ts';
 
@@ -228,6 +229,7 @@ export function recordOffline(staff: UserRow, bookingId: string, input: { method
     const outstanding = b.total_paise - b.paid_paise;
     if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0) throw new HttpError(400, 'VALIDATION_FAILED', 'Amount must be a positive whole number of paise', { fields: [{ field: 'amountPaise', message: 'Must be a positive whole number of paise' }] });
     if (input.amountPaise > outstanding) throw new HttpError(409, 'OVERPAYMENT', `Only ${outstanding} paise is outstanding on this booking`);
+    if (input.method === 'cash') checkCashReceipt({ ownerId: b.owner_id, customerId: b.customer_id, bookingId: b.id, date: istDate(now()), amountPaise: input.amountPaise });
     const purpose = b.status === 'confirmed' ? 'balance' : input.amountPaise >= b.total_paise ? 'full' : 'advance';
     let id: string;
     try {

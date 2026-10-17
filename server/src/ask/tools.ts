@@ -22,7 +22,7 @@ const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', booking
 
 export function can(ctx: Ctx, area: Area): boolean {
   const u = ctx.user;
-  if (area === 'reports') return hasPermission(u, 'view_reports') || hasPermission(u, 'manage_accounting');
+  if (area === 'reports') return (hasPermission(u, 'view_reports') || hasPermission(u, 'manage_accounting')) && hasPermission(u, 'view_revenue');
   if (area === 'bookings') return hasPermission(u, 'manage_bookings') || hasPermission(u, 'view_reports');
   return hasPermission(u, 'view_customers');
 }

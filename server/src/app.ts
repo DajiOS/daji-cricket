@@ -20,6 +20,7 @@ import { billsRoutes } from './routes/bills.ts';
 import { payrollRoutes } from './routes/payroll.ts';
 import { membershipsRoutes } from './routes/memberships.ts';
 import { tournamentsRoutes } from './routes/tournaments.ts';
+import { complianceRoutes } from './routes/compliance.ts';
 import { remindersRoutes } from './routes/reminders.ts';
 
 export function buildRouter(): Router {
@@ -44,6 +45,7 @@ export function buildRouter(): Router {
   mediaRoutes(r);
   libraryRoutes(r);
   cardRoutes(r);
+  complianceRoutes(r);
   return r;
 }
 

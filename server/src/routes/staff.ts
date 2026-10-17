@@ -3,7 +3,7 @@ import { U, page, ownerFilter, ownerOrFail, groundInScope } from './helpers.ts';
 import { Validator } from '../input.ts';
 import { HttpError, notFound } from '../errors.ts';
 import { audit } from '../audit.ts';
-import { checkPasswordStrength, createUser, hasPermission, listStaff, requirePermission, scopeOwnerId, toUser, userRow } from '../auth.ts';
+import { checkPasswordStrength, createUser, hasPermission, listStaff, requirePermission, requireRevenue, scopeOwnerId, toUser, userRow } from '../auth.ts';
 import { one, many, run } from '../db.ts';
 import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
@@ -268,6 +268,7 @@ export function staffRoutes(r: Router): void {
   r.get('/api/staff/reports/overview', (c) => {
     const u = U(c);
     requirePermission(u, 'view_reports');
+    requireRevenue(u);
     const range = parseRange(c.query.get('from'), c.query.get('to'), c.query.get('month'));
     return ok(overview(ownerFilter(c), range));
   }, A);

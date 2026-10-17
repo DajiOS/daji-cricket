@@ -16,6 +16,7 @@ export const STAFF_PERMISSIONS = [
   'manage_academy',
   'manage_matches',
   'manage_tasks',
+  'view_revenue',
 ] as const;
 export type StaffPermission = (typeof STAFF_PERMISSIONS)[number];
 
@@ -24,10 +25,10 @@ export const ROLE_PRESETS: Record<string, { title: string; permissions: StaffPer
   // An Admin works for the owner with fewer rights: day-to-day bookings, payments, customers, the academy and matches, and reading reports.
   // Not the books (changing them), prices and timings, promo codes, other team members or settings. Those stay with the owner.
   admin: { title: 'Admin', permissions: ['manage_bookings', 'verify_payments', 'record_payments', 'manage_enquiries', 'view_customers', 'view_reports', 'manage_academy', 'manage_matches', 'manage_tasks'] },
-  general_manager: { title: 'General manager', permissions: ['manage_bookings', 'verify_payments', 'record_payments', 'manage_enquiries', 'manage_grounds', 'view_customers', 'view_reports', 'send_broadcasts', 'manage_academy', 'manage_matches', 'manage_tasks'] },
+  general_manager: { title: 'General manager', permissions: ['manage_bookings', 'verify_payments', 'record_payments', 'manage_enquiries', 'manage_grounds', 'view_customers', 'view_reports', 'send_broadcasts', 'manage_academy', 'manage_matches', 'manage_tasks', 'view_revenue'] },
   coach: { title: 'Coach', permissions: ['manage_academy', 'manage_matches'] },
   front_desk: { title: 'Front desk', permissions: ['manage_bookings', 'verify_payments', 'record_payments', 'manage_enquiries', 'view_customers'] },
-  accountant: { title: 'Accountant', permissions: ['view_reports', 'manage_accounting'] },
+  accountant: { title: 'Accountant', permissions: ['view_reports', 'manage_accounting', 'view_revenue'] },
 };
 
 export interface ApiErrorBody {

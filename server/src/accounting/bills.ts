@@ -1,3 +1,4 @@
+import { checkCashExpense } from '../taxrules.ts';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -338,6 +339,10 @@ export function payBill(ownerId: string, actor: Actor, id: string, raw: unknown)
   v.done();
   return tx(() => {
     const cur = move(ownerId, id, ['approved'], 'Only an approved bill can be marked paid');
+    if (method === 'cash') {
+      const same = one<{ s: number }>("SELECT COALESCE(SUM(amount_paise), 0) s FROM acct_bills WHERE owner_id = ? AND vendor_id = ? AND status = 'paid' AND pay_method = 'cash' AND paid_date = ? AND deleted_at IS NULL AND id <> ?", ownerId, cur.vendor_id, paidDate!, id)!.s;
+      checkCashExpense({ amountPaise: cur.amount_paise, alreadyPaidTodayPaise: same, what: 'Cash for bills' });
+    }
     let ref = reference ?? null;
     if (txnId) {
       const t = one<{ amount_paise: number; reference: string | null }>('SELECT amount_paise, reference FROM acct_transactions WHERE id = ? AND owner_id = ? AND deleted_at IS NULL', txnId, ownerId);

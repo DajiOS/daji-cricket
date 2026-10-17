@@ -1,7 +1,7 @@
 // One booking: who, when, money, payments, and everything staff can do to it.
 import { useState } from 'react';
 import { Modal, Chip, Loading, ErrorBox, Field, Status, Table, Confirm, useToast } from '../../ui';
-import { useApi, post, inr, toPaise, rupees, fmtDay, fmtDateTime, formatPhone, can } from '../../lib';
+import { useApi, post, api, inr, toPaise, rupees, fmtDay, fmtDateTime, formatPhone, can } from '../../lib';
 import { useSession } from '../../App';
 import { type Booking, BookingChip, CancelDialog, HAND_METHODS, METHOD_LABEL, PAY_STATUS, SOURCE_LABEL, cancellable, errText, timeRange, whatOf } from './common';
 
@@ -15,6 +15,7 @@ export function BookingDetail({ id, onClose, onChanged }: { id: string; onClose:
   const toast = useToast();
   const [d, err, reload] = useApi<Detail>(`/api/staff/bookings/${encodeURIComponent(id)}`);
   const [pay, setPay] = useState(false);
+  const [inv, setInv] = useState<Invoice | null>(null);
   const [cancel, setCancel] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const changed = () => { reload(); onChanged(); };
@@ -37,6 +38,7 @@ export function BookingDetail({ id, onClose, onChanged }: { id: string; onClose:
       foot={<>
         {b.needsReview && <button className="btn" onClick={() => act('review-done', {}, 'Marked as reviewed.')}>Mark as reviewed</button>}
         {b.status === 'confirmed' && b.approval === 'pending' && <button className="btn primary" onClick={() => act('approve', {}, 'Approved. The customer has been told.')}>Approve</button>}
+        {(b.status === 'confirmed' || b.status === 'completed') && b.paidPaise > 0 && <button className="btn" onClick={async () => { try { setInv(await api<Invoice>(`/api/bookings/${encodeURIComponent(b.id)}/invoice`)); } catch (e) { toast(errText(e)); } }}>Invoice</button>}
         {canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}
         {b.status === 'confirmed' && started && <Confirm label="Mark no-show" ask="No refund, no credit?" onYes={() => act('no-show', {}, 'Marked as a no-show.')} />}
         {cancellable(b) && <button className="btn danger" onClick={() => setCancel(true)}>Cancel booking</button>}
@@ -84,9 +86,30 @@ export function BookingDetail({ id, onClose, onChanged }: { id: string; onClose:
         )}
       </div>
     </Modal>
+    {inv && <InvoiceView i={inv} onClose={() => setInv(null)} />}
     {pay && <RecordPayment b={b} onClose={() => setPay(false)} onDone={() => { setPay(false); toast('Payment recorded.'); changed(); }} />}
     {cancel && <CancelDialog b={b} onClose={() => setCancel(false)} onDone={() => { setCancel(false); toast('Cancelled. The customer has been told.'); changed(); }} />}
     </>
+  );
+}
+
+interface Invoice { number: string; title: string; kind: string; issuedOn: string; sac: string; gstPercent: number; taxablePaise: number; cgstPaise: number; sgstPaise: number; totalPaise: number; supplierName: string; supplierGstin: string | null; supplierAddress: string | null; buyerName: string; description: string; placeOfSupply: string; reverseChargeLine: string }
+
+function InvoiceView({ i, onClose }: { i: Invoice; onClose: () => void }) {
+  return (
+    <Modal title={i.title} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Close</button><button className="btn primary" onClick={() => window.print()}>Print</button></>}>
+      <div className="stack" style={{ gap: 10 }}>
+        <div><div className="strong">{i.supplierName}</div>{i.supplierAddress && <div className="small">{i.supplierAddress}</div>}{i.supplierGstin && <div className="small">GSTIN {i.supplierGstin}</div>}</div>
+        <div className="row" style={{ justifyContent: 'space-between' }}><span>Invoice no. <b>{i.number}</b></span><span>Date {fmtDay(i.issuedOn)}</span></div>
+        <div className="small">Billed to {i.buyerName}. Place of supply: {i.placeOfSupply}</div>
+        <table className="tbl"><tbody>
+          <tr><td>{i.description}<div className="small muted">SAC {i.sac}</div></td><td className="num right">{inr(i.taxablePaise)}</td></tr>
+          {i.kind === 'tax_invoice' && <><tr><td>CGST {i.gstPercent / 2}%</td><td className="num right">{inr(i.cgstPaise)}</td></tr><tr><td>SGST {i.gstPercent / 2}%</td><td className="num right">{inr(i.sgstPaise)}</td></tr></>}
+          <tr><td className="strong">Total</td><td className="num right strong">{inr(i.totalPaise)}</td></tr>
+        </tbody></table>
+        <div className="small">{i.reverseChargeLine}</div>
+      </div>
+    </Modal>
   );
 }
 

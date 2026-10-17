@@ -1,3 +1,4 @@
+import { needsTerms } from './legal.ts';
 import { setVaultKey } from './vault.ts';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { Role } from '@daji/shared';
@@ -242,6 +243,11 @@ export function createApp(cfg: Config, router: Router): Server {
       if (a) {
         if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Please sign in');
         if (a !== 'user' && !a.includes(user.role)) throw forbidden();
+      }
+
+      // Team members must have accepted the current terms before they use anything else (the terms, sign-out and "who am I" stay open).
+      if (cfg.requireStaffTerms && user && user.role === 'staff' && !/^\/api\/(legal\/|auth\/logout|me$)/.test(url.pathname) && needsTerms(user)) {
+        throw new HttpError(403, 'TERMS_REQUIRED', 'Please read and accept the team terms of use to continue');
       }
 
       const raw = method === 'GET' || method === 'HEAD' || route.opts.stream ? Buffer.alloc(0) : await readBody(req, route.opts.maxBody ?? DEFAULT_BODY);

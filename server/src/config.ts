@@ -19,6 +19,7 @@ export interface Config {
   corsOrigins: string[] | '*';
   trustProxy: boolean;
   rateLimit: boolean;
+  requireStaffTerms: boolean;
   log: boolean;
   razorpay: { keyId: string; keySecret: string; webhookSecret: string; apiUrl: string };
   yodlee: {
@@ -141,6 +142,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     corsOrigins,
     trustProxy: truthy(env.TRUST_PROXY, false),
     rateLimit: truthy(env.RATE_LIMIT, true),
+    requireStaffTerms: truthy(env.REQUIRE_STAFF_TERMS, true),
     log: truthy(env.LOG, true),
     razorpay: {
       keyId: env.RAZORPAY_KEY_ID || '',

@@ -2,7 +2,7 @@ import { Router, ok, created } from '../http.ts';
 import type { Ctx, Reply } from '../http.ts';
 import { U, ownerOrFail } from './helpers.ts';
 import { HttpError, forbidden } from '../errors.ts';
-import { hasPermission } from '../auth.ts';
+import { hasPermission, requireRevenue } from '../auth.ts';
 import { MAX_ATTACHMENT_BYTES } from '../accounting/books.ts';
 import { addBillFile, approvalsCount, approveBill, createBill, createVendor, deleteBill, deleteVendor, getBill, linkableTransactions, listBills, listVendors, payBill, readBillFile, rejectBill, removeBillFile, submitBill, updateBill, updateVendor } from '../accounting/bills.ts';
 
@@ -11,7 +11,7 @@ const A = { auth: STAFF };
 const FILE = { auth: STAFF, maxBody: MAX_ATTACHMENT_BYTES + 1024 };
 
 export function billsRoutes(r: Router): void {
-  const read = (c: Ctx) => { const u = U(c); if (!hasPermission(u, 'view_reports') && !hasPermission(u, 'manage_accounting')) throw forbidden('This needs the "view_reports" permission'); return ownerOrFail(c, 'use bills'); };
+  const read = (c: Ctx) => { const u = U(c); if (!hasPermission(u, 'view_reports') && !hasPermission(u, 'manage_accounting')) throw forbidden('This needs the "view_reports" permission'); requireRevenue(u); return ownerOrFail(c, 'use bills'); };
   const write = (c: Ctx) => { const u = U(c); if (!hasPermission(u, 'manage_accounting')) throw forbidden('This needs the "manage_accounting" permission'); return { owner: ownerOrFail(c, 'use bills'), actor: { id: u.id, role: u.role } }; };
   const date = (c: Ctx, k: string): string | undefined => { const v = c.query.get(k); if (!v) return undefined; if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new HttpError(400, 'VALIDATION_FAILED', `${k} must be a date`); return v; };
 

@@ -1,3 +1,4 @@
+import { checkCashExpense, checkCashLoanDeposit } from '../taxrules.ts';
 import { createHash } from 'node:crypto';
 import { many, one, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
@@ -248,10 +249,18 @@ export function addTransaction(ownerId: string, actor: Actor, body: unknown): Tx
   if (amount === 0) v.fail('amountPaise', 'Cannot be zero');
   if (date && date > addDays(today(), 1)) v.fail('date', 'Cannot be in the future');
   v.done();
-  accountOr404(ownerId, accountId!);
+  const acct = accountOr404(ownerId, accountId!);
   assertAccountActive(accountId!);
   if (catId) categoryOr400(ownerId, catId);
   assertOpen(ownerId, date!);
+  if (acct.kind === 'cash') { // India's cash limits (see taxrules.ts); salaries and moving cash to the bank are not "payments to a person" for this rule
+    if (catId === categoryId('loan')) checkCashLoanDeposit(Math.abs(amount!), amount! > 0 ? 'A loan received' : 'A loan repayment');
+    else if (amount! < 0 && catId !== categoryId('salaries') && catId !== categoryId('cash_deposit')) {
+      const who = (counterparty ?? description!).trim().toLowerCase();
+      const same = one<{ s: number }>("SELECT COALESCE(SUM(-t.amount_paise), 0) s FROM acct_transactions t JOIN acct_accounts a ON a.id = t.account_id WHERE t.owner_id = ? AND a.kind = 'cash' AND t.amount_paise < 0 AND t.txn_date = ? AND lower(COALESCE(t.counterparty, t.description)) = ? AND t.deleted_at IS NULL AND COALESCE(t.category_id, '') NOT IN (?, ?)", ownerId, date!, who, categoryId('salaries'), categoryId('cash_deposit'))!.s;
+      checkCashExpense({ amountPaise: -amount!, alreadyPaidTodayPaise: same });
+    }
+  }
   const id = newId('txn'), t = now();
   run(`INSERT INTO acct_transactions(id, owner_id, account_id, source, txn_date, amount_paise, description, counterparty, reference, fingerprint, seq, category_id, category_by, note, created_at, created_by, updated_at, updated_by)
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, ownerId, accountId!, 'manual', date!, amount!, description!, counterparty ?? null, reference ?? null, `manual:${id}`, 0, catId ?? null, catId ? 'manual' : null, note ?? null, t, actor.id, t, actor.id);

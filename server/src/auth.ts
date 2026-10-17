@@ -203,6 +203,14 @@ export function hasPermission(u: UserRow, perm: StaffPermission): boolean {
   if (u.role !== 'staff') return false;
   return (JSON.parse(u.permissions || '[]') as string[]).includes(perm);
 }
+/**
+ * Revenue, profit, the books and the money reports. A team member sees none of it unless the owner has switched on
+ * "Can see revenue" for them, whatever else they are allowed to do.
+ */
+export const canSeeRevenue = (u: UserRow): boolean => hasPermission(u, 'view_revenue');
+export function requireRevenue(u: UserRow): void {
+  if (!canSeeRevenue(u)) throw forbidden('Revenue is hidden from your login. Ask the owner to switch on "Can see revenue".');
+}
 export function requirePermission(u: UserRow, perm: StaffPermission): void {
   if (!hasPermission(u, perm)) throw forbidden(`This needs the "${perm}" permission`);
 }

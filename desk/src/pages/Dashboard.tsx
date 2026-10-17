@@ -27,9 +27,10 @@ export default function Dashboard({ sub }: { sub: string }) {
   const { me, ownerId } = useSession();
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
-  const canBookings = can(me, 'manage_bookings'), canReports = can(me, 'view_reports');
-  // money (revenue, profit, billed and collected, balances to collect) is for the owner only; staff never see it on the dashboard
-  const canMoney = canReports && me.role !== 'staff';
+  const canBookings = can(me, 'manage_bookings'), canSeeReports = can(me, 'view_reports') || can(me, 'manage_accounting');
+  // money (revenue, profit, billed and collected, balances to collect) shows only to the owner and to team members the owner has given "Can see revenue"
+  const canMoney = canSeeReports && can(me, 'view_revenue');
+  const canReports = canMoney;
   const month = todayISO().slice(0, 7);
 
   const [today, todayErr] = useApi<TodayData>(canBookings ? '/api/staff/today' : null, [version, ownerId]);
