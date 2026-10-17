@@ -394,7 +394,7 @@ export function computeLines(ownerId: string, month: string): Line[] {
     const units2 = c.present * 2 + c.half + (s.pay_type === 'monthly' ? c.leave * 2 : 0);
     const gross = grossFor(s.pay_type, s.rate_paise, units2, dim);
     const a = adj.get(s.id) ?? { bonus: 0, advance: 0, deduction: 0 };
-    const st = statutory({ payType: s.pay_type, ratePaise: s.rate_paise, grossPaise: gross, bonusPaise: a.bonus, paidDays: units2 / 2, pf: !!s.pf, esi: !!s.esi, pt: !!s.pt, tds: !!s.tds, tdsFixedPaise: s.tds_fixed_paise });
+    const st = statutory({ payType: s.pay_type, ratePaise: s.rate_paise, grossPaise: gross, bonusPaise: a.bonus, paidDays: units2 / 2, contractMonthlyPaise: s.pay_type === 'monthly' ? s.rate_paise : s.rate_paise * 26, pf: !!s.pf, esi: !!s.esi, pt: !!s.pt, tds: !!s.tds, tdsFixedPaise: s.tds_fixed_paise });
     const raw = gross + a.bonus - a.advance - a.deduction - st.pfEmployeePaise - st.esiEmployeePaise - st.ptPaise - st.tdsPaise;
     return {
       id: null, staffId: s.id, staffName: s.name, staffRole: s.role, payType: s.pay_type, ratePaise: s.rate_paise, daysInMonth: dim,

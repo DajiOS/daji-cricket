@@ -5,7 +5,7 @@ import { HttpError, notFound } from './errors.ts';
 import { audit, SYSTEM, type Actor } from './audit.ts';
 import { Validator } from './input.ts';
 import { addDays, istDate } from './time.ts';
-import { CASH_LIMITS } from './taxrules.ts';
+import { CASH_LIMITS, LIMIT_DEFAULTS, limitOf, type LimitCode } from './taxrules.ts';
 import { MAX_INVOICE_NO, DEFAULT_SAC } from './invoices.ts';
 import { PF, ESI, GUJARAT_PT, STATUTORY_RULES_CHECKED } from './accounting/statutory.ts';
 
@@ -51,9 +51,9 @@ CREATE TABLE compliance_checks (
 const inr = (p: number) => `Rs ${(p / 100).toLocaleString('en-IN')}`;
 interface Seed { code: string; title: string; authority: string; rule: string; value: string; where: string; days: number }
 const SEEDS = (): Seed[] => [
-  { code: 'CASH_269ST', title: 'No cash receipt of Rs 2 lakh or more', authority: 'Income-tax Act, section 269ST', rule: 'A business may not receive Rs 2,00,000 or more in cash from one person in a day, for one transaction, or for one event.', value: `${inr(CASH_LIMITS.receiptPaise)} (refused at or above)`, where: 'taxrules.checkCashReceipt, used when staff record a cash payment on a booking', days: 180 },
-  { code: 'CASH_40A3', title: 'Cash payments to one person up to Rs 10,000 a day', authority: 'Income-tax Act, section 40A(3) and Rule 6DD', rule: 'A cash payment to one person above Rs 10,000 in a day is not an allowed business expense.', value: `${inr(CASH_LIMITS.expensePaise)} per person per day`, where: 'taxrules.checkCashExpense, used for cash bills and manual cash entries in the books', days: 180 },
-  { code: 'CASH_269SS', title: 'No cash loans or deposits of Rs 20,000 or more', authority: 'Income-tax Act, sections 269SS and 269T', rule: 'Loans, deposits and their repayment of Rs 20,000 or more must go by account payee cheque, bank transfer or UPI.', value: `${inr(CASH_LIMITS.loanDepositPaise)} (refused at or above)`, where: 'taxrules.checkCashLoanDeposit, used for cash entries categorised as a loan', days: 180 },
+  { code: 'CASH_269ST', title: 'No cash receipt of Rs 2 lakh or more', authority: 'Income-tax Act, 2025 (formerly section 269ST of the 1961 Act)', rule: 'A business may not receive Rs 2,00,000 or more in cash from one person in a day, for one transaction, or for one event.', value: `${inr(CASH_LIMITS.receiptPaise)} (refused at or above)`, where: 'taxrules.checkCashReceipt, used when staff record a cash payment on a booking', days: 180 },
+  { code: 'CASH_40A3', title: 'Cash payments to one person up to Rs 10,000 a day', authority: 'Income-tax Act, 2025 (formerly section 40A(3) and Rule 6DD)', rule: 'A cash payment to one person above Rs 10,000 in a day is not an allowed business expense unless an exception applies, so the software asks for the reason.', value: `${inr(CASH_LIMITS.expensePaise)} per person per day, reason needed above`, where: 'taxrules.checkCashExpense (written reason needed above the limit), used for cash bills and manual cash entries', days: 180 },
+  { code: 'CASH_269SS', title: 'No cash loans or deposits of Rs 20,000 or more', authority: 'Income-tax Act, 2025 (formerly sections 269SS and 269T)', rule: 'Loans, deposits and their repayment of Rs 20,000 or more must go by account payee cheque, bank transfer or UPI.', value: `${inr(CASH_LIMITS.loanDepositPaise)} (refused at or above)`, where: 'taxrules.checkCashLoanDeposit, used for cash entries categorised as a loan', days: 180 },
   { code: 'GST_INV_NO', title: 'GST invoice number of 16 characters or fewer', authority: 'CGST Rules 2017, rule 46', rule: 'The invoice number is unique in the financial year, up to 16 characters, using only letters, digits, "/" and "-".', value: `${MAX_INVOICE_NO} characters, format PREFIX/26-27/000001`, where: 'invoices.invoiceNumber', days: 180 },
   { code: 'GST_SAC', title: 'SAC code and tax split on the invoice', authority: 'CGST Rules 2017, rule 46; GST rate notifications', rule: 'A tax invoice shows the SAC code, taxable value, rate and CGST + SGST (IGST between states). The SAC and rate for ground hire should be confirmed by the owner\'s accountant.', value: `Default SAC ${DEFAULT_SAC}; rate set in the books (GST percent)`, where: 'invoices.invoiceForBooking, GST profile', days: 90 },
   { code: 'GST_RCM', title: 'Reverse-charge line on every invoice', authority: 'CGST Rules 2017, rule 46(p)', rule: 'The invoice states whether tax is payable on reverse charge.', value: '"Tax payable on reverse charge: No"', where: 'invoices.toInvoice', days: 180 },
@@ -120,6 +120,19 @@ export function logChange(actor: Actor, body: unknown): ChangeEntry {
   audit(actor, 'compliance.change', 'compliance_item', code!, { summary, oldValue: oldValue ?? null, newValue: newValue ?? null });
   markReviewed(actor, code!, {});
   return changes().find((c) => c.id === id)!;
+}
+
+/** Changes one of the cash limits after a change in the law. It is applied at once and written to the law-change log. */
+export function setLimit(actor: Actor, code: string, body: unknown): RegisterItem {
+  ensureSeeded();
+  if (!(code in LIMIT_DEFAULTS)) throw new HttpError(400, 'VALIDATION_FAILED', 'That rule has a fixed value', { fields: [{ field: 'code', message: 'Only the cash limits can be changed' }] });
+  const v = new Validator(body);
+  const value = v.int('valuePaise', { required: true, min: 100, max: 100_000_000_00 }), source = v.str('source', { required: true, min: 3, max: 300 });
+  v.done();
+  const old = limitOf(code as LimitCode);
+  run('INSERT INTO compliance_values(code, value_paise, set_by, set_at) VALUES(?,?,?,?) ON CONFLICT(code) DO UPDATE SET value_paise = excluded.value_paise, set_by = excluded.set_by, set_at = excluded.set_at', code, value!, actor.id, now());
+  logChange(actor, { code, summary: 'Limit changed in the software', oldValue: inr(old), newValue: inr(value!), source });
+  return register().find((x) => x.code === code)!;
 }
 
 export function changes(): ChangeEntry[] {

@@ -245,7 +245,8 @@ export function addTransaction(ownerId: string, actor: Actor, body: unknown): Tx
   const counterparty = v.str('counterparty', { max: 100 });
   const reference = v.str('reference', { max: 60 });
   const catId = v.str('categoryId', { max: 60 });
-  const note = v.str('note', { max: 300 });
+  let note = v.str('note', { max: 300 });
+  const cashReason = v.str('cashReason', { max: 300 });
   if (amount === 0) v.fail('amountPaise', 'Cannot be zero');
   if (date && date > addDays(today(), 1)) v.fail('date', 'Cannot be in the future');
   v.done();
@@ -258,7 +259,8 @@ export function addTransaction(ownerId: string, actor: Actor, body: unknown): Tx
     else if (amount! < 0 && catId !== categoryId('salaries') && catId !== categoryId('cash_deposit')) {
       const who = (counterparty ?? description!).trim().toLowerCase();
       const same = one<{ s: number }>("SELECT COALESCE(SUM(-t.amount_paise), 0) s FROM acct_transactions t JOIN acct_accounts a ON a.id = t.account_id WHERE t.owner_id = ? AND a.kind = 'cash' AND t.amount_paise < 0 AND t.txn_date = ? AND lower(COALESCE(t.counterparty, t.description)) = ? AND t.deleted_at IS NULL AND COALESCE(t.category_id, '') NOT IN (?, ?)", ownerId, date!, who, categoryId('salaries'), categoryId('cash_deposit'))!.s;
-      checkCashExpense({ amountPaise: -amount!, alreadyPaidTodayPaise: same });
+      const why = checkCashExpense({ amountPaise: -amount!, alreadyPaidTodayPaise: same, reason: cashReason });
+      if (why) note = `Cash exception (40A(3)): ${why}`.slice(0, 300);
     }
   }
   const id = newId('txn'), t = now();

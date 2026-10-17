@@ -33,3 +33,10 @@ test('TDS: new regime, rebate to 12 lakh, slabs above, owner override wins', () 
   assert.equal(statutory({ ...base, grossPaise: R(50000), tds: true, tdsFixedPaise: R(900) }).tdsPaise, R(900));
   assert.equal(statutory({ ...base, ratePaise: R(30000), grossPaise: R(30000), tds: true }).tdsPaise, 0); // 3.6 lakh a year: nil
 });
+
+test('ESI cover follows the agreed wage, not the month: a bonus does not push a covered person out', () => {
+  const a = statutory({ ...base, ratePaise: R(15000), contractMonthlyPaise: R(15000), grossPaise: R(15000), bonusPaise: R(10000), esi: true });
+  assert.ok(a.esiEmployeePaise > 0);
+  const b = statutory({ ...base, ratePaise: R(25000), contractMonthlyPaise: R(25000), grossPaise: R(10000), esi: true });
+  assert.equal(b.esiEmployerPaise, 0);
+});

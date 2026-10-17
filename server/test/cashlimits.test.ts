@@ -9,10 +9,11 @@ before(async () => { h = await startHarness(); });
 after(async () => { await h.close(); });
 beforeEach(() => { h.reset(); });
 
-test('40A(3): more than Rs 10,000 in cash to one person in a day is refused, exactly Rs 10,000 is fine', () => {
-  checkCashExpense({ amountPaise: CASH_LIMITS.expensePaise });
+test('40A(3): more than Rs 10,000 in cash to one person in a day needs a written reason, exactly Rs 10,000 is fine', () => {
+  assert.equal(checkCashExpense({ amountPaise: CASH_LIMITS.expensePaise }), null);
   assert.throws(() => checkCashExpense({ amountPaise: CASH_LIMITS.expensePaise + 1 }), /40A\(3\)/);
-  assert.throws(() => checkCashExpense({ amountPaise: 600_000, alreadyPaidTodayPaise: 500_000 }), /40A\(3\)/);
+  assert.throws(() => checkCashExpense({ amountPaise: 600_000, alreadyPaidTodayPaise: 500_000, reason: 'no' }), /40A\(3\)/);
+  assert.equal(checkCashExpense({ amountPaise: 600_000, alreadyPaidTodayPaise: 500_000, reason: 'Village has no bank, rule 6DD' }), 'Village has no bank, rule 6DD');
 });
 
 test('269SS/269T: Rs 20,000 or more of loan or deposit in cash is refused', () => {

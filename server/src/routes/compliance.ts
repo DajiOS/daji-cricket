@@ -3,7 +3,7 @@ import { U, ownerOrFail } from './helpers.ts';
 import { forbidden } from '../errors.ts';
 import { Validator } from '../input.ts';
 import { accessBooking } from '../bookings.ts';
-import { changes, lastChecks, logChange, markReviewed, register, runCheck } from '../compliance.ts';
+import { changes, lastChecks, logChange, markReviewed, register, runCheck, setLimit } from '../compliance.ts';
 import { acceptTerms, acceptanceOf, acceptanceReport, currentTerms } from '../legal.ts';
 import { getProfile, invoiceForBooking, listInvoices, saveProfile } from '../invoices.ts';
 
@@ -14,6 +14,7 @@ export function complianceRoutes(r: Router): void {
   r.get('/api/compliance', () => ok({ items: register(), changes: changes(), checks: lastChecks() }), OWNER);
   r.post('/api/compliance/check', () => ok(runCheck({ force: true })), OWNER);
   r.post('/api/compliance/changes', (c) => created(logChange({ id: U(c).id, role: U(c).role }, c.json())), OWNER);
+  r.post('/api/compliance/:code/limit', (c) => ok(setLimit({ id: U(c).id, role: U(c).role }, c.params.code!, c.json())), OWNER);
   r.post('/api/compliance/:code/review', (c) => ok(markReviewed({ id: U(c).id, role: U(c).role }, c.params.code!, c.json())), OWNER);
 
   // ---- team terms: read, accept, and the owner's evidence report

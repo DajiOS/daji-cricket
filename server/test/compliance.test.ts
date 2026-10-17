@@ -88,3 +88,14 @@ test('invoice: receipt with no tax before a GSTIN, then a tax invoice with SAC, 
   assert.ok(b.body.cgstPaise > 0 && Math.abs(b.body.cgstPaise - b.body.sgstPaise) <= 1);
   assert.notEqual(b.body.number, a.body.number); assert.ok(b.body.number.length <= 16);
 });
+
+test('the cash limits can be changed in Compliance and the change is logged', async () => {
+  const owner = await h.login('owner1');
+  const bad = await h.post('/api/compliance/GST_INV_NO/limit', { valuePaise: 100, source: 'x y z' }, owner);
+  assert.equal(bad.status, 400);
+  const r = await h.post('/api/compliance/CASH_40A3/limit', { valuePaise: 2_000_000, source: 'Finance Act notification' }, owner);
+  assert.equal(r.status, 200); assert.match(r.body.currentValue, /20,000/);
+  const reg = await h.get('/api/compliance', owner);
+  assert.ok(reg.body.changes.some((c: any) => c.code === 'CASH_40A3' && c.newValue === 'Rs 20,000'));
+  await h.post('/api/compliance/CASH_40A3/limit', { valuePaise: 1_000_000, source: 'reset for the next test' }, owner);
+});

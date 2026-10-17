@@ -334,14 +334,16 @@ export function payBill(ownerId: string, actor: Actor, id: string, raw: unknown)
   const method = v.oneOf('method', ['upi', 'bank', 'cash'] as const, true);
   const reference = v.str('reference', { max: 80 });
   const txnId = v.str('transactionId', { max: 60 });
+  const cashReason = v.str('cashReason', { max: 300 });
   if (paidDate && paidDate > today()) v.fail('paidDate', 'Cannot be in the future');
   if (method && method !== 'cash' && !reference && !txnId) v.fail('reference', 'Enter the UTR or reference, or link the bank transaction');
   v.done();
   return tx(() => {
+    let cashNote: string | null = null;
     const cur = move(ownerId, id, ['approved'], 'Only an approved bill can be marked paid');
     if (method === 'cash') {
       const same = one<{ s: number }>("SELECT COALESCE(SUM(amount_paise), 0) s FROM acct_bills WHERE owner_id = ? AND vendor_id = ? AND status = 'paid' AND pay_method = 'cash' AND paid_date = ? AND deleted_at IS NULL AND id <> ?", ownerId, cur.vendor_id, paidDate!, id)!.s;
-      checkCashExpense({ amountPaise: cur.amount_paise, alreadyPaidTodayPaise: same, what: 'Cash for bills' });
+      cashNote = checkCashExpense({ amountPaise: cur.amount_paise, alreadyPaidTodayPaise: same, what: 'Cash for bills', reason: cashReason });
     }
     let ref = reference ?? null;
     if (txnId) {
@@ -354,7 +356,7 @@ export function payBill(ownerId: string, actor: Actor, id: string, raw: unknown)
     const t = now();
     run("UPDATE acct_bills SET status = 'paid', paid_date = ?, pay_method = ?, pay_reference = ?, transaction_id = ?, paid_by = ?, updated_at = ?, updated_by = ? WHERE id = ?",
       paidDate!, method!, ref, txnId ?? null, actor.id, t, actor.id, id);
-    audit(actor, 'bill.pay', 'acct_bill', id, { paidDate, method, reference: ref, transactionId: txnId ?? null, amountPaise: cur.amount_paise }, ownerId);
+    audit(actor, 'bill.pay', 'acct_bill', id, { paidDate, method, reference: ref, transactionId: txnId ?? null, amountPaise: cur.amount_paise, ...(cashNote ? { cashException: cashNote } : {}) }, ownerId);
     return toBill(billRow(ownerId, id));
   });
 }

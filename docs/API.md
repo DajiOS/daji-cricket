@@ -253,3 +253,20 @@ Every minute the server charges the balance of confirmed bookings that start wit
 ## Email (Gmail)
 
 Set `GMAIL_USER` (default dajicricket@gmail.com) and `GMAIL_APP_PASSWORD` (a Google App Password, not the normal password). Messages stay queued until it is set. The Services page has a Test button.
+
+## Statutory payroll (owner only)
+`GET /api/accounting/payroll/statutory?month=YYYY-MM` returns what is owed to PF, ESI, Gujarat PT and the tax department for the month, with due dates and per-person lines. Staff profiles accept `pf`, `esi`, `pt`, `tds` (booleans), `tdsFixedPaise`, `uan`, `esicNo`, `pan`. Payroll lines carry `pfEmployeePaise`, `pfEmployerPaise`, `pfAdminPaise`, `esiEmployeePaise`, `esiEmployerPaise`, `ptPaise`, `tdsPaise`; they come off net pay and are frozen when the month is finalised. Rules live in `server/src/accounting/statutory.ts`.
+
+## India tax rules
+- Cash limits (`server/src/taxrules.ts`): a cash receipt that brings one customer to Rs 2,00,000 or more in a day, or one booking to that, is refused (422 `CASH_LIMIT_269ST`). Cash to one payee above Rs 10,000 in a day needs `cashReason` on bill payment or a manual cash entry (422 `CASH_REASON_NEEDED`). A cash loan of Rs 20,000 or more is refused (422 `CASH_LIMIT_269SS`).
+- `GET /api/bookings/:id/invoice` issues, once, the GST invoice for a confirmed paid booking (customer, or team with `manage_bookings`). Number is `PREFIX/26-27/000001`, never over 16 characters. Without a GSTIN it is a receipt with no tax. Includes SAC, CGST and SGST, and `reverseChargeLine`.
+- `GET/PUT /api/accounting/gst-profile`, `GET /api/accounting/invoices?fy=26-27` (owner).
+
+## Compliance register (owner)
+`GET /api/compliance` returns rules with review dates, the law-change log and past checks. `POST /api/compliance/:code/review`, `POST /api/compliance/changes`, `POST /api/compliance/:code/limit` (cash limits only, logs a change), `POST /api/compliance/check`. The check also runs by itself on the 1st and 16th (IST).
+
+## Team terms
+`GET /api/legal/staff-terms` returns the wording, version and SHA-256. `POST /api/legal/staff-terms/accept {version, sha256}` records the acceptance with time and IP. Until accepted, every other team request returns 403 `TERMS_REQUIRED`. `GET /api/legal/staff-terms/report` (owner) lists who accepted. Changing the wording requires bumping `STAFF_TERMS_VERSION` in `server/src/legal.ts`.
+
+## Sign-out and revenue
+`POST /api/auth/logout` revokes the token on the server; `POST /api/auth/logout-all` ends every session. The `view_revenue` permission ("Can see revenue") gates reports, the books, bills and the dashboard money tiles for team members; the owner always sees them.

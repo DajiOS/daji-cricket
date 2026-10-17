@@ -31,6 +31,7 @@ export interface StatInput {
   grossPaise: number;      // earned this month before bonus
   bonusPaise: number;
   paidDays: number;
+  contractMonthlyPaise?: number; // the agreed monthly wage; ESI cover is judged on this, so one big month does not flip it
   pf: boolean; esi: boolean; pt: boolean; tds: boolean;
   tdsFixedPaise: number;   // owner-set monthly TDS; 0 = work it out
 }
@@ -62,7 +63,8 @@ export function statutory(i: StatInput): StatOutput {
     out.pfEmployerPaise = roundRupee(base * PF.employerRate);
     out.pfAdminPaise = roundRupee(base * (PF.edliRate + PF.adminRate));
   }
-  if (i.esi && wages <= ESI.coverageCeilingPaise) {
+  const covered = (i.contractMonthlyPaise ?? wages) <= ESI.coverageCeilingPaise;
+  if (i.esi && covered) {
     const daily = wages / Math.max(1, i.paidDays);
     out.esiEmployeePaise = daily <= ESI.exemptDailyWagePaise ? 0 : ceilRupee(wages * ESI.employeeRate);
     out.esiEmployerPaise = ceilRupee(wages * ESI.employerRate);

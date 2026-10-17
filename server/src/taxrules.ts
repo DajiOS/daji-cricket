@@ -1,4 +1,4 @@
-import { one } from './db.ts';
+import { one, registerSchema } from './db.ts';
 import { HttpError } from './errors.ts';
 import { istDate } from './time.ts';
 
@@ -10,11 +10,16 @@ import { istDate } from './time.ts';
 // Amounts are paise.
 
 const RUPEE = 100;
+// The owner can change a limit in Compliance when the law changes; no new release is needed. These are the starting values.
+registerSchema('limit-overrides-1', `CREATE TABLE compliance_values (code TEXT PRIMARY KEY, value_paise INTEGER NOT NULL, set_by TEXT, set_at INTEGER NOT NULL);`);
+export const LIMIT_DEFAULTS = { CASH_269ST: 200_000 * RUPEE, CASH_40A3: 10_000 * RUPEE, CASH_269SS: 20_000 * RUPEE } as const;
+export type LimitCode = keyof typeof LIMIT_DEFAULTS;
+export const limitOf = (code: LimitCode): number => one<{ v: number }>('SELECT value_paise v FROM compliance_values WHERE code = ?', code)?.v ?? LIMIT_DEFAULTS[code];
 export const CASH_LIMITS = {
-  receiptPaise: 200_000 * RUPEE,    // 269ST: the limit itself is NOT allowed, so reaching it is refused
-  expensePaise: 10_000 * RUPEE,     // 40A(3): more than this per payee per day is refused
-  loanDepositPaise: 20_000 * RUPEE, // 269SS/269T: this much or more is refused
-} as const;
+  get receiptPaise() { return limitOf('CASH_269ST'); },    // 269ST: the limit itself is NOT allowed, so reaching it is refused
+  get expensePaise() { return limitOf('CASH_40A3'); },     // 40A(3): above this per payee per day needs a written reason
+  get loanDepositPaise() { return limitOf('CASH_269SS'); }, // 269SS/269T: this much or more is refused
+};
 
 const inr = (p: number): string => `Rs ${(p / RUPEE).toLocaleString('en-IN')}`;
 const refuse = (code: string, section: string, msg: string): never => {
@@ -33,11 +38,18 @@ export function checkCashReceipt(i: { ownerId: string; customerId: string; booki
     `Cash for this one booking would reach ${inr(event + i.amountPaise)}. A business cannot take ${inr(CASH_LIMITS.receiptPaise)} or more in cash for one event`);
 }
 
-/** A cash payment out to one vendor or person. `alreadyPaidToday` is what the same payee already got in cash that day. */
-export function checkCashExpense(i: { amountPaise: number; alreadyPaidTodayPaise?: number; what?: string }): void {
+/**
+ * A cash payment out to one vendor or person. `alreadyPaidToday` is what the same payee already got in cash that day.
+ * Above the limit the expense is not deductible unless a rule-6DD exception applies (no bank in the village, payment on a bank
+ * holiday and so on), so it is allowed only with a written reason. Returns the reason to keep on the record, or null.
+ */
+export function checkCashExpense(i: { amountPaise: number; alreadyPaidTodayPaise?: number; what?: string; reason?: unknown }): string | null {
   const total = i.amountPaise + (i.alreadyPaidTodayPaise ?? 0);
-  if (total > CASH_LIMITS.expensePaise) refuse('CASH_LIMIT_40A3', '40A(3)',
-    `${i.what ?? 'Cash paid'} to one person would total ${inr(total)} in a day, above the ${inr(CASH_LIMITS.expensePaise)} limit, and the expense would not be allowed in your tax`);
+  if (total <= CASH_LIMITS.expensePaise) return null;
+  const reason = typeof i.reason === 'string' ? i.reason.trim() : '';
+  if (reason.length < 5) throw new HttpError(422, 'CASH_REASON_NEEDED',
+    `${i.what ?? 'Cash paid'} to one person would total ${inr(total)} in a day, above ${inr(CASH_LIMITS.expensePaise)}. The expense is not allowed in your tax unless an exception in rule 6DD applies (Income-tax Act, section 40A(3)). Pay by UPI or bank transfer, or write the reason this payment falls under an exception.`);
+  return reason.slice(0, 300);
 }
 
 /** Taking or repaying a loan or deposit in cash. */
