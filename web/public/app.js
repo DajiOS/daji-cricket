@@ -14,8 +14,12 @@ const store = {
 
 // colour theme: ?theme= in the address or the admin picker; remembered in this browser
 const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', 'Pitch green & gold', '#0b2e23', '#d3b26a'], ['navy', 'Navy & brass', '#0e192d', '#c8a96b'], ['ivory', 'Ivory & emerald', '#f6f2e9', '#0f3d2e'], ['pearl', 'White, red & green', '#ffffff', '#b3261e'], ['rose-onyx', 'Onyx & rose gold', '#0b0909', '#d9a08e'], ['rose-plum', 'Plum & rose gold', '#150d14', '#e0a9a0'], ['rose-wine', 'Wine & rose gold', '#1c0a10', '#e8b09c'], ['rose-slate', 'Slate & rose gold', '#101417', '#dfa592'], ['slate-gold', 'Slate & gold', '#101417', '#c9a96b'], ['slate-black', 'Slate-black & gold', '#0a0d0f', '#c9a96b'], ['onyx-slate', 'Onyx & gold (slate glow)', '#0a0c0b', '#c9a96b']];
-function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; document.documentElement.setAttribute('data-theme', t); if (save) store.set('daji.theme', t); }
+/** Light pages use the emerald logo; the dark ones keep the gold. */
+function swapLogos() { const light = document.documentElement.getAttribute('data-theme') === 'ivory'; for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
+try { matchMedia('(min-width:1021px)').addEventListener('change', swapLogos); } catch { /* older browser: logo stays as loaded */ }
+function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; document.documentElement.setAttribute('data-theme', t); swapLogos(); if (save) store.set('daji.theme', t); }
 try { const q = new URLSearchParams(location.search).get('theme'); if (window.parent === window) applyTheme(q || store.get('daji.theme'), !!q); } catch { /* keep the default */ }
+swapLogos();
 const state = {
   config: null, grounds: [], ground: null, date: null, slots: [], sel: [],
   token: store.get('daji.token'), user: null, creditPaise: 0, useCredit: false, loading: false,
@@ -335,7 +339,7 @@ function renderAuth() {
   // each nav bar gets its own fresh elements, because the buttons carry click handlers
   for (const el of $$('#authlinks')) { clear(el); el.append(...buildAuthItems()); }
   for (const el of $$('#profile-slot')) clear(el); // the profile button now takes the place of the Sign in button
-  for (const el of $$('[data-navclone]')) { clear(el); el.append(h('a', { href: '#top', 'data-home': true, onclick: goHome }, 'Home'), ...buildAuthItems()); }
+  for (const el of $$('[data-navclone]')) { clear(el); el.append(h('a', { href: '#top', 'data-home': true, onclick: goHome }, 'Home'), h('a', { href: '#book', 'data-jump': 'book' }, 'Reserve'), ...buildAuthItems()); }
 }
 function buildAuthItems() {
   const u = state.user;
@@ -486,7 +490,7 @@ function fillStatic() {
     $('#ct-open-sub').textContent = [seasonal ? `Summer. Winter (Nov–Feb): ${g0.winterOpenTime} – ${clock(g0.winterCloseTime)}.` : '', g0.closedDays && g0.closedDays.length ? `Closed on ${g0.closedDays.map((d) => DAY_FULL[d] + 's').join(' and ')}.` : 'Every day.', g0.eveningSurchargePaise > 0 ? `Floodlights from ${g0.eveningFrom}.` : ''].filter(Boolean).join(' ');
   } else { $('#ct-open').textContent = ''; $('#ct-open-sub').textContent = ''; }
   $('#tagline').textContent = c.tagline;
-  $('#foot-l').textContent = `© Daji Cricket Ground  ·  ${c.tagline}`;
+  $('#foot-l').textContent = `© Daji Cricket Ground & Daji Sports  ·  ${c.tagline}`;
   $('#foot-r').textContent = `${c.contact.email}  ·  dajicricket.com`;
   // grounds
   const list = clear($('#grounds-list'));
@@ -1589,6 +1593,7 @@ function openTerms() {
         'A full refund or full credit is offered when the cancellation is the ground\'s doing: weather or ground condition, a tournament that does not go ahead, or a ground-side problem. A part refund may be offered where the booking is cancelled because of the customer, for example breaking the ground rules.',
         'Nothing is paid out or credited until you choose. Refunds go back to the original payment method and may take 5 to 7 working days to show.'),
       sec('Weather and play', 'If rain stops play before it starts, the ground may cancel and you will be offered a full refund or credit. Play stopped part-way is not refunded unless the ground says so.'),
+      sec('Safety and liability', 'Cricket carries a risk of injury and you play at your own risk. The full terms of use, ground rules, limits on liability and grievance officer are on the Legal notices page (legal.html). By booking you accept them.'),
       sec('Contact', `Questions about a booking: ${contact.name || 'the ground'}${contact.phone ? ' on ' + formatPhone(contact.phone) : ''}.`)),
     h('button', { class: 'btn ghost block', type: 'button', style: 'margin-top:12px', onclick: () => closeModal() }, 'Close')]);
 }
