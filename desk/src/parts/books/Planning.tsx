@@ -1,7 +1,7 @@
 // Cash flow, budget against actual, GST summary and fixed assets.
 import { useState } from 'react';
 import { post, del, inr, fmtDate, thisMonth, useApi, qs } from '../../lib';
-import { Field, Chip, ErrorBox, Loading, Icon } from '../../ui';
+import { Field, Chip, ErrorBox, Loading, Icon, DateInput } from '../../ui';
 import { Grid, Money, GRow, Section, Note, ExportBar, useAct, monthName } from './kit';
 import { BudgetDialog, AssetDialog, DisposeDialog } from './dialogs';
 
@@ -59,8 +59,8 @@ export function Gst() {
   return (
     <Section title="GST summary" aside={<ExportBar path={() => path} name={() => 'gst-summary'} />}>
       <div className="form-grid" style={{ marginBottom: 6 }}>
-        <Field label="From"><input className="inp" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
-        <Field label="To"><input className="inp" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
+        <Field label="From"><DateInput className="inp" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
+        <Field label="To"><DateInput className="inp" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
       </div>
       <Note>Leave the dates empty for the financial year so far.</Note>
       {e ? <ErrorBox msg={e} /> : !g ? <Loading h={200} /> : <>

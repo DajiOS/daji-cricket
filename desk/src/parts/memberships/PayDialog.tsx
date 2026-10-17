@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { post, inr, toPaise, rupees, formatPhone, fmtDate, todayISO, addDaysISO } from '../../lib';
-import { Modal, Field, ErrorBox, NameField, useToast } from '../../ui';
+import { Modal, Field, ErrorBox, NameField, useToast, DateInput } from '../../ui';
 import { METHODS, needsRef, errText, type Member, type Plan } from './shared';
 
 /** Sell a new membership (no `member`) or renew an existing one. One form, one payment. */
@@ -54,7 +54,7 @@ export default function PayDialog({ plans, member, onClose, onDone }: { plans: P
               {choices.map((p) => <option key={p.id} value={p.id}>{p.name} · {inr(p.pricePaise)} · {p.durationDays} days{p.active ? '' : ' (off)'}</option>)}
             </select>
           </Field>
-          {!member && <Field label="Starts on"><input className="inp" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></Field>}
+          {!member && <Field label="Starts on"><DateInput className="inp" value={start} onChange={(e) => setStart(e.target.value)} /></Field>}
           <Field label="Amount received (₹)" hint={plan && amountText !== rupees(plan.pricePaise) ? `Plan price is ${inr(plan.pricePaise)}` : undefined}>
             <input className="inp" inputMode="decimal" value={amountText} onChange={(e) => setAmount(e.target.value)} />
           </Field>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApi, post, del, inr, toPaise, fmtDate, todayISO } from '../../lib';
-import { Table, Chip, Modal, Field, ErrorBox, Loading, Confirm, useToast, useForm } from '../../ui';
+import { Table, Chip, Modal, Field, ErrorBox, Loading, Confirm, useToast, useForm, DateInput } from '../../ui';
 import { PAY, KIND_LABEL, KIND_TONE, monthName, type Adjustment, type PayStaff } from './common';
 
 export function AdjustmentsTab({ month, locked, onChanged }: { month: string; locked: boolean; onChanged: () => void }) {
@@ -52,7 +52,7 @@ function AdjustmentForm({ month, onClose, onSaved }: { month: string; onClose: (
         <Field label="Staff"><select className="inp" {...f.bind('staffId')}><option value="">Choose</option>{staff?.items.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         <Field label="Type"><select className="inp" {...f.bind('kind')}><option value="advance">Advance (recovered from this month's pay)</option><option value="deduction">Deduction (fine, damage)</option><option value="bonus">Bonus (added to pay)</option></select></Field>
         <Field label="Amount (rupees)"><input className="inp" inputMode="decimal" {...f.bind('amount')} /></Field>
-        <Field label="Date given"><input className="inp" type="date" {...f.bind('givenOn')} /></Field>
+        <Field label="Date given"><DateInput className="inp" {...f.bind('givenOn')} /></Field>
         <Field label="Note" full><input className="inp" {...f.bind('note')} placeholder="Reason" /></Field>
       </div>
       <ErrorBox msg={err} />

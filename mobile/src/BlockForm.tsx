@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { api } from './api';
-import { Btn, Chip, Field, NameFields, splitName, s } from './ui';
+import { Btn, Chip, Field, NameFields, splitName, s, DateField } from './ui';
 import { inr } from './theme';
 
 interface Ground { id: string; name: string; active: boolean }
@@ -52,8 +52,8 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
       <Text style={s.muted}>For a custom programme agreed with the customer. One booking is made for each day and the agreed total is shared across the days. The first day's advance must be received now.</Text>
       <Text style={[s.muted, { marginTop: 10 }]}>Ground</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{grounds.map((g) => <Chip key={g.id} label={g.name} on={groundId === g.id} onPress={() => setGroundId(g.id)} />)}</View>
-      <Field label="First day (YYYY-MM-DD)" value={from} onChangeText={(v) => { setFrom(v); if (to < v) setTo(v); }} />
-      <Field label="Last day (YYYY-MM-DD)" value={to} onChangeText={setTo} />
+      <DateField label="First day" value={from} onChange={(v) => { setFrom(v); if (v && to < v) setTo(v); }} />
+      <DateField label="Last day" value={to} onChange={setTo} />
       <Text style={s.muted}>From</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>{HOURS.map((h) => <Chip key={h} label={lab(h)} on={start === h} onPress={() => { setStart(h); if (end <= h) setEnd(h + 1); }} />)}</ScrollView>
       <Text style={s.muted}>Until</Text>

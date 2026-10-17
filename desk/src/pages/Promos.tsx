@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PageHead, Stat, Table, Chip, Field, Modal, Loading, ErrorBox, Filters, useToast } from '../ui';
+import { PageHead, Stat, Table, Chip, Field, Modal, Loading, ErrorBox, Filters, useToast, DateInput } from '../ui';
 import { useApi, post, inr, fmtDate } from '../lib';
 import { errText } from '../parts/admin/common';
 
@@ -44,8 +44,8 @@ function NewCodes({ onClose, onDone }: { onClose: () => void; onDone: (codes: st
         <Field label={f.kind === 'percent' ? 'Percent off' : 'Rupees off'}><input className="inp" type="number" min={1} value={f.value} onChange={set('value')} /></Field>
         {f.kind === 'percent' && <Field label="Largest discount in rupees"><input className="inp" type="number" min={0} placeholder="No cap" value={f.cap} onChange={set('cap')} /></Field>}
         <Field label="Smallest booking in rupees"><input className="inp" type="number" min={0} placeholder="No minimum" value={f.min} onChange={set('min')} /></Field>
-        <Field label="Valid from"><input className="inp" type="date" value={f.from} onChange={set('from')} /></Field>
-        <Field label="Valid until"><input className="inp" type="date" value={f.to} onChange={set('to')} /></Field>
+        <Field label="Valid from"><DateInput className="inp" value={f.from} onChange={set('from')} /></Field>
+        <Field label="Valid until"><DateInput className="inp" value={f.to} onChange={set('to')} /></Field>
         <Field label="Note" full><input className="inp" maxLength={80} placeholder="For yourself, for example Diwali weekend" value={f.label} onChange={set('label')} /></Field>
       </div>
       <div style={{ marginTop: 12 }}><ErrorBox msg={err} /></div>

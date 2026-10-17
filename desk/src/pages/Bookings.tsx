@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSession } from '../App';
-import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Status, Icon, Filters, Modal, useToast } from '../ui';
+import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Status, Icon, Filters, Modal, useToast, DateInput } from '../ui';
 import { useApi, api, post, go, inr, fmtDay, fmtDateTime, formatPhone, can, qs, todayISO, addDaysISO } from '../lib';
 import { type Booking, type Page, BookingChip, METHOD_LABEL, PAY_STATUS, STATUS_LABEL, errText, timeRange, whatOf } from '../parts/dash/common';
 import { BookingDetail } from '../parts/dash/Detail';
@@ -86,8 +86,8 @@ function List({ version, preset }: { version: number; preset: string }) {
               <option value="">Any status</option>{Object.entries(STATUS_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
             <select className="inp" aria-label="Ground" value={groundId} onChange={set(setGroundId)}>
               <option value="">All grounds</option>{(grounds?.items || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
-            {view === 'list' && <><input className="inp" type="date" aria-label="From date" value={from} onChange={set(setFrom)} />
-            <input className="inp" type="date" aria-label="To date" value={to} onChange={set(setTo)} /></>}
+            {view === 'list' && <><DateInput className="inp" aria-label="From date" value={from} onChange={set(setFrom)} />
+            <DateInput className="inp" aria-label="To date" value={to} onChange={set(setTo)} /></>}
           </div>
         </Filters>
       </div>

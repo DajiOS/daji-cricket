@@ -1454,3 +1454,11 @@ html.splash-on .kn .k{animation-play-state:paused}
 @media(max-width:700px){.slot{min-height:56px}}
 html:not([data-embed]):not([data-embed-section]) #view-home #book .slot{height:auto;min-height:clamp(42px,5.6vh,52px)}
 .chip2{max-width:100%}
+
+/* Indian-style dates: dd/mm/yyyy box with a calendar button (see dateinput.js). */
+.dx{position:relative;display:inline-block;vertical-align:middle;max-width:100%}.dx-block{display:block}
+.dx .dx-t{width:100%;box-sizing:border-box;padding-right:34px}
+.dx .dx-n{position:absolute!important;left:0;bottom:0;width:1px!important;height:1px!important;min-height:0!important;min-width:0!important;opacity:0;pointer-events:none;border:0;padding:0}
+.dx .dx-b{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:26px;height:26px;display:grid;place-items:center;border:0;background:none;color:inherit;opacity:.7;cursor:pointer;border-radius:6px}
+.dx .dx-b:hover{opacity:1}.dx .dx-t:disabled+.dx-b{opacity:.3;cursor:default}
+.dx .dx-t.dx-bad{border-color:#c0392b!important}

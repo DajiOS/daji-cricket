@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
-import { Badge, Btn, Chip, Field, Loading, Section, s } from './ui';
+import { Badge, Btn, Chip, Field, Loading, Section, s, DateField } from './ui';
 import { C, niceDate } from './theme';
 
 interface Settings { razorpayEnabled: boolean; bookingsOpenFrom: string; bookingsCloseFrom: string; autoDebitEnabled: boolean; autoDebitHoursBefore: number }
@@ -44,15 +44,15 @@ export function PlatformScreen() {
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       <Section>When customers can book</Section>
       <View style={s.card}>
-        <Field label="Bookings open from (YYYY-MM-DD)" value={openFrom} onChangeText={setOpenFrom} placeholder="2026-11-14" />
+        <DateField label="Bookings open from" value={openFrom} onChange={setOpenFrom} placeholder="14/11/2026" />
         <Btn kind="outline" label="Save opening day" onPress={() => put({ bookingsOpenFrom: openFrom.trim() }, openFrom.trim() ? `Customers can book from ${niceDate(openFrom.trim())}.` : 'Bookings are open now.')} />
-        <Field label="Bookings closed from (YYYY-MM-DD)" value={closeFrom} onChangeText={setCloseFrom} placeholder="2027-06-01" />
+        <DateField label="Bookings closed from" value={closeFrom} onChange={setCloseFrom} placeholder="01/06/2027" />
         <Btn kind="outline" label="Save closing day" onPress={() => put({ bookingsCloseFrom: closeFrom.trim() }, closeFrom.trim() ? `Customers cannot book from ${niceDate(closeFrom.trim())}.` : 'No closing day.')} />
       </View>
       <Section>Close or open days</Section>
       <View style={s.card}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{SCOPES.map(([k, l]) => <Chip key={k} label={l} on={scope === k} onPress={() => setScope(k)} />)}</View>
-        <Field label="From day (YYYY-MM-DD)" value={from} onChangeText={setFrom} /><Field label="To day (leave empty for one day)" value={to} onChangeText={setTo} /><Field label="Reason (optional)" value={why} onChangeText={setWhy} autoCapitalize="sentences" />
+        <DateField label="From day" value={from} onChange={setFrom} /><DateField label="To day (leave empty for one day)" value={to} onChange={setTo} /><Field label="Reason (optional)" value={why} onChangeText={setWhy} autoCapitalize="sentences" />
         <Btn label={scope === 'all' ? 'Close everything' : `Close ${scope}`} onPress={() => mark(true)} /><Btn kind="outline" label={scope === 'all' ? 'Open everything' : `Open ${scope}`} onPress={() => mark(false)} />
       </View>
       {[...byDay.entries()].slice(0, 40).map(([d, cs]) => (<View key={d} style={s.row}><Text style={s.text}>{niceDate(d)}</Text><View style={{ flexDirection: 'row' }}>{cs.length === 3 ? <Badge tone="danger" label="Everything" /> : cs.map((c) => <Badge key={c.scope} tone="danger" label={c.scope} />)}</View></View>))}

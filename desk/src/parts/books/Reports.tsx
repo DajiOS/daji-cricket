@@ -1,7 +1,7 @@
 // The report list and one report at a time, each with period controls, print and export.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, go, inr, fmtDate, todayISO, addDaysISO, useApi } from '../../lib';
-import { Field, Icon, ErrorBox, Loading, Empty, Tabs } from '../../ui';
+import { Field, Icon, ErrorBox, Loading, Empty, Tabs, DateInput } from '../../ui';
 import { Grid, Money, GRow, ExportBar, Section, Note, monthAdd, lastDayOf, fyStart } from './kit';
 
 interface Def { id: string; name: string; sec: string; kind?: string; tab?: string; range?: boolean; basis?: boolean; compare?: boolean; pct?: boolean; fy?: boolean; asOf?: boolean; days?: number; future?: boolean; path?: (q: Q) => string; file?: string }
@@ -113,8 +113,8 @@ function Viewer({ def }: { def: Def }) {
       </div>
       <div className="card"><div className="card-pad no-print"><div className="form-grid bk-ctl">
         {def.range && <Field label="Period"><select className="inp" value={preset} onChange={(e) => applyPreset(e.target.value)}><option value="month">This month</option><option value="last">Last month</option><option value="fy">This financial year</option><option value="lastfy">Last financial year</option><option value="custom">Custom</option></select></Field>}
-        {def.range && <Field label="From"><input className="inp" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPreset('custom'); }} /></Field>}
-        {(def.range || def.asOf) && <Field label={def.asOf ? 'As of' : 'To'}><input className="inp" type="date" value={to} onChange={(e) => { setTo(e.target.value); if (def.range) setPreset('custom'); }} /></Field>}
+        {def.range && <Field label="From"><DateInput className="inp" value={from} onChange={(e) => { setFrom(e.target.value); setPreset('custom'); }} /></Field>}
+        {(def.range || def.asOf) && <Field label={def.asOf ? 'As of' : 'To'}><DateInput className="inp" value={to} onChange={(e) => { setTo(e.target.value); if (def.range) setPreset('custom'); }} /></Field>}
         {def.basis && <Field label="Basis"><select className="inp" value={basis} onChange={(e) => setBasis(e.target.value)}><option value="accrual">Accrual (sessions played)</option><option value="cash">Cash (money received)</option></select></Field>}
         {def.kind === 'ledger' && <Field label="Account"><select className="inp" value={account} onChange={(e) => setAccount(e.target.value)}><option value="">Choose an account</option>{accts.map((a) => <option key={a.code} value={a.code}>{a.name}</option>)}</select></Field>}
       </div>

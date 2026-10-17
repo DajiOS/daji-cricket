@@ -73,3 +73,18 @@ export const Avatar = ({ name, url, size = 40 }: { name: string; url?: string | 
 );
 
 export const Section = ({ children }: { children: React.ReactNode }) => <Text style={[s.eyebrow, { marginTop: 18 }]}>{children}</Text>;
+
+const showDate = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+const isoDate = (txt: string): string => {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(txt); if (!m) return '';
+  const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]), dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d ? `${m[3]}-${m[2]}-${m[1]}` : '';
+};
+const maskDate = (raw: string) => { const d = raw.replace(/\D/g, '').slice(0, 8); return d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d; };
+
+/** A day typed as dd/mm/yyyy. value and onChange use yyyy-mm-dd; onChange gets an empty string until the date is complete and real. */
+export function DateField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (iso: string) => void; placeholder?: string }) {
+  const [txt, setTxt] = React.useState(showDate(value));
+  React.useEffect(() => { if (isoDate(txt) !== value && !(txt.length > 0 && txt.length < 10)) setTxt(showDate(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (<Field label={label} value={txt} placeholder={placeholder ?? 'dd/mm/yyyy'} keyboardType="number-pad" maxLength={10} onChangeText={(v) => { const t = maskDate(v); setTxt(t); onChange(isoDate(t)); }} />);
+}

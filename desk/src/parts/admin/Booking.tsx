@@ -1,7 +1,7 @@
 // When customers can book: the open and close dates, and a calendar to switch single days off.
 import { useState } from 'react';
 import { useApi, put, post, fmtDate, todayISO, addDaysISO } from '../../lib';
-import { Loading, ErrorBox } from '../../ui';
+import { Loading, ErrorBox, DateInput } from '../../ui';
 import { Panel, Pill, errText } from './common';
 
 const SCOPES: [string, string][] = [['all', 'Everything'], ['ground', 'Ground'], ['practice', 'Practice'], ['academy', 'Academy']];
@@ -16,7 +16,7 @@ function DateRow({ label, field, value, okText, clearText }: { label: string; fi
     <div className="ad-line">
       <div><b>{label}</b></div>
       <div className="acts">
-        <input className="inp" type="date" style={{ width: 170 }} value={d} onChange={(e) => setD(e.target.value)} aria-label={label} />
+        <DateInput className="inp" style={{ width: 170 }} value={d} onChange={(e) => setD(e.target.value)} aria-label={label} />
         <button className="btn sm" onClick={() => save(d)}>Save</button>
         <button className="btn sm ghost" onClick={() => { setD(''); save(''); }}>Clear</button>
       </div>
@@ -67,8 +67,8 @@ function Calendar({ s }: { s: { bookingsOpenFrom: string | null; bookingsCloseFr
       <div className="cal">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <span key={d} className="cal-h">{d}</span>)}{cells}</div>
       <div className="hint" style={{ margin: '10px 0' }}><span className="cal-key" /> Open &nbsp; <span className="cal-key part" /> Partly closed &nbsp; <span className="cal-key off" /> Closed &nbsp; <span className="cal-key out" /> Outside the window</div>
       <div className="row">
-        <input className="inp" type="date" style={{ width: 160 }} value={a} onChange={(e) => setA(e.target.value)} aria-label="From day" /><span>to</span>
-        <input className="inp" type="date" style={{ width: 160 }} value={b} onChange={(e) => setB(e.target.value)} aria-label="To day" />
+        <DateInput className="inp" style={{ width: 160 }} value={a} onChange={(e) => setA(e.target.value)} aria-label="From day" /><span>to</span>
+        <DateInput className="inp" style={{ width: 160 }} value={b} onChange={(e) => setB(e.target.value)} aria-label="To day" />
         <input className="inp" style={{ width: 200 }} maxLength={100} placeholder="Reason (optional)" value={why} onChange={(e) => setWhy(e.target.value)} />
         <button className="btn sm" onClick={() => range(true)}>Close these days</button><button className="btn sm ghost" onClick={() => range(false)}>Open these days</button>
       </div>

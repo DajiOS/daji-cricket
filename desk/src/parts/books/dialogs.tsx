@@ -1,7 +1,7 @@
 // Dialogs for adding and changing accounting records.
 import { useState, useRef, useEffect } from 'react';
 import { api, post, put, patch, del, sendFile, download, toPaise, todayISO, addDaysISO, inr, fmtDate } from '../../lib';
-import { Field, useForm, useToast, Loading, Empty, Modal } from '../../ui';
+import { Field, useForm, useToast, Loading, Empty, Modal, DateInput } from '../../ui';
 import { FormModal, CatSelect, type Account, type Category, Money, monthName } from './kit';
 
 const bad = (m: string): never => { throw new Error(m); };
@@ -17,7 +17,7 @@ export function AddTxnDialog({ accounts, cats, onClose, done }: { accounts: Acco
       <div className="form-grid">
         <Field label="Account"><select className="inp" {...f.bind('accountId')}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
         <Field label="Type"><select className="inp" {...f.bind('dir')}><option value="out">Money out (spent)</option><option value="in">Money in (received)</option></select></Field>
-        <Field label="Date"><input className="inp" type="date" max={addDaysISO(todayISO(), 1)} {...f.bind('date')} /></Field>
+        <Field label="Date"><DateInput className="inp" max={addDaysISO(todayISO(), 1)} {...f.bind('date')} /></Field>
         <Field label="Amount (₹)"><input className="inp" inputMode="decimal" placeholder="2500.00" {...f.bind('amount')} /></Field>
         <Field label="Description" full><input className="inp" placeholder="What was it for?" {...f.bind('description')} /></Field>
         <Field label="Category" full><CatSelect cats={cats} value={f.v.categoryId} onChange={(v) => f.setV((s) => ({ ...s, categoryId: v }))} blank="Decide later" /></Field>
@@ -37,7 +37,7 @@ export function TransferDialog({ accounts, onClose, done }: { accounts: Account[
       <div className="form-grid">
         <Field label="From"><select className="inp" {...f.bind('from')}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
         <Field label="To"><select className="inp" {...f.bind('to')}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
-        <Field label="Date"><input className="inp" type="date" max={todayISO()} {...f.bind('date')} /></Field>
+        <Field label="Date"><DateInput className="inp" max={todayISO()} {...f.bind('date')} /></Field>
         <Field label="Amount (₹)"><input className="inp" inputMode="decimal" placeholder="5000" {...f.bind('amount')} /></Field>
         <Field label="Note" full><input className="inp" placeholder="Optional" {...f.bind('note')} /></Field>
       </div>
@@ -58,7 +58,7 @@ export function AccountDialog({ onClose, done }: { onClose: () => void; done: ()
         <Field label="Bank (optional)"><input className="inp" placeholder="HDFC Bank" {...f.bind('bankName')} /></Field>
         <Field label="Last 4 digits (optional)"><input className="inp" maxLength={4} placeholder="1234" {...f.bind('last4')} /></Field>
         <Field label="Opening balance (₹)" hint={f.v.kind === 'card' || f.v.kind === 'loan' ? 'Enter what is owed as a minus number, for example -25000.' : 'What was in the account on the date below.'}><input className="inp" inputMode="decimal" placeholder="0" {...f.bind('opening')} /></Field>
-        <Field label="Opening balance date"><input className="inp" type="date" {...f.bind('openingDate')} /></Field>
+        <Field label="Opening balance date"><DateInput className="inp" {...f.bind('openingDate')} /></Field>
       </div>
     </FormModal>
   );
@@ -139,8 +139,8 @@ export function RecDialog({ accounts, cats, onClose, done }: { accounts: Account
         <Field label="What is it?"><input className="inp" placeholder="Ground rent" {...f.bind('description')} /></Field>
         <Field label="Amount (₹)"><input className="inp" inputMode="decimal" placeholder="25000" {...f.bind('amount')} /></Field>
         <Field label="How often"><select className="inp" {...f.bind('frequency')}><option value="monthly">Every month</option><option value="weekly">Every week</option><option value="quarterly">Every 3 months</option><option value="yearly">Every year</option></select></Field>
-        <Field label="First date" hint="Dates in the past are posted straight away."><input className="inp" type="date" {...f.bind('startDate')} /></Field>
-        <Field label="Last date (optional)"><input className="inp" type="date" {...f.bind('endDate')} /></Field>
+        <Field label="First date" hint="Dates in the past are posted straight away."><DateInput className="inp" {...f.bind('startDate')} /></Field>
+        <Field label="Last date (optional)"><DateInput className="inp" {...f.bind('endDate')} /></Field>
         <Field label="Category"><CatSelect cats={cats} value={f.v.categoryId} onChange={(v) => f.setV((s) => ({ ...s, categoryId: v }))} blank="Decide later" /></Field>
       </div>
     </FormModal>
@@ -160,7 +160,7 @@ export function JournalDialog({ onClose, done }: { onClose: () => void; done: ()
       await post('/api/accounting/journals', { date: v.date, memo: v.memo.trim(), lines: ls }); done();
     }}>
       <div className="form-grid">
-        <Field label="Date"><input className="inp" type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></Field>
+        <Field label="Date"><DateInput className="inp" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></Field>
         <Field label="Memo"><input className="inp" placeholder="What is this adjustment?" value={v.memo} onChange={(e) => setV({ ...v, memo: e.target.value })} /></Field>
       </div>
       <div className="bk-jl-head"><span>Account</span><span>Debit ₹</span><span>Credit ₹</span></div>
@@ -209,7 +209,7 @@ export function AssetDialog({ onClose, done }: { onClose: () => void; done: () =
         <Field label="Name" full><input className="inp" placeholder="Bowling machine" {...f.bind('name')} /></Field>
         <Field label="Cost (₹)"><input className="inp" inputMode="decimal" placeholder="120000" {...f.bind('cost')} /></Field>
         <Field label="Value left at the end (₹)"><input className="inp" inputMode="decimal" placeholder="0" {...f.bind('salvage')} /></Field>
-        <Field label="Bought on"><input className="inp" type="date" max={todayISO()} {...f.bind('date')} /></Field>
+        <Field label="Bought on"><DateInput className="inp" max={todayISO()} {...f.bind('date')} /></Field>
         <Field label="Useful life (months)" hint="60 months is five years."><input className="inp" inputMode="numeric" {...f.bind('life')} /></Field>
       </div>
     </FormModal>
@@ -218,6 +218,6 @@ export function AssetDialog({ onClose, done }: { onClose: () => void; done: () =
 
 export function DisposeDialog({ a, onClose, done }: { a: any; onClose: () => void; done: () => void }) {
   const f = useForm({ on: todayISO() });
-  return <FormModal title="Sold or scrapped" lede={`${a.name}: depreciation stops after this date.`} onClose={onClose} onSubmit={async () => { await post(`/api/accounting/assets/${a.id}/dispose`, { disposedOn: f.v.on }); done(); }}><Field label="Date"><input className="inp" type="date" max={todayISO()} {...f.bind('on')} /></Field></FormModal>;
+  return <FormModal title="Sold or scrapped" lede={`${a.name}: depreciation stops after this date.`} onClose={onClose} onSubmit={async () => { await post(`/api/accounting/assets/${a.id}/dispose`, { disposedOn: f.v.on }); done(); }}><Field label="Date"><DateInput className="inp" max={todayISO()} {...f.bind('on')} /></Field></FormModal>;
 }
 export { monthName };
