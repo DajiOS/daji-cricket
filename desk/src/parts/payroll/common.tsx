@@ -3,17 +3,19 @@ import { Icon, type Tone } from '../../ui';
 
 export const PAY = '/api/accounting/payroll';
 
-export interface PayStaff { id: string; name: string; role: string; phone: string | null; payType: 'monthly' | 'daily'; ratePaise: number; joinedOn: string; leftOn: string | null; active: boolean; notes: string | null }
+export interface PayStaff { id: string; name: string; role: string; phone: string | null; payType: 'monthly' | 'daily'; ratePaise: number; joinedOn: string; leftOn: string | null; active: boolean; notes: string | null; pf: boolean; esi: boolean; pt: boolean; tds: boolean; tdsFixedPaise: number; uan: string | null; esicNo: string | null; pan: string | null }
 export type AttStatus = 'present' | 'half' | 'absent' | 'leave';
 export interface Line {
   id: string | null; staffId: string; staffName: string; staffRole: string; payType: string; ratePaise: number; daysInMonth: number;
   present: number; half: number; absent: number; leave: number; unmarked: number; paidDays: number;
   grossPaise: number; bonusPaise: number; advancePaise: number; deductionPaise: number; netPaise: number; shortfallPaise: number;
   paidOn: string | null; paidMethod: string | null; paidRef: string | null; paidAt: number | null;
+  pfEmployeePaise: number; pfEmployerPaise: number; pfAdminPaise: number; esiEmployeePaise: number; esiEmployerPaise: number; ptPaise: number; tdsPaise: number;
 }
 export interface Summary {
   headcount: number; grossPaise: number; bonusPaise: number; advancePaise: number; deductionPaise: number; netPaise: number; paidPaise: number; outstandingPaise: number;
   paidCount: number; unmarkedDays: number; presentDays: number; absentDays: number; leaveDays: number; shortfallPaise: number;
+  pfPaise: number; pfEmployerPaise: number; esiPaise: number; esiEmployerPaise: number; ptPaise: number; tdsPaise: number;
 }
 export interface Run { month: string; status: 'open' | 'final'; locked: boolean; finalisedAt: number | null; lines: Line[]; summary: Summary }
 export interface Adjustment { id: string; staffId: string; staffName: string; kind: 'advance' | 'deduction' | 'bonus'; amountPaise: number; givenOn: string; month: string; note: string | null }

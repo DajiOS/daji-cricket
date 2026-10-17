@@ -7,7 +7,7 @@ import type { Ctx, Reply } from '../http.ts';
 import { U, page, ownerOrFail } from './helpers.ts';
 import { HttpError, forbidden } from '../errors.ts';
 import { audit, SYSTEM } from '../audit.ts';
-import { hasPermission } from '../auth.ts';
+import { hasPermission, requireRevenue } from '../auth.ts';
 import { many, one, run } from '../db.ts';
 import { now } from '../clock.ts';
 import { istDate, monthRange, addDays as addDaysIst } from '../time.ts';
@@ -31,6 +31,7 @@ const A = { auth: STAFF_ROLES };
 function canRead(c: Ctx): void {
   const u = U(c);
   if (!hasPermission(u, 'view_reports') && !hasPermission(u, 'manage_accounting')) throw forbidden('This needs the "view_reports" permission');
+  requireRevenue(u);
 }
 function canWrite(c: Ctx): void {
   const u = U(c);

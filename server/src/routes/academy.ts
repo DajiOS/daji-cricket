@@ -3,7 +3,7 @@ import { audit } from '../audit.ts';
 import { getSettings, updateSettings } from '../settings.ts';
 import { Router, ok, created } from '../http.ts';
 import { U, ownerOrFail } from './helpers.ts';
-import { requirePermission } from '../auth.ts';
+import { requirePermission, requireRevenue } from '../auth.ts';
 import { listFees, raiseFees, recordPayment, getShare, setShare, shareStatement } from '../academy-fees.ts';
 import { attendanceFor, childrenOf, createStudent, getSkills, getStudent, linkGuardian, linkStudentSelf, unlinkStudentSelf, listProgress, listStudents, markAttendance, saveProgress, setPublished, setSkills, unlinkGuardian, updateStudent } from '../academy.ts';
 
@@ -51,7 +51,7 @@ export function academyRoutes(r: Router): void {
   r.post('/api/staff/academy/fees/:id/payments', (c) => { const g = gate(c); return created(recordPayment(g.actor, g.owner, c.params.id!, c.json())); }, A);
   r.get('/api/staff/academy/share', (c) => { const g = gate(c); return ok({ ...getShare(g.owner) }); }, A);
   r.put('/api/staff/academy/share', (c) => { const g = gate(c); if (g.u.role === 'staff') throw forbidden('Only the owner can set the share terms.'); return ok({ ...setShare(g.actor, g.owner, c.json()) }); }, A);
-  r.get('/api/staff/academy/share/statement', (c) => { const g = gate(c); return ok(shareStatement(g.owner, c.query.get('month'))); }, A);
+  r.get('/api/staff/academy/share/statement', (c) => { const g = gate(c); requireRevenue(g.u); return ok(shareStatement(g.owner, c.query.get('month'))); }, A);
 
   // the parent's view: only children staff have linked to this account, only published cards
   r.get('/api/me/children', (c) => ok({ items: childrenOf(U(c).id) }), { auth: ['customer'] });

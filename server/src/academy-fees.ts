@@ -1,3 +1,4 @@
+import { checkCashSingle } from './taxrules.ts';
 import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
@@ -102,6 +103,7 @@ export function recordPayment(actor: Actor, ownerId: string, feeId: string, src:
   v.done();
   const paid = one<{ s: number }>('SELECT COALESCE(SUM(amount_paise),0) s FROM academy_fee_payments WHERE fee_id = ?', feeId)!.s;
   if (paid + amount! > fee.amount_paise) throw new HttpError(409, 'OVERPAID', 'That is more than is due on this fee.');
+  checkCashSingle(mode ?? 'cash', amount!);
   run('INSERT INTO academy_fee_payments(id, owner_id, fee_id, amount_paise, mode, received_on, note, created_by, created_at) VALUES(?,?,?,?,?,?,?,?,?)',
     newId('fpy'), ownerId, feeId, amount, mode ?? 'cash', receivedOn ?? istDate(now()), note ?? null, actor.id, now());
   audit(actor, 'academy.fee_payment', 'academy_fee', feeId, { amountPaise: amount, mode: mode ?? 'cash' }, ownerId);

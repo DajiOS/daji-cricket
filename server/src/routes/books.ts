@@ -2,7 +2,7 @@ import { Router, ok, created } from '../http.ts';
 import type { Ctx, Reply } from '../http.ts';
 import { U, ownerOrFail } from './helpers.ts';
 import { HttpError, forbidden } from '../errors.ts';
-import { hasPermission } from '../auth.ts';
+import { hasPermission, requireRevenue } from '../auth.ts';
 import { accountChecks, addAttachment, attachmentCounts, autoMatch, createRecurring, deleteRecurring, listAttachments, listRecurring, matchPayment, MAX_ATTACHMENT_BYTES, readAttachment, reconciliationQueue, removeAttachment, runRecurring, unmatchPayment, updateRecurring } from '../accounting/books.ts';
 import { applyRules, createRule, deleteRule, importStatement, listImports, listRules, undoImport, updateRule, type ParsedStatement } from '../accounting/import.ts';
 import { readPdfStatement } from '../accounting/pdfstatement.ts';
@@ -15,7 +15,7 @@ const FILE = { auth: STAFF, maxBody: MAX_ATTACHMENT_BYTES + 1024 };
 
 const pdfCache = new Map<string, ParsedStatement>();
 export function booksRoutes(r: Router): void {
-  const read = (c: Ctx) => { const u = U(c); if (!hasPermission(u, 'view_reports') && !hasPermission(u, 'manage_accounting')) throw forbidden('This needs the "view_reports" permission'); return ownerOrFail(c, 'use the books'); };
+  const read = (c: Ctx) => { const u = U(c); if (!hasPermission(u, 'view_reports') && !hasPermission(u, 'manage_accounting')) throw forbidden('This needs the "view_reports" permission'); requireRevenue(u); return ownerOrFail(c, 'use the books'); };
   const write = (c: Ctx) => { const u = U(c); if (!hasPermission(u, 'manage_accounting')) throw forbidden('This needs the "manage_accounting" permission'); return { owner: ownerOrFail(c, 'use the books'), actor: { id: u.id, role: u.role } }; };
   const q = (c: Ctx, k: string): string => { const v = c.query.get(k); if (!v) throw new HttpError(400, 'VALIDATION_FAILED', `${k} is required`, { fields: [{ field: k, message: 'Required' }] }); return v; };
 

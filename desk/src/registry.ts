@@ -1,6 +1,7 @@
 // The desk's menu and routes in one place. To add a page: create src/pages/<Name>.tsx that exports a default component, then add one line to PAGES and one to NAV.
 import type { ComponentType } from 'react';
 import Dashboard from './pages/Dashboard';
+import Compliance from './pages/Compliance';
 import Bookings from './pages/Bookings';
 import Promos from './pages/Promos';
 import Tasks from './pages/Tasks';
@@ -30,6 +31,7 @@ export const SUBS: Record<string, [string, string][]> = {
   '/accounting': [['overview', 'Overview'], ['review', 'Books review'], ['reports', 'Reports'], ['reconcile', 'Reconcile'], ['recurring', 'Recurring'], ['journals', 'Journals'], ['cashflow', 'Cash flow'], ['budget', 'Budget'], ['gst', 'GST'], ['assets', 'Fixed assets'], ['close', 'Month-end'], ['setup', 'Setup']],
   '/settings': [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['backups', 'Backups'], ['people', 'People'], ['connections', 'Connections'], ['services', 'Services']],
   '/bills': [['', 'Bills'], ['vendors', 'Vendors']],
+  '/compliance': [['rules', 'Rules and review dates'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']],
   '/payroll': [['run', 'Payroll run'], ['attendance', 'Attendance'], ['advances', 'Advances and deductions'], ['staff', 'Staff']],
   '/memberships': [['', 'Members'], ['expiring', 'Expiring soon'], ['plans', 'Plans'], ['activity', 'Activity']],
   '/reminders': [['', 'Queue'], ['templates', 'Templates'], ['one', 'Send one'], ['history', 'History']],
@@ -46,7 +48,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/accounting', page: Accounting }, { path: '/transactions', page: Transactions }, { path: '/bank', page: BankImport },
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
-  { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media },
+  { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/compliance', page: Compliance },
 ];
 export const HOME = Dashboard;
 
@@ -71,12 +73,13 @@ export const NAV: NavGroup[] = [
     { to: '/bills', label: 'Bills', icon: 'billing', perm: 'manage_accounting' },
     { to: '/transactions', label: 'Transactions', icon: 'swap', perm: 'manage_accounting' },
     { to: '/bank', label: 'Bank import', icon: 'upload', perm: 'manage_accounting' },
-    { to: '/accounting', label: 'Accounting', icon: 'accounts', perm: 'view_reports' },
+    { to: '/accounting', label: 'Accounting', icon: 'accounts', perm: 'view_revenue' },
     { to: '/payroll', label: 'Staff & payroll', icon: 'payroll', ownerOnly: true },
   ] },
   { group: 'Settings', items: [
     { to: '/team', label: 'Users & Access', icon: 'shield', ownerOnly: true },
     { to: '/media', label: 'Photos & videos', icon: 'upload', ownerOnly: true },
+    { to: '/compliance', label: 'Compliance', icon: 'audit', ownerOnly: true },
     { to: '/settings', label: 'Settings', icon: 'settings', ownerOnly: true },
     { to: '/platform', label: 'Platform', icon: 'vault', superOnly: true },
   ] },
@@ -90,6 +93,7 @@ export const SUB_ICONS: Record<string, string> = {
   '/accounting:journals': 'book', '/accounting:cashflow': 'payments', '/accounting:budget': 'pie', '/accounting:gst': 'percent', '/accounting:assets': 'warehouse', '/accounting:close': 'lock', '/accounting:setup': 'settings',
   '/settings:prices': 'tag', '/settings:booking': 'calendar', '/settings:payments': 'payments', '/settings:website': 'globe', '/settings:backups': 'vault', '/settings:people': 'users', '/settings:connections': 'key', '/settings:services': 'plug',
   '/bills:': 'billing', '/bills:vendors': 'warehouse',
+  '/compliance:rules': 'audit', '/compliance:changes': 'book', '/compliance:gst': 'percent', '/compliance:terms': 'shield',
   '/payroll:run': 'payroll', '/payroll:attendance': 'clock', '/payroll:advances': 'swap', '/payroll:staff': 'users',
   '/memberships:': 'users', '/memberships:expiring': 'bell', '/memberships:plans': 'tag', '/memberships:activity': 'list',
   '/reminders:': 'inbox', '/reminders:templates': 'edit', '/reminders:one': 'chat', '/reminders:history': 'clock',

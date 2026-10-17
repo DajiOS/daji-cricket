@@ -224,3 +224,22 @@ test('a signed-off month refuses both the posting and the reversal with 409, and
   assert.ok((await h.get(`${P}/runs/${m}`, owner)).body.lines[0].paidOn, 'still paid');
   assert.equal((await txns()).length, 1);
 });
+
+test('statutory deductions come off net pay, freeze on finalise and total in the dues sheet', async () => {
+  const id = await person('Ramesh', 'monthly', 2_000_000, owner); // 20,000 a month
+  assert.equal((await h.patch(`${P}/staff/${id}`, { pf: true, esi: true, pt: true, uan: '123456789012', pan: 'abcde1234f' }, owner)).status, 200);
+  const pm = prevMonth(), dim = daysInMonth(pm);
+  const entries = Array.from({ length: dim }, (_, i) => ({ staffId: id, date: `${pm}-${String(i + 1).padStart(2, '0')}`, status: 'present' }));
+  assert.equal((await h.put(`${P}/attendance`, { entries }, owner)).status, 200);
+  const run = (await h.get(`${P}/runs/${pm}`, owner)).body;
+  const l = run.lines[0];
+  assert.equal(l.grossPaise, 2_000_000);
+  assert.equal(l.pfEmployeePaise, 180_000); assert.equal(l.esiEmployeePaise, 15_000); assert.equal(l.ptPaise, 20_000);
+  assert.equal(l.netPaise, 2_000_000 - 180_000 - 15_000 - 20_000);
+  assert.equal((await h.post(`${P}/runs/${pm}/finalise`, {}, owner)).status, 200);
+  const d = (await h.get(`${P}/statutory?month=${pm}`, owner)).body;
+  assert.equal(d.pf.employeePaise, 180_000); assert.equal(d.pt.totalPaise, 20_000);
+  assert.equal(d.esi.totalPaise, 15_000 + 65_000);
+  assert.match(d.pf.dueOn, /-15$/);
+  assert.equal((await h.patch(`${P}/staff/${id}`, { pan: 'bad' }, owner)).status, 400);
+});

@@ -22,7 +22,7 @@ const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', booking
 
 export function can(ctx: Ctx, area: Area): boolean {
   const u = ctx.user;
-  if (area === 'reports') return hasPermission(u, 'view_reports') || hasPermission(u, 'manage_accounting');
+  if (area === 'reports') return (hasPermission(u, 'view_reports') || hasPermission(u, 'manage_accounting')) && hasPermission(u, 'view_revenue');
   if (area === 'bookings') return hasPermission(u, 'manage_bookings') || hasPermission(u, 'view_reports');
   return hasPermission(u, 'view_customers');
 }
@@ -157,7 +157,7 @@ export function bookings(ctx: Ctx, a: Range & { groundId?: string | null }): Boo
   for (const x of past.byGround) { const y = g(x.groundId, x.groundName); y.played += x.sessions; y.earnedPaise += x.earnedPaise; }
   for (const x of fut.byGround) { const y = g(x.groundId, x.groundName); y.upcoming += x.bookings; y.upcomingValuePaise += x.valuePaise; }
   const s = past.summary;
-  return {
+  const out: BookingsAnswer = {
     from: a.from, to: a.to, groundId: a.groundId ?? null,
     played: { sessions: s.sessions, slots: s.slots, valuePaise: s.valuePaise, incomePaise: s.incomePaise, collectedPaise: s.collectedPaise, notCollectedPaise: s.outstandingPaise },
     noShows: { count: s.noShows, advanceKeptPaise: s.noShowKeptPaise },
@@ -165,6 +165,15 @@ export function bookings(ctx: Ctx, a: Range & { groundId?: string | null }): Boo
     upcoming: { bookings: fut.summary.bookings, slots: fut.summary.slots, valuePaise: fut.summary.valuePaise, paidPaise: fut.summary.paidPaise, toCollectPaise: fut.summary.duePaise },
     byGround: [...ground.values()].sort((x, y) => (y.earnedPaise + y.upcomingValuePaise) - (x.earnedPaise + x.upcomingValuePaise) || x.groundName.localeCompare(y.groundName)),
   };
+  if (hasPermission(ctx.user, 'view_revenue')) return out;
+  // A team member without "Can see revenue" gets the counts but no rupee figures, however the question is asked.
+  const hide = <T extends object>(o: T, keys: string[]): T => { const c = { ...o } as Record<string, unknown>; for (const k of keys) if (k in c) c[k] = null; return c as T; };
+  out.played = hide(out.played, ['valuePaise', 'incomePaise', 'collectedPaise', 'notCollectedPaise']);
+  out.noShows = hide(out.noShows, ['advanceKeptPaise']);
+  out.cancellations = hide(out.cancellations, ['refundedPaise', 'creditGivenPaise', 'advanceKeptPaise']);
+  out.upcoming = hide(out.upcoming, ['valuePaise', 'paidPaise', 'toCollectPaise']);
+  out.byGround = out.byGround.map((g) => hide(g, ['earnedPaise', 'upcomingValuePaise']));
+  return out;
 }
 
 export interface UpcomingRow { ref: string; ground: string; date: string; start: string; end: string; slots: number; status: string; totalPaise: number; paidPaise: number; toCollectPaise: number; customer?: string }

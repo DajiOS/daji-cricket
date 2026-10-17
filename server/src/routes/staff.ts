@@ -3,17 +3,17 @@ import { U, page, ownerFilter, ownerOrFail, groundInScope } from './helpers.ts';
 import { Validator } from '../input.ts';
 import { HttpError, notFound } from '../errors.ts';
 import { audit } from '../audit.ts';
-import { checkPasswordStrength, createUser, hasPermission, listStaff, requirePermission, scopeOwnerId, toUser, userRow } from '../auth.ts';
+import { checkPasswordStrength, createUser, hasPermission, listStaff, requirePermission, requireRevenue, scopeOwnerId, toUser, userRow } from '../auth.ts';
 import { one, many, run } from '../db.ts';
 import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { accessBooking, approveBooking, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
-import { createStaffBooking, parseWalkIn } from '../hold.ts';
+import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn } from '../hold.ts';
 import { cancelBooking, previewCancel } from '../cancellation.ts';
 import { createPromos, listPromos, setPromoActive } from '../promo.ts';
 import { completeManualRefund, listPayments, listRefunds, paymentHistory, paymentOr404, recordOffline, verifyUpi } from '../payments.ts';
 import { blockRange, createGround, listGrounds, toGround, unblockRange, updateGround } from '../grounds.ts';
-import { addEnquiryNote, closeEnquiry, convertEnquiry, getEnquiry, listEnquiries, sendQuotation } from '../enquiries.ts';
+import { addEnquiryNote, closeEnquiry, convertEnquiry, convertEnquiryToBlock, getEnquiry, listEnquiries, sendQuotation } from '../enquiries.ts';
 import { customerList, overview, parseRange } from '../reports.ts';
 import * as credits from '../credits.ts';
 import { listAudit } from '../audit.ts';
@@ -32,7 +32,7 @@ function perms(v: Validator, key: string): StaffPermission[] | undefined {
   return [...new Set(arr)] as StaffPermission[];
 }
 
-const needPay = (u: Parameters<typeof hasPermission>[0]): void => { if (u.role === 'staff' && !hasPermission(u, 'verify_payments') && !hasPermission(u, 'record_payments') && !hasPermission(u, 'view_reports')) throw new HttpError(403, 'FORBIDDEN', 'This needs a payments permission'); };
+const needPay = (u: Parameters<typeof hasPermission>[0]): void => { if (u.role === 'staff' && !hasPermission(u, 'verify_payments') && !hasPermission(u, 'record_payments') && !hasPermission(u, 'view_revenue')) throw new HttpError(403, 'FORBIDDEN', 'This needs a payments permission'); };
 
 export function staffRoutes(r: Router): void {
   const A = { auth: STAFF_ROLES };
@@ -55,6 +55,9 @@ export function staffRoutes(r: Router): void {
   }, A);
 
   r.post('/api/staff/bookings', (c) => created({ booking: createStaffBooking(U(c), parseWalkIn(c.json())) }), A);
+
+  // One booking per day for a run of days at one agreed total (camps, tournaments, shoots)
+  r.post('/api/staff/bookings/block', (c) => created(createStaffBlock(U(c), parseBlock(c.json()))), A);
 
   r.post('/api/staff/bookings/:id/payments', (c) => {
     const v = new Validator(c.json());
@@ -224,6 +227,7 @@ export function staffRoutes(r: Router): void {
   r.post('/api/staff/enquiries/:id/quotations', (c) => created(sendQuotation(U(c), c.params.id!, c.json())), A);
   r.post('/api/staff/enquiries/:id/close', (c) => ok(closeEnquiry(U(c), c.params.id!, c.json())), A);
   r.post('/api/staff/enquiries/:id/convert', (c) => created(convertEnquiry(U(c), c.params.id!, c.json())), A);
+  r.post('/api/staff/enquiries/:id/convert-block', (c) => created(convertEnquiryToBlock(U(c), c.params.id!, c.json())), A);
 
   // ---- customers
   r.get('/api/staff/customers', (c) => {
@@ -268,6 +272,7 @@ export function staffRoutes(r: Router): void {
   r.get('/api/staff/reports/overview', (c) => {
     const u = U(c);
     requirePermission(u, 'view_reports');
+    requireRevenue(u);
     const range = parseRange(c.query.get('from'), c.query.get('to'), c.query.get('month'));
     return ok(overview(ownerFilter(c), range));
   }, A);

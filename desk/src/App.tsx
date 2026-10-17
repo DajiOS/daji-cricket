@@ -41,7 +41,7 @@ function Shell({ route }: { route: string }) {
   const [counts, , reloadCounts] = useApi<{ count: number }>(can(s.me, 'manage_accounting') && s.ownerId ? '/api/accounting/approvals/count' : null, [route, s.ownerId]);
   const waiting = counts?.count ?? 0;
   s.refreshCounts = reloadCounts;
-  const signOut = () => { setToken(null); location.href = './'; };
+  const signOut = () => { const t = getToken(); const done = () => { setToken(null); location.href = './'; }; if (!t) return done(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + t } }).catch(() => {}).finally(done); };
   const all = NAV.flatMap((g) => g.items);
   const bottom = ['/', '/bookings', '/bills', '/approvals', '/settings'].map((to) => all.find((i) => i.to === to)).filter((i): i is NavItem => !!i && visible(i));
   const owner = s.owners.find((o) => o.id === s.ownerId);
@@ -136,8 +136,40 @@ function Shell({ route }: { route: string }) {
 }
 
 const GROUP_ICONS: Record<string, string> = { Portfolio: 'dashboard', Ground: 'ball', 'Task Management': 'tasks', 'People & Messages': 'users', 'MP13 Academy': 'grad', Finance: 'accounts', Settings: 'settings' };
+interface Terms { version: number; sha256: string; title: string; body: string; accepted: unknown }
+
+/** Team members read and accept the current terms before the desk opens. The server refuses everything else until they do. */
+function TermsGate({ terms, onDone, onSignOut }: { terms: Terms; onDone: () => void; onSignOut: () => void }) {
+  const [agree, setAgree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function accept() {
+    setBusy(true); setErr(null);
+    try { await api('/api/legal/staff-terms/accept', { method: 'POST', body: { version: terms.version, sha256: terms.sha256 } }); onDone(); }
+    catch (e: any) { setErr(e.message); setBusy(false); }
+  }
+  return (
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 }}>
+      <div className="card" style={{ maxWidth: 720, width: '100%' }}>
+        <div className="card-head"><h3>{terms.title}</h3></div>
+        <div className="card-pad">
+          <p className="small muted">Please read these terms. You need to accept them once before you can use the desk. Your acceptance is saved with the time and your device address.</p>
+          <pre style={{ whiteSpace: 'pre-wrap', font: 'inherit', maxHeight: '45vh', overflow: 'auto', padding: 12, border: '1px solid var(--line, #ddd)', borderRadius: 8 }}>{terms.body}</pre>
+          <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /><span>I accept these terms</span></label>
+          {err && <p style={{ color: '#b3261e' }}>{err}</p>}
+          <div className="row" style={{ marginTop: 12, justifyContent: 'space-between' }}>
+            <button className="btn ghost" onClick={onSignOut}>Sign out</button>
+            <button className="btn primary" disabled={!agree || busy} onClick={accept}>Accept and continue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const route = useRoute();
+  const [terms, setTerms] = useState<Terms | null>(null);
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [owners, setOwners] = useState<Owner[]>([]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
@@ -155,11 +187,16 @@ export function App() {
         const pick = list.find((o) => o.id === keep)?.id ?? list[0]?.id ?? null;
         setViewOwner(pick); setOwnerId(pick);
       } else { setOwnerId(u.ownerId ?? u.id); setOwners([{ id: u.ownerId ?? u.id, name: u.name, businessName: u.businessName }]); }
+      if (u.role === 'staff') {
+        const t = await api<Terms & { accepted: unknown }>('/api/legal/staff-terms').catch(() => null);
+        if (t && !t.accepted) setTerms(t);
+      }
       setMe(u);
     }).catch(signInPage);
   }, []);
   if (me === undefined) return <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}><Crest size={72} /></div>;
   if (!me) return null;
+  if (terms) return <TermsGate terms={terms} onDone={() => setTerms(null)} onSignOut={() => { const t = getToken(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + (t ?? '') } }).catch(() => {}).finally(() => { setToken(null); location.href = './'; }); }} />;
   const setOwner = (id: string) => { setViewOwner(id); setOwnerId(id); };
   // the key makes every page reload its data when a super admin switches business
   return (

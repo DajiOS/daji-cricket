@@ -5,6 +5,7 @@ import { HttpError, conflict, notFound } from '../errors.ts';
 import { newId } from '../ids.ts';
 import { Validator } from '../input.ts';
 import { addDays, istDate, isValidDate } from '../time.ts';
+import { statutory, STATUTORY_RULES_CHECKED } from './statutory.ts';
 import { postToLedger, removeFromLedger, type LedgerRef } from './autopost.ts';
 
 // Staff pay profiles, monthly attendance, advances and deductions, the monthly payroll run (net pay in paise),
@@ -126,6 +127,24 @@ export const ATT_STATUSES = ['present', 'half', 'absent', 'leave'] as const;
 export const ADJ_KINDS = ['advance', 'deduction', 'bonus'] as const;
 registerSchema('payroll-2', `ALTER TABLE payroll_lines ADD COLUMN ledger_txn_id TEXT;`);
 
+registerSchema('payroll-3', `
+ALTER TABLE payroll_staff ADD COLUMN pf INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_staff ADD COLUMN esi INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_staff ADD COLUMN pt INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_staff ADD COLUMN tds INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_staff ADD COLUMN tds_fixed_paise INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_staff ADD COLUMN uan TEXT;
+ALTER TABLE payroll_staff ADD COLUMN esic_no TEXT;
+ALTER TABLE payroll_staff ADD COLUMN pan TEXT;
+ALTER TABLE payroll_lines ADD COLUMN pf_employee_paise INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN pf_employer_paise INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN pf_admin_paise INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN esi_employee_paise INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN esi_employer_paise INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN pt_paise INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN tds_paise INTEGER NOT NULL DEFAULT 0;
+`);
+
 export const METHODS = ['cash', 'upi', 'bank', 'cheque', 'other'] as const;
 const MAX_PAISE = 100_000_000_00; // 10 crore rupees: a sanity limit, not a business rule
 
@@ -162,12 +181,21 @@ export function grossFor(payType: string, ratePaise: number, units2: number, dim
 
 // ------------------------------------------------------------------ staff
 
+function statFields(v: Validator) {
+  const flag = (k: string): number | undefined => { const x = v.bool(k); return x === undefined ? undefined : x ? 1 : 0; };
+  const pan = v.str('pan', { max: 10 }), uan = v.str('uan', { max: 12 }), esicNo = v.str('esicNo', { max: 17 });
+  if (pan && !/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(pan)) v.fail('pan', 'A PAN looks like ABCDE1234F');
+  if (uan && !/^\d{12}$/.test(uan)) v.fail('uan', 'A UAN is 12 digits');
+  return { pf: flag('pf'), esi: flag('esi'), pt: flag('pt'), tds: flag('tds'), tdsFixed: v.int('tdsFixedPaise', { min: 0, max: MAX_PAISE }), uan, esicNo, pan: pan?.toUpperCase() };
+}
+
 export interface PayStaff {
   id: string; name: string; role: string; phone: string | null; payType: string; ratePaise: number;
   joinedOn: string; leftOn: string | null; active: boolean; notes: string | null; createdAt: number;
+  pf: boolean; esi: boolean; pt: boolean; tds: boolean; tdsFixedPaise: number; uan: string | null; esicNo: string | null; pan: string | null;
 }
-interface StaffRow { id: string; owner_id: string; name: string; role: string; phone: string | null; pay_type: string; rate_paise: number; joined_on: string; left_on: string | null; active: number; notes: string | null; created_at: number }
-const toStaff = (r: StaffRow): PayStaff => ({ id: r.id, name: r.name, role: r.role, phone: r.phone, payType: r.pay_type, ratePaise: r.rate_paise, joinedOn: r.joined_on, leftOn: r.left_on, active: !!r.active, notes: r.notes, createdAt: r.created_at });
+interface StaffRow { id: string; owner_id: string; name: string; role: string; phone: string | null; pay_type: string; rate_paise: number; joined_on: string; left_on: string | null; active: number; notes: string | null; created_at: number; pf: number; esi: number; pt: number; tds: number; tds_fixed_paise: number; uan: string | null; esic_no: string | null; pan: string | null }
+const toStaff = (r: StaffRow): PayStaff => ({ id: r.id, name: r.name, role: r.role, phone: r.phone, payType: r.pay_type, ratePaise: r.rate_paise, joinedOn: r.joined_on, leftOn: r.left_on, active: !!r.active, notes: r.notes, createdAt: r.created_at, pf: !!r.pf, esi: !!r.esi, pt: !!r.pt, tds: !!r.tds, tdsFixedPaise: r.tds_fixed_paise, uan: r.uan, esicNo: r.esic_no, pan: r.pan });
 
 export function listStaff(ownerId: string, includeInactive = true): PayStaff[] {
   return many<StaffRow>(`SELECT * FROM payroll_staff WHERE owner_id = ? AND deleted_at IS NULL ${includeInactive ? '' : 'AND active = 1'} ORDER BY active DESC, name COLLATE NOCASE`, ownerId).map(toStaff);
@@ -185,10 +213,11 @@ export function createStaff(ownerId: string, actor: Actor, body: unknown): PaySt
   const joinedOn = v.date('joinedOn') ?? today();
   const phone = v.str('phone', { max: 20 }), notes = v.str('notes', { max: 500 });
   if (payType && !(PAY_TYPES as readonly string[]).includes(payType)) v.fail('payType', 'Must be monthly or daily');
+  const sf = statFields(v);
   v.done();
   const id = newId('pst'), t = now();
-  run(`INSERT INTO payroll_staff(id, owner_id, name, role, phone, pay_type, rate_paise, joined_on, active, notes, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?,?)`,
-    id, ownerId, name!, role, phone ?? null, payType!, rate!, joinedOn, notes ?? null, t, actor.id, t, actor.id);
+  run(`INSERT INTO payroll_staff(id, owner_id, name, role, phone, pay_type, rate_paise, joined_on, active, notes, pf, esi, pt, tds, tds_fixed_paise, uan, esic_no, pan, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    id, ownerId, name!, role, phone ?? null, payType!, rate!, joinedOn, notes ?? null, sf.pf ?? 0, sf.esi ?? 0, sf.pt ?? 0, sf.tds ?? 0, sf.tdsFixed ?? 0, sf.uan ?? null, sf.esicNo ?? null, sf.pan ?? null, t, actor.id, t, actor.id);
   audit(actor, 'payroll.staff.create', 'payroll_staff', id, { name, payType, ratePaise: rate }, ownerId);
   return toStaff(staffOr404(ownerId, id));
 }
@@ -202,6 +231,7 @@ export function updateStaff(ownerId: string, actor: Actor, id: string, body: unk
   const phone = v.str('phone', { max: 20 }), notes = v.str('notes', { max: 500 });
   const active = v.bool('active');
   if (payType && !(PAY_TYPES as readonly string[]).includes(payType)) v.fail('payType', 'Must be monthly or daily');
+  const sf = statFields(v);
   v.done();
   const b = body as Record<string, unknown>;
   const nextActive = active === undefined ? cur.active : active ? 1 : 0;
@@ -210,9 +240,10 @@ export function updateStaff(ownerId: string, actor: Actor, id: string, body: unk
   if (active === false && !nextLeft && cur.active) nextLeft = today();
   if (active === true) nextLeft = null;
   if (nextLeft && nextLeft < nextJoined) throw new HttpError(400, 'VALIDATION_FAILED', 'The last day cannot be before the joining date', { fields: [{ field: 'leftOn', message: 'Before joining date' }] });
-  run(`UPDATE payroll_staff SET name = ?, role = ?, phone = ?, pay_type = ?, rate_paise = ?, joined_on = ?, left_on = ?, active = ?, notes = ?, updated_at = ?, updated_by = ? WHERE id = ?`,
+  run(`UPDATE payroll_staff SET name = ?, role = ?, phone = ?, pay_type = ?, rate_paise = ?, joined_on = ?, left_on = ?, active = ?, notes = ?, pf = ?, esi = ?, pt = ?, tds = ?, tds_fixed_paise = ?, uan = ?, esic_no = ?, pan = ?, updated_at = ?, updated_by = ? WHERE id = ?`,
     name ?? cur.name, role ?? cur.role, b.phone === '' ? null : phone ?? cur.phone, payType ?? cur.pay_type, rate ?? cur.rate_paise, nextJoined, nextLeft, nextActive,
-    b.notes === '' ? null : notes ?? cur.notes, now(), actor.id, id);
+    b.notes === '' ? null : notes ?? cur.notes, sf.pf ?? cur.pf, sf.esi ?? cur.esi, sf.pt ?? cur.pt, sf.tds ?? cur.tds, sf.tdsFixed ?? cur.tds_fixed_paise,
+    b.uan === '' ? null : sf.uan ?? cur.uan, b.esicNo === '' ? null : sf.esicNo ?? cur.esic_no, b.pan === '' ? null : sf.pan ?? cur.pan, now(), actor.id, id);
   audit(actor, 'payroll.staff.update', 'payroll_staff', id, { changed: Object.keys(b) }, ownerId);
   return toStaff(staffOr404(ownerId, id));
 }
@@ -338,6 +369,7 @@ export interface Line {
   present: number; half: number; absent: number; leave: number; unmarked: number; paidDays: number;
   grossPaise: number; bonusPaise: number; advancePaise: number; deductionPaise: number; netPaise: number; shortfallPaise: number;
   paidOn: string | null; paidMethod: string | null; paidRef: string | null; paidAt: number | null; ledgerTxnId: string | null;
+  pfEmployeePaise: number; pfEmployerPaise: number; pfAdminPaise: number; esiEmployeePaise: number; esiEmployerPaise: number; ptPaise: number; tdsPaise: number;
 }
 
 /** Work out each person's pay for a month from attendance and adjustments (nothing is saved). */
@@ -362,29 +394,32 @@ export function computeLines(ownerId: string, month: string): Line[] {
     const units2 = c.present * 2 + c.half + (s.pay_type === 'monthly' ? c.leave * 2 : 0);
     const gross = grossFor(s.pay_type, s.rate_paise, units2, dim);
     const a = adj.get(s.id) ?? { bonus: 0, advance: 0, deduction: 0 };
-    const raw = gross + a.bonus - a.advance - a.deduction;
+    const st = statutory({ payType: s.pay_type, ratePaise: s.rate_paise, grossPaise: gross, bonusPaise: a.bonus, paidDays: units2 / 2, contractMonthlyPaise: s.pay_type === 'monthly' ? s.rate_paise : s.rate_paise * 26, pf: !!s.pf, esi: !!s.esi, pt: !!s.pt, tds: !!s.tds, tdsFixedPaise: s.tds_fixed_paise });
+    const raw = gross + a.bonus - a.advance - a.deduction - st.pfEmployeePaise - st.esiEmployeePaise - st.ptPaise - st.tdsPaise;
     return {
       id: null, staffId: s.id, staffName: s.name, staffRole: s.role, payType: s.pay_type, ratePaise: s.rate_paise, daysInMonth: dim,
       ...c, unmarked, paidDays: units2 / 2, grossPaise: gross, bonusPaise: a.bonus, advancePaise: a.advance, deductionPaise: a.deduction,
-      netPaise: Math.max(0, raw), shortfallPaise: Math.max(0, -raw), paidOn: null, paidMethod: null, paidRef: null, paidAt: null, ledgerTxnId: null,
+      netPaise: Math.max(0, raw), shortfallPaise: Math.max(0, -raw), paidOn: null, paidMethod: null, paidRef: null, paidAt: null, ledgerTxnId: null, ...st,
     };
   });
 }
 
-interface LineRow { id: string; staff_id: string; staff_name: string; staff_role: string; pay_type: string; rate_paise: number; days_in_month: number; present: number; half: number; absent: number; leave: number; unmarked: number; paid_units2: number; gross_paise: number; bonus_paise: number; advance_paise: number; deduction_paise: number; net_paise: number; shortfall_paise: number; paid_on: string | null; paid_method: string | null; paid_ref: string | null; paid_at: number | null; ledger_txn_id: string | null }
+interface LineRow { id: string; staff_id: string; staff_name: string; staff_role: string; pay_type: string; rate_paise: number; days_in_month: number; present: number; half: number; absent: number; leave: number; unmarked: number; paid_units2: number; gross_paise: number; bonus_paise: number; advance_paise: number; deduction_paise: number; net_paise: number; shortfall_paise: number; paid_on: string | null; paid_method: string | null; paid_ref: string | null; paid_at: number | null; ledger_txn_id: string | null; pf_employee_paise: number; pf_employer_paise: number; pf_admin_paise: number; esi_employee_paise: number; esi_employer_paise: number; pt_paise: number; tds_paise: number }
 const toLine = (r: LineRow): Line => ({
   id: r.id, staffId: r.staff_id, staffName: r.staff_name, staffRole: r.staff_role, payType: r.pay_type, ratePaise: r.rate_paise, daysInMonth: r.days_in_month,
   present: r.present, half: r.half, absent: r.absent, leave: r.leave, unmarked: r.unmarked, paidDays: r.paid_units2 / 2,
   grossPaise: r.gross_paise, bonusPaise: r.bonus_paise, advancePaise: r.advance_paise, deductionPaise: r.deduction_paise, netPaise: r.net_paise, shortfallPaise: r.shortfall_paise,
   paidOn: r.paid_on, paidMethod: r.paid_method, paidRef: r.paid_ref, paidAt: r.paid_at, ledgerTxnId: r.ledger_txn_id,
+  pfEmployeePaise: r.pf_employee_paise, pfEmployerPaise: r.pf_employer_paise, pfAdminPaise: r.pf_admin_paise, esiEmployeePaise: r.esi_employee_paise, esiEmployerPaise: r.esi_employer_paise, ptPaise: r.pt_paise, tdsPaise: r.tds_paise,
 });
 const storedLines = (runId: string): Line[] => many<LineRow>('SELECT * FROM payroll_lines WHERE run_id = ? AND deleted_at IS NULL ORDER BY staff_name COLLATE NOCASE', runId).map(toLine);
 
 export function summarise(lines: Line[]) {
-  const s = { headcount: lines.length, grossPaise: 0, bonusPaise: 0, advancePaise: 0, deductionPaise: 0, netPaise: 0, paidPaise: 0, outstandingPaise: 0, paidCount: 0, unmarkedDays: 0, presentDays: 0, absentDays: 0, leaveDays: 0, shortfallPaise: 0 };
+  const s = { headcount: lines.length, grossPaise: 0, bonusPaise: 0, advancePaise: 0, deductionPaise: 0, netPaise: 0, paidPaise: 0, outstandingPaise: 0, paidCount: 0, unmarkedDays: 0, presentDays: 0, absentDays: 0, leaveDays: 0, shortfallPaise: 0, pfPaise: 0, pfEmployerPaise: 0, esiPaise: 0, esiEmployerPaise: 0, ptPaise: 0, tdsPaise: 0 };
   for (const l of lines) {
     s.grossPaise += l.grossPaise; s.bonusPaise += l.bonusPaise; s.advancePaise += l.advancePaise; s.deductionPaise += l.deductionPaise; s.netPaise += l.netPaise; s.shortfallPaise += l.shortfallPaise;
     if (l.paidOn) { s.paidPaise += l.netPaise; s.paidCount++; } else s.outstandingPaise += l.netPaise;
+    s.pfPaise += l.pfEmployeePaise; s.pfEmployerPaise += l.pfEmployerPaise + l.pfAdminPaise; s.esiPaise += l.esiEmployeePaise; s.esiEmployerPaise += l.esiEmployerPaise; s.ptPaise += l.ptPaise; s.tdsPaise += l.tdsPaise;
     s.unmarkedDays += l.unmarked; s.presentDays += l.present + l.half / 2; s.absentDays += l.absent; s.leaveDays += l.leave;
   }
   return s;
@@ -416,10 +451,11 @@ export function finaliseRun(ownerId: string, actor: Actor, month: string) {
     const id = newId('prn'), t = now();
     run('INSERT INTO payroll_runs(id, owner_id, month, finalised_at, finalised_by, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,?)', id, ownerId, month, t, actor.id, t, actor.id, t, actor.id);
     for (const l of lines) {
-      run(`INSERT INTO payroll_lines(id, owner_id, run_id, month, staff_id, staff_name, staff_role, pay_type, rate_paise, days_in_month, present, half, absent, leave, unmarked, paid_units2, gross_paise, bonus_paise, advance_paise, deduction_paise, net_paise, shortfall_paise, created_at, created_by, updated_at, updated_by)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      run(`INSERT INTO payroll_lines(id, owner_id, run_id, month, staff_id, staff_name, staff_role, pay_type, rate_paise, days_in_month, present, half, absent, leave, unmarked, paid_units2, gross_paise, bonus_paise, advance_paise, deduction_paise, net_paise, shortfall_paise, pf_employee_paise, pf_employer_paise, pf_admin_paise, esi_employee_paise, esi_employer_paise, pt_paise, tds_paise, created_at, created_by, updated_at, updated_by)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         newId('pln'), ownerId, id, month, l.staffId, l.staffName, l.staffRole, l.payType, l.ratePaise, l.daysInMonth, l.present, l.half, l.absent, l.leave, l.unmarked, Math.round(l.paidDays * 2),
-        l.grossPaise, l.bonusPaise, l.advancePaise, l.deductionPaise, l.netPaise, l.shortfallPaise, t, actor.id, t, actor.id);
+        l.grossPaise, l.bonusPaise, l.advancePaise, l.deductionPaise, l.netPaise, l.shortfallPaise,
+        l.pfEmployeePaise, l.pfEmployerPaise, l.pfAdminPaise, l.esiEmployeePaise, l.esiEmployerPaise, l.ptPaise, l.tdsPaise, t, actor.id, t, actor.id);
     }
   });
   audit(actor, 'payroll.finalise', 'payroll_runs', null, { month }, ownerId);
@@ -490,7 +526,7 @@ export function payslip(ownerId: string, month: string, staffId: string) {
   const biz = one<{ business_name: string | null; name: string }>('SELECT business_name, name FROM users WHERE id = ?', ownerId);
   return {
     month, status: r.status, finalisedAt: r.finalisedAt, employer: biz?.business_name || biz?.name || 'Daji Cricket Ground',
-    staff: st ? { name: st.name, role: st.role, phone: st.phone, joinedOn: st.joined_on } : { name: line.staffName, role: line.staffRole, phone: null, joinedOn: null },
+    staff: st ? { name: st.name, role: st.role, phone: st.phone, joinedOn: st.joined_on, uan: st.uan, esicNo: st.esic_no, pan: st.pan } : { name: line.staffName, role: line.staffRole, phone: null, joinedOn: null, uan: null, esicNo: null, pan: null },
     line, marks, adjustments: listAdjustments(ownerId, month, staffId),
   };
 }
@@ -508,5 +544,27 @@ export function summary(ownerId: string, month: string) {
     activeStaff: listStaff(ownerId, false).length,
     previousNetPaise: prevRun ? summarise(storedLines(prevRun.id)).netPaise : null,
     allOutstandingPaise: outstandingAll,
+  };
+}
+
+// ------------------------------------------------------------------ statutory dues
+
+/** What is owed to the PF office, ESIC, the Gujarat PT office and the tax department for a month, with the usual due dates. */
+export function statutoryDues(ownerId: string, month: string) {
+  const r = getRun(ownerId, month);
+  const t = summarise(r.lines);
+  const [y, m] = month.split('-').map(Number);
+  const nx = new Date(Date.UTC(y!, m!, 1)); // first of next month
+  const ym = nx.toISOString().slice(0, 7);
+  const due = (d: number) => `${ym}-${String(d).padStart(2, '0')}`;
+  const tdsDue = m === 3 ? `${y}-04-30` : due(7); // March TDS is due on 30 April, every other month on the 7th
+  return {
+    month, status: r.status, rulesCheckedOn: STATUTORY_RULES_CHECKED,
+    pf: { employeePaise: t.pfPaise, employerPaise: t.pfEmployerPaise, totalPaise: t.pfPaise + t.pfEmployerPaise, dueOn: due(15), where: 'EPFO portal, ECR and challan' },
+    esi: { employeePaise: t.esiPaise, employerPaise: t.esiEmployerPaise, totalPaise: t.esiPaise + t.esiEmployerPaise, dueOn: due(15), where: 'ESIC portal' },
+    pt: { totalPaise: t.ptPaise, dueOn: due(15), where: 'Gujarat Professional Tax (GSTN-linked portal)' },
+    tds: { totalPaise: t.tdsPaise, dueOn: tdsDue, where: 'TRACES / Income Tax challan 281 (code 92B)' },
+    lines: r.lines.map((l) => ({ staffId: l.staffId, name: l.staffName, pfEmployeePaise: l.pfEmployeePaise, pfEmployerPaise: l.pfEmployerPaise + l.pfAdminPaise, esiEmployeePaise: l.esiEmployeePaise, esiEmployerPaise: l.esiEmployerPaise, ptPaise: l.ptPaise, tdsPaise: l.tdsPaise })),
+    note: r.status === 'final' ? null : 'Month still open: these figures can change until you finalise.',
   };
 }

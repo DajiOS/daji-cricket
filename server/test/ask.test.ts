@@ -335,7 +335,7 @@ test('only signed-in staff can ask, and each person is limited to what they may 
   assert.match(money.body.error.message, /view_reports/);
   assert.equal((await ask('how many bookings last week', sc.staff)).status, 200);
   assert.equal((await ask('how many new customers this month', sc.staff)).status, 200);
-  perms(['view_reports']);
+  perms(['view_reports', 'view_revenue']);
   assert.equal((await ask('revenue this month', sc.staff)).status, 200);
   assert.equal((await ask('how many bookings last week', sc.staff)).status, 200);
   const cust = await ask('how many new customers this month', sc.staff);
@@ -395,7 +395,7 @@ test('the examples shown to a person depend on what they may ask', async () => {
   const all = (await h.get('/api/staff/ask/examples', sc.owner)).body;
   assert.ok(all.items.length >= 10);
   assert.equal(all.claudeEnabled, false);
-  perms(['view_reports']);
+  perms(['view_reports', 'view_revenue']);
   const some = (await h.get('/api/staff/ask/examples', sc.staff)).body.items as string[];
   assert.ok(some.some((s) => /revenue/.test(s)));
   assert.ok(!some.some((s) => /new customers/.test(s)));

@@ -35,7 +35,7 @@ export interface Harness {
 }
 
 export async function startHarness(env: Record<string, string> = {}): Promise<Harness> {
-  const cfg = loadConfig({ PUBLIC_URL: 'http://localhost:4000', RATE_LIMIT: 'off', LOG: 'off', DEMO_MODE: 'on', ...env });
+  const cfg = loadConfig({ PUBLIC_URL: 'http://localhost:4000', RATE_LIMIT: 'off', REQUIRE_STAFF_TERMS: 'off', LOG: 'off', DEMO_MODE: 'on', ...env });
   setNow(T0);
   openDb(':memory:');
   seedDemo(cfg);

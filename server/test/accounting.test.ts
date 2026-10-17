@@ -458,11 +458,11 @@ test('only people with the right permission can see or change the books', async 
   for (const p of paths) assert.equal((await h.get(p, staff)).status, 403, `staff without permission: ${p}`);
 
   const perms = (list: string[]) => run('UPDATE users SET permissions = ? WHERE email = ?', JSON.stringify(list), DEMO_ACCOUNTS.staff1.email);
-  perms(['view_reports']);
+  perms(['view_reports', 'view_revenue']);
   for (const p of paths) assert.equal((await h.get(p, staff)).status, 200, `view_reports can read ${p}`);
   assert.equal((await h.post('/api/accounting/accounts', { kind: 'cash', name: 'Sneaky' }, staff)).status, 403, 'but cannot change anything');
   assert.equal((await h.patch('/api/accounting/settings', { gstPercent: 5 }, staff)).status, 403);
-  perms(['manage_accounting']);
+  perms(['manage_accounting', 'view_revenue']);
   assert.equal((await h.post('/api/accounting/accounts', { kind: 'cash', name: 'Cash drawer' }, staff)).status, 201, 'manage_accounting can');
   assert.equal((await get('/api/accounting/accounts')).body.items.length, 1, 'staff work on their employer\'s books');
 });

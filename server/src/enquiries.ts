@@ -9,7 +9,7 @@ import { getGroundOr404 } from './grounds.ts';
 import { hasPermission, requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
 import { notify, sendAlert } from './notifications.ts';
 import { getSettings } from './settings.ts';
-import { createStaffBooking, parseWalkIn } from './hold.ts';
+import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn } from './hold.ts';
 import { isClosedDate } from './closures.ts';
 
 interface EnquiryRow {
@@ -164,6 +164,35 @@ export function closeEnquiry(user: UserRow, id: string, body: unknown): Enquiry 
     audit({ id: user.id, role: user.role }, 'enquiry.close', 'enquiry', id, { reason }, r.owner_id);
   });
   return getEnquiry(user, id);
+}
+
+/**
+ * A custom programme over several days (a camp, a tournament, a shoot): the enquiry becomes one booking per day for one agreed
+ * total, entered by staff on the web desk or the app. Same rules as the single booking: the first day's advance must be received.
+ */
+export function convertEnquiryToBlock(user: UserRow, id: string, body: unknown): Enquiry {
+  const r = access(user, id, true);
+  open(r);
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const quotationId = typeof b.quotationId === 'string' ? b.quotationId : undefined;
+  let total = b.totalPaise;
+  if (quotationId) {
+    const q = one<{ amount_paise: number; status: string }>('SELECT amount_paise, status FROM quotations WHERE id = ? AND enquiry_id = ?', quotationId, id);
+    if (!q) throw notFound('Quotation not found');
+    if (q.status === 'declined' || q.status === 'expired') throw new HttpError(409, 'BAD_STATE', `That quotation is ${q.status}`);
+    total = q.amount_paise;
+  }
+  const input = parseBlock({ ...b, totalPaise: total, groundId: b.groundId ?? r.ground_id, customer: { name: r.name, phone: r.phone, email: r.email ?? undefined } });
+  return tx(() => {
+    const out = createStaffBlock(user, { ...input, enquiryId: id, customerId: r.customer_id ?? undefined });
+    const first = out.bookings[0]!;
+    run("UPDATE enquiries SET status = 'converted', booking_id = ?, updated_at = ? WHERE id = ?", first.id, now(), id);
+    addNote(id, user.id, 'status', `${r.status} → converted to a ${out.series.days}-day block (${first.ref})`);
+    if (quotationId) run("UPDATE quotations SET status = 'accepted' WHERE id = ?", quotationId);
+    audit({ id: user.id, role: user.role } as Actor, 'enquiry.convert_block', 'enquiry', id, { bookingId: first.id, days: out.series.days }, r.owner_id);
+    notify(first.customerId, 'enquiry_converted', { ref: first.ref, ground: first.groundName, startAt: first.startAt }, first.id);
+    return getEnquiry(user, id);
+  });
 }
 
 /** Turns an enquiry into a confirmed booking at the quoted price (staff records the advance, like a walk-in). */

@@ -9,8 +9,8 @@ after(async () => { await h.close(); });
 beforeEach(async () => {
   h.reset();
   owner = await h.login('owner1'); owner2 = await h.login('owner2'); cust = await h.login('customer'); staff = await h.login('staff1'); admin = await h.login('admin');
-  run('UPDATE users SET permissions = ? WHERE email = ?', JSON.stringify(['manage_accounting']), DEMO_ACCOUNTS.staff1.email);
-  const r = await h.post('/api/staff/team', { name: 'Second Clerk', email: 'clerk2@daji.test', password: 'Clerk2@12345', permissions: ['manage_accounting'] }, owner);
+  run('UPDATE users SET permissions = ? WHERE email = ?', JSON.stringify(['manage_accounting', 'view_revenue']), DEMO_ACCOUNTS.staff1.email);
+  const r = await h.post('/api/staff/team', { name: 'Second Clerk', email: 'clerk2@daji.test', password: 'Clerk2@12345', permissions: ['manage_accounting', 'view_revenue'] }, owner);
   assert.equal(r.status, 201, JSON.stringify(r.body));
   staff2 = (await h.post('/api/auth/login', { email: 'clerk2@daji.test', password: 'Clerk2@12345' })).body.token;
 });
@@ -48,7 +48,7 @@ test('permissions: customers and staff without manage_accounting are refused; vi
   run('UPDATE users SET permissions = ? WHERE email = ?', JSON.stringify(['manage_bookings']), DEMO_ACCOUNTS.staff1.email);
   assert.equal((await h.get('/api/accounting/bills', staff)).status, 403);
   assert.equal((await h.get('/api/accounting/approvals/count', staff)).status, 403);
-  run('UPDATE users SET permissions = ? WHERE email = ?', JSON.stringify(['view_reports']), DEMO_ACCOUNTS.staff1.email);
+  run('UPDATE users SET permissions = ? WHERE email = ?', JSON.stringify(['view_reports', 'view_revenue']), DEMO_ACCOUNTS.staff1.email);
   assert.equal((await h.get('/api/accounting/bills', staff)).status, 200);
   assert.equal((await h.post('/api/accounting/bills', { vendorId: v, billDate: dayFromNow(0), dueDate: dayFromNow(1), amountPaise: 100 }, staff)).status, 403);
   assert.equal((await h.get('/api/accounting/bills', admin)).status, 400, 'the admin must say which owner');

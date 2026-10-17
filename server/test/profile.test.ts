@@ -54,6 +54,6 @@ test('an Admin made from the preset has fewer rights than the owner', async () =
   const t = adm.body.token;
   assert.equal((await h.post('/api/staff/promos', { code: 'NOPE10', kind: 'flat', value: 100 }, t)).status, 403); // promo codes stay with the owner
   assert.equal((await h.get('/api/staff/team', t)).status, 403); // so does the team
-  assert.equal((await h.get('/api/accounting/reports/pnl?month=2026-10', t)).status, 200); // reading reports is allowed
+  assert.equal((await h.get('/api/accounting/reports/pnl?month=2026-10', t)).status, 403); // revenue is hidden unless the owner switches it on
   assert.equal((await h.post('/api/accounting/journals', { date: '2026-10-01', memo: 'x', lines: [] }, t)).status, 403); // changing the books is not
 });

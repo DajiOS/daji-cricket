@@ -5,7 +5,7 @@ import { errText } from '../parts/admin/common';
 
 interface Member { id: string; name: string; email: string | null; phone: string | null; active: boolean; permissions: string[] }
 interface TeamData { items: Member[]; allPermissions: string[]; presets: Record<string, { title: string; permissions: string[] }> }
-const words = (p: string) => p.replace(/_/g, ' ');
+const words = (p: string) => (p === 'view_revenue' ? 'Can see revenue' : p.replace(/_/g, ' '));
 
 function AddMember({ presets, onClose, onDone }: { presets: TeamData['presets']; onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState({ name: '', email: '', phone: '', password: '', preset: Object.keys(presets)[0] || '' });

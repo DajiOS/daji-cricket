@@ -189,6 +189,8 @@ function setUser(auth) {
   renderAuth();
 }
 function signOut(silent) {
+  // tell the server first, so the token stops working everywhere (a 401 means it already has)
+  if (state.token && !silent) { try { fetch(API + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + state.token }, keepalive: true }).catch(() => {}); } catch { /* offline: the token still expires */ } }
   state.token = null; state.user = null; state.creditPaise = 0; state.useCredit = false;
   store.set('daji.token', null);
   renderAuth(); renderCreditRow();

@@ -4,7 +4,7 @@ import { U, ownerOrFail } from './helpers.ts';
 import { forbidden } from '../errors.ts';
 import {
   addAdjustment, attendanceSheet, checkMonth, createStaff, finaliseRun, getRun, listAdjustments, listRuns, listStaff, markPaid, parseAttendance,
-  payslip, removeAdjustment, reopenRun, setAttendance, summary, unmarkPaid, updateStaff,
+  payslip, removeAdjustment, statutoryDues, reopenRun, setAttendance, summary, unmarkPaid, updateStaff,
 } from '../accounting/payroll.ts';
 import { istDate } from '../time.ts';
 import { now } from '../clock.ts';
@@ -39,5 +39,6 @@ export function payrollRoutes(r: Router): void {
   r.post(`${P}/runs/:month/lines/:id/pay`, (c) => { const g = guard(c); return ok(markPaid(g.owner, g.actor, c.params.month!, c.params.id!, c.json())); }, A);
   r.del(`${P}/runs/:month/lines/:id/pay`, (c) => { const g = guard(c); return ok(unmarkPaid(g.owner, g.actor, c.params.month!, c.params.id!)); }, A);
   r.get(`${P}/payslip`, (c) => { const g = guard(c); return ok(payslip(g.owner, month(c), c.query.get('staffId') ?? '')); }, A);
+  r.get(`${P}/statutory`, (c) => { const g = guard(c); return ok(statutoryDues(g.owner, month(c))); }, A);
   r.get(`${P}/summary`, (c) => { const g = guard(c); return ok(summary(g.owner, month(c))); }, A);
 }

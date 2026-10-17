@@ -45,11 +45,40 @@ export function verifyPassword(pw: string, stored: string | null): boolean {
 
 // ---- tokens (HS256 JWT) ----
 const b64u = (b: Buffer | string) => Buffer.from(b).toString('base64url');
-export interface TokenPayload { sub: string; role: Role; tv: number; iat: number; exp: number }
+export interface TokenPayload { sub: string; role: Role; tv: number; iat: number; exp: number; jti?: string }
+
+// Signing out is enforced here, not just in the browser: the token's id goes on a revoked list until the token would have expired anyway.
+registerSchema('revoked-tokens-1', `
+CREATE TABLE revoked_tokens (
+  jti TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  revoked_at INTEGER NOT NULL
+);
+CREATE INDEX ix_revoked_tokens_exp ON revoked_tokens(expires_at);
+`);
+
+/** Revokes the token in an Authorization header. Returns false if it was not a valid token. Old tokens with no id are cut off by bumping the user's token version. */
+export function revokeToken(cfg: Config, header: string | undefined): boolean {
+  if (!header?.startsWith('Bearer ')) return false;
+  const p = verifyToken(cfg, header.slice(7).trim());
+  if (!p) return false;
+  const who = userRow(p.sub);
+  if (!who || who.token_version !== p.tv) return true; // already dead: nothing to revoke, and an old token cannot sign anyone out
+  const t = now();
+  run('DELETE FROM revoked_tokens WHERE expires_at < ?', Math.floor(t / 1000));
+  if (p.jti) run('INSERT OR IGNORE INTO revoked_tokens(jti, user_id, expires_at, revoked_at) VALUES(?,?,?,?)', p.jti, p.sub, p.exp, t);
+  else run('UPDATE users SET token_version = token_version + 1 WHERE id = ?', p.sub);
+  return true;
+}
+/** Signs the person out of every device. */
+export function revokeAllTokens(userId: string): void {
+  run('UPDATE users SET token_version = token_version + 1, updated_at = ? WHERE id = ?', now(), userId);
+}
 
 export function signToken(cfg: Config, u: { id: string; role: Role; token_version: number }): string {
   const iat = Math.floor(now() / 1000);
-  const body: TokenPayload = { sub: u.id, role: u.role, tv: u.token_version, iat, exp: iat + cfg.jwtTtlDays * 86400 };
+  const body: TokenPayload = { sub: u.id, role: u.role, tv: u.token_version, iat, exp: iat + cfg.jwtTtlDays * 86400, jti: randomBytes(12).toString('base64url') };
   const head = b64u(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const pl = b64u(JSON.stringify(body));
   const sig = createHmac('sha256', cfg.jwtSecret).update(`${head}.${pl}`).digest('base64url');
@@ -146,9 +175,9 @@ export function login(cfg: Config, identifier: string, password: string, code?: 
   const lockKey = identifier.trim().toLowerCase().slice(0, 120);
   lockCheck(lockKey);
   const found = candidatesFor(identifier);
-  let r = found[0];
-  for (const c of found) if (c.password_hash && verifyPassword(password, c.password_hash)) { r = c; break; }
-  const ok = verifyPassword(password, r?.password_hash ?? DUMMY);
+  let r = found[0], ok = false;
+  for (const c of found) if (c.password_hash && verifyPassword(password, c.password_hash)) { r = c; ok = true; break; }
+  if (!ok && !found.some((c) => c.password_hash)) verifyPassword(password, DUMMY); // same time whether or not the account exists
   if (!r || !ok || !r.password_hash) { lockFail(lockKey); throw new HttpError(401, 'INVALID_LOGIN', 'Email, mobile number or password is not right'); }
   if (!r.active) throw new HttpError(403, 'ACCOUNT_DISABLED', 'This account has been disabled');
   if (mfaEnabled(r.id)) {
@@ -166,6 +195,7 @@ export function authenticate(cfg: Config, header: string | undefined): UserRow |
   if (!p) return null;
   const r = userRow(p.sub);
   if (!r || !r.active || r.token_version !== p.tv) return null;
+  if (p.jti && one('SELECT 1 FROM revoked_tokens WHERE jti = ?', p.jti)) return null;
   return r;
 }
 
@@ -174,6 +204,14 @@ export function hasPermission(u: UserRow, perm: StaffPermission): boolean {
   if (u.role === 'super_admin' || u.role === 'owner') return true;
   if (u.role !== 'staff') return false;
   return (JSON.parse(u.permissions || '[]') as string[]).includes(perm);
+}
+/**
+ * Revenue, profit, the books and the money reports. A team member sees none of it unless the owner has switched on
+ * "Can see revenue" for them, whatever else they are allowed to do.
+ */
+export const canSeeRevenue = (u: UserRow): boolean => hasPermission(u, 'view_revenue');
+export function requireRevenue(u: UserRow): void {
+  if (!canSeeRevenue(u)) throw forbidden('Revenue is hidden from your login. Ask the owner to switch on "Can see revenue".');
 }
 export function requirePermission(u: UserRow, perm: StaffPermission): void {
   if (!hasPermission(u, perm)) throw forbidden(`This needs the "${perm}" permission`);

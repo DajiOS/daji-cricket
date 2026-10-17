@@ -32,7 +32,7 @@ export default function Memberships({ sub }: { sub: string }) {
         <Stat label="Active members" value={stats ? stats.active + stats.expiring : '—'} foot={stats ? `${stats.total} on record` : undefined} />
         <Stat label="Expiring in 14 days" value={stats ? stats.expiring : '—'} foot={stats && stats.expiring ? 'Call them to renew' : 'Nobody due'} />
         <Stat label="Expired" value={stats ? stats.expired : '—'} foot="Can be renewed any time" />
-        <Stat label="Revenue this month" value={stats ? inr(stats.revenueMonthPaise) : '—'} foot={stats ? `${stats.salesThisMonth} sold, ${stats.renewalsThisMonth} renewed` : undefined} />
+        <Stat label="Revenue this month" value={stats ? (stats.revenueMonthPaise == null ? 'Hidden' : inr(stats.revenueMonthPaise)) : '—'} foot={stats ? `${stats.salesThisMonth} sold, ${stats.renewalsThisMonth} renewed` : undefined} />
       </div>
       <Tabs<Tab> value={tab} onChange={setTab} label="Sections" items={[['members', 'Members'], ['expiring', 'Expiring soon'], ['plans', 'Plans'], ['activity', 'Activity']]} />
       {tab === 'members' && <MembersTab plans={plans?.items ?? []} rev={rev} onOpen={setOpenId} />}
