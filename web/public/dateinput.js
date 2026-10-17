@@ -13,7 +13,7 @@
   const CAL = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
 
   function upgrade(n) {
-    if (n.dataset.dx) return; n.dataset.dx = '1';
+    if (n.dataset.dx || n.hasAttribute('data-native')) return; n.dataset.dx = '1'; // data-native: a calendar button that never shows its text, like the day picker on the booking page
     const cs = getComputedStyle(n), block = cs.display === 'block' || cs.display === 'flex', w = n.offsetWidth;
     const wrap = document.createElement('span'); wrap.className = 'dx' + (block ? ' dx-block' : '');
     const t = document.createElement('input'); t.type = 'text'; t.inputMode = 'numeric'; t.autocomplete = 'off'; t.maxLength = 10;
