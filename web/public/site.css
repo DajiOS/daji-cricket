@@ -1268,3 +1268,15 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after
 @media (min-width:1021px){
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand{margin:0 22px 0 auto}
 }
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home{position:relative}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand{position:absolute;top:18px;right:calc(var(--split) + clamp(28px,3vw,56px));margin:0;left:auto;z-index:5}
+}
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home>.wrap,
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav{position:static}
+}
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home>.wrap,
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav{position:static}
+}
