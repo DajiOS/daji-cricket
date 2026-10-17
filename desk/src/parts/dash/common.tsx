@@ -162,7 +162,7 @@ export function RefundList({ refunds, canPay, onChanged }: { refunds: RefundItem
       {refunds.map((r) => {
         const auto = r.mode === 'gateway', done = r.status === 'done';
         const how = auto ? 'Back to the customer\'s card or UPI through Razorpay, automatically' : (BYHAND[r.paymentMethod || ''] || 'Pay it back by hand');
-        const state = done ? 'Paid back' : !r.approvedAt ? 'Waiting for the super admin to authorise' : auto ? 'Authorised, being sent to Razorpay' : 'Authorised, ready to pay';
+        const state = done ? 'Paid back' : !r.approvedAt ? 'Waiting for the super admin (Bookings, Refund approvals)' : auto ? 'Authorised, being sent to Razorpay' : 'Authorised, ready to pay';
         return (
           <div className="card card-pad stack" style={{ gap: 6 }} key={r.id}>
             <div className="row" style={{ justifyContent: 'space-between' }}><b>{inr(r.amountPaise)}</b><Chip tone={done ? 'good' : r.approvedAt ? 'info' : 'warn'}>{state}</Chip></div>

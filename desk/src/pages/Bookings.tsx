@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSession } from '../App';
-import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Status, Icon, Filters, useToast } from '../ui';
+import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Status, Icon, Filters, Modal, useToast } from '../ui';
 import { useApi, api, post, go, inr, fmtDay, fmtDateTime, formatPhone, can, qs, todayISO, addDaysISO } from '../lib';
 import { type Booking, type Page, BookingChip, METHOD_LABEL, PAY_STATUS, STATUS_LABEL, errText, timeRange, whatOf } from '../parts/dash/common';
 import { BookingDetail } from '../parts/dash/Detail';
@@ -8,8 +8,9 @@ import { NewBooking } from '../parts/dash/NewBooking';
 import { BlockBooking } from '../parts/dash/BlockBooking';
 import { DayView } from '../parts/dash/DayView';
 import { MonthCalendar, ViewToggle, useView } from '../parts/dash/BookingCalendar';
+import { RefundApprovals } from '../parts/admin/Refunds';
 
-type Tab = 'list' | 'day' | 'approvals' | 'payments';
+type Tab = 'list' | 'day' | 'approvals' | 'payments' | 'refunds';
 const SECTIONS = ['day', 'approvals', 'payments'];
 const PAGE = 25;
 
@@ -20,28 +21,37 @@ export default function Bookings({ sub }: { sub: string }) {
   const bump = () => setVersion((v) => v + 1);
   const key = sub.split('/')[0] || '';
   const filterPreset = key === 'review' ? 'review' : key === 'choosing' ? 'choosing' : '';
-  const tab: Tab = key === 'day' ? 'day' : key === 'approvals' ? 'approvals' : key === 'payments' ? 'payments' : 'list';
+  const tab: Tab = key === 'day' ? 'day' : key === 'approvals' ? 'approvals' : key === 'payments' ? 'payments' : key === 'refunds' ? 'refunds' : 'list';
+  const showAdd = key === 'add';
   const showNew = key === 'new';
   const showBlock = key === 'block';
-  const openId = key && !SECTIONS.includes(key) && !['new', 'block', 'review', 'choosing'].includes(key) ? key : null;
+  const openId = key && !SECTIONS.includes(key) && !['new', 'block', 'add', 'review', 'choosing', 'refunds'].includes(key) ? key : null;
   const asDay = sub.split('/')[1] === 'day';
   const canVerify = can(me, 'verify_payments') || can(me, 'record_payments');
   const [pendingN] = useApi<Page<Booking>>('/api/staff/bookings?approval=pending&limit=1', [version]);
-  const tabs: [Tab, string][] = [['list', 'All bookings'], ['day', 'Day view'], ['approvals', `Approvals${pendingN?.total ? ` (${pendingN.total})` : ''}`], ...(canVerify ? [['payments', 'UPI to verify'] as [Tab, string]] : [])];
+  const tabs: [Tab, string][] = [['list', 'All bookings'], ['day', 'Day view'], ['approvals', `Approvals${pendingN?.total ? ` (${pendingN.total})` : ''}`], ...(canVerify ? [['payments', 'UPI to verify'] as [Tab, string]] : []), ...(me.role === 'super_admin' ? [['refunds', 'Refund approvals'] as [Tab, string]] : [])];
   const toList = () => go('/bookings');
 
   return (
     <div className="stack">
       <PageHead eyebrow="Ground" title="Bookings" lede="Every session at the ground: who is playing, what has been paid and what is still to collect.">
-        <button className="btn" onClick={() => go('/bookings/block')}><Icon name="calendar" />Multi-day booking</button>
-        <button className="btn primary" onClick={() => go('/bookings/new')}><Icon name="plus" />New booking</button>
+        <button className="btn primary" onClick={() => go('/bookings/add')}><Icon name="plus" />Add booking</button>
       </PageHead>
       <div><Tabs value={tab} onChange={(t) => go(t === 'list' ? '/bookings' : `/bookings/${t}`)} items={tabs} label="Sections" /></div>
       {tab === 'list' && <List version={version} preset={filterPreset} />}
       {tab === 'day' && <DayView version={version} onChanged={bump} />}
       {tab === 'approvals' && <Approvals version={version} onChanged={bump} />}
+      {tab === 'refunds' && <RefundApprovals />}
       {tab === 'payments' && <UpiQueue version={version} onChanged={bump} />}
       {openId && <BookingDetail id={openId} asDay={asDay} onClose={toList} onChanged={bump} />}
+      {showAdd && (
+        <Modal title="Add booking" onClose={toList}>
+          <div className="stack" style={{ gap: 10 }}>
+            <button className="card card-pad" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go('/bookings/new')}><b>Single booking</b><div className="small muted">One session on one day: a match, a net, a practice.</div></button>
+            <button className="card card-pad" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go('/bookings/block')}><b>Multi-day or tournament booking</b><div className="small muted">The same hours over several days for one agreed amount. It can also create the tournament.</div></button>
+          </div>
+        </Modal>
+      )}
       {showBlock && <BlockBooking onClose={toList} onDone={(id) => { bump(); go(`/bookings/${id}`); }} />}
       {showNew && <NewBooking onClose={toList} onDone={(id) => { bump(); go(`/bookings/${id}`); }} />}
     </div>

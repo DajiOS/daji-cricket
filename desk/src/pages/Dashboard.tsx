@@ -61,7 +61,7 @@ export default function Dashboard({ sub }: { sub: string }) {
     <div className="stack">
       <PageHead eyebrow={me.role === 'super_admin' ? 'Software owner' : me.businessName || 'Daji Cricket Ground'} title={`${greet}, ${me.name.split(' ')[0]}`}
         lede={`Here is the ground as of ${fmtDay(todayISO())}.`}>
-        {canBookings && <button className="btn primary" onClick={() => go('/bookings/new')}><Icon name="plus" />New booking</button>}
+        {canBookings && <button className="btn primary" onClick={() => go('/bookings/add')}><Icon name="plus" />Add booking</button>}
       </PageHead>
 
       {(canBookings || canMoney) && <div className="grid g4" style={canMoney ? { gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" } : undefined}>
