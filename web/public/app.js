@@ -17,7 +17,12 @@ const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', '
 /** Light pages use the emerald logo; the dark ones keep the gold. */
 function swapLogos() { const light = document.documentElement.getAttribute('data-theme') === 'ivory'; for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
 try { matchMedia('(min-width:1021px)').addEventListener('change', swapLogos); } catch { /* older browser: logo stays as loaded */ }
-function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; document.documentElement.setAttribute('data-theme', t); swapLogos(); if (save) store.set('daji.theme', t); }
+function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); } catch { /* not ready yet */ } if (save) store.set('daji.theme', t); }
+// light / dark icon at the far right of the top bar: ivory is the light look, obsidian the dark one
+const DARK_THEMES = THEMES.filter((t) => { const h = t[2].slice(1); return (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000 < 110; }).map((t) => t[0]);
+const isDarkTheme = () => DARK_THEMES.includes(document.documentElement.getAttribute('data-theme'));
+function syncThemeIcon() { const b = document.getElementById('theme-toggle'); if (!b) return; const d = isDarkTheme(); b.setAttribute('aria-label', d ? 'Switch to light theme' : 'Switch to dark theme'); b.dataset.mode = d ? 'dark' : 'light'; }
+document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#theme-toggle')) { applyTheme(isDarkTheme() ? 'ivory' : 'obsidian', true); syncThemeIcon(); } });
 try { const q = new URLSearchParams(location.search).get('theme'); if (window.parent === window) applyTheme(q || store.get('daji.theme'), !!q); } catch { /* keep the default */ }
 swapLogos();
 const state = {
@@ -2147,7 +2152,7 @@ async function renderMyDash(el) {
   };
   skip.addEventListener('click', finish);
   setTimeout(finish, 12000);
-  fetch('assets/logo.svg').then((r) => (r.ok ? r.text() : Promise.reject(new Error('logo')))).then(run).catch(finish);
+  fetch('assets/logo-brass.svg').then((r) => (r.ok ? r.text() : Promise.reject(new Error('logo')))).then(run).catch(finish);
 
   function run(text) {
     if (done) return;
@@ -2170,6 +2175,8 @@ async function renderMyDash(el) {
 
     // the stumps and bails
     const base = cy + 14 * u, sH = 30 * u, sW = 2.6 * u, gap = 4.8 * u;
+    // a soft studio shadow under the stumps; the ball gets one that follows it
+    mk('sp-floor', { left: px(cx - 22 * u), top: px(base - 1.5 * u), width: px(44 * u), height: px(3 * u) });
     mk('sp-glow', { left: px(cx - 30 * u), top: px(base - 4 * u), width: px(60 * u), height: px(8 * u) });
     const stumps = [-1, 0, 1].map((i) => mk('sp-st', { left: px(cx + i * gap - sW / 2), top: px(base - sH), width: px(sW), height: px(sH) }));
     const bails = [-0.5, 0.5].map((i) => mk('sp-bail', { left: px(cx + i * gap - gap * 0.44), top: px(base - sH - 1.2 * u), width: px(gap * 0.88), height: px(1.1 * u) }));
@@ -2210,7 +2217,7 @@ async function renderMyDash(el) {
     const W = L + 100;
     if (emblem) A(emblem, [{ opacity: 0, transform: 'scale(.92)' }, { opacity: 1, transform: 'none' }], { duration: 700, delay: W, easing: 'ease-out' });
     const len = daji.getTotalLength ? daji.getTotalLength() : 0;
-    daji.setAttribute('stroke', '#f3e1b6'); daji.setAttribute('stroke-width', '34'); daji.setAttribute('stroke-linejoin', 'round'); daji.setAttribute('stroke-linecap', 'round');
+    daji.setAttribute('stroke', '#0f3d2e'); daji.setAttribute('stroke-width', '34'); daji.setAttribute('stroke-linejoin', 'round'); daji.setAttribute('stroke-linecap', 'round');
     daji.style.strokeDasharray = len + ' ' + len;
     A(daji, [{ strokeDashoffset: len, fillOpacity: 0, strokeOpacity: 1 }, { strokeDashoffset: 0, fillOpacity: 0, strokeOpacity: 1 }], { duration: 1500, delay: W + 100, easing: 'cubic-bezier(.45,.05,.4,1)' });
     A(daji, [{ fillOpacity: 0, strokeOpacity: 1 }, { fillOpacity: 1, strokeOpacity: 0 }], { duration: 900, delay: W + 1500, composite: 'replace' });
@@ -2220,3 +2227,5 @@ async function renderMyDash(el) {
     setTimeout(finish, W + 1900 + letters.length * 55 + 700 + 700);
   }
 })();
+
+document.addEventListener('DOMContentLoaded', () => { try { syncThemeIcon(); } catch { /* ignore */ } });
