@@ -2087,43 +2087,41 @@ async function renderMyDash(el) {
 
 // Opening animation: the intro video plays the moment the site opens, then the logo shrinks and settles into the top bar.
 (function splash() {
-  const box = document.getElementById('splash'), v = document.getElementById('splash-v'), skip = document.getElementById('splash-skip'), fly = document.getElementById('splash-logo');
-  if (!box || !v) { document.documentElement.classList.remove('splash-on'); return; }
+  const box = document.getElementById('splash'), skip = document.getElementById('splash-skip'), fly = document.getElementById('splash-logo');
+  if (!box || !fly) { document.documentElement.classList.remove('splash-on'); return; }
   let seen = false;
   try { seen = sessionStorage.getItem('daji.splash') === '1'; } catch { /* private mode: just play */ }
   const framed = window.parent !== window || /[?&]embed=/.test(location.search);
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (seen || framed || reduce || (location.hash && location.hash !== '#top')) { document.documentElement.classList.remove('splash-on'); box.remove(); return; }
   const root = document.documentElement;
+  const light = root.getAttribute('data-theme') === 'ivory';
+  fly.src = light ? 'assets/logo-brass.svg' : 'assets/logo.svg';
   root.classList.add('splash-on'); box.hidden = false; window.scrollTo(0, 0);
-  // where the logo sits in the last frame of the 1920x1080 video
-  const F = { x: 173.7, y: 279.4, w: 1576.7, h: 525.8 };
   let done = false, started = false;
   const cleanup = () => { root.classList.remove('splash-on', 'splash-reveal'); box.remove(); };
-  const finish = (instant) => {
+  const finish = () => {
     if (done) return; done = true;
     try { sessionStorage.setItem('daji.splash', '1'); } catch { /* ignore */ }
     box.classList.add('out'); setTimeout(cleanup, 700);
   };
   const place = (r) => { const z = parseFloat(getComputedStyle(root).zoom) || 1; fly.style.left = r.left / z + 'px'; fly.style.top = r.top / z + 'px'; fly.style.width = r.width / z + 'px'; fly.style.height = r.height / z + 'px'; };
+  // the logo is drawn large in the middle of the screen (the artwork is about 3 to 1)
+  const centre = () => { const vw = innerWidth, vh = innerHeight, w = Math.min(vw * (vw < 700 ? 0.86 : 0.58), 820), h = w / 3; return { left: (vw - w) / 2, top: (vh - h) / 2, width: w, height: h }; };
   const landing = () => {
     if (done || started) return; started = true;
-    const vw = innerWidth, vh = innerHeight, k = Math.min(vw / 1920, vh / 1080), ox = (vw - 1920 * k) / 2, oy = (vh - 1080 * k) / 2;
     const target = [...document.querySelectorAll('.wm-nav')].find((el) => el.offsetParent !== null);
-    if (!target || !fly) { finish(); return; }
-    place({ left: ox + F.x * k, top: oy + F.y * k, width: F.w * k, height: F.h * k });
-    fly.style.opacity = '1';
+    if (!target) { finish(); return; }
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      box.classList.add('fly');                       // video fades out under the identical logo
-      fly.classList.add('move'); place(target.getBoundingClientRect());   // glide starts at once, no pause
-      // the site stays covered until the logo has landed in the nav; then the cover fades away and the page comes in
+      box.classList.add('fly');
+      fly.classList.add('move'); place(target.getBoundingClientRect());
+      // the page stays covered until the logo has landed in the top bar; then the cover fades away and the page comes in
       setTimeout(() => { root.classList.add('splash-reveal'); box.classList.add('reveal'); }, 1650);
       setTimeout(() => { done = true; try { sessionStorage.setItem('daji.splash', '1'); } catch { /* ignore */ } cleanup(); }, 1650 + 1300);
     }));
   };
-  v.addEventListener('ended', landing);
-  v.addEventListener('error', () => finish());
+  place(centre()); fly.style.opacity = '1'; fly.classList.add('draw');
   skip.addEventListener('click', () => (started ? null : finish()));
-  setTimeout(() => { if (!started) finish(); }, 12000);
-  const p = v.play(); if (p && p.catch) p.catch(() => finish());
+  setTimeout(landing, 1900);
+  setTimeout(() => { if (!started) finish(); }, 8000);
 })();
