@@ -57,7 +57,6 @@ const SEEDS = (): Seed[] => [
   { code: 'GST_INV_NO', title: 'GST invoice number of 16 characters or fewer', authority: 'CGST Rules 2017, rule 46', rule: 'The invoice number is unique in the financial year, up to 16 characters, using only letters, digits, "/" and "-".', value: `${MAX_INVOICE_NO} characters, format PREFIX/26-27/000001`, where: 'invoices.invoiceNumber', days: 180 },
   { code: 'GST_SAC', title: 'SAC code and tax split on the invoice', authority: 'CGST Rules 2017, rule 46; GST rate notifications', rule: 'A tax invoice shows the SAC code, taxable value, rate and CGST + SGST (IGST between states). The SAC and rate for ground hire should be confirmed by the owner\'s accountant.', value: `Default SAC ${DEFAULT_SAC}; rate set in the books (GST percent)`, where: 'invoices.invoiceForBooking, GST profile', days: 90 },
   { code: 'GST_RCM', title: 'Reverse-charge line on every invoice', authority: 'CGST Rules 2017, rule 46(p)', rule: 'The invoice states whether tax is payable on reverse charge.', value: '"Tax payable on reverse charge: No"', where: 'invoices.toInvoice', days: 180 },
-  { code: 'PF_EPF', title: 'Provident Fund contributions', authority: 'EPF and Miscellaneous Provisions Act, 1952', rule: 'Employee and employer pay 12% each of PF wages (ceiling Rs 15,000 a month). Due by the 15th of the next month.', value: `${PF.employeeRate * 100}% / ${PF.employerRate * 100}% up to ${inr(PF.wageCeilingPaise)}`, where: 'accounting/statutory.ts, payroll runs', days: 90 },
   { code: 'ESI', title: 'Employees\' State Insurance', authority: 'ESI Act, 1948', rule: 'Covered while monthly wages are Rs 21,000 or less. Employee 0.75%, employer 3.25%. Due by the 15th of the next month.', value: `${ESI.employeeRate * 100}% / ${ESI.employerRate * 100}% up to ${inr(ESI.coverageCeilingPaise)}`, where: 'accounting/statutory.ts, payroll runs', days: 90 },
   { code: 'PT_GUJARAT', title: 'Gujarat Professional Tax', authority: 'Gujarat State Tax on Professions, Trades, Callings and Employments Act, 1976', rule: 'Employees earning above Rs 12,000 a month pay Rs 200 a month, deducted by the employer.', value: `Nil up to ${inr(GUJARAT_PT.freeUpToPaise)}, ${inr(GUJARAT_PT.monthlyPaise)} a month above`, where: 'accounting/statutory.ts, payroll runs', days: 90 },
   { code: 'TDS_SALARY', title: 'TDS on salary', authority: 'Income-tax Act (section 192; section 392 of the Income-tax Act, 2025 from 1 April 2026)', rule: 'Tax is deducted from salary on the employee\'s estimated yearly tax. The software uses the new regime slabs; TDS is due by the 7th of the next month.', value: 'New regime slabs, standard deduction Rs 75,000, rebate up to Rs 12 lakh', where: 'accounting/statutory.ts, payroll runs', days: 90 },
@@ -71,6 +70,7 @@ const SEEDS = (): Seed[] => [
 ];
 
 function ensureSeeded(): void {
+  run("DELETE FROM compliance_items WHERE code = 'PF_EPF'"); // Provident Fund is not applicable to Daji
   const today = istDate(now());
   SEEDS().forEach((s, i) => {
     // The values and wording are refreshed from code on every start, so the register can never disagree with what is enforced.

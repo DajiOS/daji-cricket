@@ -187,7 +187,8 @@ function statFields(v: Validator) {
   const pan = v.str('pan', { max: 10 }), uan = v.str('uan', { max: 12 }), esicNo = v.str('esicNo', { max: 17 });
   if (pan && !/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(pan)) v.fail('pan', 'A PAN looks like ABCDE1234F');
   if (uan && !/^\d{12}$/.test(uan)) v.fail('uan', 'A UAN is 12 digits');
-  return { pf: flag('pf'), esi: flag('esi'), pt: flag('pt'), tds: flag('tds'), tdsFixed: v.int('tdsFixedPaise', { min: 0, max: MAX_PAISE }), uan, esicNo, pan: pan?.toUpperCase() };
+  // Provident Fund does not apply to Daji (fewer than 20 people), so it is never switched on
+  return { pf: v.bool('pf') === undefined ? undefined : 0, esi: flag('esi'), pt: flag('pt'), tds: flag('tds'), tdsFixed: v.int('tdsFixedPaise', { min: 0, max: MAX_PAISE }), uan, esicNo, pan: pan?.toUpperCase() };
 }
 
 export interface PayStaff {
@@ -564,7 +565,6 @@ export function statutoryDues(ownerId: string, month: string) {
   const tdsDue = m === 3 ? `${y}-04-30` : due(7); // March TDS is due on 30 April, every other month on the 7th
   return {
     month, status: r.status, rulesCheckedOn: STATUTORY_RULES_CHECKED,
-    pf: { employeePaise: t.pfPaise, employerPaise: t.pfEmployerPaise, totalPaise: t.pfPaise + t.pfEmployerPaise, dueOn: due(15), where: 'EPFO portal, ECR and challan' },
     esi: { employeePaise: t.esiPaise, employerPaise: t.esiEmployerPaise, totalPaise: t.esiPaise + t.esiEmployerPaise, dueOn: due(15), where: 'ESIC portal' },
     pt: { totalPaise: t.ptPaise, dueOn: due(15), where: 'Gujarat Professional Tax (GSTN-linked portal)' },
     tds: { totalPaise: t.tdsPaise, dueOn: tdsDue, where: 'TRACES / Income Tax challan 281 (code 92B)' },
