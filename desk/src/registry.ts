@@ -1,27 +1,27 @@
 // The desk's menu and routes in one place. To add a page: create src/pages/<Name>.tsx that exports a default component, then add one line to PAGES and one to NAV.
-import type { ComponentType } from 'react';
+import { lazy, type ComponentType } from 'react';
 import Dashboard from './pages/Dashboard';
-import Compliance from './pages/Compliance';
-import Bookings from './pages/Bookings';
-import Promos from './pages/Promos';
-import Tasks from './pages/Tasks';
-import Matches from './pages/Matches';
-import Contacts from './pages/Contacts';
-import Cards from './pages/Cards';
-import Academy from './pages/Academy';
-import Accounting from './pages/Accounting';
-import Transactions from './pages/Transactions';
-import BankImport from './pages/BankImport';
-import Approvals from './pages/Approvals';
-import Bills from './pages/Bills';
-import Payroll from './pages/Payroll';
-import Memberships from './pages/Memberships';
-import Tournaments from './pages/Tournaments';
-import Reminders from './pages/Reminders';
-import Team from './pages/Team';
-import Settings from './pages/Settings';
-import Platform from './pages/Platform';
-import Media from './pages/Media';
+const Compliance = lazy(() => import('./pages/Compliance'));
+const Bookings = lazy(() => import('./pages/Bookings'));
+const Promos = lazy(() => import('./pages/Promos'));
+const Tasks = lazy(() => import('./pages/Tasks'));
+const Matches = lazy(() => import('./pages/Matches'));
+const Contacts = lazy(() => import('./pages/Contacts'));
+const Cards = lazy(() => import('./pages/Cards'));
+const Academy = lazy(() => import('./pages/Academy'));
+const Accounting = lazy(() => import('./pages/Accounting'));
+const Transactions = lazy(() => import('./pages/Transactions'));
+const BankImport = lazy(() => import('./pages/BankImport'));
+const Approvals = lazy(() => import('./pages/Approvals'));
+const Bills = lazy(() => import('./pages/Bills'));
+const Payroll = lazy(() => import('./pages/Payroll'));
+const Memberships = lazy(() => import('./pages/Memberships'));
+const Tournaments = lazy(() => import('./pages/Tournaments'));
+const Reminders = lazy(() => import('./pages/Reminders'));
+const Team = lazy(() => import('./pages/Team'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Platform = lazy(() => import('./pages/Platform'));
+const Media = lazy(() => import('./pages/Media'));
 
 export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals' }
 /** The sections inside a page (the pills at its top), so the side menu can list them too. The first one is the page's own address. */

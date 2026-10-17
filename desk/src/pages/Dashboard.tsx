@@ -15,12 +15,6 @@ interface Pnl { revenue: { totalPaise: number }; netProfitPaise: number; uncateg
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const SOLD = ['confirmed', 'completed', 'no_show']; // sessions that count as booked
 
-/** The last six months as YYYY-MM, oldest first. */
-function lastMonths(n: number) {
-  const [y, m] = todayISO().split('-').map(Number);
-  return Array.from({ length: n }, (_, i) => { const d = new Date(Date.UTC(y!, m! - 1 - (n - 1 - i), 1)); return d.toISOString().slice(0, 7); });
-}
-const monthEnd = (p: string) => { const [y, m] = p.split('-').map(Number); return `${p}-${String(new Date(Date.UTC(y!, m!, 0)).getUTCDate()).padStart(2, '0')}`; };
 
 export default function Dashboard({ sub }: { sub: string }) {
   void sub;
@@ -43,9 +37,10 @@ export default function Dashboard({ sub }: { sub: string }) {
   useEffect(() => {
     if (!canReports) return;
     let live = true; setTrend(null); setTrendErr(null);
-    Promise.all(lastMonths(6).map((p) => api<Overview>(`/api/staff/reports/overview?from=${p}-01&to=${monthEnd(p)}`).then((o) => ({ p, o }))))
-      .then((rows) => {
+    api<{ items: { period: string; overview: Overview }[] }>('/api/staff/reports/overview-series?months=6')
+      .then((res) => {
         if (!live) return;
+        const rows = res.items.map((x) => ({ p: x.period, o: x.overview }));
         setTrend(rows.map(({ p, o }) => ({ period: p, billed: SOLD.reduce((a, k) => a + (o.bookings.byStatus[k]?.totalPaise || 0), 0), collected: SOLD.reduce((a, k) => a + (o.bookings.byStatus[k]?.paidPaise || 0), 0) })));
         setUtil(rows[rows.length - 1]!.o);
       }).catch((e) => live && setTrendErr(e.message));

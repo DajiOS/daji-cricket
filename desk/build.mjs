@@ -9,6 +9,7 @@ rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true 
 // desk.css = the shared sheet, then every file in styles/ (one per page area, so builders never edit the same file)
 const css = [readFileSync('styles.css', 'utf8'), ...readdirSync('styles').filter((f) => f.endsWith('.css')).sort().map((f) => readFileSync('styles/' + f, 'utf8'))].join('\n');
 writeFileSync(out + 'desk.css', css);
-const opts = { entryPoints: ['src/main.tsx'], outfile: out + 'desk.js', bundle: true, platform: 'browser', format: 'esm', target: ['es2020', 'safari15'], minify: !watch, sourcemap: false, jsx: 'automatic', logLevel: 'info', define: { 'process.env.NODE_ENV': '"production"' } };
+const opts = { entryPoints: ['src/main.tsx'], outdir: out, entryNames: 'desk', chunkNames: 'chunks/[name].[hash]', splitting: true, bundle: true, platform: 'browser', format: 'esm', target: ['es2020', 'safari15'], minify: !watch, sourcemap: false, jsx: 'automatic', logLevel: 'info', define: { 'process.env.NODE_ENV': '"production"' } };
 if (watch) { const ctx = await esbuild.context(opts); await ctx.watch(); } else { await esbuild.build(opts); }
-for (const f of readdirSync(out)) chmodSync(out + f, 0o644);
+const fix = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const f = d + e.name; if (e.isDirectory()) { chmodSync(f, 0o755); fix(f + '/'); } else chmodSync(f, 0o644); } };
+fix(out);

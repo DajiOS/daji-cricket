@@ -93,21 +93,34 @@ export function sweepReminders(): number {
 
 export interface SweepResult { expiry: ExpiryResult; creditsExpiredPaise: number; reminders: number; completed: number; refundsProcessed: number }
 
-/** Everything the scheduler does each minute. Safe to run any number of times. */
-export async function runSweeps(cfg: Config): Promise<SweepResult> {
+const logErr = (where: string) => (e: unknown) => console.error(JSON.stringify({ level: 'error', where, error: String((e as Error)?.message ?? e) }));
+
+/** The time-critical part: holds, reminders and refunds. It never waits on bank feeds or billing. */
+export async function runFastSweeps(cfg: Config): Promise<SweepResult> {
   const expiry = sweepHolds();
   const ce = credits.expireDue();
   const reminders = sweepReminders();
   const completed = sweepCompleted();
   const refunds = await processRefunds(cfg);
-  await chargeDue(cfg).catch((e) => console.error(JSON.stringify({ level: 'error', where: 'autodebit', error: String((e as Error)?.message ?? e) })));
+  return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done };
+}
+
+/** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries and the compliance check. */
+export async function runSlowSweeps(cfg: Config): Promise<void> {
+  await chargeDue(cfg).catch(logErr('autodebit'));
   runRecurring(null, null);
   runDepreciation(null, SYSTEM);
-  await runFeedSync(cfg, (e) => console.error(JSON.stringify({ level: 'error', where: 'bank-feed', error: String((e as Error)?.message ?? e) })));
-  await runAaSync(cfg, (e) => console.error(JSON.stringify({ level: 'error', where: 'account-aggregator', error: String((e as Error)?.message ?? e) })));
-  await billingDaily(cfg, SYSTEM).catch((e) => console.error(JSON.stringify({ level: 'error', where: 'billing', error: String((e as Error)?.message ?? e) })));
-  try { runCheck(); } catch (e) { console.error(JSON.stringify({ level: 'error', where: 'compliance-check', error: String((e as Error)?.message ?? e) })); }
-  return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done };
+  await runFeedSync(cfg, logErr('bank-feed'));
+  await runAaSync(cfg, logErr('account-aggregator'));
+  await billingDaily(cfg, SYSTEM).catch(logErr('billing'));
+  try { runCheck(); } catch (e) { logErr('compliance-check')(e); }
+}
+
+/** Everything the scheduler does each minute. Safe to run any number of times. */
+export async function runSweeps(cfg: Config): Promise<SweepResult> {
+  const r = await runFastSweeps(cfg);
+  await runSlowSweeps(cfg);
+  return r;
 }
 
 registerSchema('scheduler-lease-1', `CREATE TABLE scheduler_lease (name TEXT PRIMARY KEY, holder TEXT NOT NULL, until INTEGER NOT NULL);`);
@@ -122,14 +135,21 @@ export function takeLease(name: string, ttlMs: number, holder = instanceId): boo
 let timer: ReturnType<typeof setInterval> | null = null;
 export function startScheduler(cfg: Config, onError: (e: unknown) => void = () => {}): void {
   if (timer) return;
-  let running = false;
+  const busy = { fast: false, slow: false };
+  const every = cfg.sweepIntervalSeconds * 1000;
+  // Two lanes with their own lease: a slow bank feed or billing run cannot delay hold expiry, and the lease is renewed on every tick even while a run is going.
   timer = setInterval(() => {
-    if (running) return;
-    if (!takeLease('sweeps', Math.max(120_000, cfg.sweepIntervalSeconds * 3000))) return;
-    running = true;
-    try { runBackupIfDue(cfg, onError); } catch (e) { onError(e); }
-    runSweeps(cfg).catch(onError).finally(() => { running = false; });
-  }, cfg.sweepIntervalSeconds * 1000);
+    const ttl = Math.max(120_000, cfg.sweepIntervalSeconds * 3000);
+    if (takeLease('sweeps', ttl) && !busy.fast) {
+      busy.fast = true;
+      try { runBackupIfDue(cfg, onError); } catch (e) { onError(e); }
+      runFastSweeps(cfg).catch(onError).finally(() => { busy.fast = false; });
+    }
+    if (takeLease('sweeps-slow', Math.max(ttl, 600_000)) && !busy.slow) {
+      busy.slow = true;
+      runSlowSweeps(cfg).catch(onError).finally(() => { busy.slow = false; });
+    }
+  }, every);
   timer.unref();
 }
 export function stopScheduler(): void {

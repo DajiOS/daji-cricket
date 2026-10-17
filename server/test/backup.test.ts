@@ -159,3 +159,13 @@ test('a failed manual backup says so and leaves nothing behind', async () => {
   assert.equal(r.body.error.code, 'BACKUP_FAILED');
   rmSync(join(dir, 'backups'), { force: true });
 });
+
+test('media library, website media, avatars, cards and task photos are in the snapshot too', () => {
+  for (const f of ['library', 'media', 'avatars', 'cards', 'task-photos']) {
+    mkdirSync(join(dir, f), { recursive: true });
+    writeFileSync(join(dir, f, 'x.bin'), Buffer.alloc(100, 1));
+  }
+  const info = backupNow(h.cfg, 'manual');
+  for (const f of ['library', 'media', 'avatars', 'cards', 'task-photos']) assert.ok(readdirSync(join(h.cfg.backup.dir, info.name)).includes(f), f);
+  assert.ok(info.files >= 5);
+});

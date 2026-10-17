@@ -44,7 +44,7 @@ export function RunTab({ month, run, reload, onSlip }: { month: string; run: Run
             { head: 'Earned', num: true, cell: (l) => inr(l.grossPaise) },
             { head: 'Bonus', num: true, cell: (l) => l.bonusPaise ? <span className="gold">+{inr(l.bonusPaise)}</span> : <span className="muted">-</span> },
             { head: 'Advance', num: true, cell: (l) => l.advancePaise ? `-${inr(l.advancePaise)}` : <span className="muted">-</span> },
-            { head: 'PF, ESI, PT, TDS', num: true, cell: (l) => { const t = l.pfEmployeePaise + l.esiEmployeePaise + l.ptPaise + l.tdsPaise; return t ? <span title={`PF ${inr(l.pfEmployeePaise)}, ESI ${inr(l.esiEmployeePaise)}, PT ${inr(l.ptPaise)}, TDS ${inr(l.tdsPaise)}`}>-{inr(t)}</span> : <span className="muted">-</span>; } },
+            { head: 'ESI, PT, TDS', num: true, cell: (l) => { const t = l.esiEmployeePaise + l.ptPaise + l.tdsPaise; return t ? <span title={`ESI ${inr(l.esiEmployeePaise)}, PT ${inr(l.ptPaise)}, TDS ${inr(l.tdsPaise)}`}>-{inr(t)}</span> : <span className="muted">-</span>; } },
             { head: 'Deduction', num: true, cell: (l) => l.deductionPaise ? `-${inr(l.deductionPaise)}` : <span className="muted">-</span> },
             { head: 'Net pay', num: true, cell: (l) => <span className="strong">{inr(l.netPaise)}</span> },
             { head: 'Salary', cell: (l) => !final ? <Chip tone="mute">Not finalised</Chip> : l.paidOn ? <><Chip tone="good">Paid</Chip><div className="small muted">{fmtDate(l.paidOn)}, {METHOD_LABEL[l.paidMethod ?? ''] ?? l.paidMethod}{l.paidRef ? `, ${l.paidRef}` : ''}</div></> : <Chip tone="warn">Due</Chip> },

@@ -4,9 +4,10 @@ import { api } from './api';
 import type { PaymentRow, StaffBooking, User } from './types';
 import { Badge, Btn, Chip, Field, KV, Loading, s } from './ui';
 import { C, inr, niceDate } from './theme';
+import { BlockForm } from './BlockForm';
 
 const hhmm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
-type View_ = 'today' | 'upcoming' | 'approvals' | 'payments';
+type View_ = 'today' | 'upcoming' | 'approvals' | 'payments' | 'block';
 const can = (u: User, perm: string) => u.role !== 'staff' || (u.permissions ?? []).includes(perm);
 
 /** Bookings for the team: today, what is coming, approvals, and UPI payments waiting to be checked. */
@@ -22,6 +23,7 @@ export function StaffScreen({ user }: { user: User }) {
   const load = useCallback(async () => {
     setBusy(true); setErr('');
     try {
+      if (view === 'block') { setBooks([]); return; }
       if (view === 'payments') setPays((await api<{ items: PaymentRow[] }>('/api/staff/payments?status=submitted&limit=50')).items);
       else if (view === 'today') { const r = await api<{ bookings: StaffBooking[]; awaitingVerification: number; needsReview: number }>('/api/staff/today'); setBooks(r.bookings); setCounts({ awaiting: r.awaitingVerification, review: r.needsReview }); }
       else if (view === 'approvals') setBooks((await api<{ items: StaffBooking[] }>('/api/staff/bookings?approval=pending&limit=50')).items);
@@ -74,13 +76,14 @@ export function StaffScreen({ user }: { user: User }) {
   };
 
   const tabs: [View_, string][] = [['today', 'Today'], ['upcoming', 'Upcoming'], ['approvals', 'Approvals'], ['payments', 'Payments']];
+  if (can(user, 'manage_bookings')) tabs.push(['block', 'Multi-day']);
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Bookings</Text><Text style={s.h1}>{view === 'today' ? 'Today' : view === 'upcoming' ? 'Coming up' : view === 'approvals' ? 'Waiting for approval' : 'Payments to check'}</Text>
+      <Text style={s.eyebrow}>Bookings</Text><Text style={s.h1}>{view === 'today' ? 'Today' : view === 'upcoming' ? 'Coming up' : view === 'approvals' ? 'Waiting for approval' : view === 'block' ? 'Multi-day booking' : 'Payments to check'}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>{tabs.map(([id, l]) => <Chip key={id} label={l} on={view === id} onPress={() => setView(id)} />)}</ScrollView>
       {view === 'today' && (counts.awaiting > 0 || counts.review > 0) && <Text style={[s.muted, { color: C.gold, marginBottom: 8 }]}>{counts.awaiting} payment{counts.awaiting === 1 ? '' : 's'} to check · {counts.review} to review</Text>}
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
-      {view === 'payments' ? (!pays.length ? <Text style={s.muted}>Nothing waiting. All UPI payments are checked.</Text> : pays.map((p) => (
+      {view === 'block' ? <BlockForm onDone={(m) => { setNote(m); setView('upcoming'); }} /> : view === 'payments' ? (!pays.length ? <Text style={s.muted}>Nothing waiting. All UPI payments are checked.</Text> : pays.map((p) => (
         <View key={p.id} style={s.card}>
           <KV k="Amount" v={inr(p.amountPaise)} bold /><KV k="UPI reference" v={p.reference ?? 'none'} /><KV k="For" v={p.purpose} />
           {can(user, 'verify_payments') && (<><Btn label="Money received" onPress={() => run(`/api/staff/payments/${p.id}/verify`, { approve: true }, 'Payment confirmed.')} /><Btn kind="outline" label="Not received" onPress={() => run(`/api/staff/payments/${p.id}/verify`, { approve: false, reason: 'Money not found in the account' }, 'Payment rejected.')} /></>)}

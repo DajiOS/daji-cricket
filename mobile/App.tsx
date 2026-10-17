@@ -17,9 +17,12 @@ import { PlatformScreen } from './src/PlatformScreen';
 import { AccountsScreen } from './src/AccountsScreen';
 import { AcademyScreen } from './src/AcademyScreen';
 import { MatchesScreen } from './src/MatchesScreen';
-import { Avatar, Btn, Chip, Loading, s } from './src/ui';
+import { Avatar, Btn, Chip, Loading, s, refreshStyles } from './src/ui';
+import * as SecureStore from 'expo-secure-store';
+import { Intro } from './src/Intro';
+import { ThemeButton } from './src/ThemeButton';
 import { registerForPush, unregisterPush, onNotificationTap } from './src/push';
-import { C, inr } from './src/theme';
+import { C, inr, mode, setMode, type Mode } from './src/theme';
 import { ADMIN_APP } from './src/variant';
 
 // One app for everyone. What each person sees depends on who signed in:
@@ -31,7 +34,8 @@ import { ADMIN_APP } from './src/variant';
 type Tab = 'book' | 'me' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'accounts' | 'more';
 type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches';
 
-export default function App() {
+function AppInner({ theme }: { theme: Mode }) {
+  void theme; // a new value makes the whole app draw again with the new colours
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [tab, setTab] = useState<Tab>('book');
   const [hold, setHold] = useState<HoldResponse | null>(null);
@@ -61,13 +65,13 @@ export default function App() {
   const signOut = useCallback(async () => { await unregisterPush(); await serverSignOut(); await setToken(null); setViewOwner(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('book'); }, []);
 
   if (user === undefined) return <View style={s.screen}><Loading /></View>;
-  if (user === null && ADMIN_APP) return <><StatusBar style="light" /><AuthScreen admin onUser={setUser} /></>;
+  if (user === null && ADMIN_APP) return <><StatusBar style={mode === 'light' ? 'dark' : 'light'} /><AuthScreen admin onUser={setUser} /></>;
   if (user === null) {
     // Guests open straight on the booking page and only sign in when they hold a slot or open their own pages.
     const ask = () => setSignin(true);
     return (
       <View style={s.screen}>
-        <StatusBar style="light" />
+        <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
         <View style={{ flex: 1, display: signin ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
         {signin && <AuthScreen onUser={(u) => { setSignin(false); setUser(u); }} onBack={() => setSignin(false)} note="Sign in to hold your slot. Your day and time stay as you left them." />}
         {!signin && (
@@ -85,7 +89,7 @@ export default function App() {
   if (ADMIN_APP === (user.role === 'customer')) {
     return (
       <View style={[s.screen, s.pad, { paddingTop: 90 }]}>
-        <StatusBar style="light" />
+        <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
         <Text style={s.eyebrow}>{ADMIN_APP ? 'Daji Admin' : 'Daji Cricket Ground'}</Text>
         <Text style={s.h1}>{ADMIN_APP ? 'This app is for the ground team' : 'Please use the Daji Admin app'}</Text>
         <Text style={[s.muted, { marginBottom: 18 }]}>{ADMIN_APP ? 'Your account is a customer account. Book and manage your games in the Daji Cricket Ground app.' : 'Your account belongs to the ground team. Sign in to the Daji Admin app to work with bookings, tasks and accounts.'}</Text>
@@ -152,7 +156,7 @@ export default function App() {
     : [...(bookingsOk ? [['bookings', 'Bookings'] as [Tab, string]] : []), ['tasks', 'Tasks'], ...(accountsOk ? [['accounts', 'Books'] as [Tab, string]] : []), ['more', 'More']];
   return (
     <View style={s.screen}>
-      <StatusBar style="light" />
+      <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
       <View style={{ flex: 1 }}>{body}</View>
       {!hold && (
         <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: 18 }}>
@@ -163,6 +167,24 @@ export default function App() {
           ))}
         </View>
       )}
+    </View>
+  );
+}
+
+const THEME_KEY = 'daji.theme';
+/** The whole app, with the light / dark choice (remembered on this phone, applied everywhere) and the opening animation. */
+export default function App() {
+  const [m, setM] = useState<Mode>(mode);
+  const [intro, setIntro] = useState(true);
+  const [ready, setReady] = useState(false);
+  useEffect(() => { (async () => { try { const v = await SecureStore.getItemAsync(THEME_KEY); if (v === 'light' || v === 'dark') { setMode(v); refreshStyles(); setM(v); } } catch { /* keep dark */ } setReady(true); })(); }, []);
+  const flip = () => { const next: Mode = m === 'dark' ? 'light' : 'dark'; setMode(next); refreshStyles(); setM(next); SecureStore.setItemAsync(THEME_KEY, next).catch(() => {}); };
+  if (!ready) return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <AppInner theme={m} />
+      {!intro && <ThemeButton onPress={flip} />}
+      {intro && <Intro onDone={() => setIntro(false)} />}
     </View>
   );
 }

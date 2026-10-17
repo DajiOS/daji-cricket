@@ -86,6 +86,7 @@ function limited(key: string, max: number, windowMs: number): number {
   let b = buckets.get(key);
   if (!b || b.reset <= t) {
     if (buckets.size > 20000) for (const [k, v] of buckets) if (v.reset <= t) buckets.delete(k);
+    if (buckets.size > 50000) buckets.clear(); // a flood of distinct keys cannot grow memory without limit
     b = { n: 0, reset: t + windowMs };
     buckets.set(key, b);
   }
@@ -215,7 +216,7 @@ export function createApp(cfg: Config, router: Router): Server {
         if (method !== 'GET' && method !== 'HEAD') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use GET');
         // Validate any % escapes before the static layer sees the path.
         safeDecode(url.pathname);
-        const r = serveWeb(cfg, url);
+        const r = serveWeb(cfg, url, typeof req.headers['if-none-match'] === 'string' ? req.headers['if-none-match'] : undefined);
         status = r.status;
         send(res, method === 'HEAD' ? { ...r, raw: undefined, body: undefined } : r, cors, sitePolicy(cfg));
         return;

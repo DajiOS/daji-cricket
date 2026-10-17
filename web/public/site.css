@@ -1406,3 +1406,41 @@ html[data-theme] #splash::before,#splash::before{background:radial-gradient(elli
 .sp-glow{background:radial-gradient(ellipse at center,rgba(232,217,176,.35),transparent 70%)}
 .sp-logo svg{display:block}
 html #splash #splash-skip{color:#e8d9b0;border:1px solid rgba(232,217,176,.45);background:transparent;border-radius:99px;z-index:2}
+
+/* ===== Opening animation: the launch-film sequence from intro.js. The cover follows the theme (dark screen, or white for the light themes). ===== */
+html[data-theme] #splash::before,html #splash::before{background:#07090a!important;background-image:none!important;opacity:1}
+html[data-theme="ivory"] #splash::before,html[data-theme="pearl"] #splash::before{background:#fbfaf7!important}
+#splash video,#splash-logo{display:none!important}
+
+/* light / dark icon, far right of the top bar */
+.theme-toggle{flex:none;width:44px;height:44px;margin-left:10px;display:inline-flex;align-items:center;justify-content:center;background:none;border:1px solid var(--line);border-radius:var(--radius-sm);cursor:pointer;color:var(--text,currentColor)}
+.theme-toggle svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.theme-toggle .ico-moon{fill:currentColor;stroke:none}
+.theme-toggle .ico-sun{display:none}
+.theme-toggle[data-mode="dark"] .ico-sun{display:block}
+.theme-toggle[data-mode="dark"] .ico-moon{display:none}
+.theme-toggle:focus-visible{outline:2px solid var(--gold,currentColor);outline-offset:2px}
+html.splash-on .theme-toggle{visibility:hidden}
+
+
+/* ===== Motion layer (luxury.js): headlines rise into place, blocks fade up. Slow, eased and quiet. ===== */
+.kn .kw{display:inline-block;white-space:nowrap;overflow:hidden;vertical-align:top;padding-bottom:.14em;margin-bottom:-.14em}
+.kn .k{display:inline-block;animation:k-rise 1s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i) * 28ms)}
+html.splash-on .kn .k{animation-play-state:paused}
+.kin-view.kn .k{animation-play-state:paused}
+.kin-view.kn.in .k{animation-play-state:running}
+.ln > span.kn{animation:none!important}
+@keyframes k-rise{0%{opacity:0;transform:translateY(105%)}100%{opacity:1;transform:none}}
+.sm-in{opacity:0}
+.sm-in.in{animation:sm-in .9s cubic-bezier(.2,.7,.2,1) both}
+@keyframes sm-in{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:none}}
+.btn{transition:transform .16s ease,background-color .16s ease,border-color .16s ease,color .16s ease}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:scale(.985)}
+@media (prefers-reduced-motion:reduce){.sm-in{opacity:1}.kn .k{animation:none}}
+
+/* the light / dark icon sits at the far right of the screen, above everything, with its own chip so it reads on any colour */
+.theme-toggle{position:fixed;top:16px;right:max(16px,env(safe-area-inset-right,0px));margin:0;z-index:150;background:var(--bg);border-color:var(--line-strong,var(--line));box-shadow:0 6px 18px -10px rgba(0,0,0,.45);transition:transform .16s ease,border-color .16s ease}
+.theme-toggle:hover{transform:translateY(-1px)}
+.theme-toggle:active{transform:scale(1.05,.94)}
+@media (max-width:900px){.theme-toggle{top:14px;right:calc(max(16px,env(safe-area-inset-right,0px)) + 56px);width:40px;height:40px}}

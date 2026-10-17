@@ -9,7 +9,7 @@ The public pages (legal.html, privacy.html, the Terms window) are drafts written
 4. DPDP Act 2023 and Rules: notice and consent wording, breach process, children's data (academy), cross-border transfer.
 5. Payments: Razorpay merchant terms, RBI rules, UPI. We keep no card data.
 6. Sports and premises: public liability and personal accident insurance, local licence, fire and electrical safety (floodlights), municipal permission.
-7. Staff: Shops and Establishments registration, wages and PF/ESI where applicable. The software now works out PF, ESI, Gujarat PT and TDS (see accounting/statutory.ts); the CA should confirm the Gujarat PT slab (is exactly Rs 12,000 nil?), PF on basic versus gross, and TDS regime.
+7. Staff: Shops and Establishments registration, wages and ESI where applicable (Provident Fund is not applicable to Daji). The software now works out PF, ESI, Gujarat PT and TDS (see accounting/statutory.ts); the CA should confirm the Gujarat PT slab (is exactly Rs 12,000 nil?), PF on basic versus gross, and TDS regime.
 7a. Team terms (server/src/legal.ts): staff accept versioned wording; the hash, time and IP are kept. Advocate to review the wording.
 7b. India tax rules (server/src/taxrules.ts, invoices.ts): cash limits and the GST invoice. Confirm the SAC (default 997212), the GST rate and when the business must register.
 8. Messaging: WhatsApp (Meta template rules), TRAI DLT registration for SMS, consent records.

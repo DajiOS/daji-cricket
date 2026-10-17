@@ -25,7 +25,7 @@ export function StaffTab({ onChanged }: { onChanged: () => void }) {
           { head: 'Name', cell: (s) => <><span className="strong">{s.name}</span>{s.phone && <div className="small muted">{s.phone}</div>}</> },
           { head: 'Role', cell: (s) => s.role },
           { head: 'Pay', cell: (s) => <>{inr(s.ratePaise)} <span className="muted small">{s.payType === 'monthly' ? 'per month' : 'per day'}</span></> },
-          { head: 'Deducts', cell: (s) => [s.pf && 'PF', s.esi && 'ESI', s.pt && 'PT', s.tds && 'TDS'].filter(Boolean).join(', ') || <span className="muted">-</span> },
+          { head: 'Deducts', cell: (s) => [s.esi && 'ESI', s.pt && 'PT', s.tds && 'TDS'].filter(Boolean).join(', ') || <span className="muted">-</span> },
           { head: 'Joined', cell: (s) => fmtDate(s.joinedOn) },
           { head: 'Status', cell: (s) => s.active ? <Chip tone="good">Active</Chip> : <Chip tone="mute">Left {s.leftOn ? fmtDate(s.leftOn) : ''}</Chip> },
         ]} />
@@ -41,7 +41,7 @@ function StaffForm({ staff, onClose, onSaved }: { staff: PayStaff | null; onClos
     rate: staff ? rupees(staff.ratePaise) : '', joinedOn: staff?.joinedOn ?? todayISO(), notes: staff?.notes ?? '',
     uan: staff?.uan ?? '', esicNo: staff?.esicNo ?? '', pan: staff?.pan ?? '', tdsFixed: staff?.tdsFixedPaise ? rupees(staff.tdsFixedPaise) : '',
   });
-  const [flags, setFlags] = useState({ pf: staff?.pf ?? false, esi: staff?.esi ?? false, pt: staff?.pt ?? false, tds: staff?.tds ?? false });
+  const [flags, setFlags] = useState({ esi: staff?.esi ?? false, pt: staff?.pt ?? false, tds: staff?.tds ?? false });
   const flag = (k: keyof typeof flags, label: string, hint: string) => (
     <label className="row" style={{ gap: 8, alignItems: 'flex-start' }}><input type="checkbox" checked={flags[k]} onChange={(e) => setFlags({ ...flags, [k]: e.target.checked })} /><span><span className="strong">{label}</span><span className="hint" style={{ display: 'block' }}>{hint}</span></span></label>
   );
@@ -81,13 +81,11 @@ function StaffForm({ staff, onClose, onSaved }: { staff: PayStaff | null; onClos
       </div>
       <h4 style={{ margin: '18px 0 6px' }}>Statutory deductions</h4>
       <div className="form-grid">
-        {flag('pf', 'Provident Fund (PF)', '12% of pay up to 15,000 a month, matched by you. Usual once you have 20 or more people.')}
         {flag('esi', 'ESI', '0.75% from the person, 3.25% from you, while monthly pay is 21,000 or less.')}
         {flag('pt', 'Gujarat Professional Tax', '200 a month when monthly pay is above 12,000.')}
         {flag('tds', 'TDS on salary', 'Worked out on the new tax regime from the yearly pay, or fix an amount below.')}
         {flags.tds && <Field label="Fixed TDS each month (rupees)" hint="Leave empty to work it out"><input className="inp" inputMode="decimal" {...f.bind('tdsFixed')} /></Field>}
-        {flags.pf && <Field label="UAN"><input className="inp" inputMode="numeric" {...f.bind('uan')} /></Field>}
-        {flags.esi && <Field label="ESIC number"><input className="inp" {...f.bind('esicNo')} /></Field>}
+                {flags.esi && <Field label="ESIC number"><input className="inp" {...f.bind('esicNo')} /></Field>}
         {flags.tds && <Field label="PAN"><input className="inp" {...f.bind('pan')} placeholder="ABCDE1234F" /></Field>}
       </div>
       {staff && <p className="hint">A change in pay applies from the next payroll run. Months already finalised keep the figures they had.</p>}

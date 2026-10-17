@@ -4,7 +4,7 @@
     "slug": "daji-cricket-ground",
     "version": "0.2.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "backgroundColor": "#0a0c0b",
     "ios": {
       "supportsTablet": false,

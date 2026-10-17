@@ -17,7 +17,12 @@ const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', '
 /** Light pages use the emerald logo; the dark ones keep the gold. */
 function swapLogos() { const light = document.documentElement.getAttribute('data-theme') === 'ivory'; for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
 try { matchMedia('(min-width:1021px)').addEventListener('change', swapLogos); } catch { /* older browser: logo stays as loaded */ }
-function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; document.documentElement.setAttribute('data-theme', t); swapLogos(); if (save) store.set('daji.theme', t); }
+function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); } catch { /* not ready yet */ } if (save) store.set('daji.theme', t); }
+// light / dark icon at the far right of the top bar: ivory is the light look, obsidian the dark one
+const DARK_THEMES = THEMES.filter((t) => { const h = t[2].slice(1); return (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000 < 110; }).map((t) => t[0]);
+const isDarkTheme = () => DARK_THEMES.includes(document.documentElement.getAttribute('data-theme'));
+function syncThemeIcon() { const b = document.getElementById('theme-toggle'); if (!b) return; const d = isDarkTheme(); b.setAttribute('aria-label', d ? 'Switch to light theme' : 'Switch to dark theme'); b.dataset.mode = d ? 'dark' : 'light'; }
+document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#theme-toggle')) { applyTheme(isDarkTheme() ? 'ivory' : 'obsidian', true); syncThemeIcon(); } });
 try { const q = new URLSearchParams(location.search).get('theme'); if (window.parent === window) applyTheme(q || store.get('daji.theme'), !!q); } catch { /* keep the default */ }
 swapLogos();
 const state = {
@@ -2126,8 +2131,7 @@ async function renderMyDash(el) {
 
 // Opening animation: the intro video plays the moment the site opens, then the logo shrinks and settles into the top bar.
 (function splash() {
-  // Opening animation, drawn on the page (no video): three stumps rise, a ball takes the bails off and rolls up to its place in the logo,
-  // then the logo is written and filled in. It needs the logo file only; if that cannot load, the page simply opens.
+  // Opening animation (intro.js): short phrases, a 3D phone showing the booking screen, then the logo. It follows the colour theme.
   const box = document.getElementById('splash'), skip = document.getElementById('splash-skip');
   const root = document.documentElement;
   if (!box) { root.classList.remove('splash-on'); return; }
@@ -2135,88 +2139,20 @@ async function renderMyDash(el) {
   try { seen = sessionStorage.getItem('daji.splash') === '1'; } catch { /* private mode: just play */ }
   const framed = window.parent !== window || /[?&]embed=/.test(location.search);
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (seen || framed || reduce || (location.hash && location.hash !== '#top') || !box.animate) { root.classList.remove('splash-on'); box.remove(); return; }
+  if (seen || framed || reduce || (location.hash && location.hash !== '#top') || !box.animate || !window.DajiIntro) { root.classList.remove('splash-on'); box.remove(); return; }
   root.classList.add('splash-on'); box.hidden = false; window.scrollTo(0, 0);
-  const anims = []; let done = false;
-  const A = (elm, kf, opt) => { const a = elm.animate(kf, { fill: 'both', ...opt }); anims.push(a); return a; };
-  const finish = () => {
+  if (skip) skip.hidden = true; // the intro has its own Skip
+  const dark = typeof isDarkTheme === 'function' ? isDarkTheme() : true;
+  box.classList.toggle('light', !dark);
+  let done = false;
+  const end = () => {
     if (done) return; done = true;
     try { sessionStorage.setItem('daji.splash', '1'); } catch { /* ignore */ }
     root.classList.add('splash-reveal'); box.classList.add('out');
-    setTimeout(() => { anims.forEach((a) => { try { a.cancel(); } catch { /* gone */ } }); root.classList.remove('splash-on', 'splash-reveal'); box.remove(); }, 900);
+    setTimeout(() => { root.classList.remove('splash-on', 'splash-reveal'); box.remove(); }, 700);
   };
-  skip.addEventListener('click', finish);
-  setTimeout(finish, 12000);
-  fetch('assets/logo.svg').then((r) => (r.ok ? r.text() : Promise.reject(new Error('logo')))).then(run).catch(finish);
-
-  function run(text) {
-    if (done) return;
-    const scene = document.createElement('div'); scene.id = 'sp-scene'; box.prepend(scene);
-    const vw = innerWidth, vh = innerHeight, u = Math.min(vw, vh * 1.2) / 100, cx = vw / 2, cy = vh / 2;
-    const mk = (cls, css) => { const d = document.createElement('div'); d.className = cls; Object.assign(d.style, css); scene.append(d); return d; };
-    const px = (n) => n + 'px';
-    // the logo, centred, drawn from the real artwork so it matches the nav logo
-    const lw = Math.min(vw * 0.84, 880), lh = lw / 3;
-    const holder = mk('sp-logo', { left: px(cx - lw / 2), top: px(cy - lh / 2), width: px(lw), height: px(lh) });
-    const svg = document.importNode(new DOMParser().parseFromString(text, 'image/svg+xml').documentElement, true);
-    svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%'); svg.style.overflow = 'visible';
-    holder.append(svg);
-    const q = (s) => svg.querySelector(s);
-    const emblem = q('#emblem'), daji = q('#dajiFill'), rowC = q('#rowC'), rowG = q('#rowG'), chunk = q('#uChunk'), tag = q('#tagline'), rl = q('#ruleL'), rr = q('#ruleR'), ball = q('#ballMove');
-    if (!daji || !ball) { finish(); return; }
-    const hide = [emblem, chunk, tag, rl, rr, ball, ...(rowC ? rowC.children : []), ...(rowG ? rowG.children : [])];
-    hide.forEach((e) => { if (e) e.style.opacity = '0'; });
-    const br = ball.getBoundingClientRect(), tx = br.left + br.width / 2, ty = br.top + br.height / 2;
-
-    // the stumps and bails
-    const base = cy + 14 * u, sH = 30 * u, sW = 2.6 * u, gap = 4.8 * u;
-    mk('sp-glow', { left: px(cx - 30 * u), top: px(base - 4 * u), width: px(60 * u), height: px(8 * u) });
-    const stumps = [-1, 0, 1].map((i) => mk('sp-st', { left: px(cx + i * gap - sW / 2), top: px(base - sH), width: px(sW), height: px(sH) }));
-    const bails = [-0.5, 0.5].map((i) => mk('sp-bail', { left: px(cx + i * gap - gap * 0.44), top: px(base - sH - 1.2 * u), width: px(gap * 0.88), height: px(1.1 * u) }));
-    stumps.forEach((s, i) => A(s, [{ transform: 'translateZ(-500px) scaleY(0)', opacity: 0 }, { opacity: 1, offset: .2 }, { transform: 'translateZ(0) scaleY(1)', opacity: 1 }], { duration: 620, delay: i * 110, easing: 'cubic-bezier(.2,.9,.3,1)' }));
-    bails.forEach((b, i) => A(b, [{ opacity: 0, transform: 'translateY(-' + 3 * u + 'px)' }, { opacity: 1, transform: 'none' }], { duration: 220, delay: 600 + i * 60 }));
-
-    // the ball: arrives from the front, hits the top of the stumps, hops, then rolls to its place in the logo
-    const D = 7 * u, T0 = 700, TD = 1700, hitAt = .4;
-    const bl = mk('sp-ball', { width: px(D), height: px(D), left: px(cx - D / 2), top: px(cy - D / 2) });
-    const sc = br.width / D;
-    const hit = { x: 0, y: base - sH * 0.78 - cy }, end = { x: tx - cx, y: ty - cy };
-    const apex = { x: (hit.x + end.x) / 2, y: Math.min(hit.y, end.y) - 14 * u };
-    const tf = (p, s, r) => `translate(${p.x}px,${p.y}px) scale(${s}) rotate(${r}deg)`;
-    A(bl, [
-      { transform: tf({ x: vw * 0.46, y: vh * 0.36 }, 1.9, 0), opacity: 0, offset: 0 },
-      { transform: tf({ x: vw * 0.36, y: vh * 0.28 }, 1.8, 40), opacity: 1, offset: .05 },
-      { transform: tf(hit, 1, 360), offset: hitAt, easing: 'cubic-bezier(.2,.6,.3,1)' },
-      { transform: tf(apex, 1.08, 560), offset: .7, easing: 'cubic-bezier(.5,0,.9,.6)' },
-      { transform: tf(end, sc, 720), opacity: 1, offset: 1 },
-    ], { duration: TD, delay: T0, easing: 'cubic-bezier(.55,0,.9,.55)' });
-    const H = T0 + TD * hitAt, L = T0 + TD;     // moment of the hit, moment the ball lands
-
-    // the hit: bails fly off, stumps fall, the scene shudders
-    A(bails[0], [{ transform: 'none', opacity: 1 }, { transform: `translate(${-22 * u}px,${-16 * u}px) rotate(-620deg)`, opacity: 0 }], { duration: 900, delay: H, easing: 'cubic-bezier(.2,.7,.4,1)' });
-    A(bails[1], [{ transform: 'none', opacity: 1 }, { transform: `translate(${20 * u}px,${-22 * u}px) rotate(540deg)`, opacity: 0 }], { duration: 950, delay: H, easing: 'cubic-bezier(.2,.7,.4,1)' });
-    [[-24, 40], [-8, -10], [26, -50]].forEach(([r, x], i) => A(stumps[i], [{ transform: 'none', opacity: 1 }, { transform: `translate(${x / 4 * u / 10}px,0) rotate(${r}deg)`, opacity: 1, offset: .55 }, { transform: `translate(${x / 2 * u / 10}px,${2 * u}px) rotate(${r * 1.6}deg)`, opacity: 0 }], { duration: 900, delay: H + i * 40, easing: 'ease-out' }));
-    A(scene, [{ transform: 'none' }, { transform: `translate(${-1.2 * u * 0.3}px,${0.8 * u * 0.3}px)` }, { transform: `translate(${1 * u * 0.3}px,${-0.6 * u * 0.3}px)` }, { transform: 'none' }], { duration: 320, delay: H });
-
-    // the ball lands in the logo: ring, then the real ball appears in its place
-    const ring = mk('sp-ring', { width: px(br.width), height: px(br.width), left: px(tx - br.width / 2), top: px(ty - br.width / 2) });
-    A(ring, [{ opacity: 0, transform: 'scale(.6)' }, { opacity: .9, transform: 'scale(1)', offset: .15 }, { opacity: 0, transform: 'scale(3.2)' }], { duration: 800, delay: L });
-    A(bl, [{ opacity: 1 }, { opacity: 0 }], { duration: 1, delay: L });
-    A(ball, [{ opacity: 0 }, { opacity: 1 }], { duration: 1, delay: L });
-    A(glowOf(scene), [{ opacity: 1 }, { opacity: 0 }], { duration: 600, delay: L });
-    function glowOf(s) { return s.querySelector('.sp-glow'); }
-
-    // the logo is written: the mark fades in, "Daji" is traced and then filled with colour, then the lettering and tagline follow
-    const W = L + 100;
-    if (emblem) A(emblem, [{ opacity: 0, transform: 'scale(.92)' }, { opacity: 1, transform: 'none' }], { duration: 700, delay: W, easing: 'ease-out' });
-    const len = daji.getTotalLength ? daji.getTotalLength() : 0;
-    daji.setAttribute('stroke', '#f3e1b6'); daji.setAttribute('stroke-width', '34'); daji.setAttribute('stroke-linejoin', 'round'); daji.setAttribute('stroke-linecap', 'round');
-    daji.style.strokeDasharray = len + ' ' + len;
-    A(daji, [{ strokeDashoffset: len, fillOpacity: 0, strokeOpacity: 1 }, { strokeDashoffset: 0, fillOpacity: 0, strokeOpacity: 1 }], { duration: 1500, delay: W + 100, easing: 'cubic-bezier(.45,.05,.4,1)' });
-    A(daji, [{ fillOpacity: 0, strokeOpacity: 1 }, { fillOpacity: 1, strokeOpacity: 0 }], { duration: 900, delay: W + 1500, composite: 'replace' });
-    const letters = [...(rowC ? rowC.children : []), ...(rowG ? rowG.children : []), chunk].filter(Boolean);
-    letters.forEach((e, i) => A(e, [{ opacity: 0, transform: 'translateY(160px)' }, { opacity: 1, transform: 'none' }], { duration: 520, delay: W + 1900 + i * 55, easing: 'cubic-bezier(.2,.8,.2,1)' }));
-    [tag, rl, rr].forEach((e) => { if (e) A(e, [{ opacity: 0 }, { opacity: 1 }], { duration: 700, delay: W + 1900 + letters.length * 55 }); });
-    setTimeout(finish, W + 1900 + letters.length * 55 + 700 + 700);
-  }
+  try { window.DajiIntro.play(box, { dark, logo: dark ? 'assets/logo.svg' : 'assets/logo-brass.svg', onDone: end }); } catch { end(); }
+  setTimeout(end, 14000);
 })();
+
+document.addEventListener('DOMContentLoaded', () => { try { syncThemeIcon(); } catch { /* ignore */ } });
