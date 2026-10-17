@@ -98,7 +98,10 @@ function List({ version, preset }: { version: number; preset: string }) {
             { head: 'Ground', cell: (b) => <>{b.groundName}<div className="small muted">{b.block ? 'Multi-day booking' : whatOf(b)}</div></> },
             { head: 'Status', cell: (b) => <span className="row" style={{ gap: 6 }}><BookingChip b={b} />{b.block && <Chip tone="info">Multi-day</Chip>}{b.needsReview && <Chip tone="warn">Review</Chip>}</span> },
             { head: 'Total', num: true, cell: (b) => inr(b.block ? b.block.totalPaise : b.totalPaise) },
-            { head: 'Paid', num: true, cell: (b) => inr(b.block ? b.block.paidPaise : b.paidPaise) },
+            { head: 'Paid', num: true, cell: (b) => {
+              const k = b.block, gone = k ? k.cancelled : b.status === 'cancelled', paid = k ? k.paidPaise : b.paidPaise;
+              const refunded = k ? k.refundedPaise : b.refundPaise, credit = k ? k.creditedPaise : b.creditPaise, waiting = k ? k.awaitingPaise > 0 : b.resolution === 'awaiting';
+              return <>{inr(paid)}{gone && paid > 0 && (waiting ? <div className="small warnText">refund waiting for customer</div> : (refunded > 0 || credit > 0) ? <div className="small muted">{refunded > 0 ? `${inr(refunded)} refunded` : ''}{refunded > 0 && credit > 0 ? ' · ' : ''}{credit > 0 ? `${inr(credit)} credit` : ''}</div> : null)}</>; } },
             { head: 'Balance', num: true, cell: (b) => { const bal = b.block ? b.block.balancePaise : b.balancePaise; return (b.status === 'confirmed' && bal > 0 ? <b className="warnText">{inr(bal)}</b> : <span className="muted">—</span>); } },
             { head: 'Ref', cell: (b) => <span className="mono small muted">{b.ref}</span> },
           ]} />

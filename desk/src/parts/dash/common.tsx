@@ -5,7 +5,7 @@ import { post, inr, fmtDay, fmtTime, useApi, ApiError } from '../../lib';
 
 export interface BlockDay { id: string; ref: string; date: string; startAt: number; endAt: number; status: string; totalPaise: number; paidPaise: number; balancePaise: number }
 /** A multi-day booking seen as one: dates, money across every day and (in the detail) each day. */
-export interface Block { seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; items?: BlockDay[]; payments?: { createdAt: number; method: string; status: string; amountPaise: number; refundedPaise: number; reference: string | null }[] }
+export interface Block { seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; cancelled: boolean; awaitingPaise: number; refundedPaise: number; creditedPaise: number; cancellableDays: number; items?: BlockDay[]; payments?: { createdAt: number; method: string; status: string; amountPaise: number; refundedPaise: number; reference: string | null }[] }
 export interface Booking {
   block?: Block | null;
   id: string; ref: string; groundId: string; groundName: string; customerId: string; customerName: string; customerPhone: string | null;
@@ -52,14 +52,15 @@ export function CancelDialog({ b, onClose, onDone }: { b: Booking; onClose: () =
   const paid = b.paidPaise > 0;
   const [offers, setOffers] = useState<string[]>(['refund', 'credit']);
   const [reason, setReason] = useState('');
+  const [settle, setSettle] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const toggle = (k: string) => setOffers((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
   const submit = async () => {
-    if (paid && !offers.length) return setErr('Offer the customer at least one option.');
+    if (paid && !settle && !offers.length) return setErr('Offer the customer at least one option.');
     if (paid && reason.trim().length < 10) return setErr('Please explain to the customer why (at least 10 characters).');
     setBusy(true); setErr(null);
-    try { await post(`/api/staff/bookings/${encodeURIComponent(b.id)}/cancel`, paid ? { reason: reason.trim(), offers } : { reason: reason.trim() || undefined }); onDone(); }
+    try { await post(`/api/staff/bookings/${encodeURIComponent(b.id)}/cancel`, paid ? { reason: reason.trim(), offers: settle ? [settle] : offers } : { reason: reason.trim() || undefined }); if (paid && settle) await post(`/api/staff/bookings/${encodeURIComponent(b.id)}/settle`, { choice: settle }); onDone(); }
     catch (e) { setErr(errText(e)); setBusy(false); }
   };
   const pct = cfg?.cashRefundPercent ?? 50;
@@ -70,13 +71,14 @@ export function CancelDialog({ b, onClose, onDone }: { b: Booking; onClose: () =
         <div><b>{b.customerName}</b>, {fmtDay(b.date)}, {timeRange(b)}. {paid ? <>They paid <b className="gold">{inr(b.paidPaise)}</b>.</> : 'Nothing has been paid yet.'}</div>
         {paid ? (
           <>
-            <p className="muted small" style={{ margin: 0 }}>The customer will read your explanation, then choose from the options you tick, as set out in the terms and conditions. Nothing is paid out until they choose.</p>
+            <SettleChoice value={settle} onChange={setSettle} paid={b.paidPaise} />
+            {!settle && <><p className="muted small" style={{ margin: 0 }}>The customer will read your explanation, then choose from the options you tick, as set out in the terms and conditions. Nothing is paid out until they choose.</p>
             <div className="stack" style={{ gap: 8 }}>
               <div className="eyebrow" style={{ margin: 0 }}>What the customer may choose</div>
               <label className="check"><input type="checkbox" checked={offers.includes('refund')} onChange={() => toggle('refund')} />Full refund ({inr(b.paidPaise)})</label>
               <label className="check"><input type="checkbox" checked={offers.includes('half')} onChange={() => toggle('half')} />{pct}% refund to the payment method</label>
               <label className="check"><input type="checkbox" checked={offers.includes('credit')} onChange={() => toggle('credit')} />Full amount as account credit, or another slot</label>
-            </div>
+            </div></>}
             <Field label="Explanation for the customer" hint="For example: the tournament is not going ahead because too few teams entered.">
               <textarea className="inp" rows={4} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
             </Field>
@@ -88,6 +90,16 @@ export function CancelDialog({ b, onClose, onDone }: { b: Booking; onClose: () =
       </div>
     </Modal>
   );
+}
+
+/** What happens to the money when the ground cancels: the customer chooses later, or staff settle it now. */
+export function SettleChoice({ value, onChange, paid }: { value: string; onChange: (v: string) => void; paid: number }) {
+  const opts: [string, string][] = [['', 'Let the customer choose'], ['refund', `Refund ${inr(paid)} now`], ['credit', `Add ${inr(paid)} as account credit now`]];
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="eyebrow" style={{ margin: 0 }}>What happens to the money</div>
+      {opts.map(([k, l]) => <label className="check" key={k || 'ask'}><input type="radio" name="settle" checked={value === k} onChange={() => onChange(k)} />{l}</label>)}
+    </div>);
 }
 
 /** Pay-method choices that staff may record by hand. */

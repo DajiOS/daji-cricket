@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Modal, Chip, Loading, ErrorBox, Field, Status, Table, Confirm, useToast } from '../../ui';
 import { useApi, post, api, go, inr, toPaise, rupees, fmtDay, fmtDateTime, formatPhone, can } from '../../lib';
 import { useSession } from '../../App';
-import { type Booking, type Block, BookingChip, CancelDialog, HAND_METHODS, METHOD_LABEL, PAY_STATUS, SOURCE_LABEL, STATUS_LABEL, cancellable, errText, timeRange, whatOf } from './common';
+import { type Booking, type Block, BookingChip, CancelDialog, SettleChoice, HAND_METHODS, METHOD_LABEL, PAY_STATUS, SOURCE_LABEL, STATUS_LABEL, cancellable, errText, timeRange, whatOf } from './common';
 
 interface Pay { id: string; method: string; status: string; purpose: string; amountPaise: number; refundedPaise: number; reference: string | null; createdAt: number; rejectReason: string | null }
 interface Detail { booking: Booking; block: Block | null; payments: Pay[]; refunds: { id: string; amountPaise: number; status: string; mode: string | null; createdAt: number }[]; audit: { id: number; at: number; action: string; actorRole: string | null }[] }
@@ -49,6 +49,13 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
         <div className="row"><BookingChip b={b} />{b.needsReview && <Chip tone="warn">Needs review</Chip>}<Chip tone="mute">{SOURCE_LABEL[b.source] || b.source}</Chip>
           {b.status === 'held' && b.holdExpiresAt && <span className="small muted">Hold ends {fmtDateTime(b.holdExpiresAt)}</span>}</div>
         <ErrorBox msg={msg} />
+        {b.status === 'cancelled' && b.resolution === 'awaiting' && can(me, 'manage_bookings') && (
+          <div className="card card-pad stack" style={{ gap: 8 }}>
+            <div><b>Waiting for the customer to choose.</b> <span className="muted small">{inr(b.paidPaise)} is still held. If they have agreed with you, settle it now.</span></div>
+            <div className="row"><button className="btn primary sm" onClick={() => act('settle', { choice: 'refund' }, 'Refunded. The customer has been told.')}>Refund {inr(b.paidPaise)} now</button>
+              <button className="btn sm" onClick={() => act('settle', { choice: 'credit' }, 'Added as account credit.')}>Add as account credit</button></div>
+          </div>)}
+        {b.status === 'cancelled' && b.resolution && b.resolution !== 'awaiting' && (b.refundPaise > 0 || b.creditPaise > 0) && <div className="small"><Chip tone="info">{b.refundPaise > 0 ? `${inr(b.refundPaise)} refunded` : ''}{b.refundPaise > 0 && b.creditPaise > 0 ? ' · ' : ''}{b.creditPaise > 0 ? `${inr(b.creditPaise)} as credit` : ''}</Chip></div>}
         {d.block && <div><button className="btn ghost sm" onClick={() => go(`/bookings/${b.id}`)}>← Whole multi-day booking ({d.block.days} days)</button></div>}
         <div className="facts">
           <div><span>Ground</span><b>{b.groundName}</b></div>
@@ -151,12 +158,22 @@ function BlockDetail({ d, onClose, onChanged }: { d: Detail; onClose: () => void
   const [pay, setPay] = useState(false);
   const days = k.items || [];
   const live = days.filter((x) => x.status !== 'cancelled' && x.status !== 'expired');
-  const canPay = can(me, 'record_payments') && k.balancePaise > 0 && live.some((x) => x.status === 'confirmed' || x.status === 'held');
+  const [cancelAll, setCancelAll] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const settle = async (choice: string) => { setMsg(null); try { await post(`/api/staff/bookings/block/${encodeURIComponent(k.seriesId)}/settle`, { choice }); toast(choice === 'refund' ? 'Refunded. The customer has been told.' : 'Added as account credit.'); onChanged(); } catch (e) { setMsg(errText(e)); } };
+  const canPay = !k.cancelled && can(me, 'record_payments') && k.balancePaise > 0 && live.some((x) => x.status === 'confirmed' || x.status === 'held');
   return (
     <>
       <Modal title={`Multi-day booking ${b.ref}`} onClose={onClose} wide
-        foot={<>{canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}<button className="btn ghost" onClick={onClose}>Close</button></>}>
+        foot={<>{k.cancellableDays > 0 && can(me, 'manage_bookings') && <button className="btn danger" onClick={() => setCancelAll(true)}>Cancel all {k.cancellableDays} days</button>}{canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}<button className="btn ghost" onClick={onClose}>Close</button></>}>
         <div className="stack" style={{ gap: 18 }}>
+          <ErrorBox msg={msg} />
+          {k.cancelled && <div className="row"><Chip tone="bad">Cancelled</Chip>{k.refundedPaise > 0 && <Chip tone="info">{inr(k.refundedPaise)} refunded</Chip>}{k.creditedPaise > 0 && <Chip tone="info">{inr(k.creditedPaise)} as credit</Chip>}</div>}
+          {k.awaitingPaise > 0 && can(me, 'manage_bookings') && (
+            <div className="card card-pad stack" style={{ gap: 8 }}>
+              <div><b>Waiting for the customer to choose.</b> <span className="muted small">{inr(k.awaitingPaise)} is still held. If they have agreed with you, settle it now.</span></div>
+              <div className="row"><button className="btn primary sm" onClick={() => settle('refund')}>Refund {inr(k.awaitingPaise)} now</button><button className="btn sm" onClick={() => settle('credit')}>Add as account credit</button></div>
+            </div>)}
           <div className="row"><Chip tone="info">Multi-day</Chip><Chip tone="mute">{SOURCE_LABEL[b.source] || b.source}</Chip><span className="small muted">{k.days} days, one agreed total</span></div>
           <div className="facts">
             <div><span>Ground</span><b>{b.groundName}</b></div>
@@ -191,6 +208,7 @@ function BlockDetail({ d, onClose, onChanged }: { d: Detail; onClose: () => void
           </div>
         </div>
       </Modal>
+      {cancelAll && <CancelBlock k={k} b={b} onClose={() => setCancelAll(false)} onDone={() => { setCancelAll(false); toast('All days cancelled.'); onChanged(); }} />}
       {pay && <RecordBlockPayment k={k} onClose={() => setPay(false)} onDone={() => { setPay(false); toast('Payment recorded.'); onChanged(); }} />}
     </>
   );
@@ -219,6 +237,33 @@ function RecordBlockPayment({ k, onClose, onDone }: { k: Block; onClose: () => v
         <Field label={method === 'upi' ? 'UPI reference (UTR)' : 'Reference (optional)'}><input className="inp" maxLength={60} value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
         <Field label="Note (optional)"><input className="inp" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
         <div className="full"><ErrorBox msg={err} /></div>
+      </div>
+    </Modal>
+  );
+}
+
+function CancelBlock({ k, b, onClose, onDone }: { k: Block; b: Booking; onClose: () => void; onDone: () => void }) {
+  const paid = k.paidPaise > 0;
+  const [reason, setReason] = useState('');
+  const [settle, setSettle] = useState('refund');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (paid && reason.trim().length < 10) return setErr('Please explain to the customer why (at least 10 characters).');
+    setBusy(true); setErr(null);
+    try { await post(`/api/staff/bookings/block/${encodeURIComponent(k.seriesId)}/cancel`, { reason: reason.trim() || undefined, ...(paid && settle ? { settle } : paid ? { offers: ['refund', 'credit'] } : {}) }); onDone(); }
+    catch (e) { setErr(errText(e)); setBusy(false); }
+  };
+  return (
+    <Modal title="Cancel the whole multi-day booking?" onClose={onClose}
+      foot={<><button className="btn ghost" onClick={onClose}>Keep it</button><button className="btn danger" disabled={busy} onClick={submit}>Cancel all {k.cancellableDays} days</button></>}>
+      <div className="stack" style={{ gap: 14 }}>
+        <div><b>{b.customerName}</b>, {fmtDay(k.fromDate)} – {fmtDay(k.toDate)}. {paid ? <>They have paid <b className="gold">{inr(k.paidPaise)}</b>.</> : 'Nothing has been paid yet.'} Days that have already started stay as they are.</div>
+        {paid && <SettleChoice value={settle} onChange={setSettle} paid={k.paidPaise} />}
+        <Field label={paid ? 'Explanation for the customer' : 'Reason (optional)'} hint={paid ? 'For example: the tournament is not going ahead because too few teams entered.' : undefined}>
+          <textarea className="inp" rows={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
+        </Field>
+        <ErrorBox msg={err} />
       </div>
     </Modal>
   );

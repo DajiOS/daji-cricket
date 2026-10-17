@@ -8,6 +8,7 @@ import { one, many, run } from '../db.ts';
 import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
+import { cancelBlock, settleBlock, settleForCustomer } from '../cancellation.ts';
 import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
 import { cancelBooking, previewCancel } from '../cancellation.ts';
 import { createPromos, listPromos, setPromoActive } from '../promo.ts';
@@ -68,6 +69,29 @@ export function staffRoutes(r: Router): void {
     const note = v.str('note', { max: 200 });
     v.done();
     return created({ block: recordBlockPayment(U(c), c.params.seriesId!, { method: method!, amountPaise: amountPaise!, reference, note }) });
+  }, A);
+
+  // Cancel every day of a multi-day booking at once; `settle` also returns the money (or credits it) now
+  r.post('/api/staff/bookings/block/:seriesId/cancel', (c) => {
+    const v = new Validator(c.json());
+    const reason = v.str('reason', { max: 300 });
+    const settle = v.oneOf('settle', ['refund', 'half', 'credit'] as const);
+    const offers = v.strArray('offers', { max: 3, itemMax: 10 });
+    v.done();
+    return ok({ ...cancelBlock(U(c), c.params.seriesId!, { reason, settle, offers }), block: blockOf(c.params.seriesId!) });
+  }, A);
+  r.post('/api/staff/bookings/block/:seriesId/settle', (c) => {
+    const v = new Validator(c.json());
+    const choice = v.oneOf('choice', ['refund', 'half', 'credit'] as const, true);
+    v.done();
+    return ok({ ...settleBlock(U(c), c.params.seriesId!, choice!), block: blockOf(c.params.seriesId!) });
+  }, A);
+  // Settle one cancelled booking for the customer (they agreed in person or by phone)
+  r.post('/api/staff/bookings/:id/settle', (c) => {
+    const v = new Validator(c.json());
+    const choice = v.oneOf('choice', ['refund', 'half', 'credit'] as const, true);
+    v.done();
+    return ok(settleForCustomer(U(c), c.params.id!, choice!));
   }, A);
 
   r.post('/api/staff/bookings/:id/payments', (c) => {

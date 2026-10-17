@@ -218,7 +218,7 @@ export type PaymentStatus =
 export interface BlockDay { id: string; ref: string; date: string; startAt: number; endAt: number; status: string; totalPaise: number; paidPaise: number; balancePaise: number }
 /** A multi-day booking (camp, tournament) seen as one: dates, money across every day, and (in the detail) each day. */
 export interface BlockPayment { createdAt: number; method: string; status: string; amountPaise: number; refundedPaise: number; reference: string | null }
-export interface BlockSummary { seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; items?: BlockDay[]; payments?: BlockPayment[] }
+export interface BlockSummary { seriesId: string; cancelled: boolean; awaitingPaise: number; refundedPaise: number; creditedPaise: number; cancellableDays: number; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; items?: BlockDay[]; payments?: BlockPayment[] }
 
 export interface Booking {
   id: string;

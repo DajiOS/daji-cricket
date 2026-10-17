@@ -103,3 +103,32 @@ test('the dashboard can see the money already booked for the months ahead', asyn
   assert.equal(a.body.totalPaise, 3_000_000); assert.equal(a.body.paidPaise, 1_000_000); assert.equal(a.body.balancePaise, 2_000_000);
   assert.equal((await h.get('/api/staff/reports/upcoming', staff)).status, 403, 'staff without the revenue switch cannot see it');
 });
+
+test('a multi-day booking is cancelled on all days in one call, and the refund can be settled at once', async () => {
+  const staff = await h.login('staff1'), g = (await grounds(h))[0]!;
+  const r = await h.post('/api/staff/bookings/block', { groundId: g.id, fromDate: dayFromNow(110), toDate: dayFromNow(112), startTime: '07:00', endTime: '19:00', totalPaise: 3_000_000, customer: { name: 'Cancel Group', phone: '9890000011' }, payment: { method: 'upi', amountPaise: 1_000_000, reference: 'UTRCANCEL001' } }, staff);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const row = (await h.get('/api/staff/bookings?group=1&q=Cancel%20Group', staff)).body.items[0];
+  const sid = row.block.seriesId as string;
+  assert.equal((await h.post(`/api/staff/bookings/block/${sid}/cancel`, { settle: 'refund' }, staff)).status, 400, 'a reason is needed when money was paid');
+  const c = await h.post(`/api/staff/bookings/block/${sid}/cancel`, { reason: 'The tournament is not going ahead', settle: 'refund' }, staff);
+  assert.equal(c.status, 200, JSON.stringify(c.body));
+  assert.equal(c.body.cancelled, 3);
+  assert.equal(c.body.block.cancelled, true);
+  assert.equal(c.body.block.refundedPaise, 1_000_000);
+  assert.equal(c.body.block.awaitingPaise, 0);
+  const again = await h.post(`/api/staff/bookings/block/${sid}/cancel`, { reason: 'The tournament is not going ahead' }, staff);
+  assert.equal(again.status, 404, 'nothing left to cancel');
+});
+
+test('a booking cancelled by the ground that waits for the customer can be settled by staff', async () => {
+  const staff = await h.login('staff1'), g = (await grounds(h))[0]!;
+  const r = await h.post('/api/staff/bookings', { groundId: g.id, date: dayFromNow(5), startTime: '08:00', slots: 1, customer: { name: 'Settle Me', phone: '9890000012' }, payment: { method: 'upi', amountPaise: 110000, reference: 'UTRSETTLE001' } }, staff);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const id = r.body.booking.id as string;
+  assert.equal((await h.post(`/api/staff/bookings/${id}/cancel`, { reason: 'Rain is forecast all day', offers: ['refund', 'credit'] }, staff)).status, 200);
+  const s = await h.post(`/api/staff/bookings/${id}/settle`, { choice: 'refund' }, staff);
+  assert.equal(s.status, 200, JSON.stringify(s.body));
+  assert.equal(s.body.refundPaise, 110000);
+  assert.equal(s.body.booking.resolution, 'refund');
+});

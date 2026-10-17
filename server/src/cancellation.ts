@@ -158,11 +158,11 @@ function ownerCancel(user: UserRow, bookingId: string, reasonIn: string | undefi
 }
 
 /** The customer's choice after the ground cancelled their booking: everything back to the payment method, everything as credit, or credit now to book another slot. */
-export function resolveOwnerCancel(user: UserRow, bookingId: string, choice: 'refund' | 'half' | 'credit' | 'rebook'): { booking: Booking; refundPaise: number; creditPaise: number; rebook: boolean } {
+export function resolveOwnerCancel(user: UserRow, bookingId: string, choice: 'refund' | 'half' | 'credit' | 'rebook', opts: { byStaff?: boolean } = {}): { booking: Booking; refundPaise: number; creditPaise: number; rebook: boolean } {
   const b0 = accessBooking(user, bookingId);
   if (!b0.owner_cancelled || b0.status !== 'cancelled' || b0.resolution !== 'awaiting') throw new HttpError(409, 'NOTHING_TO_CHOOSE', 'There is nothing to choose for this booking');
   const offered = b0.cancel_offers ? b0.cancel_offers.split(',') : ['refund', 'credit'];
-  if (!offered.includes(choice === 'rebook' ? 'credit' : choice)) throw new HttpError(409, 'NOT_OFFERED', 'The ground did not offer that option for this booking');
+  if (!opts.byStaff && !offered.includes(choice === 'rebook' ? 'credit' : choice)) throw new HttpError(409, 'NOT_OFFERED', 'The ground did not offer that option for this booking');
   const actor: Actor = { id: user.id, role: user.role };
   return tx(() => {
     const b = accessBooking(user, bookingId);
@@ -196,4 +196,37 @@ function offerText(offers: string[], paid: number): string {
   const pct = getSettings().cashRefundPercent;
   const parts = [offers.includes('refund') ? `a full refund of ${formatPaise(paid)}` : '', offers.includes('half') ? `${pct}% back to the payment method` : '', offers.includes('credit') ? 'the full amount as account credit, or another slot' : ''].filter(Boolean);
   return parts.join(', ');
+}
+
+/** Staff settle a cancelled booking for the customer (who agreed by phone or in person): the money goes back or becomes credit now. */
+export function settleForCustomer(staff: UserRow, bookingId: string, choice: 'refund' | 'half' | 'credit') {
+  if (staff.role === 'customer') throw new HttpError(403, 'FORBIDDEN', 'Not allowed');
+  accessBooking(staff, bookingId, 'manage_bookings');
+  return resolveOwnerCancel(staff, bookingId, choice, { byStaff: true });
+}
+
+/**
+ * Cancels every day of a multi-day booking that has not started, in one go. Days with money on them are cancelled by the ground
+ * (the reason is shown to the customer); with `settle` the money is also returned or credited at once, otherwise the customer chooses.
+ */
+export function cancelBlock(staff: UserRow, seriesId: string, input: { reason?: string; offers?: string[]; settle?: 'refund' | 'half' | 'credit' }) {
+  if (staff.role === 'customer') throw new HttpError(403, 'FORBIDDEN', 'Not allowed');
+  const days = many<BookingRow>("SELECT * FROM bookings WHERE series_id = ? AND status IN ('held','confirmed') AND start_at > ? ORDER BY series_index", seriesId, now());
+  if (!days.length || !one("SELECT 1 FROM booking_series WHERE id = ? AND kind = 'block'", seriesId)) throw new HttpError(404, 'NOT_FOUND', 'No days left to cancel on this multi-day booking');
+  accessBooking(staff, days[0]!.id, 'manage_bookings');
+  const offers = input.settle ? [input.settle] : input.offers;
+  return tx(() => {
+    for (const d of days) {
+      cancelBooking(staff, d.id, { reason: input.reason, offers });
+      if (input.settle && d.paid_paise > 0) resolveOwnerCancel(staff, d.id, input.settle, { byStaff: true });
+    }
+    return { cancelled: days.length };
+  });
+}
+
+/** Settles every day of a cancelled multi-day booking that is still waiting for the customer's choice. */
+export function settleBlock(staff: UserRow, seriesId: string, choice: 'refund' | 'half' | 'credit') {
+  const days = many<BookingRow>("SELECT * FROM bookings WHERE series_id = ? AND status = 'cancelled' AND resolution = 'awaiting' ORDER BY series_index", seriesId);
+  if (!days.length) throw new HttpError(409, 'NOTHING_TO_CHOOSE', 'Nothing is waiting to be settled on this multi-day booking');
+  return tx(() => { for (const d of days) settleForCustomer(staff, d.id, choice); return { settled: days.length }; });
 }

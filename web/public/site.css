@@ -1413,12 +1413,14 @@ html[data-theme="ivory"] #splash::before,html[data-theme="pearl"] #splash::befor
 #splash video,#splash-logo{display:none!important}
 
 /* light / dark icon, far right of the top bar */
-.theme-toggle{flex:none;width:44px;height:44px;margin-left:10px;display:inline-flex;align-items:center;justify-content:center;background:none;border:1px solid var(--line);border-radius:var(--radius-sm);cursor:pointer;color:var(--text,currentColor)}
-.theme-toggle svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.theme-toggle .ico-moon{fill:currentColor;stroke:none}
-.theme-toggle .ico-sun{display:none}
-.theme-toggle[data-mode="dark"] .ico-sun{display:block}
-.theme-toggle[data-mode="dark"] .ico-moon{display:none}
+.theme-toggle{flex:none;width:58px;height:32px;padding:3px;margin-left:10px;display:inline-flex;align-items:center;background:var(--surface-high,rgba(127,127,127,.14));border:1px solid var(--line);border-radius:99px;cursor:pointer;color:var(--text,currentColor);transition:border-color .2s}
+.theme-toggle .tt-knob{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--gold,#c9a96b);color:#17130a;box-shadow:0 1px 4px rgba(0,0,0,.35);transition:transform .24s cubic-bezier(.3,.7,.2,1)}
+.theme-toggle[data-mode="dark"] .tt-knob{transform:translateX(26px)}
+.theme-toggle svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.theme-toggle .ico-moon{display:none;fill:currentColor;stroke:none}
+.theme-toggle[data-mode="dark"] .ico-sun{display:none}
+.theme-toggle[data-mode="dark"] .ico-moon{display:block}
+@media (prefers-reduced-motion:reduce){.theme-toggle .tt-knob{transition:none}}
 .theme-toggle:focus-visible{outline:2px solid var(--gold,currentColor);outline-offset:2px}
 html.splash-on .theme-toggle{visibility:hidden}
 
@@ -1440,10 +1442,10 @@ html.splash-on .kn .k{animation-play-state:paused}
 @media (prefers-reduced-motion:reduce){.sm-in{opacity:1}.kn .k{animation:none}}
 
 /* the light / dark icon sits at the far right of the screen, above everything, with its own chip so it reads on any colour */
-.theme-toggle{position:fixed;top:16px;right:max(16px,env(safe-area-inset-right,0px));margin:0;z-index:150;background:var(--bg);border-color:var(--line-strong,var(--line));box-shadow:0 6px 18px -10px rgba(0,0,0,.45);transition:transform .16s ease,border-color .16s ease}
+.theme-toggle{position:fixed;top:18px;right:max(16px,env(safe-area-inset-right,0px));margin:0;z-index:150;background:var(--bg);border-color:var(--line-strong,var(--line));box-shadow:0 6px 18px -10px rgba(0,0,0,.45);transition:transform .16s ease,border-color .16s ease}
 .theme-toggle:hover{transform:translateY(-1px)}
 .theme-toggle:active{transform:scale(1.05,.94)}
-@media (max-width:900px){.theme-toggle{top:14px;right:calc(max(16px,env(safe-area-inset-right,0px)) + 56px);width:40px;height:40px}}
+@media (max-width:900px){.theme-toggle{top:16px;right:calc(max(16px,env(safe-area-inset-right,0px)) + 56px)}}
 
 /* ---- booking boxes grow with their words (a long session name, a time range and a price used to spill out of a fixed-height box) ---- */
 .slot{height:auto;min-height:60px;min-width:0;padding:7px 8px;line-height:1.25;text-align:center;overflow-wrap:anywhere}

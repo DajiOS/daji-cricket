@@ -16,7 +16,7 @@ export function StaffScreen({ user }: { user: User }) {
   const [books, setBooks] = useState<StaffBooking[] | null>(null); const [pays, setPays] = useState<PaymentRow[]>([]);
   const [open, setOpen] = useState(''); const [mode, setMode] = useState<'' | 'pay' | 'cancel'>('');
   const [amount, setAmount] = useState(''); const [method, setMethod] = useState<'cash' | 'upi' | 'card' | 'bank_transfer'>('cash');
-  const [reason, setReason] = useState(''); const [offers, setOffers] = useState<string[]>(['refund', 'credit']);
+  const [reason, setReason] = useState(''); const [offers, setOffers] = useState<string[]>(['refund', 'credit']); const [settle, setSettle] = useState<'refund' | 'credit'>('refund');
   const [err, setErr] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
   const [counts, setCounts] = useState({ awaiting: 0, review: 0 });
 
@@ -39,7 +39,7 @@ export function StaffScreen({ user }: { user: User }) {
   const flip = (k: string) => setOffers((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
 
   const card = (b: StaffBooking) => {
-    const on = open === b.id, blk = b.block ?? null, money = b.paidPaise > 0, balance = blk ? blk.balancePaise : b.balancePaise;
+    const on = open === b.id, blk = b.block ?? null, money = (b.block ? b.block.paidPaise : b.paidPaise) > 0, balance = blk ? blk.balancePaise : b.balancePaise;
     return (
       <View key={b.id} style={s.card}>
         <View style={s.row}><Text style={[s.text, { fontWeight: '700' }]}>{blk ? `${niceDate(blk.fromDate)} – ${niceDate(blk.toDate)}  ·  ${blk.days} days` : `${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${niceDate(b.date)}`}</Text><Text style={s.muted}>{b.ref}</Text></View>
@@ -56,8 +56,7 @@ export function StaffScreen({ user }: { user: User }) {
           {!blk && b.approval === 'pending' && b.status !== 'cancelled' && can(user, 'manage_bookings') && <Btn label="Approve booking" onPress={() => run(`/api/staff/bookings/${b.id}/approve`, {}, 'Approved.')} />}
           {b.status === 'confirmed' && balance > 0 && can(user, 'record_payments') && <Btn kind="outline" label="Record a payment" onPress={() => setMode('pay')} />}
           {!blk && b.status === 'confirmed' && can(user, 'manage_bookings') && <Btn kind="outline" label="Mark no-show" onPress={() => run(`/api/staff/bookings/${b.id}/no-show`, {}, 'Marked as no-show.')} />}
-          {blk && <Text style={s.muted}>To cancel or change a single day, open this booking on the desk.</Text>}
-          {!blk && b.status !== 'cancelled' && b.status !== 'expired' && can(user, 'manage_bookings') && <Btn kind="ghost" label="Cancel booking" onPress={() => setMode('cancel')} />}
+          {b.status !== 'cancelled' && b.status !== 'expired' && can(user, 'manage_bookings') && <Btn kind="ghost" label={blk ? 'Cancel all days' : 'Cancel booking'} onPress={() => setMode('cancel')} />}
         </>)}
         {on && mode === 'pay' && (<>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{(['cash', 'upi', 'card', 'bank_transfer'] as const).map((m) => <Chip key={m} label={m.replace('_', ' ')} on={method === m} onPress={() => setMethod(m)} />)}</View>
@@ -65,7 +64,14 @@ export function StaffScreen({ user }: { user: User }) {
           <Btn label="Save payment" disabled={!Number(amount)} onPress={() => run(blk ? `/api/staff/bookings/block/${blk.seriesId}/payments` : `/api/staff/bookings/${b.id}/payments`, { method, amountPaise: Math.round(Number(amount) * 100) }, 'Payment recorded.')} />
           <Btn kind="ghost" label="Back" onPress={() => setMode('')} />
         </>)}
-        {on && mode === 'cancel' && (<>
+        {on && mode === 'cancel' && blk && (<>
+          <Text style={s.muted}>This cancels every day that has not started. Explain why (at least 10 characters if money was paid) and choose what happens to the money.</Text>
+          <Field label="Reason for the customer" value={reason} onChangeText={setReason} autoCapitalize="sentences" />
+          {money && <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{[['refund', 'Refund now'], ['credit', 'Credit now']].map(([k, l]) => <Chip key={k} label={l!} on={settle === k} onPress={() => setSettle(k as 'refund' | 'credit')} />)}</View>}
+          <Btn label="Cancel all days" disabled={money && reason.trim().length < 10} onPress={() => run(`/api/staff/bookings/block/${blk.seriesId}/cancel`, { reason: reason.trim() || undefined, ...(money ? { settle } : {}) }, 'All days cancelled.')} />
+          <Btn kind="ghost" label="Back" onPress={() => setMode('')} />
+        </>)}
+        {on && mode === 'cancel' && !blk && (<>
           {money && <Text style={s.muted}>Money has been paid on this booking. Explain why (at least 10 characters) and choose what the customer may pick: a full refund, half back, or credit. Terms and conditions apply.</Text>}
           <Field label={money ? 'Reason for the customer' : 'Reason (optional)'} value={reason} onChangeText={setReason} autoCapitalize="sentences" />
           {money && <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{[['refund', 'Full refund'], ['half', '50% refund'], ['credit', 'Credit']].map(([k, l]) => <Chip key={k} label={l!} on={offers.includes(k!)} onPress={() => flip(k!)} />)}</View>}

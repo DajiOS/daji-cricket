@@ -827,14 +827,16 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 @media (max-width: 720px) { .rem-msg { max-width: 240px; } }
 
 /* Light (ivory and green, like the website) is the desk's look; dark is chosen with the sun and moon icon at the far right of the top bar and remembered on this device. */
-.theme-toggle { flex: none; width: 38px; height: 38px; display: inline-grid; place-items: center; margin-left: 10px; background: transparent; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--text); cursor: pointer; }
+.theme-toggle { flex: none; position: relative; width: 54px; height: 30px; margin-left: 10px; padding: 3px; display: inline-flex; align-items: center; border-radius: 99px; border: 1px solid var(--line-strong); background: var(--panel-2); cursor: pointer; transition: background .2s, border-color .2s; }
 .theme-toggle:hover { border-color: var(--gold); }
 .theme-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.theme-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.theme-toggle .moon { fill: currentColor; stroke: none; }
-.theme-toggle .sun { display: none; }
-:root[data-theme="dark"] .theme-toggle .sun { display: block; }
-:root[data-theme="dark"] .theme-toggle .moon { display: none; }
+.theme-toggle .tt-knob { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .24s cubic-bezier(.3,.7,.2,1); }
+.theme-toggle[data-mode="dark"] .tt-knob { transform: translateX(24px); color: #1a1405; }
+.theme-toggle svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme-toggle .moon { display: none; fill: currentColor; stroke: none; }
+.theme-toggle[data-mode="dark"] .sun { display: none; }
+.theme-toggle[data-mode="dark"] .moon { display: block; }
+@media (prefers-reduced-motion: reduce) { .theme-toggle .tt-knob { transition: none; } }
 
 /* opening animation: played by intro.js (the same film as the website) */
 #intro { position: fixed; inset: 0; z-index: 400; }
