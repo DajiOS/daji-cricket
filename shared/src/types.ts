@@ -430,6 +430,8 @@ export interface PublicConfig {
   gallery: string[];
   academyGallery: string[];
   razorpayEnabled: boolean;
+  /** Whether sign-in codes by WhatsApp or text message can be sent. When false, sign-up and sign-in use email and password. */
+  codesEnabled?: boolean;
   razorpayDemo: boolean;
   razorpayKeyId: string | null;
   holdMinutesOnline: number;

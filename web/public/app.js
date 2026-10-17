@@ -258,7 +258,7 @@ function openAuth({ after, mode = 'in', note } = {}) {
     });
     return form;
   };
-  let upMethod = 'otp';
+  let upMethod = cfg.codesEnabled === false ? 'email' : 'otp';
   /** Create an account with an email and a password (a mobile number is optional). */
   const emailSignup = () => {
     const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' });
@@ -286,7 +286,7 @@ function openAuth({ after, mode = 'in', note } = {}) {
     clear(body);
     if (current === 'up') {
       const pick = (m, text) => h('button', { type: 'button', class: 'tab' + (upMethod === m ? ' on' : ''), onclick: () => { upMethod = m; render(); } }, text);
-      body.append(h('div', { class: 'tabs', style: 'margin:0 0 16px' }, pick('otp', 'With my mobile number'), pick('email', 'With my email')), upMethod === 'otp' ? otpForm(true) : emailSignup());
+      body.append(h('div', { class: 'tabs', style: 'margin:0 0 16px' }, ...(cfg.codesEnabled === false ? [] : [pick('otp', 'With my mobile number'), pick('email', 'With my email')])), upMethod === 'otp' ? otpForm(true) : emailSignup());
       return;
     }
     if (method === 'otp') {

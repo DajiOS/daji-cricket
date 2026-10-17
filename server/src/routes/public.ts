@@ -9,6 +9,7 @@ import { HttpError } from '../errors.ts';
 import { checkPasswordStrength, createUser, hashPassword, login, revokeAllTokens, revokeToken, signToken, toUser, userByEmail, userByPhone, userRow, type UserRow } from '../auth.ts';
 import { splitName, titleCase } from '../names.ts';
 import { checkOtp, requestOtp } from '../otp.ts';
+import { otpAvailable } from '../notifications.ts';
 import { audit } from '../audit.ts';
 import { createEnquiry } from '../enquiries.ts';
 import { isValidDate, istDate } from '../time.ts';
@@ -30,6 +31,7 @@ export function publicRoutes(r: Router): void {
       gallery: s.galleryImages,
       academyGallery: s.academyImages,
       razorpayEnabled: s.razorpayEnabled,
+      codesEnabled: otpAvailable(c.cfg.demoMode),
       razorpayDemo: !razorpayConfigured(c.cfg) && c.cfg.demoMode,
       razorpayKeyId: razorpayConfigured(c.cfg) ? c.cfg.razorpay.keyId : null,
       holdMinutesOnline: s.holdMinutesOnline,
