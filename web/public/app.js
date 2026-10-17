@@ -468,7 +468,7 @@ async function fillLibrary() {
     if (hero.kind === 'video') {
       const v = h('video', { muted: '', loop: '', playsinline: '', autoplay: '', preload: 'auto', 'aria-label': 'The ground' });
       if (hero.thumb) v.poster = src({ url: hero.thumb });
-      v.muted = true; v.defaultMuted = true; v.setAttribute('playsinline', ''); v.src = src(hero);
+      v.muted = true; v.defaultMuted = true; v.setAttribute('playsinline', ''); v.src = src({ url: hero.web || hero.url });
       box.append(v); v.play && v.play().catch(() => {});
     } else box.append(h('img', { src: src(hero), alt: 'The ground', loading: 'eager' }));
     lead.parentNode.insertBefore(box, lead);
@@ -479,7 +479,7 @@ async function fillLibrary() {
     const none = grid.querySelector('.none'); if (none) none.remove();
     for (const it of pics) {
       const open = () => openModal([h('div', { class: 'lightbox' }, it.kind === 'video'
-        ? h('video', { src: src(it), controls: '', autoplay: '', playsinline: '', preload: 'auto' })
+        ? h('video', { src: src({ url: it.web || it.url }), controls: '', autoplay: '', playsinline: '', preload: 'auto' })
         : h('img', { src: src(it), alt: 'Daji Cricket Ground photo' }))], { photo: true });
       const thumb = it.thumb
         ? h('img', { src: src({ url: it.thumb }), alt: '', loading: 'lazy' })

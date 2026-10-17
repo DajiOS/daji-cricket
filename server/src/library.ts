@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, existsSync, mkdirSync, statSync, statfsSync, unlinkSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, mkdirSync, renameSync, statSync, statfsSync, unlinkSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -33,11 +33,12 @@ const TYPES: Record<string, string> = {
   mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
 };
 interface Row { id: string; name: string; mime: string; ext: string; bytes: number; tag: string; created_at: number }
-export interface LibItem { id: string; name: string; mime: string; kind: 'image' | 'video'; bytes: number; tag: string; url: string; thumb: string | null; createdAt: number }
+export interface LibItem { id: string; name: string; mime: string; kind: 'image' | 'video'; bytes: number; tag: string; url: string; thumb: string | null; web: string | null; createdAt: number }
 let dataRoot = '';
 export const setLibraryRoot = (dataDir: string): void => { dataRoot = dataDir; };
 const thumbPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.thumb.jpg`);
-const toOut = (r: Row): LibItem => ({ id: r.id, name: r.name, mime: r.mime, kind: r.mime.startsWith('video/') ? 'video' : 'image', bytes: r.bytes, tag: r.tag, url: `/media/${r.id}.${r.ext}`, thumb: dataRoot && existsSync(thumbPath(dataRoot, r.id)) ? `/media/${r.id}.thumb.jpg` : null, createdAt: r.created_at });
+const webPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.web.mp4`);
+const toOut = (r: Row): LibItem => ({ id: r.id, name: r.name, mime: r.mime, kind: r.mime.startsWith('video/') ? 'video' : 'image', bytes: r.bytes, tag: r.tag, url: `/media/${r.id}.${r.ext}`, thumb: dataRoot && existsSync(thumbPath(dataRoot, r.id)) ? `/media/${r.id}.thumb.jpg` : null, web: dataRoot && existsSync(webPath(dataRoot, r.id)) ? `/media/${r.id}.web.mp4` : null, createdAt: r.created_at });
 const dir = (dataDir: string) => join(dataDir, 'library');
 
 // Small preview pictures (the first frame of a video, or a shrunken photo) so the website and the desk never have to load a huge original
@@ -62,13 +63,20 @@ export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boo
     const vf = ['-vf', 'scale=720:-2', '-frames:v', '1', '-q:v', '4', out];
     const ok = isVideo ? (await ffmpeg(['-ss', '1', '-i', src, ...vf])) || (await ffmpeg(['-i', src, ...vf])) : await ffmpeg(['-i', src, ...vf]);
     if (!ok) { try { unlinkSync(out); } catch { /* none made */ } }
+    // a light copy for playing on the website: 720p, about 3 Mbit/s, starts playing before it has fully downloaded
+    const web = webPath(dataDir, id);
+    if (isVideo && !existsSync(web)) {
+      const tmp = web + '.part.mp4';
+      const done = await ffmpeg(['-i', src, '-vf', 'scale=-2:720', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27', '-maxrate', '3M', '-bufsize', '6M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-threads', '2', tmp]);
+      try { if (done) renameSync(tmp, web); else unlinkSync(tmp); } catch { /* nothing to clean */ }
+    }
   });
   void drain();
 }
 /** Previews for files uploaded before this existed. */
 export function backfillThumbs(dataDir: string): void {
   dataRoot = dataDir;
-  for (const r of many<Row>('SELECT * FROM media_lib')) if (!existsSync(thumbPath(dataDir, r.id))) makeThumb(dataDir, r.id, r.ext, r.mime.startsWith('video/'));
+  for (const r of many<Row>('SELECT * FROM media_lib')) if (!existsSync(thumbPath(dataDir, r.id)) || (r.mime.startsWith('video/') && !existsSync(webPath(dataDir, r.id)))) makeThumb(dataDir, r.id, r.ext, r.mime.startsWith('video/'));
 }
 
 const pathOf = (dataDir: string, id: string, ext: string) => join(dir(dataDir), `${id}.${ext}`);
@@ -112,6 +120,7 @@ export function removeFile(dataDir: string, id: string): void {
   run('DELETE FROM media_lib WHERE id = ?', id);
   try { unlinkSync(pathOf(dataDir, r.id, r.ext)); } catch { /* already gone */ }
   try { unlinkSync(thumbPath(dataDir, r.id)); } catch { /* none */ }
+  try { unlinkSync(webPath(dataDir, r.id)); } catch { /* none */ }
 }
 
 export function diskInfo(dataDir: string): { freeBytes: number | null; libraryBytes: number } {
@@ -126,12 +135,12 @@ export function serveLibraryFile(dataDir: string, req: IncomingMessage, res: Ser
   const m = /^\/media\/(lib_[A-Za-z0-9_-]+)\.([a-z0-9.]+)$/.exec(pathname);
   if (!m) return false;
   const r = one<Row>('SELECT * FROM media_lib WHERE id = ?', m[1]!);
-  const isThumb = m[2] === 'thumb.jpg';
-  const file = r && isThumb ? thumbPath(dataDir, r.id) : r && r.ext === m[2] ? pathOf(dataDir, r.id, r.ext) : '';
+  const isThumb = m[2] === 'thumb.jpg', isWeb = m[2] === 'web.mp4';
+  const file = r && isThumb ? thumbPath(dataDir, r.id) : r && isWeb ? webPath(dataDir, r.id) : r && r.ext === m[2] ? pathOf(dataDir, r.id, r.ext) : '';
   if (!r || !existsSync(file)) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Not found'); return true; }
   const total = statSync(file).size;
   const base: Record<string, string> = {
-    'Content-Type': isThumb ? 'image/jpeg' : r.mime, 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'cross-origin',
+    'Content-Type': isThumb ? 'image/jpeg' : isWeb ? 'video/mp4' : r.mime, 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'cross-origin',
     'Content-Security-Policy': "default-src 'none'; sandbox", 'Cache-Control': 'public, max-age=86400',
   };
   let start = 0, end = total - 1, status = 200;
