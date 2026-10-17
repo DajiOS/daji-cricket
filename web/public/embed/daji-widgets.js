@@ -27,7 +27,7 @@
       f.title = 'Daji Cricket Ground';
       f.loading = 'lazy';
       f.allow = 'payment *; clipboard-write';
-      f.style.cssText = 'width:100%;border:0;display:block;min-height:420px;background:#0a0c0b';
+      f.style.cssText = 'width:100%;border:0;display:block;min-height:420px;background:#f6f2e9';
       f.setAttribute('scrolling', 'no');
       this._on = (e) => { if (e.source === f.contentWindow && e.data && e.data.daji === 'height') f.style.height = Math.max(320, Number(e.data.height) || 0) + 'px'; };
       window.addEventListener('message', this._on);
