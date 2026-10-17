@@ -1,5 +1,6 @@
 # Daji Cricket Ground: one image with the API and the website. No build step and no npm dependencies at run time.
 FROM node:22.22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production DATA_DIR=/data WEB_DIR=/app/web/public PORT=4000 HOST=0.0.0.0
 COPY package.json ./package.json

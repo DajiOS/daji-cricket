@@ -1,4 +1,5 @@
 import { createReadStream, createWriteStream, existsSync, mkdirSync, statSync, statfsSync, unlinkSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -32,9 +33,44 @@ const TYPES: Record<string, string> = {
   mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
 };
 interface Row { id: string; name: string; mime: string; ext: string; bytes: number; tag: string; created_at: number }
-export interface LibItem { id: string; name: string; mime: string; kind: 'image' | 'video'; bytes: number; tag: string; url: string; createdAt: number }
-const toOut = (r: Row): LibItem => ({ id: r.id, name: r.name, mime: r.mime, kind: r.mime.startsWith('video/') ? 'video' : 'image', bytes: r.bytes, tag: r.tag, url: `/media/${r.id}.${r.ext}`, createdAt: r.created_at });
+export interface LibItem { id: string; name: string; mime: string; kind: 'image' | 'video'; bytes: number; tag: string; url: string; thumb: string | null; createdAt: number }
+let dataRoot = '';
+export const setLibraryRoot = (dataDir: string): void => { dataRoot = dataDir; };
+const thumbPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.thumb.jpg`);
+const toOut = (r: Row): LibItem => ({ id: r.id, name: r.name, mime: r.mime, kind: r.mime.startsWith('video/') ? 'video' : 'image', bytes: r.bytes, tag: r.tag, url: `/media/${r.id}.${r.ext}`, thumb: dataRoot && existsSync(thumbPath(dataRoot, r.id)) ? `/media/${r.id}.thumb.jpg` : null, createdAt: r.created_at });
 const dir = (dataDir: string) => join(dataDir, 'library');
+
+// Small preview pictures (the first frame of a video, or a shrunken photo) so the website and the desk never have to load a huge original
+// just to draw a tile. Made one at a time in the background with ffmpeg; when ffmpeg is not installed the original is used instead.
+const queue: Array<() => Promise<void>> = [];
+let working = false;
+async function drain(): Promise<void> {
+  if (working) return; working = true;
+  while (queue.length) { try { await queue.shift()!(); } catch { /* a failed preview is not an error */ } }
+  working = false;
+}
+function ffmpeg(args: string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    try { const p = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...args], { stdio: 'ignore' }); p.on('error', () => resolve(false)); p.on('close', (c) => resolve(c === 0)); }
+    catch { resolve(false); }
+  });
+}
+export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boolean): void {
+  queue.push(async () => {
+    const src = pathOf(dataDir, id, ext), out = thumbPath(dataDir, id);
+    if (existsSync(out) || !existsSync(src)) return;
+    const vf = ['-vf', 'scale=720:-2', '-frames:v', '1', '-q:v', '4', out];
+    const ok = isVideo ? (await ffmpeg(['-ss', '1', '-i', src, ...vf])) || (await ffmpeg(['-i', src, ...vf])) : await ffmpeg(['-i', src, ...vf]);
+    if (!ok) { try { unlinkSync(out); } catch { /* none made */ } }
+  });
+  void drain();
+}
+/** Previews for files uploaded before this existed. */
+export function backfillThumbs(dataDir: string): void {
+  dataRoot = dataDir;
+  for (const r of many<Row>('SELECT * FROM media_lib')) if (!existsSync(thumbPath(dataDir, r.id))) makeThumb(dataDir, r.id, r.ext, r.mime.startsWith('video/'));
+}
+
 const pathOf = (dataDir: string, id: string, ext: string) => join(dir(dataDir), `${id}.${ext}`);
 
 export async function saveUpload(dataDir: string, req: IncomingMessage, actorId: string, name: string, tag: string): Promise<LibItem> {
@@ -54,7 +90,9 @@ export async function saveUpload(dataDir: string, req: IncomingMessage, actorId:
   try { await pipeline(req, createWriteStream(file)); }
   catch { try { unlinkSync(file); } catch { /* nothing was written */ } throw new HttpError(400, 'UPLOAD_FAILED', 'The upload was interrupted. Try again.'); }
   if (size === 0) { try { unlinkSync(file); } catch { /* empty */ } throw new HttpError(400, 'EMPTY', 'The file is empty'); }
+  dataRoot = dataDir;
   run('INSERT INTO media_lib (id, name, mime, ext, bytes, tag, created_at, created_by) VALUES (?,?,?,?,?,?,?,?)', id, clean, mime, ext, size, tag, now(), actorId);
+  makeThumb(dataDir, id, ext, mime.startsWith('video/'));
   return toOut(one<Row>('SELECT * FROM media_lib WHERE id = ?', id)!);
 }
 
@@ -73,6 +111,7 @@ export function removeFile(dataDir: string, id: string): void {
   if (!r) throw notFound('File');
   run('DELETE FROM media_lib WHERE id = ?', id);
   try { unlinkSync(pathOf(dataDir, r.id, r.ext)); } catch { /* already gone */ }
+  try { unlinkSync(thumbPath(dataDir, r.id)); } catch { /* none */ }
 }
 
 export function diskInfo(dataDir: string): { freeBytes: number | null; libraryBytes: number } {
@@ -84,14 +123,15 @@ export function diskInfo(dataDir: string): { freeBytes: number | null; libraryBy
 
 /** GET /media/<id>.<ext> with Range support. Returns false when the path is not a library file. */
 export function serveLibraryFile(dataDir: string, req: IncomingMessage, res: ServerResponse, pathname: string): boolean {
-  const m = /^\/media\/(lib_[A-Za-z0-9_-]+)\.([a-z0-9]+)$/.exec(pathname);
+  const m = /^\/media\/(lib_[A-Za-z0-9_-]+)\.([a-z0-9.]+)$/.exec(pathname);
   if (!m) return false;
   const r = one<Row>('SELECT * FROM media_lib WHERE id = ?', m[1]!);
-  const file = r && r.ext === m[2] ? pathOf(dataDir, r.id, r.ext) : '';
+  const isThumb = m[2] === 'thumb.jpg';
+  const file = r && isThumb ? thumbPath(dataDir, r.id) : r && r.ext === m[2] ? pathOf(dataDir, r.id, r.ext) : '';
   if (!r || !existsSync(file)) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Not found'); return true; }
   const total = statSync(file).size;
   const base: Record<string, string> = {
-    'Content-Type': r.mime, 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'cross-origin',
+    'Content-Type': isThumb ? 'image/jpeg' : r.mime, 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'cross-origin',
     'Content-Security-Policy': "default-src 'none'; sandbox", 'Cache-Control': 'public, max-age=86400',
   };
   let start = 0, end = total - 1, status = 200;
