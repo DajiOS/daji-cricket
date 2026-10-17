@@ -1373,3 +1373,5 @@ html[data-theme="ivory"] #view-home aside.panel#book .chip2.on{background:rgba(2
 html[data-theme="ivory"] #view-home h1.display{font-family:'Pinyon Script','Great Vibes','Snell Roundhand','Apple Chancery',cursive;font-weight:400;letter-spacing:0;line-height:1.12;text-transform:none;font-size:clamp(52px,6.4vw,104px)}
 /* hero headline: refined italic serif instead of script */
 html[data-theme="ivory"] #view-home h1.display{font-family:'Cormorant Garamond','Playfair Display',Georgia,serif;font-style:italic;font-weight:400;letter-spacing:-.01em;line-height:1.04;font-size:clamp(48px,5.6vw,92px);color:#0f3d2e}
+/* hero headline: Bodoni Moda italic */
+html[data-theme="ivory"] #view-home h1.display{font-family:'Bodoni Moda','Playfair Display',Didot,Georgia,serif;font-style:italic;font-weight:500;letter-spacing:-.01em;line-height:1.08;font-size:clamp(44px,5.2vw,86px)}
