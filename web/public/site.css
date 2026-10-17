@@ -1364,3 +1364,7 @@ html[data-theme="ivory"] aside.panel#book .chip2.on{background:#fff;border-color
 @media (max-width:560px){.day b{font-size:26px}}
 html[data-theme="ivory"] #view-home aside.panel#book .chip2,html[data-theme="ivory"] #view-home aside.panel#book .chip2 small{color:#0f3d2e!important}
 html[data-theme="ivory"] #view-home aside.panel#book .chip2{background:#fbf8f0;font-weight:600}
+/* ball / match chips: green panel look, selected one in brass */
+html[data-theme="ivory"] #view-home aside.panel#book .chip2{background:rgba(255,255,255,.07)!important;border:1px solid rgba(255,255,255,.28)!important;box-shadow:none}
+html[data-theme="ivory"] #view-home aside.panel#book .chip2,html[data-theme="ivory"] #view-home aside.panel#book .chip2 small{color:#f3ead2!important}
+html[data-theme="ivory"] #view-home aside.panel#book .chip2.on{background:rgba(201,169,107,.18)!important;border-color:#c9a96b!important;box-shadow:0 0 0 2px rgba(201,169,107,.25)}
