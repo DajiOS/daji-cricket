@@ -391,13 +391,14 @@ function openProfile() {
     catch (e) { err.textContent = e.message; }
     file.value = '';
   });
-  const name = h('input', { type: 'text', maxlength: '80', value: u.name || '' }), email = h('input', { type: 'email', value: u.email || '' }), phone = h('input', { type: 'tel', value: u.phone || '' });
+  const sn = (u.name || '').trim().split(/\s+/);
+  const first = h('input', { type: 'text', maxlength: '40', autocomplete: 'given-name', value: u.firstName || sn.slice(0, -1).join(' ') || sn[0] || '' }), last = h('input', { type: 'text', maxlength: '40', autocomplete: 'family-name', value: u.lastName || (sn.length > 1 ? sn[sn.length - 1] : '') }), email = h('input', { type: 'email', value: u.email || '' }), phone = h('input', { type: 'tel', value: u.phone || '' });
   const biz = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.businessName || '' }) : null, upi = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.upiId || '', placeholder: 'name@bank' }) : null;
   const f = (l, el) => { el.style.width = '100%'; return h('label', { class: 'lbl', style: 'display:grid;gap:6px;margin-top:12px' }, l, el); };
   const save = h('button', { class: 'btn primary block', type: 'button', style: 'margin-top:16px', onclick: async () => {
     err.textContent = ''; save.disabled = true;
     try {
-      const body = { name: name.value.trim(), phone: phone.value.trim() || undefined, email: email.value.trim() || undefined };
+      const body = { firstName: first.value.trim(), lastName: last.value.trim(), phone: phone.value.trim() || undefined, email: email.value.trim() || undefined };
       if (biz) { body.businessName = biz.value.trim(); body.upiId = upi.value.trim(); }
       const r = await api('/api/me', { method: 'PATCH', body }); state.user = r.user; renderAuth(); toast('Profile saved.'); closeModal();
     } catch (e) { const fe = fieldErrors(e); err.textContent = Object.values(fe)[0] || e.message; save.disabled = false; }
@@ -414,7 +415,7 @@ function openProfile() {
       h('button', { class: 'btn outline sm', type: 'button', onclick: () => file.click() }, 'Choose a picture'),
       h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { closeModal(); signOut(); } }, 'Sign out'),
       u.avatarUrl ? h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { await api('/api/me/avatar', { method: 'DELETE' }); state.user = { ...state.user, avatarUrl: null }; refreshPic(); } catch (e) { err.textContent = e.message; } } }, 'Use my initial') : null, file)),
-    f('Name', name), f('Email', email), f('Mobile number', phone), biz ? f('Business name', biz) : null, upi ? f('UPI ID for payments', upi) : null, err, save,
+    f('First name', first), f('Last name', last), f('Email', email), f('Mobile number', phone), biz ? f('Business name', biz) : null, upi ? f('UPI ID for payments', upi) : null, err, save,
     h('div', { class: 'eyebrow', style: 'margin:22px 0 4px' }, 'Password'), f('Current password', cur), f('New password', nw), pwErr, pwBtn,
     h('button', { class: 'btn ghost block', type: 'button', style: 'margin-top:18px', onclick: () => { closeModal(); signOut(); } }, 'Sign out')]);
 }
@@ -971,7 +972,8 @@ function showConfirmed(b) {
 function openEnquiry(kind) {
   const u = state.user && state.user.role === 'customer' ? state.user : null;
   const gsel = h('select', {}, state.grounds.map((g) => h('option', { value: g.id, selected: state.ground && g.id === state.ground.id }, g.name)));
-  const name = input('name', 'text', { value: u ? u.name : '', autocomplete: 'name' });
+  const first = input('firstName', 'text', { value: u ? (u.firstName || u.name.split(' ')[0] || '') : '', autocomplete: 'given-name', autocapitalize: 'words' });
+  const last = input('lastName', 'text', { value: u ? (u.lastName || u.name.split(' ').slice(1).join(' ')) : '', autocomplete: 'family-name', autocapitalize: 'words' });
   const phone = input('phone', 'tel', { value: u && u.phone ? u.phone : '', autocomplete: 'tel' });
   const email = input('email', 'email', { value: u && u.email ? u.email : '', autocomplete: 'email' });
   const date = input('preferredDate', 'date', { min: firstDay() });
@@ -980,12 +982,12 @@ function openEnquiry(kind) {
   const err = h('div', { class: 'fe' });
   const submit = h('button', { class: 'btn primary block', type: 'submit' }, 'Send enquiry');
   const form = h('form', { novalidate: true },
-    field('Ground', gsel), field('Your name', name), field('Mobile number', phone), field('Email (optional)', email),
+    field('Ground', gsel), h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('First name', first), field('Last name', last)), field('Mobile number', phone), field('Email (optional)', email),
     h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('Preferred date', date), field('Players', players)),
     field('Message', msg), err, submit);
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault(); err.textContent = ''; submit.disabled = true;
-    const body = { groundId: gsel.value, name: name.value.trim(), phone: phone.value.trim(), message: msg.value.trim() };
+    const body = { groundId: gsel.value, firstName: first.value.trim(), lastName: last.value.trim(), phone: phone.value.trim(), message: msg.value.trim() };
     if (email.value.trim()) body.email = email.value.trim();
     if (date.value) body.preferredDate = date.value;
     if (players.value) body.players = Number(players.value);
@@ -1287,13 +1289,13 @@ function renderTeam(pane) {
     try {
       const r = await api('/api/staff/team');
       clear(box);
-      const name = h('input', { type: 'text', maxlength: '80', placeholder: 'Full name' }), email = h('input', { type: 'email', placeholder: 'Email' }), phone = h('input', { type: 'tel', placeholder: '10 digit mobile number' }), pw = h('input', { type: 'text', placeholder: 'First password', autocomplete: 'off' });
+      const first = h('input', { type: 'text', maxlength: '40', placeholder: 'First name' }), last = h('input', { type: 'text', maxlength: '40', placeholder: 'Last name' }), email = h('input', { type: 'email', placeholder: 'Email' }), phone = h('input', { type: 'tel', placeholder: '10 digit mobile number' }), pw = h('input', { type: 'text', placeholder: 'First password', autocomplete: 'off' });
       const preset = h('select', {}, Object.entries(r.presets).map(([k, p]) => h('option', { value: k }, p.title)));
       const err = h('div', { class: 'fe' });
       const f = (l, el) => { el.style.width = '100%'; return h('label', { class: 'lbl', style: 'display:grid;gap:6px' }, l, el); };
       const add = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
         err.textContent = ''; add.disabled = true;
-        try { await api('/api/staff/team', { method: 'POST', body: { name: name.value.trim(), email: email.value.trim(), phone: phone.value.trim() || undefined, password: pw.value, preset: preset.value } }); toast('Added. They can sign in with their email or mobile number.'); load(); }
+        try { await api('/api/staff/team', { method: 'POST', body: { firstName: first.value.trim(), lastName: last.value.trim(), email: email.value.trim(), phone: phone.value.trim() || undefined, password: pw.value, preset: preset.value } }); toast('Added. They can sign in with their email or mobile number.'); load(); }
         catch (e) { err.textContent = e.message; add.disabled = false; }
       } }, 'Add to team');
       const list = h('div', { class: 'list' });
@@ -1311,7 +1313,7 @@ function renderTeam(pane) {
         const saveBtn = list.lastChild.querySelector('button.outline'); const toggle = list.lastChild.querySelector('.acts button'); toggle.addEventListener('click', () => { saveBtn.style.display = perms.style.display === 'none' ? 'none' : ''; });
       }
       box.append(h('div', { class: 'eyebrow', style: 'margin-bottom:12px' }, 'Your team'), h('p', { class: 'hint' }, 'An Admin runs the day to day (bookings, payments, customers, the academy and matches) and can read reports. Prices, the books, promo codes, the team and settings stay with you.'),
-        h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:end;margin:14px 0' }, f('Name', name), f('Email', email), f('Mobile number', phone), f('Role', preset), f('First password', pw), add), err, list);
+        h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:end;margin:14px 0' }, f('First name', first), f('Last name', last), f('Email', email), f('Mobile number', phone), f('Role', preset), f('First password', pw), add), err, list);
     } catch (e) { clear(box); box.append(h('div', { class: 'empty' }, e.message)); }
   };
   load();

@@ -11,7 +11,7 @@ export function tournamentsRoutes(r: Router): void {
   const base = '/api/staff/tournaments';
 
   r.get(base, (c) => ok(listTournaments(gate(c).owner)), A);
-  r.post(base, (c) => { const g = gate(c); return created(createTournament(g.actor, g.owner, c.json())); }, A);
+  r.post(base, (c) => { const g = gate(c); return created(createTournament(g.actor, g.owner, c.json(), U(c))); }, A);
   r.get(`${base}/:id`, (c) => ok(tournamentDetail(gate(c).owner, c.params.id!)), A);
   r.patch(`${base}/:id`, (c) => { const g = gate(c); return ok(updateTournament(g.actor, g.owner, c.params.id!, c.json())); }, A);
   r.del(`${base}/:id`, (c) => { const g = gate(c); deleteTournament(g.actor, g.owner, c.params.id!); return ok({ removed: true }); }, A);

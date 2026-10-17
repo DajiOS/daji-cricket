@@ -11,7 +11,7 @@ export interface Slot { start: number; end: number; time: string; pricePaise: nu
 export interface Booking {
   id: string; ref: string; groundId: string; groundName: string; date: string; startAt: number; endAt: number; slotCount: number;
   status: 'held' | 'confirmed' | 'cancelled' | 'expired' | 'no_show' | 'completed';
-  totalPaise: number; paidPaise: number; balancePaise: number; holdExpiresAt: number | null; refundPaise: number; creditPaise: number; cancelKind: string | null; seriesId?: string | null; seriesIndex?: number | null; block?: { seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number } | null;
+  totalPaise: number; paidPaise: number; balancePaise: number; holdExpiresAt: number | null; refundPaise: number; creditPaise: number; cancelKind: string | null; seriesId?: string | null; seriesIndex?: number | null; block?: { tournament?: { id: string; name: string } | null; seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number } | null;
 }
 export interface PaymentInstructions {
   mode: 'razorpay' | 'upi' | 'none'; amountPaise: number; paymentId: string | null;

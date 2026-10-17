@@ -220,6 +220,8 @@ export function cancelBlock(staff: UserRow, seriesId: string, input: { reason?: 
       cancelBooking(staff, d.id, { reason: input.reason, offers });
       if (input.settle && d.paid_paise > 0) resolveOwnerCancel(staff, d.id, input.settle, { byStaff: true });
     }
+    // a tournament that was booked this way cannot go ahead without the ground
+    run("UPDATE tournaments SET status = 'cancelled', updated_at = ?, updated_by = ? WHERE series_id = ? AND status <> 'completed'", now(), staff.id, seriesId);
     return { cancelled: days.length };
   });
 }

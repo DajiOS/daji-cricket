@@ -34,6 +34,21 @@ export function Field({ label, ...rest }: { label: string } & TextInputProps) {
   return (<View><Text style={[s.muted, { marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11 }]}>{label}</Text><TextInput placeholderTextColor={C.muted} autoCapitalize="none" style={s.input} {...rest} /></View>);
 }
 
+/** "Asha Rao" is first "Asha", last "Rao"; the last word is the surname. */
+export const splitName = (full: string): { first: string; last: string } => {
+  const p = (full || '').trim().split(/\s+/).filter(Boolean);
+  return p.length < 2 ? { first: p[0] || '', last: '' } : { first: p.slice(0, -1).join(' '), last: p[p.length - 1]! };
+};
+export const joinName = (first: string, last: string) => `${first.trim()} ${last.trim()}`.trim();
+
+/** First name and Last name as two fields wherever a form asks for a person. Reports the full name. */
+export function NameFields({ value, onChange, firstLabel = 'First name', lastLabel = 'Last name' }: { value: string; onChange: (full: string) => void; firstLabel?: string; lastLabel?: string }) {
+  const [p, setP] = React.useState(() => splitName(value));
+  React.useEffect(() => { if (joinName(p.first, p.last) !== (value || '').trim()) setP(splitName(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const set = (k: 'first' | 'last') => (v: string) => { const n = { ...p, [k]: v }; setP(n); onChange(joinName(n.first, n.last)); };
+  return (<><Field label={firstLabel} value={p.first} onChangeText={set('first')} autoCapitalize="words" autoComplete="given-name" /><Field label={lastLabel} value={p.last} onChangeText={set('last')} autoCapitalize="words" autoComplete="family-name" /></>);
+}
+
 export function Chip({ label, on, onPress, disabled }: { label: string; on?: boolean; onPress?: () => void; disabled?: boolean }) {
   return (
     <Pressable onPress={onPress} disabled={disabled} style={{ borderColor: on ? C.gold : C.line, backgroundColor: on ? 'rgba(201,169,107,.14)' : 'transparent', borderWidth: 1, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 13, marginRight: 8, marginBottom: 8, opacity: disabled ? 0.35 : 1 }}>

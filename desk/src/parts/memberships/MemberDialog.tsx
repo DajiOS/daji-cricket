@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { patch, useApi, inr, fmtDate, fmtDateTime, formatPhone } from '../../lib';
-import { Modal, Field, Loading, ErrorBox, Table, Chip, useToast } from '../../ui';
+import { Modal, Field, Loading, ErrorBox, Table, Chip, NameField, useToast } from '../../ui';
 import { StatusChip, leftText, methodLabel, errText, type Member, type Payment } from './shared';
 
 type Detail = Member & { payments: Payment[] };
@@ -25,7 +25,7 @@ export default function MemberDialog({ id, onClose, onRenew, onChanged }: { id: 
       {!m && !err && <Loading h={160} />}
       {m && (edit ? (
         <div className="form-grid">
-          <Field label="Name"><input className="inp" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></Field>
+          <NameField value={name} onChange={setName} />
           <Field label="Mobile number"><input className="inp" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
           <Field label="Notes" full><textarea className="inp" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={300} /></Field>
           <div className="full"><ErrorBox msg={e2} /></div>

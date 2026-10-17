@@ -220,6 +220,7 @@ export function blockOf(seriesId: string, withDays = true): BlockSummary | null 
     awaitingPaise: rows.filter((r) => r.status === 'cancelled' && r.resolution === 'awaiting').reduce((a, r) => a + r.paid_paise, 0),
     refundedPaise: rows.reduce((a, r) => a + r.refund_paise, 0), creditedPaise: rows.reduce((a, r) => a + r.credit_paise, 0),
     cancellableDays: rows.filter((r) => (r.status === 'confirmed' || r.status === 'held') && r.start_at > now()).length,
+    tournament: one<{ id: string; name: string }>('SELECT id, name FROM tournaments WHERE series_id = ? AND deleted_at IS NULL', seriesId) ?? null,
     days: use.length, fromDate: use[0]!.date, toDate: use[use.length - 1]!.date, totalPaise: total, paidPaise: paid, balancePaise: Math.max(total - paid, 0),
     ...(withDays ? { payments: pays } : {}),
     ...(withDays ? { items: rows.map((r) => ({ id: r.id, ref: r.ref, date: r.date, startAt: r.start_at, endAt: r.end_at, status: r.status, totalPaise: r.total_paise, paidPaise: r.paid_paise, balancePaise: Math.max(r.total_paise - r.paid_paise, 0) })) } : {}),

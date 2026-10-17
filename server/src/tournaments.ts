@@ -6,6 +6,9 @@ import { newId } from './ids.ts';
 import { Validator } from './input.ts';
 import { addDays, istDate, istMidnight, minutesOf, MIN } from './time.ts';
 import { createMatch } from './matches.ts';
+import { blockOf } from './bookings.ts';
+import { createStaffBlock, findOrCreateCustomer } from './hold.ts';
+import type { UserRow } from './auth.ts';
 import { postToLedger, removeFromLedger } from './accounting/autopost.ts';
 
 // Tournaments: teams with entry fees, fixtures (round robin can be generated), results and a points table worked out from the results.
@@ -82,12 +85,21 @@ CREATE INDEX ix_tournament_fixtures_t ON tournament_fixtures(tournament_id, roun
 
 export const FORMATS = ['round_robin', 'knockout', 'league_knockout', 'other'] as const;
 export const STATUSES = ['draft', 'open', 'running', 'completed', 'cancelled'] as const;
+registerSchema('tournaments-3', `
+ALTER TABLE tournaments ADD COLUMN series_id TEXT;
+ALTER TABLE tournaments ADD COLUMN customer_id TEXT;
+ALTER TABLE tournaments ADD COLUMN organiser_first TEXT;
+ALTER TABLE tournaments ADD COLUMN organiser_last TEXT;
+ALTER TABLE tournaments ADD COLUMN organiser_phone TEXT;
+ALTER TABLE tournaments ADD COLUMN organiser_email TEXT;
+CREATE INDEX ix_tournaments_series ON tournaments(series_id);
+`);
 registerSchema('tournaments-2', `ALTER TABLE tournament_teams ADD COLUMN ledger_txn_id TEXT;`);
 
 const OUTCOMES = ['team_a', 'team_b', 'tie', 'no_result'] as const;
 const MAX_TEAMS = 32;
 
-interface TRow { id: string; owner_id: string; name: string; start_date: string; end_date: string; format: string; overs: number; entry_fee_paise: number; points_win: number; points_tie: number; status: string; notes: string | null; created_at: number }
+interface TRow { id: string; owner_id: string; name: string; start_date: string; end_date: string; format: string; overs: number; entry_fee_paise: number; points_win: number; points_tie: number; status: string; notes: string | null; created_at: number; series_id: string | null; customer_id: string | null; organiser_first: string | null; organiser_last: string | null; organiser_phone: string | null; organiser_email: string | null }
 interface TeamRow { id: string; tournament_id: string; name: string; captain: string | null; phone: string | null; fee_paid: number; payment_ref: string | null; paid_at: number | null; ledger_txn_id: string | null }
 interface FxRow { id: string; tournament_id: string; round: number; team_a_id: string; team_b_id: string; starts_at: number | null; ground_id: string | null; outcome: string | null; winner_team_id: string | null; result_text: string | null; a_runs: number | null; a_balls: number | null; b_runs: number | null; b_balls: number | null; match_id: string | null }
 
@@ -167,11 +179,23 @@ export function feeStats(t: Pick<TRow, 'entry_fee_paise'>, teams: TeamRow[]): Fe
   return { teams: teams.length, paidTeams: paid, unpaidTeams: teams.length - paid, expectedPaise: expected, collectedPaise: collected, pendingPaise: expected - collected };
 }
 
-export interface TournamentOut { id: string; name: string; startDate: string; endDate: string; format: string; overs: number; entryFeePaise: number; pointsWin: number; pointsTie: number; status: string; notes: string | null; teamCount: number; fixtureCount: number; playedCount: number; fees: FeeStats }
+export interface TournamentOut { id: string; name: string; startDate: string; endDate: string; format: string; overs: number; entryFeePaise: number; pointsWin: number; pointsTie: number; status: string; notes: string | null; teamCount: number; fixtureCount: number; playedCount: number; fees: FeeStats;
+  /** Who runs it. Matched to a customer, so their bookings and the tournament are linked. */
+  organiser: { firstName: string; lastName: string; phone: string | null; email: string | null; customerId: string | null };
+  /** The ground booking made for it (a multi-day booking), if there is one. */
+  booking: { seriesId: string; firstBookingId: string | null; groundName: string | null; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; cancelled: boolean } | null }
+function bookingOf(t: TRow): TournamentOut['booking'] {
+  if (!t.series_id) return null;
+  const k = blockOf(t.series_id, false);
+  if (!k) return null;
+  const s = one<{ first_booking_id: string | null; name: string | null }>('SELECT s.first_booking_id, g.name FROM booking_series s LEFT JOIN grounds g ON g.id = s.ground_id WHERE s.id = ?', t.series_id);
+  return { seriesId: t.series_id, firstBookingId: s?.first_booking_id ?? null, groundName: s?.name ?? null, fromDate: k.fromDate, toDate: k.toDate, totalPaise: k.totalPaise, paidPaise: k.paidPaise, balancePaise: k.balancePaise, cancelled: k.cancelled };
+}
 function toTournament(t: TRow): TournamentOut {
   const teams = teamsOf(t.id), fx = fixturesOf(t.id);
   return { id: t.id, name: t.name, startDate: t.start_date, endDate: t.end_date, format: t.format, overs: t.overs, entryFeePaise: t.entry_fee_paise, pointsWin: t.points_win, pointsTie: t.points_tie, status: t.status, notes: t.notes,
-    teamCount: teams.length, fixtureCount: fx.length, playedCount: fx.filter((f) => f.outcome).length, fees: feeStats(t, teams) };
+    teamCount: teams.length, fixtureCount: fx.length, playedCount: fx.filter((f) => f.outcome).length, fees: feeStats(t, teams),
+    organiser: { firstName: t.organiser_first ?? '', lastName: t.organiser_last ?? '', phone: t.organiser_phone, email: t.organiser_email, customerId: t.customer_id }, booking: bookingOf(t) };
 }
 
 export function listTournaments(ownerId: string): { items: TournamentOut[]; grounds: { id: string; name: string }[] } {
@@ -186,7 +210,36 @@ export function tournamentDetail(ownerId: string, id: string) {
 
 // ------------------------------------------------------------------ tournaments
 
-export function createTournament(actor: Actor, ownerId: string, src: unknown): TournamentOut {
+interface Organiser { first: string; last: string; phone: string | null; email: string | null }
+function parseOrganiser(src: any, required: boolean): Organiser | null {
+  const o = src?.organiser;
+  if (!o || typeof o !== 'object') { if (required) throw bad('organiser', 'Enter the organiser\'s first and last name and phone'); return null; }
+  const v = new Validator(o);
+  const first = v.str('firstName', { required, min: 1, max: 40 }), last = v.str('lastName', { max: 40 }), phone = v.phone('phone', required), email = v.email('email');
+  for (const f of v.fields) throw new HttpError(400, 'VALIDATION_FAILED', f.message, { fields: [{ field: `organiser.${f.field}`, message: f.message }] });
+  if (!first && !phone && !email && !last) return null;
+  return { first: first ?? '', last: last ?? '', phone: phone ?? null, email: email ?? null };
+}
+
+/** The tournament row, with its organiser matched to (or made as) a customer so both sides point at the same person. */
+function insertTournament(actor: Actor, ownerId: string, f: { name: string; startDate: string; endDate: string; format: string; overs: number; fee: number; pw: number; pt: number; status: string; notes: string | null; seriesId?: string | null; org: Organiser | null; customerId?: string | null }): string {
+  const id = newId('trn');
+  let customerId = f.customerId ?? null;
+  if (!customerId && f.org?.phone && f.org.first) customerId = findOrCreateCustomer({ name: `${f.org.first} ${f.org.last}`.trim(), firstName: f.org.first, lastName: f.org.last, phone: f.org.phone, email: f.org.email ?? undefined }).id;
+  run(`INSERT INTO tournaments(id, owner_id, name, start_date, end_date, format, overs, entry_fee_paise, points_win, points_tie, status, notes, series_id, customer_id, organiser_first, organiser_last, organiser_phone, organiser_email, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    id, ownerId, f.name, f.startDate, f.endDate, f.format, f.overs, f.fee, f.pw, f.pt, f.status, f.notes, f.seriesId ?? null, customerId, f.org?.first ?? null, f.org?.last ?? null, f.org?.phone ?? null, f.org?.email ?? null, now(), actor.id, now(), actor.id);
+  audit(actor, 'tournament.create', 'tournament', id, { name: f.name, seriesId: f.seriesId ?? null }, ownerId);
+  return id;
+}
+
+/**
+ * Creates a tournament. With a `booking` the ground is reserved at the same time as a multi-day booking for the tournament's dates,
+ * and the two are linked: the tournament shows the booking and the booking shows the tournament.
+ */
+export function createTournament(actor: Actor, ownerId: string, src: unknown, staff?: UserRow): TournamentOut {
+  return tx(() => createTournamentIn(actor, ownerId, src, staff));
+}
+function createTournamentIn(actor: Actor, ownerId: string, src: unknown, staff?: UserRow): TournamentOut {
   const v = new Validator(src);
   const name = v.str('name', { required: true, min: 3, max: 100 });
   const startDate = v.date('startDate', true), endDate = v.date('endDate', true);
@@ -198,10 +251,40 @@ export function createTournament(actor: Actor, ownerId: string, src: unknown): T
   const notes = v.str('notes', { max: 1000 });
   v.done();
   if (endDate! < startDate!) throw bad('endDate', 'The end date cannot be before the start date');
-  const id = newId('trn');
-  run(`INSERT INTO tournaments(id, owner_id, name, start_date, end_date, format, overs, entry_fee_paise, points_win, points_tie, status, notes, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    id, ownerId, name!, startDate!, endDate!, format, overs, fee, pw, pt, status, notes ?? null, now(), actor.id, now(), actor.id);
-  audit(actor, 'tournament.create', 'tournament', id, { name }, ownerId);
+  const bk = (src as any)?.booking;
+  const org = parseOrganiser(src, !!bk);
+  let seriesId: string | null = null, customerId: string | null = null;
+  if (bk && typeof bk === 'object') {
+    if (!staff) throw new HttpError(403, 'FORBIDDEN', 'Not allowed');
+    const bv = new Validator(bk);
+    const groundId = bv.str('groundId', { required: true }), startTime = bv.time('startTime', true), endTime = bv.time('endTime', true);
+    const totalPaise = bv.int('totalPaise', { required: true, min: 100, max: 100_000_000_00 });
+    const pay = bk.payment, pv = new Validator(pay && typeof pay === 'object' ? pay : {});
+    const method = pv.oneOf('method', ['cash', 'card', 'upi', 'bank_transfer'] as const, true), amountPaise = pv.int('amountPaise', { required: true, min: 1 }), reference = pv.str('reference', { max: 60 });
+    for (const f of [...bv.fields, ...pv.fields.map((x) => ({ ...x, field: `payment.${x.field}` }))]) throw new HttpError(400, 'VALIDATION_FAILED', f.message, { fields: [{ field: `booking.${f.field}`, message: f.message }] });
+    const out = createStaffBlock(staff, {
+      groundId: groundId!, fromDate: startDate!, toDate: endDate!, startTime: startTime!, endTime: endTime!, totalPaise: totalPaise!,
+      customer: { name: `${org!.first} ${org!.last}`.trim(), firstName: org!.first, lastName: org!.last, phone: org!.phone!, ...(org!.email ? { email: org!.email } : {}) },
+      payment: { method: method!, amountPaise: amountPaise!, reference }, notes: `Tournament: ${name}`,
+    });
+    seriesId = out.series.id;
+    customerId = out.bookings[0]!.customerId ?? null;
+  }
+  const id = insertTournament(actor, ownerId, { name: name!, startDate: startDate!, endDate: endDate!, format, overs, fee, pw, pt, status, notes: notes ?? null, seriesId, org, customerId });
+  return toTournament(own(ownerId, id));
+}
+
+/** A multi-day booking that was made first and is now marked as a tournament: the tournament is created and linked to it. */
+export function tournamentForBlock(actor: Actor, ownerId: string, seriesId: string, src: unknown, org: Organiser | null, customerId: string | null): TournamentOut {
+  const v = new Validator(src);
+  const name = v.str('name', { required: true, min: 3, max: 100 });
+  const format = v.oneOf('format', FORMATS) ?? 'round_robin';
+  const overs = v.int('overs', { min: 1, max: 50 }) ?? 20;
+  const fee = v.int('entryFeePaise', { min: 0, max: 100_000_000 }) ?? 0;
+  v.done();
+  const k = blockOf(seriesId, false);
+  if (!k) throw notFound('Multi-day booking not found');
+  const id = insertTournament(actor, ownerId, { name: name!, startDate: k.fromDate, endDate: k.toDate, format, overs, fee, pw: 2, pt: 1, status: 'open', notes: null, seriesId, org, customerId });
   return toTournament(own(ownerId, id));
 }
 
@@ -217,6 +300,8 @@ export function updateTournament(actor: Actor, ownerId: string, id: string, src:
   const status = v.oneOf('status', STATUSES);
   const notes = v.has('notes') ? v.str('notes', { max: 1000 }) ?? '' : v.src.notes === null ? '' : undefined;
   v.done();
+  const org = parseOrganiser(src, false);
+  if (org) run('UPDATE tournaments SET organiser_first = ?, organiser_last = ?, organiser_phone = ?, organiser_email = ? WHERE id = ?', org.first, org.last, org.phone, org.email, id);
   const s = startDate ?? cur.start_date, e = endDate ?? cur.end_date;
   if (e < s) throw bad('endDate', 'The end date cannot be before the start date');
   run('UPDATE tournaments SET name = ?, start_date = ?, end_date = ?, format = ?, overs = ?, entry_fee_paise = ?, points_win = ?, points_tie = ?, status = ?, notes = ?, updated_at = ?, updated_by = ? WHERE id = ?',

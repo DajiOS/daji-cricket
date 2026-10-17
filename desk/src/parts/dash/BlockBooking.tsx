@@ -1,7 +1,7 @@
 // A custom multi-day programme (camp, tournament, shoot): the same hours on a run of days for one agreed total.
 // Normally this follows an enquiry and a quotation; staff enter it here once the customer has agreed.
 import { useState } from 'react';
-import { Modal, Field, ErrorBox } from '../../ui';
+import { Modal, Field, ErrorBox, NameField, splitName } from '../../ui';
 import { post, useApi, inr, toPaise, todayISO, addDaysISO } from '../../lib';
 import { HAND_METHODS, errText, useCustomerMatch, MatchNote } from './common';
 
@@ -24,6 +24,7 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
+  const [isT, setIsT] = useState(false), [tName, setTName] = useState(''), [tFormat, setTFormat] = useState('round_robin'), [tOvers, setTOvers] = useState('20'), [tFee, setTFee] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -38,12 +39,17 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
     if (days < 1 || days > 31) return setErr('Choose 1 to 31 days');
     if (!totalPaise || totalPaise < 100) return setErr('Enter the agreed total for all days, in rupees');
     if (!payPaise || payPaise < 1) return setErr('Enter the amount received now');
-    if (!cust.name.trim() || !cust.phone.trim()) return setErr('Enter the customer name and phone');
+    const nm = splitName(cust.name);
+    if (!nm.first || !nm.last || !cust.phone.trim()) return setErr('Enter the customer first name, last name and phone');
+    if (isT && tName.trim().length < 3) return setErr('Give the tournament a name');
+    const fee = tFee.trim() ? toPaise(tFee) : 0;
+    if (isT && fee === null) return setErr('Enter the entry fee per team in rupees');
     setBusy(true);
     try {
       const r = await post('/api/staff/bookings/block', {
         groundId: gid, fromDate: from, toDate: to, startTime: hh(start), endTime: hh(end), totalPaise,
-        customer: { name: cust.name, phone: cust.phone, email: cust.email || undefined },
+        customer: { firstName: nm.first, lastName: nm.last, phone: cust.phone, email: cust.email || undefined },
+        ...(isT ? { tournament: { name: tName.trim(), format: tFormat, overs: Number(tOvers) || 20, entryFeePaise: fee ?? 0 } } : {}),
         payment: { method, amountPaise: payPaise, reference: reference || undefined }, notes: notes || undefined,
       });
       onDone(r.bookings[0].id);
@@ -61,12 +67,19 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
         <Field label="From"><select className="inp" value={start} onChange={(e) => setStart(Number(e.target.value))}>{HOURS.map((h) => <option key={h} value={h}>{label(h)}</option>)}</select></Field>
         <Field label="Until"><select className="inp" value={end} onChange={(e) => setEnd(Number(e.target.value))}>{HOURS.filter((h) => h > start).map((h) => <option key={h} value={h}>{label(h)}</option>)}</select></Field>
         <Field label="Agreed total for all days (rupees)" hint={totalPaise && days ? `${days} days, about ${inr(Math.round(totalPaise / days))} a day` : undefined}><input className="inp" inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value)} /></Field>
-        <Field label="Customer name"><input className="inp" value={cust.name} onChange={(e) => setCust({ ...cust, name: e.target.value })} /></Field>
+        <NameField value={cust.name} onChange={(n) => setCust((c) => ({ ...c, name: n }))} firstLabel="Customer first name" lastLabel="Customer last name" />
         <Field label="Phone"><input className="inp" inputMode="tel" value={cust.phone} onChange={(e) => setCust({ ...cust, phone: e.target.value })} /></Field>
         <Field label="Email (optional)"><input className="inp" value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} /></Field>
         <MatchNote m={match} />
+        <label className="check full"><input type="checkbox" checked={isT} onChange={(e) => setIsT(e.target.checked)} /> This is a tournament. It is also added to Tournaments, linked to this booking.</label>
+        {isT && <>
+          <Field label="Tournament name" full><input className="inp" value={tName} onChange={(e) => setTName(e.target.value)} placeholder="Diwali Cup 2026" /></Field>
+          <Field label="Format"><select className="inp" value={tFormat} onChange={(e) => setTFormat(e.target.value)}><option value="round_robin">Round robin</option><option value="knockout">Knockout</option><option value="league_knockout">League then knockout</option><option value="other">Other</option></select></Field>
+          <Field label="Overs per side"><input className="inp" inputMode="numeric" value={tOvers} onChange={(e) => setTOvers(e.target.value.replace(/\D/g, ''))} /></Field>
+          <Field label="Entry fee per team (rupees)"><input className="inp" inputMode="decimal" value={tFee} onChange={(e) => setTFee(e.target.value)} /></Field>
+        </>}
         <Field label="Received now (rupees)"><input className="inp" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
-        <Field label="Paid by"><select className="inp" value={method} onChange={(e) => setMethod(e.target.value)}>{Object.entries(HAND_METHODS).map(([k, l]) => <option key={k} value={k}>{l as string}</option>)}</select></Field>
+        <Field label="Paid by"><select className="inp" value={method} onChange={(e) => setMethod(e.target.value)}>{HAND_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
         <Field label="Reference (UTR, cheque no.)"><input className="inp" value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
         <Field label="Notes" full><input className="inp" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Camp name, contact person" /></Field>
       </div>

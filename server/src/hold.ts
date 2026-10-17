@@ -278,7 +278,7 @@ function undoHold(bookingId: string, customer: UserRow): void {
 
 export interface WalkInInput {
   groundId: string; date: string; startTime: string; slots?: number; formatId?: string; ruleId?: string;
-  customer: { name: string; phone: string; email?: string };
+  customer: { name: string; phone: string; email?: string; firstName?: string; lastName?: string };
   payment: { method: Exclude<PayMethod, 'razorpay' | 'credit'>; amountPaise: number; reference?: string };
   players?: number; notes?: string; source?: 'walk_in' | 'enquiry'; enquiryId?: string; totalPaiseOverride?: number; customerId?: string;
 }
@@ -300,11 +300,11 @@ export function parseWalkIn(body: unknown): WalkInInput {
   if (!cust || typeof cust !== 'object') v.fail('customer', 'Required');
   else {
     const cv = new Validator(cust);
-    const name = cv.str('name', { required: true, min: 2, max: 80 });
+    const nm = readName(cv, true);
     const phone = cv.phone('phone', true);
     const email = cv.email('email');
     for (const f of cv.fields) v.fail(`customer.${f.field}`, f.message);
-    if (name && phone) customer = { name, phone, email };
+    if (nm.name && phone) customer = { name: nm.name, ...(nm.firstName ? { firstName: nm.firstName, lastName: nm.lastName } : {}), phone, email };
   }
   if (!pay || typeof pay !== 'object') v.fail('payment', 'Required');
   else {
@@ -319,8 +319,17 @@ export function parseWalkIn(body: unknown): WalkInInput {
   return { groundId: groundId!, date: date!, startTime: startTime!, slots, formatId, ruleId, customer: customer!, payment: payment!, players, notes };
 }
 
+/** Reads a person's name from `firstName` and `lastName` (preferred) or a single `name`. */
+export function readName(cv: Validator, required: boolean): { name?: string; firstName?: string; lastName?: string } {
+  const first = cv.str('firstName', { min: 1, max: 40 });
+  const last = cv.str('lastName', { max: 40 });
+  if (first) return { name: `${first} ${last ?? ''}`.trim(), firstName: first, lastName: last ?? '' };
+  const name = cv.str('name', { required, min: 2, max: 80 });
+  return { name };
+}
+
 /** Finds the customer by phone (or email) within what staff may see, or creates a walk-in record without a login. */
-export function findOrCreateCustomer(c: { name: string; phone: string; email?: string }): UserRow {
+export function findOrCreateCustomer(c: { name: string; phone: string; email?: string; firstName?: string; lastName?: string }): UserRow {
   const phone = normalizePhone(c.phone)!;
   if (c.email) {
     const byEmail = one<UserRow>("SELECT * FROM users WHERE lower(email) = lower(?) AND role = 'customer'", c.email);
@@ -328,7 +337,7 @@ export function findOrCreateCustomer(c: { name: string; phone: string; email?: s
   }
   const byPhone = one<UserRow>("SELECT * FROM users WHERE phone = ? AND role = 'customer' ORDER BY (password_hash IS NOT NULL) DESC, created_at LIMIT 1", phone);
   if (byPhone) return byPhone;
-  return createUser({ role: 'customer', name: c.name, phone, email: c.email ?? null });
+  return createUser({ role: 'customer', name: c.name, ...(c.firstName ? { firstName: c.firstName, lastName: c.lastName ?? '' } : {}), phone, email: c.email ?? null });
 }
 
 export interface CustomerMatch {
@@ -394,7 +403,7 @@ export function createStaffBooking(staff: UserRow, input: WalkInInput): Booking 
 
 export interface BlockInput {
   groundId: string; fromDate: string; toDate: string; startTime: string; endTime: string; totalPaise: number;
-  customer: { name: string; phone: string; email?: string };
+  customer: { name: string; phone: string; email?: string; firstName?: string; lastName?: string };
   payment: { method: Exclude<PayMethod, 'razorpay' | 'credit'>; amountPaise: number; reference?: string };
   notes?: string; enquiryId?: string; customerId?: string;
 }
@@ -412,9 +421,9 @@ export function parseBlock(body: unknown): BlockInput {
   if (!cust || typeof cust !== 'object') v.fail('customer', 'Required');
   else {
     const cv = new Validator(cust);
-    const name = cv.str('name', { required: true, min: 2, max: 80 }), phone = cv.phone('phone', true), email = cv.email('email');
+    const nm = readName(cv, true), phone = cv.phone('phone', true), email = cv.email('email');
     for (const f of cv.fields) v.fail(`customer.${f.field}`, f.message);
-    if (name && phone) customer = { name, phone, email };
+    if (nm.name && phone) customer = { name: nm.name, ...(nm.firstName ? { firstName: nm.firstName, lastName: nm.lastName } : {}), phone, email };
   }
   if (!pay || typeof pay !== 'object') v.fail('payment', 'Required');
   else {

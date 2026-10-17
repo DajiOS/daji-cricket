@@ -79,17 +79,17 @@ function coaches(view) {
     clear(list);
     if (!rows.length) list.append(h('div', { class: 'empty' }, 'No coaches yet. Add the first one.'));
     rows.forEach((c, i) => {
-      const name = h('input', { value: c.name, maxlength: '80', placeholder: 'Full name' }), title = h('input', { value: c.title, maxlength: '80', placeholder: 'e.g. Head coach, BCCI Level 2' });
+      const sp = (c.name || '').trim().split(/\s+/), first = h('input', { value: sp.length > 1 ? sp.slice(0, -1).join(' ') : sp[0] || '', maxlength: '40', placeholder: 'First name' }), last = h('input', { value: sp.length > 1 ? sp[sp.length - 1] : '', maxlength: '40', placeholder: 'Last name' }), title = h('input', { value: c.title, maxlength: '80', placeholder: 'e.g. Head coach, BCCI Level 2' });
       const bio = h('textarea', { maxlength: '400', placeholder: 'A line or two about experience' }, c.bio);
       const photo = h('input', { value: c.photo, placeholder: 'Photo link, or upload below' });
       const file = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp' });
-      name.addEventListener('input', () => { c.name = name.value; }); title.addEventListener('input', () => { c.title = title.value; });
+      const joinName = () => { c.name = `${first.value.trim()} ${last.value.trim()}`.trim(); }; first.addEventListener('input', joinName); last.addEventListener('input', joinName); title.addEventListener('input', () => { c.title = title.value; });
       bio.addEventListener('input', () => { c.bio = bio.value; }); photo.addEventListener('input', () => { c.photo = photo.value; });
       file.addEventListener('change', async () => {
         const f = file.files[0]; if (!f) return;
         try { const r = await D.apiFile(`/api/media?kind=academy&filename=${encodeURIComponent(f.name)}`, f); c.photo = r.url; photo.value = r.url; toast('Uploaded. Press Save to publish.'); } catch (e) { fail(e); }
       });
-      list.append(h('div', { class: 'box', style: 'margin-bottom:14px' }, box('Name', name), box('Title', title), box('About', bio), box('Photo', photo), file,
+      list.append(h('div', { class: 'box', style: 'margin-bottom:14px' }, box('First name', first), box('Last name', last), box('Title', title), box('About', bio), box('Photo', photo), file,
         h('div', { class: 'dls', style: 'margin-top:10px' }, btn('Up', () => { if (i) { [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]]; draw(); } }, 'ghost sm'), btn('Down', () => { if (i < rows.length - 1) { [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]]; draw(); } }, 'ghost sm'), btn('Remove', () => { rows.splice(i, 1); draw(); }, 'ghost sm'))));
     });
   };
@@ -368,13 +368,13 @@ function platformPage() {
   const trap = h('input', { name: 'website', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true', style: 'position:absolute;left:-9999px;width:1px;height:1px;opacity:0' });
   const done = h('div', { class: 'answer', hidden: true }, h('p', {}, 'Thank you. We have your details and will call you soon.'));
   const status = h('div', { class: 'fe' });
-  f.append(h('div', { class: 'two' }, h('div', {}, inp('name', 'Your name', { autocomplete: 'name' }), inp('business', 'Ground or business name'), inp('city', 'City')),
+  f.append(h('div', { class: 'two' }, h('div', {}, inp('firstName', 'First name', { autocomplete: 'given-name' }), inp('lastName', 'Last name', { autocomplete: 'family-name' }), inp('business', 'Ground or business name'), inp('city', 'City')),
     h('div', {}, inp('phone', 'Phone', { inputmode: 'tel', autocomplete: 'tel' }), inp('email', 'Email', { type: 'email', autocomplete: 'email' }), inp('grounds', 'Number of grounds', { type: 'number', min: 1, max: 500 }))),
     h('label', { class: 'field' }, h('span', {}, 'Anything else'), msg), trap, status, h('button', { class: 'btn primary', type: 'submit' }, 'Send'), done);
   f.addEventListener('submit', async (e) => {
     e.preventDefault(); status.textContent = ''; for (const k of Object.keys(errs)) errs[k].textContent = '';
     const g = (n) => f.elements[n].value.trim();
-    const body = { name: g('name'), business: g('business'), city: g('city') || undefined, phone: g('phone'), email: g('email'), grounds: g('grounds') ? Number(g('grounds')) : undefined, message: g('message') || undefined, website: g('website') || undefined };
+    const body = { name: `${g('firstName')} ${g('lastName')}`.trim(), business: g('business'), city: g('city') || undefined, phone: g('phone'), email: g('email'), grounds: g('grounds') ? Number(g('grounds')) : undefined, message: g('message') || undefined, website: g('website') || undefined };
     try { await api('/api/platform/leads', { method: 'POST', body }); f.querySelectorAll('input,textarea,button').forEach((x) => { x.disabled = true; }); done.hidden = false; }
     catch (er) { const fe = D.fieldErrors(er); for (const [k, v] of Object.entries(fe)) if (errs[k]) errs[k].textContent = v; status.textContent = Object.keys(fe).length ? 'Please check the highlighted fields.' : er.message; }
   });

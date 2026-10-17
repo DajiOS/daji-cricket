@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Chip, Field, Filters, Modal, PageHead, Table, useForm, useToast } from '../ui';
+import { Chip, Field, Filters, Modal, PageHead, Table, useForm, NameField, useToast } from '../ui';
 import { ApiError, del, download, getToken, getViewOwner, patch, post, qs, sendFile, useApi } from '../lib';
 import { Async, errMsg, useDebounced } from '../parts/club/common';
 
@@ -37,7 +37,7 @@ const lines = (s: string) => s.split(/[\n,]+/).map((x) => x.trim()).filter(Boole
 
 function Editor({ card, draft, photo, dup, onClose, onSaved }: { card?: Card; draft?: Scan['fields']; photo?: Blob; dup?: Scan['duplicates']; onClose: () => void; onSaved: () => void }) {
   const toast = useToast(); const [busy, setBusy] = useState(false);
-  const { v, bind } = useForm(toForm(card ?? draft));
+  const { v, bind, setV } = useForm(toForm(card ?? draft));
   const [preview] = useState(() => (photo ? URL.createObjectURL(photo) : null));
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const save = async () => {
@@ -58,7 +58,7 @@ function Editor({ card, draft, photo, dup, onClose, onSaved }: { card?: Card; dr
       {photo && <div className="note" style={{ marginBottom: 12 }}>Check the details below against the card before saving. Card readers can mistake digits.</div>}
       <div className="form-grid">
         {(preview || card?.hasImage) && <div className="full">{preview ? <img src={preview} alt="Card" style={{ maxWidth: '100%', maxHeight: 220, borderRadius: 6 }} /> : <CardPhoto id={card!.id} />}</div>}
-        <Field label="Name"><input className="inp" {...bind('name')} /></Field>
+        <NameField value={v.name} onChange={(n) => setV((x: any) => ({ ...x, name: n }))} />
         <Field label="Job title"><input className="inp" {...bind('title')} /></Field>
         <Field label="Company"><input className="inp" {...bind('company')} /></Field>
         <Field label="Website"><input className="inp" {...bind('website')} /></Field>

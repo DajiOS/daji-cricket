@@ -44,7 +44,7 @@ export function StaffScreen({ user }: { user: User }) {
       <View key={b.id} style={s.card}>
         <View style={s.row}><Text style={[s.text, { fontWeight: '700' }]}>{blk ? `${niceDate(blk.fromDate)} – ${niceDate(blk.toDate)}  ·  ${blk.days} days` : `${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${niceDate(b.date)}`}</Text><Text style={s.muted}>{b.ref}</Text></View>
         <Text style={s.text}>{b.customerName}{b.customerPhone ? `  ·  ${b.customerPhone}` : ''}</Text>
-        <Text style={[s.muted, { marginBottom: 6 }]}>{b.groundName}{blk ? `  ·  Multi-day, ${hhmm(b.startAt)} – ${hhmm(b.endAt)} daily` : b.formatLabel ? `  ·  ${b.formatLabel}` : ''}</Text>
+        <Text style={[s.muted, { marginBottom: 6 }]}>{b.groundName}{blk ? `  ·  ${blk.tournament ? `Tournament: ${blk.tournament.name}  ·  ` : ''}Multi-day, ${hhmm(b.startAt)} – ${hhmm(b.endAt)} daily` : b.formatLabel ? `  ·  ${b.formatLabel}` : ''}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           <Badge tone={b.status === 'confirmed' ? 'ok' : b.status === 'cancelled' || b.status === 'no_show' ? 'danger' : 'muted'} label={b.status.replace('_', ' ')} />
           {b.approval === 'pending' && <Badge tone="gold" label="Needs approval" />}{b.needsReview && <Badge tone="danger" label="Review" />}{!!b.promoCode && <Badge label={b.promoCode} />}

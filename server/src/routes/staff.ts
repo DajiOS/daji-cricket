@@ -4,12 +4,13 @@ import { Validator } from '../input.ts';
 import { HttpError, notFound } from '../errors.ts';
 import { audit } from '../audit.ts';
 import { checkPasswordStrength, createUser, hasPermission, listStaff, requirePermission, requireRevenue, scopeOwnerId, toUser, userRow } from '../auth.ts';
-import { one, many, run } from '../db.ts';
+import { one, many, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
 import { cancelBlock, settleBlock, settleForCustomer } from '../cancellation.ts';
-import { lookupCustomer, createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
+import { tournamentForBlock } from '../tournaments.ts';
+import { lookupCustomer, readName, createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
 import { cancelBooking, previewCancel } from '../cancellation.ts';
 import { createPromos, listPromos, setPromoActive } from '../promo.ts';
 import { completeManualRefund, listPayments, listRefunds, paymentHistory, paymentOr404, recordOffline, verifyUpi } from '../payments.ts';
@@ -58,7 +59,22 @@ export function staffRoutes(r: Router): void {
   r.post('/api/staff/bookings', (c) => created({ booking: createStaffBooking(U(c), parseWalkIn(c.json())) }), A);
 
   // One booking per day for a run of days at one agreed total (camps, tournaments, shoots)
-  r.post('/api/staff/bookings/block', (c) => created(createStaffBlock(U(c), parseBlock(c.json()))), A);
+  r.post('/api/staff/bookings/block', (c) => {
+    const u = U(c), body = c.json() as any;
+    const tn = body?.tournament;
+    if (tn) requirePermission(u, 'manage_matches'); // a tournament is made alongside the booking
+    return tx(() => {
+    const out = createStaffBlock(u, parseBlock(body));
+    if (!tn || typeof tn !== 'object') return created(out);
+    const owner = scopeOwnerId(u) ?? ownerOrFail(c, 'run tournaments');
+    const cu = out.bookings[0]!;
+    const bc = body.customer ?? {};
+    const full = String(bc.name ?? '').trim(), sp = full.indexOf(' ');
+    const org = { first: bc.firstName ? String(bc.firstName) : sp < 0 ? full : full.slice(0, sp), last: bc.firstName ? String(bc.lastName ?? '') : sp < 0 ? '' : full.slice(sp + 1), phone: body.customer?.phone ?? null, email: body.customer?.email ?? null };
+    const tournament = tournamentForBlock({ id: u.id, role: u.role }, owner, out.series.id, tn, org, cu.customerId ?? null);
+    return created({ ...out, tournament });
+    });
+  }, A);
 
   // One payment for a whole multi-day booking: it fills the earliest days first
   r.post('/api/staff/bookings/block/:seriesId/payments', (c) => {
@@ -378,7 +394,7 @@ export function staffRoutes(r: Router): void {
   r.post('/api/staff/team', (c) => {
     const u = U(c);
     const v = new Validator(c.json());
-    const name = v.str('name', { required: true, min: 2, max: 80 });
+    const nm = readName(v, true); const name = nm.name;
     const email = v.email('email', true);
     const phone = v.phone('phone');
     const password = v.str('password', { required: true, trim: false });
@@ -389,7 +405,7 @@ export function staffRoutes(r: Router): void {
     if (password) { const pw = checkPasswordStrength(password); if (pw) v.fail('password', pw); }
     v.done();
     const ownerId = u.role === 'owner' ? u.id : ownerOrFail(c, 'add a team member');
-    const s = createUser({ role: 'staff', name: name!, email: email!, phone: phone ?? null, password: password!, ownerId, permissions });
+    const s = createUser({ role: 'staff', name: name!, ...(nm.firstName ? { firstName: nm.firstName, lastName: nm.lastName } : {}), email: email!, phone: phone ?? null, password: password!, ownerId, permissions });
     audit({ id: u.id, role: u.role }, 'staff.create', 'user', s.id, { permissions }, ownerId);
     return created(toUser(s));
   }, { auth: ['owner', 'super_admin'] });

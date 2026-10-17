@@ -96,7 +96,7 @@ function List({ version, preset }: { version: number; preset: string }) {
             { head: 'When', cell: (b) => b.block ? <><div className="strong">{fmtDay(b.block.fromDate)} – {fmtDay(b.block.toDate)}</div><div className="small muted tabular">{b.block.days} days · {timeRange(b)} daily</div></> : <><div className="strong">{fmtDay(b.date)}</div><div className="small muted tabular">{timeRange(b)}</div></> },
             { head: 'Customer', cell: (b) => <><div className="strong">{b.customerName}</div><div className="small muted">{formatPhone(b.customerPhone)}</div></> },
             { head: 'Ground', cell: (b) => <>{b.groundName}<div className="small muted">{b.block ? 'Multi-day booking' : whatOf(b)}</div></> },
-            { head: 'Status', cell: (b) => <span className="row" style={{ gap: 6 }}><BookingChip b={b} />{b.block && <Chip tone="info">Multi-day</Chip>}{b.needsReview && <Chip tone="warn">Review</Chip>}</span> },
+            { head: 'Status', cell: (b) => <span className="row" style={{ gap: 6 }}><BookingChip b={b} />{b.block && <Chip tone="info">Multi-day</Chip>}{b.block?.tournament && <a href={`#/tournaments/${b.block.tournament.id}`} onClick={(e) => { e.stopPropagation(); go('/tournaments/' + b.block!.tournament!.id); e.preventDefault(); }}><Chip tone="gold">Tournament: {b.block.tournament.name}</Chip></a>}{b.needsReview && <Chip tone="warn">Review</Chip>}</span> },
             { head: 'Total', num: true, cell: (b) => inr(b.block ? b.block.totalPaise : b.totalPaise) },
             { head: 'Paid', num: true, cell: (b) => {
               const k = b.block, gone = k ? k.cancelled : b.status === 'cancelled', paid = k ? k.paidPaise : b.paidPaise;

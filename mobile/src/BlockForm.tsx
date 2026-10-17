@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { api } from './api';
-import { Btn, Chip, Field, s } from './ui';
+import { Btn, Chip, Field, NameFields, splitName, s } from './ui';
 import { inr } from './theme';
 
 interface Ground { id: string; name: string; active: boolean }
@@ -20,6 +20,7 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
   const [total, setTotal] = useState(''); const [name, setName] = useState(''); const [phone, setPhone] = useState('');
   const [method, setMethod] = useState<'upi' | 'bank_transfer' | 'card' | 'cash'>('upi'); const [amount, setAmount] = useState(''); const [ref, setRef] = useState('');
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [isT, setIsT] = useState(false); const [tName, setTName] = useState('');
   const [match, setMatch] = useState<{ known: boolean; hasAccount: boolean; name?: string } | null>(null);
   // An existing customer is found by phone; their name is filled in and, if they already have an account, staff are told not to make another.
   useEffect(() => {
@@ -36,12 +37,12 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
   const n = /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) ? days(from, to) : 0;
   const totalPaise = Math.round(Number(total) * 100), payPaise = Math.round(Number(amount) * 100);
   const cashTooHigh = method === 'cash' && payPaise >= 20_000_000;
-  const ready = n >= 1 && n <= 31 && totalPaise >= 100 && payPaise >= 1 && name.trim() && phone.trim() && groundId && !cashTooHigh;
+  const ready = n >= 1 && n <= 31 && totalPaise >= 100 && payPaise >= 1 && splitName(name).first && splitName(name).last && phone.trim() && (!isT || tName.trim().length >= 3) && groundId && !cashTooHigh;
 
   async function save() {
     setErr(''); setBusy(true);
     try {
-      const r = await api<{ bookings: { id: string }[] }>('/api/staff/bookings/block', { method: 'POST', body: { groundId, fromDate: from, toDate: to, startTime: hh(start), endTime: hh(end), totalPaise, customer: { name: name.trim(), phone: phone.trim() }, payment: { method, amountPaise: payPaise, reference: ref.trim() || undefined } } });
+      const r = await api<{ bookings: { id: string }[] }>('/api/staff/bookings/block', { method: 'POST', body: { groundId, fromDate: from, toDate: to, startTime: hh(start), endTime: hh(end), totalPaise, customer: { firstName: splitName(name).first, lastName: splitName(name).last, phone: phone.trim() }, ...(isT ? { tournament: { name: tName.trim() } } : {}), payment: { method, amountPaise: payPaise, reference: ref.trim() || undefined } } });
       onDone(`${r.bookings.length} days booked.`);
     } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); } finally { setBusy(false); }
   }
@@ -59,8 +60,10 @@ export function BlockForm({ onDone }: { onDone: (message: string) => void }) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>{HOURS.filter((h) => h > start).map((h) => <Chip key={h} label={lab(h)} on={end === h} onPress={() => setEnd(h)} />)}</ScrollView>
       <Field label="Agreed total for all days (₹)" value={total} onChangeText={setTotal} keyboardType="numeric" />
       {n > 0 && totalPaise > 0 && <Text style={s.muted}>{n} day{n === 1 ? '' : 's'}, about {inr(Math.round(totalPaise / n))} a day</Text>}
-      <Field label="Customer name" value={name} onChangeText={setName} autoCapitalize="words" />
+      <NameFields value={name} onChange={setName} firstLabel="Customer first name" lastLabel="Customer last name" />
       <Field label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+      <Chip label={isT ? 'This is a tournament: also added to Tournaments' : 'Mark as a tournament'} on={isT} onPress={() => setIsT(!isT)} />
+      {isT && <Field label="Tournament name" value={tName} onChangeText={setTName} autoCapitalize="words" />}
       {match && <Text style={s.muted}>{match.known ? `Existing customer: ${match.name}. Details filled in.` : 'This number already belongs to a customer.'}{match.hasAccount ? ' They already have an account: ask them to sign in with a mobile code or reset their password, do not make a new one.' : ''}</Text>}
       <Text style={s.muted}>Paid by</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{(['upi', 'bank_transfer', 'card', 'cash'] as const).map((m) => <Chip key={m} label={m.replace('_', ' ')} on={method === m} onPress={() => setMethod(m)} />)}</View>

@@ -115,6 +115,29 @@ export function Field({ label, hint, children, full }: { label: string; hint?: s
   return <label className={`f${full ? ' full' : ''}`}><span>{label}</span>{children}{hint && <div className="hint">{hint}</div>}</label>;
 }
 
+/** "Asha Rao" becomes first "Asha", last "Rao"; the last word is the surname. */
+export function splitName(full: string): { first: string; last: string } {
+  const p = (full || '').trim().split(/\s+/).filter(Boolean);
+  return p.length < 2 ? { first: p[0] || '', last: '' } : { first: p.slice(0, -1).join(' '), last: p[p.length - 1]! };
+}
+export const joinName = (first: string, last: string) => `${first.trim()} ${last.trim()}`.trim();
+
+/** First name and last name as two fields, for any form that asks for a person. */
+export function NameFields({ first, last, onFirst, onLast, firstLabel = 'First name', lastLabel = 'Last name', autoFocus }: { first: string; last: string; onFirst: (v: string) => void; onLast: (v: string) => void; firstLabel?: string; lastLabel?: string; autoFocus?: boolean }) {
+  return (<>
+    <Field label={firstLabel}><input className="inp" maxLength={40} autoComplete="given-name" autoFocus={autoFocus} value={first} onChange={(e) => onFirst(e.target.value)} /></Field>
+    <Field label={lastLabel}><input className="inp" maxLength={40} autoComplete="family-name" value={last} onChange={(e) => onLast(e.target.value)} /></Field>
+  </>);
+}
+
+/** Drop-in for a single "Name" field: shows First name and Last name, and reports the full name. */
+export function NameField({ value, onChange, autoFocus, firstLabel = 'First name', lastLabel = 'Last name' }: { value: string; onChange: (full: string) => void; autoFocus?: boolean; firstLabel?: string; lastLabel?: string }) {
+  const [p, setP] = useState(() => splitName(value));
+  useEffect(() => { if (joinName(p.first, p.last) !== (value || '').trim()) setP(splitName(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const set = (k: 'first' | 'last') => (v: string) => { const n = { ...p, [k]: v }; setP(n); onChange(joinName(n.first, n.last)); };
+  return <NameFields first={p.first} last={p.last} onFirst={set('first')} onLast={set('last')} autoFocus={autoFocus} firstLabel={firstLabel} lastLabel={lastLabel} />;
+}
+
 export function Modal({ title, onClose, children, foot, wide }: { title: string; onClose: () => void; children: ReactNode; foot?: ReactNode; wide?: boolean }) {
   useEffect(() => { const f = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [onClose]);
   return (

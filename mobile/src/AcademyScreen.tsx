@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { ProgressCard, Student } from './types';
-import { Badge, Btn, Chip, Field, KV, Loading, Section, s } from './ui';
+import { Badge, Btn, Chip, Field, KV, Loading, Section, s, NameFields } from './ui';
 import { C } from './theme';
 
 type Tab = 'attendance' | 'students' | 'progress';
@@ -82,7 +82,7 @@ function Students() {
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       <Btn kind="outline" label={adding ? 'Close' : 'Add a student'} onPress={() => setAdding(!adding)} />
       {adding && (<View style={s.card}>
-        <Field label="Student name" value={f.name} onChangeText={set('name')} autoCapitalize="words" /><Field label="Parent or guardian" value={f.guardianName} onChangeText={set('guardianName')} autoCapitalize="words" />
+        <NameFields value={f.name} onChange={set('name')} firstLabel="Student first name" lastLabel="Student last name" /><NameFields value={f.guardianName} onChange={set('guardianName')} firstLabel="Parent first name" lastLabel="Parent last name" />
         <Field label="Parent email" value={f.guardianEmail} onChangeText={set('guardianEmail')} keyboardType="email-address" /><Field label="Parent phone" value={f.guardianPhone} onChangeText={set('guardianPhone')} keyboardType="phone-pad" />
         <Field label="Batch" value={f.batch} onChangeText={set('batch')} autoCapitalize="words" /><Field label="Born on (YYYY-MM-DD)" value={f.bornOn} onChangeText={set('bornOn')} />
         <Btn label="Save student" onPress={add} busy={busy} />

@@ -5,7 +5,7 @@ import { api, post, inr, fmtDay, fmtTime, useApi, ApiError } from '../../lib';
 
 export interface BlockDay { id: string; ref: string; date: string; startAt: number; endAt: number; status: string; totalPaise: number; paidPaise: number; balancePaise: number }
 /** A multi-day booking seen as one: dates, money across every day and (in the detail) each day. */
-export interface Block { seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; cancelled: boolean; awaitingPaise: number; refundedPaise: number; creditedPaise: number; cancellableDays: number; items?: BlockDay[]; payments?: { createdAt: number; method: string; status: string; amountPaise: number; refundedPaise: number; reference: string | null }[] }
+export interface Block { seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; cancelled: boolean; awaitingPaise: number; refundedPaise: number; creditedPaise: number; cancellableDays: number; tournament?: { id: string; name: string } | null; items?: BlockDay[]; payments?: { createdAt: number; method: string; status: string; amountPaise: number; refundedPaise: number; reference: string | null }[] }
 export interface Booking {
   block?: Block | null;
   id: string; ref: string; groundId: string; groundName: string; customerId: string; customerName: string; customerPhone: string | null;

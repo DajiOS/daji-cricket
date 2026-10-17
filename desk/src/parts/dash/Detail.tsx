@@ -169,6 +169,7 @@ function BlockDetail({ d, onClose, onChanged }: { d: Detail; onClose: () => void
         foot={<>{k.cancellableDays > 0 && can(me, 'manage_bookings') && <button className="btn danger" onClick={() => setCancelAll(true)}>Cancel all {k.cancellableDays} days</button>}{canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}<button className="btn ghost" onClick={onClose}>Close</button></>}>
         <div className="stack" style={{ gap: 18 }}>
           <ErrorBox msg={msg} />
+          {k.tournament && <div className="card card-pad row" style={{ justifyContent: 'space-between' }}><div><b>Tournament:</b> {k.tournament.name}<div className="small muted">Teams, fixtures and entry fees are kept under Tournaments. Cancelling every day also cancels the tournament.</div></div><button className="btn sm" onClick={() => go('/tournaments/' + k.tournament!.id)}>Open tournament</button></div>}
           {k.cancelled && <div className="row"><Chip tone="bad">Cancelled</Chip>{k.refundedPaise > 0 && <Chip tone="info">{inr(k.refundedPaise)} refunded</Chip>}{k.creditedPaise > 0 && <Chip tone="info">{inr(k.creditedPaise)} as credit</Chip>}</div>}
           {k.awaitingPaise > 0 && can(me, 'manage_bookings') && (
             <div className="card card-pad stack" style={{ gap: 8 }}>

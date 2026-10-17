@@ -9,7 +9,7 @@ import { getGroundOr404 } from './grounds.ts';
 import { hasPermission, requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
 import { notify, sendAlert } from './notifications.ts';
 import { getSettings } from './settings.ts';
-import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn } from './hold.ts';
+import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, readName } from './hold.ts';
 import { isClosedDate } from './closures.ts';
 
 interface EnquiryRow {
@@ -38,7 +38,7 @@ function view(r: EnquiryRow, forCustomer: boolean): Enquiry {
 export function createEnquiry(user: UserRow | null, body: unknown): Enquiry {
   const v = new Validator(body);
   const groundId = v.str('groundId', { required: true });
-  const name = v.str('name', { required: !user, min: 2, max: 80 }) ?? user?.name;
+  const nm = readName(v, !user); const name = nm.name ?? user?.name;
   const phone = v.phone('phone', !user?.phone) ?? user?.phone ?? undefined;
   const email = v.email('email') ?? user?.email ?? undefined;
   const preferredDate = v.date('preferredDate');
