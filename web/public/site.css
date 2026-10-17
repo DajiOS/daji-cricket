@@ -1313,3 +1313,18 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .hero .panel,
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{top:0;bottom:0;right:0;width:var(--split);border-radius:0}
 }
+
+/* ===== One flat ivory ground, no colour wash at the top, no box on the menu button ===== */
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]){background:var(--bg)}
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body{background-image:none;background-color:var(--bg)}
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home header.hero::before,
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home header.hero::after,
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav::before,
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav::after{background:none!important;box-shadow:none!important}
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) nav .menu{border:0!important;background:transparent!important;box-shadow:none!important}
+
+/* ===== Page runs under the phone status bar; header floats on the page ===== */
+@media (max-width:1020px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav{padding-top:env(safe-area-inset-top,0px);background:transparent!important;backdrop-filter:none!important;border:0!important;box-shadow:none!important}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav::before{content:none!important}
+}
