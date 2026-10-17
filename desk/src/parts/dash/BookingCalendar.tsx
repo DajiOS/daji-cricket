@@ -19,7 +19,7 @@ export function ViewToggle({ value, onChange }: { value: View; onChange: (v: Vie
     </div>);
 }
 
-const PALETTE = ['#d4a847', '#4fb3a9', '#7a8cf0', '#e0795f', '#a773d6', '#6fbf6f', '#e07aa6', '#5aa9e6'];
+const PALETTE = ['#14573e', '#c9a96b', '#3f7fb5', '#c2553f', '#7a5ca8', '#5a9a4a', '#c15c88', '#2c8f9a'];
 /** Each ground keeps its own colour everywhere, so the sessions on a day can be told apart and counted at a glance. */
 export const groundColor = (name: string) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]!; };
 const cv = (b: Booking) => ({ ['--c' as string]: groundColor(b.groundName) }) as CSSProperties;

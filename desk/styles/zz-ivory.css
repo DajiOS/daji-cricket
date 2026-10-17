@@ -1,0 +1,60 @@
+/* ===== Ivory and green: the admin desk matches the website (loaded last, so it wins over the older dark rules) ===== */
+:root {
+  --bg: #f6f2e9; --panel: #fbf8f0; --panel-2: #f1ecdf; --panel-3: #e8e2d2;
+  --line: #ddd6c3; --line-strong: #c3b99f;
+  --gold: #14573e; --gold-hi: #14573e; --gold-lo: #14573e; --gold-chart: #14573e;
+  --ivory: #17221c; --text: #26312a; --muted: #5d665e; --faint: #858c84;
+  --good: #1f8a58; --warn: #a8720f; --bad: #b3372c; --info: #2f6a9a;
+  --shadow: 0 1px 2px rgba(15,61,46,.06), 0 14px 30px -24px rgba(15,61,46,.4);
+  color-scheme: light;
+}
+html, body { background: var(--bg); }
+body { background: var(--bg); }
+a { color: #14573e; }
+h1, h2 { color: #0f3d2e; }
+::selection { background: rgba(20,87,62,.22); }
+:focus-visible { outline-color: #14573e; }
+
+/* green side menu, like the booking panel on the website */
+.side, .flyout { background: #0f3d2e !important; border-color: #0b2f23 !important;
+  --ivory: #f6f2e9; --text: #f3ead2; --muted: #c4d2c7; --faint: #8fa99a; --line: #25604a; --line-strong: #2f755a; --panel: #14573e; --panel-2: #19674a; --panel-3: #1d7455;
+  --gold: #c9a96b; --gold-hi: #e8d9b0; --gold-lo: #c9a96b; }
+.side .brand-name, .side .brand-sub, .flyout { color: #f3ead2; }
+.side a, .flyout a { color: #c4d2c7; }
+.side a:hover, .flyout a:hover { color: #f6f2e9; background: rgba(255,255,255,.08); }
+.nav a.on, .flyout a.on, .side .rail-btn.on { background: rgba(201,169,107,.18) !important; color: #f0e2bd !important; border-color: rgba(201,169,107,.55) !important; box-shadow: inset 2px 0 0 #c9a96b !important; }
+.nav a .count, .flyout a .count { background: #c9a96b; color: #0f3d2e; }
+.side .rail-btn { color: #c4d2c7; }
+.side .rail-btn:hover { background: rgba(255,255,255,.08); color: #f6f2e9; }
+
+.top { background: rgba(246,242,233,.88); border-bottom-color: var(--line); }
+.card { background: var(--panel); }
+.modal { background: #fbf8f0; box-shadow: 0 30px 70px rgba(15,61,46,.28); }
+.overlay { background: rgba(15,61,46,.45); }
+.toast { background: #0f3d2e; color: #f6f2e9; border-color: #c9a96b; }
+.shimmer { background: linear-gradient(90deg, #eee8d8 0%, #f6f1e4 40%, #eee8d8 80%); background-size: 200% 100%; }
+.unit, .home-mod.soon { background: var(--panel); }
+.stat::after { background: radial-gradient(circle, rgba(20,87,62,.08), transparent 70%); }
+
+/* buttons: green with ivory text */
+.btn { background: #fbf8f0; color: var(--ivory); border-color: var(--line-strong); }
+.btn:hover { background: #f1ecdf; border-color: #14573e; }
+.btn.primary, .pipe-steps .step.cur { background: #14573e; color: #f6f2e9; border-color: #0f3d2e; box-shadow: none; }
+.btn.primary:hover { background: #0f3d2e; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.ghost:hover { background: #ece6d6; color: var(--ivory); }
+.btn.danger { border-color: #e0b4ad; color: #b3372c; }
+.side .btn.ghost { color: #c4d2c7; } .side .btn.ghost:hover { background: rgba(255,255,255,.08); color: #fff; }
+
+/* inputs and small controls */
+.inp, select.inp, textarea.inp, .seg, .pill, .cal-d, .pick, .hr, .pipe-steps .step, .msg-preview, .rem-preview, .miniStat, .map-tbl th { background: #fffdf7; color: var(--ivory); }
+.seg .on, .pill.on, .cal-d.on, .pick.on, .hr.on { background: #14573e; color: #f6f2e9; border-color: #0f3d2e; }
+.tbl td, .bills-kv > div, .bk-list > .bk-li, .bk-issue, .bk-rep, .attn, .day-row, .pr-grid th, .pr-grid td, .pr-tot { border-bottom-color: #e6dfcd; border-left-color: #e6dfcd; }
+.pr-grid thead th, .pr-grid thead .pr-name { background: #f1ecdf; }
+.bk-acct { background: var(--panel); }
+.cal-cell.today .cal-num { background: #14573e; color: #f6f2e9; }
+.cal-ev { background: color-mix(in srgb, var(--c, #14573e) 18%, #fffdf7); }
+.cal-ev:hover { background: color-mix(in srgb, var(--c, #14573e) 30%, #fffdf7); }
+.cal-ev.s-pending, .cal-ev.s-held { background: color-mix(in srgb, var(--c, #14573e) 8%, #fffdf7); }
+.cal-chip { background: color-mix(in srgb, var(--c, #14573e) 22%, #fffdf7); }
+select option { color: #16201b; background: #fff; }

@@ -47,8 +47,8 @@ export function CollectionChart({ data }: { data: { period: string; billed: numb
           <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Billed versus collected rent by month">
             {ticks.map((t) => (
               <g key={t}>
-                <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="#2a2620" strokeWidth={1} />
-                <text x={L - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="#7d7566">{inrShort(t)}</text>
+                <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="#ddd6c3" strokeWidth={1} />
+                <text x={L - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="#6b7168">{inrShort(t)}</text>
               </g>
             ))}
             {data.map((d, i) => {
@@ -57,18 +57,18 @@ export function CollectionChart({ data }: { data: { period: string; billed: numb
               const rate = d.billed ? Math.round((d.collected / d.billed) * 100) : null;
               return (
                 <g key={d.period}>
-                  <rect x={L + slot * i} y={T} width={slot} height={H - T - B} fill={on ? 'rgba(201,164,76,.05)' : 'transparent'}
+                  <rect x={L + slot * i} y={T} width={slot} height={H - T - B} fill={on ? 'rgba(20,87,62,.06)' : 'transparent'}
                     onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} tabIndex={0} aria-label={`${monthLabel(d.period)}: billed ${inr(d.billed)}, collected ${inr(d.collected)}`} />
-                  {d.billed > 0 && <path d={barPath(cx - bw / 2, y(d.billed), bw, y(0) - y(d.billed))} fill="rgba(201,164,76,.07)" stroke="#8c6f2a" strokeWidth={1.2} pointerEvents="none" />}
-                  {d.collected > 0 && <path d={barPath(cx - bw / 2 + 5, y(d.collected), bw - 10, y(0) - y(d.collected))} fill={on ? '#c79d3f' : '#b08a36'} pointerEvents="none" />}
+                  {d.billed > 0 && <path d={barPath(cx - bw / 2, y(d.billed), bw, y(0) - y(d.billed))} fill="rgba(20,87,62,.08)" stroke="#14573e" strokeWidth={1.2} pointerEvents="none" />}
+                  {d.collected > 0 && <path d={barPath(cx - bw / 2 + 5, y(d.collected), bw - 10, y(0) - y(d.collected))} fill={on ? '#1f7a58' : '#14573e'} pointerEvents="none" />}
                   {i === data.length - 1 && rate != null && (
-                    <text x={cx} y={y(Math.max(d.billed, d.collected)) - 7} textAnchor="middle" fontSize="11.5" fill="#e8e2d3" fontWeight="700">{rate}%</text>
+                    <text x={cx} y={y(Math.max(d.billed, d.collected)) - 7} textAnchor="middle" fontSize="11.5" fill="#17221c" fontWeight="700">{rate}%</text>
                   )}
-                  <text x={cx} y={H - 10} textAnchor="middle" fontSize="11.5" fill={on ? '#e6c873' : '#a39b8a'}>{monthLabel(d.period)}</text>
+                  <text x={cx} y={H - 10} textAnchor="middle" fontSize="11.5" fill={on ? '#0f3d2e' : '#6b7168'}>{monthLabel(d.period)}</text>
                 </g>
               );
             })}
-            <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="#4a3f27" strokeWidth={1} />
+            <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="#c3b99f" strokeWidth={1} />
           </svg>
           {hover != null && (() => {
             const d = data[hover]; const cx = ((L + slot * hover + slot / 2) / W) * 100;
@@ -103,11 +103,11 @@ export function Ring({ value, total, label }: { value: number; total: number; la
   const pct = total ? value / total : 0; const r = 46, c = 2 * Math.PI * r;
   return (
     <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label={`${label}: ${Math.round(pct * 100)}%`}>
-      <circle cx="60" cy="60" r={r} fill="none" stroke="#232323" strokeWidth="9" />
-      <circle cx="60" cy="60" r={r} fill="none" stroke="#c9a44c" strokeWidth="9" strokeLinecap="round"
+      <circle cx="60" cy="60" r={r} fill="none" stroke="#e8e2d2" strokeWidth="9" />
+      <circle cx="60" cy="60" r={r} fill="none" stroke="#14573e" strokeWidth="9" strokeLinecap="round"
         strokeDasharray={`${c * pct} ${c}`} transform="rotate(-90 60 60)" />
-      <text x="60" y="58" textAnchor="middle" fontSize="24" fontWeight="700" fill="#ede6d6" fontFamily="Cormorant Garamond, Georgia, serif">{Math.round(pct * 100)}%</text>
-      <text x="60" y="76" textAnchor="middle" fontSize="9.5" fill="#a39b8a" letterSpacing="1.5">{label.toUpperCase()}</text>
+      <text x="60" y="58" textAnchor="middle" fontSize="24" fontWeight="700" fill="#17221c" fontFamily="Cormorant Garamond, Georgia, serif">{Math.round(pct * 100)}%</text>
+      <text x="60" y="76" textAnchor="middle" fontSize="9.5" fill="#6b7168" letterSpacing="1.5">{label.toUpperCase()}</text>
     </svg>
   );
 }
