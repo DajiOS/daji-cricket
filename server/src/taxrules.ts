@@ -4,7 +4,7 @@ import { istDate } from './time.ts';
 
 // India's cash limits, enforced where the money is recorded (not just advised). Each rule has an id that matches the
 // compliance register (compliance.ts), so a change in the law is one edit here and one entry in the law-change log.
-//   269ST   : a business cannot receive Rs 2,00,000 or more in cash from one person in a day, for one transaction, or for one event.
+//   269ST   : (not enforced here, by the owner's decision) a business cannot receive Rs 2,00,000 or more in cash from one person in a day, for one transaction, or for one event.
 //   40A(3)  : a cash payment to one person above Rs 10,000 in a day is not an allowed expense (penalty is loss of the deduction).
 //   269SS/T : loans, deposits and repayments of them of Rs 20,000 or more must go by account payee cheque, bank transfer or UPI.
 // Amounts are paise.
@@ -26,25 +26,12 @@ const refuse = (code: string, section: string, msg: string): never => {
   throw new HttpError(422, code, `${msg} (Income-tax Act, section ${section}). Take this by UPI, bank transfer or an account payee cheque instead.`);
 };
 
-/** A cash receipt from one customer. `cashSoFar*` are what that customer has already handed over in cash. */
-export function checkCashReceipt(i: { ownerId: string; customerId: string; bookingId: string; date: string; amountPaise: number }): void {
-  const cash = "method = 'cash' AND status IN ('captured','partially_refunded','refunded')";
-  const day = one<{ s: number }>(`SELECT COALESCE(SUM(amount_paise), 0) s FROM payments WHERE owner_id = ? AND customer_id = ? AND ${cash} AND created_at >= ? AND created_at < ?`,
-    i.ownerId, i.customerId, istMidnight(i.date), istMidnight(i.date) + 86_400_000)!.s;
-  if (day + i.amountPaise >= CASH_LIMITS.receiptPaise) refuse('CASH_LIMIT_269ST', '269ST',
-    `This would bring cash from this customer to ${inr(day + i.amountPaise)} today. A business cannot take ${inr(CASH_LIMITS.receiptPaise)} or more in cash in a day`);
-  // One event: this booking, plus every day of the same multi-day block or repeat series (a camp over several days is one occasion).
-  const event = one<{ s: number }>(`SELECT COALESCE(SUM(amount_paise), 0) s FROM payments WHERE ${cash} AND booking_id IN (
-      SELECT id FROM bookings WHERE id = ?1 OR (series_id IS NOT NULL AND series_id = (SELECT series_id FROM bookings WHERE id = ?1)))`, i.bookingId)!.s;
-  if (event + i.amountPaise >= CASH_LIMITS.receiptPaise) refuse('CASH_LIMIT_269ST', '269ST',
-    `Cash for this one booking would reach ${inr(event + i.amountPaise)}. A business cannot take ${inr(CASH_LIMITS.receiptPaise)} or more in cash for one event`);
-}
-
-/** One cash payment taken outside the booking flow (academy fees, memberships): on its own it must stay below the receipt limit. */
-export function checkCashSingle(method: string, amountPaise: number): void {
-  if (method !== 'cash') return;
-  if (amountPaise >= CASH_LIMITS.receiptPaise) refuse('CASH_LIMIT_269ST', '269ST', `A cash payment of ${inr(amountPaise)} is at or above the ${inr(CASH_LIMITS.receiptPaise)} limit for cash received`);
-}
+/**
+ * 269ST (cash receipts of Rs 2,00,000 or more) is NOT enforced: the owner chose to remove the check, so staff can record any
+ * cash amount on a booking, a membership or an academy fee. The functions stay so callers need no change; they accept everything.
+ */
+export function checkCashReceipt(_i: { ownerId: string; customerId: string; bookingId: string; date: string; amountPaise: number }): void {}
+export function checkCashSingle(_method: string, _amountPaise: number): void {}
 
 /**
  * A cash payment out to one vendor or person. `alreadyPaidToday` is what the same payee already got in cash that day.

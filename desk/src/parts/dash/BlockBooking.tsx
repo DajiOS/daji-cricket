@@ -30,7 +30,6 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
 
   const days = Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1);
   const totalPaise = toPaise(total), payPaise = toPaise(amount);
-  const cashTooHigh = method === 'cash' && payPaise != null && payPaise >= 200_000_00;
   const gid = groundId || grounds[0]?.id || '';
 
   async function save() {
@@ -58,7 +57,7 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
 
   return (
     <Modal title="Multi-day booking" wide onClose={onClose}
-      foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || cashTooHigh} onClick={save}>Book {days || ''} day{days === 1 ? '' : 's'}</button></>}>
+      foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={save}>Book {days || ''} day{days === 1 ? '' : 's'}</button></>}>
       <p className="small muted">For a custom programme agreed with the customer. One booking is made for each day, and the agreed total is shared across the days. Enter 0 in Received now if nothing has been received yet; the whole amount then stays due.</p>
       <div className="form-grid">
         <Field label="Ground" full><select className="inp" value={gid} onChange={(e) => setGroundId(e.target.value)}>{grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
@@ -83,7 +82,6 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
         <Field label="Reference (UTR, cheque no.)"><input className="inp" value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
         <Field label="Notes" full><input className="inp" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Camp name, contact person" /></Field>
       </div>
-      {cashTooHigh && <p style={{ color: '#b3261e' }}>Cash of ₹2,00,000 or more in a day cannot be taken (Income-tax Act). Take this part by UPI, bank transfer or cheque.</p>}
       <ErrorBox msg={err} />
     </Modal>
   );
