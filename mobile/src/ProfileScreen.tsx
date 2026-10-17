@@ -3,7 +3,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { api, upload } from './api';
 import { pickProfilePhoto } from './camera';
 import type { User } from './types';
-import { Avatar, Btn, Field, Section, s } from './ui';
+import { Avatar, Btn, Field, Section, s, NameFields, splitName } from './ui';
 import { C } from './theme';
 
 const ROLE: Record<string, string> = { customer: 'Customer', staff: 'Team member', owner: 'Owner', super_admin: 'Super admin' };
@@ -20,7 +20,7 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const save = async () => {
     setErr(''); setNote(''); setBusy(true);
     try {
-      const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { name: name.trim(), email: email.trim() || undefined, phone: phone.trim() || undefined, ...(owner ? { businessName: biz.trim(), upiId: upi.trim() } : {}) } });
+      const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { firstName: splitName(name).first, lastName: splitName(name).last, email: email.trim() || undefined, phone: phone.trim() || undefined, ...(owner ? { businessName: biz.trim(), upiId: upi.trim() } : {}) } });
       onUser(r.user); setNote('Profile saved.');
     } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); } finally { setBusy(false); }
   };
@@ -51,7 +51,7 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
       </View>
       <Btn kind="outline" label="Sign out" onPress={onSignOut} />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
-      <Field label="Name" value={name} onChangeText={setName} autoCapitalize="words" />
+      <NameFields value={name} onChange={setName} />
       <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
       <Field label="Mobile number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
       {owner && <><Field label="Business name" value={biz} onChangeText={setBiz} autoCapitalize="words" /><Field label="UPI ID for payments" value={upi} onChangeText={setUpi} /></>}

@@ -45,6 +45,9 @@ export async function sendAlert(phone: string, vars: string[]): Promise<boolean>
 }
 
 /** Delivers a sign-in code: WhatsApp first, then text message. False when neither is set up or both fail. */
+/** True when a sign-in code can actually be delivered (WhatsApp or text message set up), or when running the demo. */
+export const otpAvailable = (demo: boolean): boolean => !!(whatsappSender || smsSender) || demo;
+
 export async function sendOtpCode(phone: string, code: string): Promise<boolean> {
   for (const s of [whatsappSender, smsSender]) {
     if (!s) continue;

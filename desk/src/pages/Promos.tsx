@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PageHead, Stat, Table, Chip, Field, Modal, Loading, ErrorBox, useToast } from '../ui';
+import { PageHead, Stat, Table, Chip, Field, Modal, Loading, ErrorBox, Filters, useToast } from '../ui';
 import { useApi, post, inr, fmtDate } from '../lib';
 import { errText } from '../parts/admin/common';
 
@@ -62,7 +62,9 @@ export default function Promos({ sub }: { sub: string }) {
   async function toggle(p: Promo) {
     try { await post(`/api/staff/promos/${encodeURIComponent(p.id)}/active`, { active: !p.active }); reload(); } catch (e) { toast(errText(e)); }
   }
-  const items = data?.items || [];
+  const [q, setQ] = useState(''), [st, setSt] = useState('');
+  const all = data?.items || [];
+  const items = all.filter((p) => (!st || (st === 'on') === p.active) && (!q.trim() || (p.code + ' ' + (p.label || '')).toLowerCase().includes(q.trim().toLowerCase())));
   return (
     <div className="stack">
       <PageHead eyebrow="Ground" title="Promo codes" lede="Discounts your customers can enter when they book.">
@@ -82,12 +84,14 @@ export default function Promos({ sub }: { sub: string }) {
       {!data && !error && <Loading />}
       {data && <>
         <div className="grid g3">
-          <Stat label="Codes" value={items.length} />
-          <Stat label="Active" value={items.filter((p) => p.active).length} />
-          <Stat label="Times used" value={items.reduce((a, p) => a + p.used, 0)} />
+          <Stat label="Codes" value={all.length} />
+          <Stat label="Active" value={all.filter((p) => p.active).length} />
+          <Stat label="Times used" value={all.reduce((a, p) => a + p.used, 0)} />
         </div>
+        <div className="row"><input className="inp" style={{ flex: '1 1 220px', width: 'auto' }} type="search" placeholder="Search a code or label" aria-label="Search codes" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Filters active={st ? 1 : 0}><select className="inp" style={{ width: 150 }} aria-label="Status" value={st} onChange={(e) => setSt(e.target.value)}><option value="">Any status</option><option value="on">Active</option><option value="off">Switched off</option></select></Filters></div>
         <div className="card">
-          <Table rows={items} empty="No promo codes yet. Press New codes to build one." cols={[
+          <Table rows={items} empty={all.length ? 'No code matches.' : 'No promo codes yet. Press New codes to build one.'} cols={[
             { head: 'Code', cell: (p) => <><b style={{ letterSpacing: '.06em' }}>{p.code}</b>{p.label && <div className="small muted">{p.label}</div>}</> },
             { head: 'Discount', cell: (p) => <span className="small">{rule(p)}</span> },
             { head: 'Used', cell: (p) => (p.usageLimit ? `${p.used} of ${p.usageLimit}` : p.used), num: true },

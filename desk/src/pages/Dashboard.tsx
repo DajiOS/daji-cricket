@@ -11,6 +11,7 @@ interface Overview {
   utilization: { groundId: string; groundName: string; availableSlots: number; bookedSlots: number; utilization: number }[];
   payments: { outstandingBalances: { bookings: number; amountPaise: number } };
 }
+interface Ahead { items: { period: string; bookings: number; totalPaise: number; paidPaise: number; balancePaise: number }[]; totalPaise: number; paidPaise: number; balancePaise: number; bookings: number }
 interface Pnl { revenue: { totalPaise: number }; netProfitPaise: number; uncategorised: { count: number } }
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const SOLD = ['confirmed', 'completed', 'no_show']; // sessions that count as booked
@@ -29,6 +30,8 @@ export default function Dashboard({ sub }: { sub: string }) {
 
   const [today, todayErr] = useApi<TodayData>(canBookings ? '/api/staff/today' : null, [version, ownerId]);
   const [pnl, pnlErr] = useApi<Pnl>(canMoney ? `/api/accounting/reports/pnl?month=${month}` : null, [ownerId]);
+
+  const [ahead] = useApi<Ahead>(canMoney ? '/api/staff/reports/upcoming?months=6' : null, [version, ownerId]);
 
   // six months of sessions booked against money received
   const [trend, setTrend] = useState<{ period: string; billed: number; collected: number }[] | null>(null);
@@ -58,15 +61,16 @@ export default function Dashboard({ sub }: { sub: string }) {
     <div className="stack">
       <PageHead eyebrow={me.role === 'super_admin' ? 'Software owner' : me.businessName || 'Daji Cricket Ground'} title={`${greet}, ${me.name.split(' ')[0]}`}
         lede={`Here is the ground as of ${fmtDay(todayISO())}.`}>
-        {canBookings && <button className="btn primary" onClick={() => go('/bookings/new')}><Icon name="plus" />New booking</button>}
+        {canBookings && <button className="btn primary" onClick={() => go('/bookings/add')}><Icon name="plus" />Add booking</button>}
       </PageHead>
 
-      {(canBookings || canMoney) && <div className="grid g4">
+      {(canBookings || canMoney) && <div className="grid g4" style={canMoney ? { gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" } : undefined}>
         {canBookings && <Stat label="Sessions today" value={today ? today.bookings.length : '…'} foot={today ? (today.bookings.length ? `${today.bookings.filter((b) => b.startAt > Date.now()).length} still to play` : 'A quiet day') : ' '} />}
         {canMoney && <Stat label={`Revenue · ${monthName}`} value={pnl ? inrShort(pnl.revenue.totalPaise) : canReports && !pnlErr ? '…' : thisMonth ? inrShort(thisMonth.collected) : '—'}
           foot={pnl ? 'from sessions played this month' : pnlErr ? 'Sessions played, from payments received' : canReports ? ' ' : 'Your role does not include reports'} />}
         {canMoney && <Stat label={`Net profit · ${monthName}`} value={pnl ? <span style={pnl.netProfitPaise < 0 ? { color: '#f19a8d' } : undefined}>{inrShort(pnl.netProfitPaise)}</span> : canReports && !pnlErr ? '…' : '—'}
           foot={pnl ? (pnl.uncategorised.count ? `${pnl.uncategorised.count} bank transactions still need a category` : 'after expenses') : pnlErr ? 'Accounting is not available here' : ' '} />}
+        {canMoney && <Stat label="Booked ahead" value={ahead ? inrShort(ahead.totalPaise) : '…'} foot={ahead ? `${ahead.bookings} upcoming sessions · ${inrShort(ahead.balancePaise)} still to collect` : ' '} />}
         {canMoney && <Stat label="To collect today" value={today ? <span style={toCollect ? { color: '#e9c06a' } : undefined}>{inr(toCollect)}</span> : '…'} foot="balances on today's sessions" />}
       </div>}
 
@@ -98,6 +102,11 @@ export default function Dashboard({ sub }: { sub: string }) {
               </>)}
           </div>
         </div>
+      </div>}
+
+      {canMoney && ahead && ahead.items.length > 0 && <div className="card">
+        <div className="card-head"><h3>Revenue already booked</h3><span className="muted small">Confirmed sessions from today, by month</span></div>
+        <div className="card-pad"><CollectionChart data={ahead.items.map((x) => ({ period: x.period, billed: x.totalPaise, collected: x.paidPaise }))} /></div>
       </div>}
 
       {canBookings && <div className="grid g-2-1 dash-lists">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSession } from '../App';
-import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Status, Icon, useToast } from '../ui';
+import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Status, Icon, Filters, Modal, useToast } from '../ui';
 import { useApi, api, post, go, inr, fmtDay, fmtDateTime, formatPhone, can, qs, todayISO, addDaysISO } from '../lib';
 import { type Booking, type Page, BookingChip, METHOD_LABEL, PAY_STATUS, STATUS_LABEL, errText, timeRange, whatOf } from '../parts/dash/common';
 import { BookingDetail } from '../parts/dash/Detail';
@@ -8,8 +8,9 @@ import { NewBooking } from '../parts/dash/NewBooking';
 import { BlockBooking } from '../parts/dash/BlockBooking';
 import { DayView } from '../parts/dash/DayView';
 import { MonthCalendar, ViewToggle, useView } from '../parts/dash/BookingCalendar';
+import { RefundApprovals } from '../parts/admin/Refunds';
 
-type Tab = 'list' | 'day' | 'approvals' | 'payments';
+type Tab = 'list' | 'day' | 'approvals' | 'payments' | 'refunds';
 const SECTIONS = ['day', 'approvals', 'payments'];
 const PAGE = 25;
 
@@ -20,27 +21,37 @@ export default function Bookings({ sub }: { sub: string }) {
   const bump = () => setVersion((v) => v + 1);
   const key = sub.split('/')[0] || '';
   const filterPreset = key === 'review' ? 'review' : key === 'choosing' ? 'choosing' : '';
-  const tab: Tab = key === 'day' ? 'day' : key === 'approvals' ? 'approvals' : key === 'payments' ? 'payments' : 'list';
+  const tab: Tab = key === 'day' ? 'day' : key === 'approvals' ? 'approvals' : key === 'payments' ? 'payments' : key === 'refunds' ? 'refunds' : 'list';
+  const showAdd = key === 'add';
   const showNew = key === 'new';
   const showBlock = key === 'block';
-  const openId = key && !SECTIONS.includes(key) && !['new', 'block', 'review', 'choosing'].includes(key) ? key : null;
+  const openId = key && !SECTIONS.includes(key) && !['new', 'block', 'add', 'review', 'choosing', 'refunds'].includes(key) ? key : null;
+  const asDay = sub.split('/')[1] === 'day';
   const canVerify = can(me, 'verify_payments') || can(me, 'record_payments');
   const [pendingN] = useApi<Page<Booking>>('/api/staff/bookings?approval=pending&limit=1', [version]);
-  const tabs: [Tab, string][] = [['list', 'All bookings'], ['day', 'Day view'], ['approvals', `Approvals${pendingN?.total ? ` (${pendingN.total})` : ''}`], ...(canVerify ? [['payments', 'UPI to verify'] as [Tab, string]] : [])];
+  const tabs: [Tab, string][] = [['list', 'All bookings'], ['day', 'Day view'], ['approvals', `Approvals${pendingN?.total ? ` (${pendingN.total})` : ''}`], ...(canVerify ? [['payments', 'UPI to verify'] as [Tab, string]] : []), ...(me.role === 'super_admin' ? [['refunds', 'Refund approvals'] as [Tab, string]] : [])];
   const toList = () => go('/bookings');
 
   return (
     <div className="stack">
       <PageHead eyebrow="Ground" title="Bookings" lede="Every session at the ground: who is playing, what has been paid and what is still to collect.">
-        <button className="btn" onClick={() => go('/bookings/block')}><Icon name="calendar" />Multi-day booking</button>
-        <button className="btn primary" onClick={() => go('/bookings/new')}><Icon name="plus" />New booking</button>
+        <button className="btn primary" onClick={() => go('/bookings/add')}><Icon name="plus" />Add booking</button>
       </PageHead>
       <div><Tabs value={tab} onChange={(t) => go(t === 'list' ? '/bookings' : `/bookings/${t}`)} items={tabs} label="Sections" /></div>
       {tab === 'list' && <List version={version} preset={filterPreset} />}
       {tab === 'day' && <DayView version={version} onChanged={bump} />}
       {tab === 'approvals' && <Approvals version={version} onChanged={bump} />}
+      {tab === 'refunds' && <RefundApprovals />}
       {tab === 'payments' && <UpiQueue version={version} onChanged={bump} />}
-      {openId && <BookingDetail id={openId} onClose={toList} onChanged={bump} />}
+      {openId && <BookingDetail id={openId} asDay={asDay} onClose={toList} onChanged={bump} />}
+      {showAdd && (
+        <Modal title="Add booking" onClose={toList}>
+          <div className="stack" style={{ gap: 10 }}>
+            <button className="card card-pad" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go('/bookings/new')}><b>Single booking</b><div className="small muted">One session on one day: a match, a net, a practice.</div></button>
+            <button className="card card-pad" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go('/bookings/block')}><b>Multi-day or tournament booking</b><div className="small muted">The same hours over several days for one agreed amount. It can also create the tournament.</div></button>
+          </div>
+        </Modal>
+      )}
       {showBlock && <BlockBooking onClose={toList} onDone={(id) => { bump(); go(`/bookings/${id}`); }} />}
       {showNew && <NewBooking onClose={toList} onDone={(id) => { bump(); go(`/bookings/${id}`); }} />}
     </div>
@@ -58,7 +69,7 @@ function List({ version, preset }: { version: number; preset: string }) {
   const [view, setView] = useView();
   const [grounds] = useApi<{ items: { id: string; name: string }[] }>('/api/staff/grounds');
   useEffect(() => { const t = setTimeout(() => { setDq(q.trim()); setPage(0); }, 300); return () => clearTimeout(t); }, [q]);
-  const params = { q: dq, status, groundId, from, to, ...(preset === 'review' ? { needsReview: 1 } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}), limit: PAGE, offset: page * PAGE };
+  const params = { group: 1, q: dq, status, groundId, from, to, ...(preset === 'review' ? { needsReview: 1 } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}), limit: PAGE, offset: page * PAGE };
   const [d, err] = useApi<Page<Booking>>(`/api/staff/bookings${qs(params)}`, [version]);
   const set = (f: (v: string) => void) => (e: any) => { f(e.target.value); setPage(0); };
   const filtered = !!(dq || status || groundId || from || to || preset);
@@ -67,14 +78,18 @@ function List({ version, preset }: { version: number; preset: string }) {
   const quick = (a: string, b: string) => { setFrom(a); setTo(b); setPage(0); };
   return (
     <div className="card">
-      <div className="card-pad filters">
-        <input className="inp" type="search" placeholder="Search name, phone or reference" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="inp" aria-label="Status" value={status} onChange={set(setStatus)}>
-          <option value="">Any status</option>{Object.entries(STATUS_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-        <select className="inp" aria-label="Ground" value={groundId} onChange={set(setGroundId)}>
-          <option value="">All grounds</option>{(grounds?.items || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
-        {view === 'list' && <><input className="inp" type="date" aria-label="From date" value={from} onChange={set(setFrom)} />
-        <input className="inp" type="date" aria-label="To date" value={to} onChange={set(setTo)} /></>}
+      <div className="card-pad row" style={{ gap: 10 }}>
+        <input className="inp" style={{ flex: '1 1 260px', width: 'auto' }} type="search" placeholder="Search name, phone or reference" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Filters inline={false} active={[status, groundId, view === 'list' ? from : '', view === 'list' ? to : ''].filter(Boolean).length}>
+          <div className="filters filters2">
+            <select className="inp" aria-label="Status" value={status} onChange={set(setStatus)}>
+              <option value="">Any status</option>{Object.entries(STATUS_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+            <select className="inp" aria-label="Ground" value={groundId} onChange={set(setGroundId)}>
+              <option value="">All grounds</option>{(grounds?.items || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
+            {view === 'list' && <><input className="inp" type="date" aria-label="From date" value={from} onChange={set(setFrom)} />
+            <input className="inp" type="date" aria-label="To date" value={to} onChange={set(setTo)} /></>}
+          </div>
+        </Filters>
       </div>
       <div className="card-pad row filters-foot">
         <ViewToggle value={view} onChange={setView} />
@@ -88,13 +103,16 @@ function List({ version, preset }: { version: number; preset: string }) {
       {view === 'calendar' ? <div className="card-pad"><MonthCalendar filters={{ q: dq, status, groundId, ...(preset === 'review' ? { needsReview: '1' } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}) }} onOpen={(id) => go(`/bookings/${id}`)} /></div> : err ? <div className="card-pad"><ErrorBox msg={err} /></div> : !d ? <div className="card-pad"><Loading h={240} /></div> : (
         <>
           <Table rows={d.items} onRow={(b) => go(`/bookings/${b.id}`)} empty={filtered ? 'No bookings match those filters.' : 'No bookings yet. New ones appear here.'} cols={[
-            { head: 'When', cell: (b) => <><div className="strong">{fmtDay(b.date)}</div><div className="small muted tabular">{timeRange(b)}</div></> },
+            { head: 'When', cell: (b) => b.block ? <><div className="strong">{fmtDay(b.block.fromDate)} – {fmtDay(b.block.toDate)}</div><div className="small muted tabular">{b.block.days} days · {timeRange(b)} daily</div></> : <><div className="strong">{fmtDay(b.date)}</div><div className="small muted tabular">{timeRange(b)}</div></> },
             { head: 'Customer', cell: (b) => <><div className="strong">{b.customerName}</div><div className="small muted">{formatPhone(b.customerPhone)}</div></> },
-            { head: 'Ground', cell: (b) => <>{b.groundName}<div className="small muted">{whatOf(b)}</div></> },
-            { head: 'Status', cell: (b) => <span className="row" style={{ gap: 6 }}><BookingChip b={b} />{b.needsReview && <Chip tone="warn">Review</Chip>}</span> },
-            { head: 'Total', num: true, cell: (b) => inr(b.totalPaise) },
-            { head: 'Paid', num: true, cell: (b) => inr(b.paidPaise) },
-            { head: 'Balance', num: true, cell: (b) => (b.status === 'confirmed' && b.balancePaise > 0 ? <b className="warnText">{inr(b.balancePaise)}</b> : <span className="muted">—</span>) },
+            { head: 'Ground', cell: (b) => <>{b.groundName}<div className="small muted">{b.block ? 'Multi-day booking' : whatOf(b)}</div></> },
+            { head: 'Status', cell: (b) => <span className="row" style={{ gap: 6 }}><BookingChip b={b} />{b.block && <Chip tone="info">Multi-day</Chip>}{b.block?.tournament && <a href={`#/tournaments/${b.block.tournament.id}`} onClick={(e) => { e.stopPropagation(); go('/tournaments/' + b.block!.tournament!.id); e.preventDefault(); }}><Chip tone="gold">Tournament: {b.block.tournament.name}</Chip></a>}{b.needsReview && <Chip tone="warn">Review</Chip>}</span> },
+            { head: 'Total', num: true, cell: (b) => inr(b.block ? b.block.totalPaise : b.totalPaise) },
+            { head: 'Paid', num: true, cell: (b) => {
+              const k = b.block, gone = k ? k.cancelled : b.status === 'cancelled', paid = k ? k.paidPaise : b.paidPaise;
+              const refunded = k ? k.refundedPaise : b.refundPaise, credit = k ? k.creditedPaise : b.creditPaise, waiting = k ? k.awaitingPaise > 0 : b.resolution === 'awaiting';
+              return <>{inr(paid)}{gone && paid > 0 && (waiting ? <div className="small warnText">refund waiting for customer</div> : (refunded > 0 || credit > 0) ? <div className="small muted">{refunded > 0 ? `${inr(refunded)} refunded` : ''}{refunded > 0 && credit > 0 ? ' · ' : ''}{credit > 0 ? `${inr(credit)} credit` : ''}</div> : null)}</>; } },
+            { head: 'Balance', num: true, cell: (b) => { const bal = b.block ? b.block.balancePaise : b.balancePaise; return (b.status === 'confirmed' && bal > 0 ? <b className="warnText">{inr(bal)}</b> : <span className="muted">—</span>); } },
             { head: 'Ref', cell: (b) => <span className="mono small muted">{b.ref}</span> },
           ]} />
           {d.total > PAGE && (

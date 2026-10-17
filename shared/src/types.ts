@@ -215,6 +215,13 @@ export type PaymentStatus =
   | 'refunded'
   | 'partially_refunded';
 
+export interface BlockDay { id: string; ref: string; date: string; startAt: number; endAt: number; status: string; totalPaise: number; paidPaise: number; balancePaise: number }
+/** A multi-day booking (camp, tournament) seen as one: dates, money across every day, and (in the detail) each day. */
+export interface BlockPayment { createdAt: number; method: string; status: string; amountPaise: number; refundedPaise: number; reference: string | null }
+export interface BlockSummary { seriesId: string; cancelled: boolean; awaitingPaise: number; refundedPaise: number; creditedPaise: number; cancellableDays: number; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; items?: BlockDay[]; payments?: BlockPayment[];
+  /** The tournament this multi-day booking was made for, if any. */
+  tournament?: { id: string; name: string } | null }
+
 export interface Booking {
   id: string;
   ref: string;
@@ -249,6 +256,8 @@ export interface Booking {
   /** Set when the booking belongs to a repeating series; index 0 is the first one. */
   seriesId?: string | null;
   seriesIndex?: number | null;
+  /** Set on the first day of a multi-day block in staff lists: the whole block as one booking. */
+  block?: BlockSummary | null;
   discountPaise: number;
   cancelOffers: ('refund' | 'half' | 'credit')[];
   cancelReason: string | null;
@@ -421,6 +430,8 @@ export interface PublicConfig {
   gallery: string[];
   academyGallery: string[];
   razorpayEnabled: boolean;
+  /** Whether sign-in codes by WhatsApp or text message can be sent. When false, sign-up and sign-in use email and password. */
+  codesEnabled?: boolean;
   razorpayDemo: boolean;
   razorpayKeyId: string | null;
   holdMinutesOnline: number;
@@ -524,6 +535,8 @@ export interface Page<T> {
 export interface RefundRow {
   /** Set when the super admin has authorised it; no money moves before then. */
   approvedAt?: number | null;
+  /** How the customer originally paid. Decides how the money goes back: Razorpay through the gateway, anything else by hand. */
+  paymentMethod?: string | null;
   id: string;
   paymentId: string;
   bookingId: string;

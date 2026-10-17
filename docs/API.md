@@ -166,6 +166,7 @@ Generated from `server/src/routes`. All bodies are JSON unless noted; errors use
 | POST | `/api/staff/contacts/:id/opt-out` | contacts |
 | GET | `/api/staff/contacts/export` | contacts |
 | GET | `/api/staff/customers` | staff |
+| GET | `/api/staff/customers/lookup` | staff |
 | GET | `/api/staff/customers/:id` | staff |
 | POST | `/api/staff/customers/:id/credit` | staff |
 | GET | `/api/staff/enquiries` | staff |
@@ -244,6 +245,9 @@ A camp, tournament or shoot over consecutive days is agreed through an enquiry a
 
 - `POST /api/staff/bookings/block` `{ groundId, fromDate, toDate, startTime, endTime, totalPaise, customer, payment, notes }` makes one booking per day (up to 31) for the same hours. The agreed total is shared across the days; the first day's advance must be received now. It is all or nothing, and ignores the ground's maximum hours and weekly closed day.
 - `POST /api/staff/enquiries/:id/convert-block` does the same from an enquiry and marks it converted.
+- In `GET /api/staff/bookings?group=1` (the list and month calendar; without it every day is its own row) a block is one row (its first day) with `block: {seriesId, days, fromDate, toDate, totalPaise, paidPaise, balancePaise}`; a date filter matches any day of the block. `GET /api/staff/bookings/:id` also returns `block` with `items` (each day).
+- `GET /api/staff/reports/upcoming?months=6` returns the confirmed sessions from today by month: `{items:[{period, bookings, totalPaise, paidPaise, balancePaise}], totalPaise, paidPaise, balancePaise, bookings}`. Needs `view_reports` and the revenue switch.
+- `POST /api/staff/bookings/block/:seriesId/payments` `{method, amountPaise, reference?, note?}` records one payment for the whole block. It fills the earliest days first; the payment reference stays on the first day.
 - Cash is counted for the whole block as one event (section 269ST): cash of Rs 2,00,000 or more across all its days is refused (`CASH_LIMIT_269ST`). Take the rest by UPI, bank transfer or cheque.
 
 ## Auto-debit (UPI AutoPay)

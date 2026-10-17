@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApi, qs, inr, fmtDate, fmtDateTime, formatPhone, go } from '../lib';
-import { PageHead, Stat, Tabs, Table, Chip, Empty, Loading, ErrorBox } from '../ui';
+import { PageHead, Stat, Tabs, Table, Chip, Empty, Loading, ErrorBox, Filters } from '../ui';
 import PayDialog from '../parts/memberships/PayDialog';
 import PlanDialog from '../parts/memberships/PlanDialog';
 import MemberDialog from '../parts/memberships/MemberDialog';
@@ -66,12 +66,14 @@ function MembersTab({ plans, rev, onOpen }: { plans: Plan[]; rev: number; onOpen
     <div className="card">
       <div className="mem-tools">
         <input className="inp grow" type="search" placeholder="Search name or mobile number" aria-label="Search members" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Filters active={[status, planId].filter(Boolean).length}>
         <select className="inp" aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option><option value="active">Active</option><option value="expiring">Expiring</option><option value="expired">Expired</option>
         </select>
         <select className="inp" aria-label="Plan" value={planId} onChange={(e) => setPlanId(e.target.value)}>
           <option value="">All plans</option>{plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        </Filters>
       </div>
       <ErrorBox msg={err} />
       {!data && !err ? <Loading h={200} /> : data && (

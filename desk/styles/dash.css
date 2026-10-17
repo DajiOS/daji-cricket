@@ -48,3 +48,12 @@
 .grid > * { min-width: 0; }
 .tbl td .strong.tabular, .tbl td .tabular { white-space: nowrap; }
 .tbl td:first-child { white-space: nowrap; }
+
+/* Filters button */
+.filter-btn { gap: 6px; } .filter-btn svg { width: 15px; height: 15px; }
+.filter-btn.on { border-color: var(--gold-lo); color: var(--ivory); }
+.filter-n { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--gold); color: #fff; }
+.filter-body { display: contents; }
+.filter-panel { flex: 1 0 100%; width: 100%; }
+.filters2 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); padding: 0 0 12px; }
+.filterbar { display: grid; gap: 12px; } .filterbar > .filter-btn { justify-self: start; }

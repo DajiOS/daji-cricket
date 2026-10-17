@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { TeamMember } from './types';
-import { Badge, Btn, Chip, Field, Loading, Section, s } from './ui';
+import { Badge, Btn, Chip, Field, Loading, Section, s, NameFields } from './ui';
 import { C } from './theme';
 
 const PRESET_LABEL: Record<string, string> = { admin: 'Admin', general_manager: 'General manager', coach: 'Coach', front_desk: 'Front desk', accountant: 'Accountant' };
@@ -43,7 +43,7 @@ export function TeamScreen() {
         </View>
       ))}
       <Section>Add a team member</Section>
-      <Field label="Full name" value={name} onChangeText={setName} autoCapitalize="words" /><Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
+      <NameFields value={name} onChange={setName} /><Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
       <Field label="Mobile number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" /><Field label="Password (at least 10 characters)" value={pw} onChangeText={setPw} secureTextEntry />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{Object.keys(presets).map((k) => <Chip key={k} label={PRESET_LABEL[k] ?? presets[k]!.title} on={preset === k} onPress={() => setPreset(k)} />)}</View>
       <Btn label="Add team member" onPress={add} disabled={!name.trim() || !email.trim() || !pw} />

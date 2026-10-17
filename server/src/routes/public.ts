@@ -6,8 +6,10 @@ import { getSettings } from '../settings.ts';
 import { availability, getGroundOr404, listGrounds, toGround } from '../grounds.ts';
 import { Validator } from '../input.ts';
 import { HttpError } from '../errors.ts';
-import { checkPasswordStrength, createUser, login, revokeAllTokens, revokeToken, signToken, toUser, userByPhone, userRow } from '../auth.ts';
+import { checkPasswordStrength, createUser, hashPassword, login, revokeAllTokens, revokeToken, signToken, toUser, userByEmail, userByPhone, userRow, type UserRow } from '../auth.ts';
+import { splitName, titleCase } from '../names.ts';
 import { checkOtp, requestOtp } from '../otp.ts';
+import { otpAvailable } from '../notifications.ts';
 import { audit } from '../audit.ts';
 import { createEnquiry } from '../enquiries.ts';
 import { isValidDate, istDate } from '../time.ts';
@@ -29,6 +31,7 @@ export function publicRoutes(r: Router): void {
       gallery: s.galleryImages,
       academyGallery: s.academyImages,
       razorpayEnabled: s.razorpayEnabled,
+      codesEnabled: otpAvailable(c.cfg.demoMode),
       razorpayDemo: !razorpayConfigured(c.cfg) && c.cfg.demoMode,
       razorpayKeyId: razorpayConfigured(c.cfg) ? c.cfg.razorpay.keyId : null,
       holdMinutesOnline: s.holdMinutesOnline,
@@ -86,7 +89,16 @@ export function publicRoutes(r: Router): void {
     for (const f of cv.fields) v.fail(`consent.${f.field}`, f.message);
     if (password) { const pw = checkPasswordStrength(password); if (pw) v.fail('password', pw); }
     v.done();
-    const row = createUser({ role: 'customer', name: name ?? `${firstName} ${lastName ?? ''}`, ...(firstName ? { firstName, lastName: lastName ?? '' } : {}), email: email!, phone: phone ?? null, password: password! });
+    // Someone already booked at the desk has a record without a login. Signing up with that email claims it instead of making a second one.
+    // The phone alone is not enough to claim it: numbers are not verified here, and family members share them.
+    const sameEmail = email ? userByEmail(email) : undefined;
+    if (sameEmail && (sameEmail.role !== 'customer' || sameEmail.password_hash)) throw new HttpError(409, 'ACCOUNT_EXISTS', 'There is already an account with this email. Sign in with a code sent to your mobile, or reset your password, instead of making a new one.');
+    let row: UserRow;
+    if (sameEmail) {
+      run('UPDATE users SET password_hash = ?, phone = COALESCE(phone, ?), first_name = ?, last_name = ?, name = ?, updated_at = ? WHERE id = ?',
+        hashPassword(password!), phone ?? null, titleCase(firstName ?? splitName(name!).first), titleCase(lastName ?? splitName(name ?? '').last), (firstName ? `${titleCase(firstName)} ${titleCase(lastName ?? '')}`.trim() : titleCase(name!)), now(), sameEmail.id);
+      row = userRow(sameEmail.id)!;
+    } else row = createUser({ role: 'customer', name: name ?? `${firstName} ${lastName ?? ''}`, ...(firstName ? { firstName, lastName: lastName ?? '' } : {}), email: email!, phone: phone ?? null, password: password! });
     if (ce || cs || cw) {
       run('UPDATE users SET consent_email = ?, consent_sms = ?, consent_whatsapp = ?, consent_updated_at = ? WHERE id = ?', ce ? 1 : 0, cs ? 1 : 0, cw ? 1 : 0, now(), row.id);
       audit({ id: row.id, role: 'customer' }, 'consent.set', 'user', row.id, { email: !!ce, sms: !!cs, whatsapp: !!cw });

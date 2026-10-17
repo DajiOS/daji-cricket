@@ -2,7 +2,9 @@
 import type { Tone } from '../../ui';
 
 export interface Fees { teams: number; paidTeams: number; unpaidTeams: number; expectedPaise: number; collectedPaise: number; pendingPaise: number }
-export interface Tournament { id: string; name: string; startDate: string; endDate: string; format: string; overs: number; entryFeePaise: number; pointsWin: number; pointsTie: number; status: string; notes: string | null; teamCount: number; fixtureCount: number; playedCount: number; fees: Fees }
+export interface Tournament { id: string; name: string; startDate: string; endDate: string; format: string; overs: number; entryFeePaise: number; pointsWin: number; pointsTie: number; status: string; notes: string | null; teamCount: number; fixtureCount: number; playedCount: number; fees: Fees;
+  organiser?: { firstName: string; lastName: string; phone: string | null; email: string | null; customerId: string | null };
+  booking?: { seriesId: string; firstBookingId: string | null; groundName: string | null; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number; cancelled: boolean } | null }
 export interface Team { id: string; name: string; captain: string | null; phone: string | null; feePaid: boolean; paymentRef: string | null; paidAt: number | null }
 export interface Fixture {
   id: string; round: number; teamAId: string; teamBId: string; teamA: string; teamB: string; startsAt: number | null; groundId: string | null; groundName: string | null;

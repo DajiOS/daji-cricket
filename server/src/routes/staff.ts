@@ -4,11 +4,13 @@ import { Validator } from '../input.ts';
 import { HttpError, notFound } from '../errors.ts';
 import { audit } from '../audit.ts';
 import { checkPasswordStrength, createUser, hasPermission, listStaff, requirePermission, requireRevenue, scopeOwnerId, toUser, userRow } from '../auth.ts';
-import { one, many, run } from '../db.ts';
+import { one, many, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
-import { accessBooking, approveBooking, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
-import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn } from '../hold.ts';
+import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
+import { cancelBlock, settleBlock, settleForCustomer } from '../cancellation.ts';
+import { tournamentForBlock } from '../tournaments.ts';
+import { lookupCustomer, readName, createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
 import { cancelBooking, previewCancel } from '../cancellation.ts';
 import { createPromos, listPromos, setPromoActive } from '../promo.ts';
 import { completeManualRefund, listPayments, listRefunds, paymentHistory, paymentOr404, recordOffline, verifyUpi } from '../payments.ts';
@@ -44,20 +46,69 @@ export function staffRoutes(r: Router): void {
     const { limit, offset } = page(c);
     return ok(listBookings({
       ownerId: ownerFilter(c), groundId: c.query.get('groundId') ?? undefined, status: c.query.get('status') ?? undefined, from: c.query.get('from') ?? undefined,
-      to: c.query.get('to') ?? undefined, q: c.query.get('q') ?? undefined, needsReview: c.query.get('needsReview') === '1', approval: c.query.get('approval') === 'pending' ? 'pending' : undefined, resolution: c.query.get('resolution') === 'awaiting' ? 'awaiting' : undefined, limit, offset,
+      to: c.query.get('to') ?? undefined, q: c.query.get('q') ?? undefined, needsReview: c.query.get('needsReview') === '1', collapse: c.query.get('group') === '1', approval: c.query.get('approval') === 'pending' ? 'pending' : undefined, resolution: c.query.get('resolution') === 'awaiting' ? 'awaiting' : undefined, limit, offset,
     }));
   }, A);
 
   r.get('/api/staff/bookings/:id', (c) => {
     const b = accessBooking(U(c), c.params.id!, 'manage_bookings');
     const payments = bookingPayments(b.id);
-    return ok({ booking: viewBooking(b.id), payments, refunds: listRefunds(b.owner_id).filter((x) => x.bookingId === b.id), audit: listAudit({ entity: 'booking', entityId: b.id, limit: 100 }).items });
+    return ok({ booking: viewBooking(b.id), block: b.series_id ? blockOf(b.series_id) : null, payments, refunds: listRefunds(b.owner_id).filter((x) => x.bookingId === b.id || (b.series_id && seriesBookingIds(b.series_id).includes(x.bookingId))), audit: listAudit({ entity: 'booking', entityId: b.id, limit: 100 }).items });
   }, A);
 
   r.post('/api/staff/bookings', (c) => created({ booking: createStaffBooking(U(c), parseWalkIn(c.json())) }), A);
 
   // One booking per day for a run of days at one agreed total (camps, tournaments, shoots)
-  r.post('/api/staff/bookings/block', (c) => created(createStaffBlock(U(c), parseBlock(c.json()))), A);
+  r.post('/api/staff/bookings/block', (c) => {
+    const u = U(c), body = c.json() as any;
+    const tn = body?.tournament;
+    if (tn) requirePermission(u, 'manage_matches'); // a tournament is made alongside the booking
+    return tx(() => {
+    const out = createStaffBlock(u, parseBlock(body));
+    if (!tn || typeof tn !== 'object') return created(out);
+    const owner = scopeOwnerId(u) ?? ownerOrFail(c, 'run tournaments');
+    const cu = out.bookings[0]!;
+    const bc = body.customer ?? {};
+    const full = String(bc.name ?? '').trim(), sp = full.indexOf(' ');
+    const org = { first: bc.firstName ? String(bc.firstName) : sp < 0 ? full : full.slice(0, sp), last: bc.firstName ? String(bc.lastName ?? '') : sp < 0 ? '' : full.slice(sp + 1), phone: body.customer?.phone ?? null, email: body.customer?.email ?? null };
+    const tournament = tournamentForBlock({ id: u.id, role: u.role }, owner, out.series.id, tn, org, cu.customerId ?? null);
+    return created({ ...out, tournament });
+    });
+  }, A);
+
+  // One payment for a whole multi-day booking: it fills the earliest days first
+  r.post('/api/staff/bookings/block/:seriesId/payments', (c) => {
+    const v = new Validator(c.json());
+    const method = v.oneOf('method', ['cash', 'card', 'upi', 'bank_transfer'] as const, true);
+    const amountPaise = v.int('amountPaise', { required: true, min: 1 });
+    const reference = v.str('reference', { max: 60 });
+    const note = v.str('note', { max: 200 });
+    v.done();
+    return created({ block: recordBlockPayment(U(c), c.params.seriesId!, { method: method!, amountPaise: amountPaise!, reference, note }) });
+  }, A);
+
+  // Cancel every day of a multi-day booking at once; `settle` also returns the money (or credits it) now
+  r.post('/api/staff/bookings/block/:seriesId/cancel', (c) => {
+    const v = new Validator(c.json());
+    const reason = v.str('reason', { max: 300 });
+    const settle = v.oneOf('settle', ['refund', 'half', 'credit'] as const);
+    const offers = v.strArray('offers', { max: 3, itemMax: 10 });
+    v.done();
+    return ok({ ...cancelBlock(U(c), c.params.seriesId!, { reason, settle, offers }), block: blockOf(c.params.seriesId!) });
+  }, A);
+  r.post('/api/staff/bookings/block/:seriesId/settle', (c) => {
+    const v = new Validator(c.json());
+    const choice = v.oneOf('choice', ['refund', 'half', 'credit'] as const, true);
+    v.done();
+    return ok({ ...settleBlock(U(c), c.params.seriesId!, choice!), block: blockOf(c.params.seriesId!) });
+  }, A);
+  // Settle one cancelled booking for the customer (they agreed in person or by phone)
+  r.post('/api/staff/bookings/:id/settle', (c) => {
+    const v = new Validator(c.json());
+    const choice = v.oneOf('choice', ['refund', 'half', 'credit'] as const, true);
+    v.done();
+    return ok(settleForCustomer(U(c), c.params.id!, choice!));
+  }, A);
 
   r.post('/api/staff/bookings/:id/payments', (c) => {
     const v = new Validator(c.json());
@@ -239,6 +290,13 @@ export function staffRoutes(r: Router): void {
     return ok(customerList(owner, c.query.get('q') ?? undefined, limit, offset));
   }, A);
 
+  // Is this phone or email already a customer? Used by New booking to prefill and to avoid a second account.
+  r.get('/api/staff/customers/lookup', (c) => {
+    const u = U(c);
+    const owner = u.role === 'super_admin' ? (c.query.get('ownerId') || null) : scopeOwnerId(u);
+    return ok(lookupCustomer(owner, { phone: c.query.get('phone'), email: c.query.get('email') }));
+  }, A);
+
   r.get('/api/staff/customers/:id', (c) => {
     const u = U(c);
     requirePermission(u, 'view_customers');
@@ -296,6 +354,22 @@ export function staffRoutes(r: Router): void {
     return ok({ items: out });
   }, A);
 
+  // Money already booked for the months ahead: what the confirmed sessions are worth, what has been paid and what is still to collect.
+  r.get('/api/staff/reports/upcoming', (c) => {
+    const u = U(c);
+    requirePermission(u, 'view_reports');
+    requireRevenue(u);
+    const n = Math.min(12, Math.max(1, Number(c.query.get('months')) || 6));
+    const owner = ownerFilter(c);
+    const today = istDate(Date.now());
+    const rows = many<{ period: string; n: number; total: number; paid: number }>(
+      `SELECT substr(date, 1, 7) AS period, COUNT(*) AS n, COALESCE(SUM(total_paise), 0) AS total, COALESCE(SUM(paid_paise), 0) AS paid
+       FROM bookings WHERE status = 'confirmed' AND date >= ? ${owner ? 'AND owner_id = ?' : ''} GROUP BY period ORDER BY period LIMIT ?`,
+      ...[today, ...(owner ? [owner] : []), n]);
+    const items = rows.map((r) => ({ period: r.period, bookings: r.n, totalPaise: r.total, paidPaise: r.paid, balancePaise: Math.max(r.total - r.paid, 0) }));
+    return ok({ items, totalPaise: items.reduce((a, x) => a + x.totalPaise, 0), paidPaise: items.reduce((a, x) => a + x.paidPaise, 0), balancePaise: items.reduce((a, x) => a + x.balancePaise, 0), bookings: items.reduce((a, x) => a + x.bookings, 0) });
+  }, A);
+
   r.get('/api/staff/today', (c) => {
     const u = U(c);
     if (u.role === 'staff') requirePermission(u, 'manage_bookings');
@@ -308,6 +382,8 @@ export function staffRoutes(r: Router): void {
     return ok({ date: today, bookings: list.items.filter((b) => b.status !== 'cancelled' && b.status !== 'expired'), awaitingVerification: awaiting, needsReview: review });
   }, A);
 
+  const seriesBookingIds = (sid: string): string[] => many<{ id: string }>('SELECT id FROM bookings WHERE series_id = ?', sid).map((x) => x.id);
+
   // ---- team (owner manages their staff)
   r.get('/api/staff/team', (c) => {
     const u = U(c);
@@ -318,7 +394,7 @@ export function staffRoutes(r: Router): void {
   r.post('/api/staff/team', (c) => {
     const u = U(c);
     const v = new Validator(c.json());
-    const name = v.str('name', { required: true, min: 2, max: 80 });
+    const nm = readName(v, true); const name = nm.name;
     const email = v.email('email', true);
     const phone = v.phone('phone');
     const password = v.str('password', { required: true, trim: false });
@@ -329,7 +405,7 @@ export function staffRoutes(r: Router): void {
     if (password) { const pw = checkPasswordStrength(password); if (pw) v.fail('password', pw); }
     v.done();
     const ownerId = u.role === 'owner' ? u.id : ownerOrFail(c, 'add a team member');
-    const s = createUser({ role: 'staff', name: name!, email: email!, phone: phone ?? null, password: password!, ownerId, permissions });
+    const s = createUser({ role: 'staff', name: name!, ...(nm.firstName ? { firstName: nm.firstName, lastName: nm.lastName } : {}), email: email!, phone: phone ?? null, password: password!, ownerId, permissions });
     audit({ id: u.id, role: u.role }, 'staff.create', 'user', s.id, { permissions }, ownerId);
     return created(toUser(s));
   }, { auth: ['owner', 'super_admin'] });

@@ -7,7 +7,7 @@ import { audit, type Actor } from './audit.ts';
 import { Validator, normalizePhone } from './input.ts';
 import { getSettings } from './settings.ts';
 import { MIN, DAY, addDays, istMidnight, timeOfDay } from './time.ts';
-import { advanceFor, bookingOr404, confirmBooking, loadBooking, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
+import { accessBooking, blockOf, advanceFor, bookingOr404, confirmBooking, loadBooking, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
 import { getGroundOr404, slotPrice, slotStarts, type GroundRow } from './grounds.ts';
 import { createUser, requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
 import { insertPayment, logEvent, recordOffline, type PaymentRow } from './payments.ts';
@@ -278,7 +278,7 @@ function undoHold(bookingId: string, customer: UserRow): void {
 
 export interface WalkInInput {
   groundId: string; date: string; startTime: string; slots?: number; formatId?: string; ruleId?: string;
-  customer: { name: string; phone: string; email?: string };
+  customer: { name: string; phone: string; email?: string; firstName?: string; lastName?: string };
   payment: { method: Exclude<PayMethod, 'razorpay' | 'credit'>; amountPaise: number; reference?: string };
   players?: number; notes?: string; source?: 'walk_in' | 'enquiry'; enquiryId?: string; totalPaiseOverride?: number; customerId?: string;
 }
@@ -300,11 +300,11 @@ export function parseWalkIn(body: unknown): WalkInInput {
   if (!cust || typeof cust !== 'object') v.fail('customer', 'Required');
   else {
     const cv = new Validator(cust);
-    const name = cv.str('name', { required: true, min: 2, max: 80 });
+    const nm = readName(cv, true);
     const phone = cv.phone('phone', true);
     const email = cv.email('email');
     for (const f of cv.fields) v.fail(`customer.${f.field}`, f.message);
-    if (name && phone) customer = { name, phone, email };
+    if (nm.name && phone) customer = { name: nm.name, ...(nm.firstName ? { firstName: nm.firstName, lastName: nm.lastName } : {}), phone, email };
   }
   if (!pay || typeof pay !== 'object') v.fail('payment', 'Required');
   else {
@@ -319,8 +319,17 @@ export function parseWalkIn(body: unknown): WalkInInput {
   return { groundId: groundId!, date: date!, startTime: startTime!, slots, formatId, ruleId, customer: customer!, payment: payment!, players, notes };
 }
 
+/** Reads a person's name from `firstName` and `lastName` (preferred) or a single `name`. */
+export function readName(cv: Validator, required: boolean): { name?: string; firstName?: string; lastName?: string } {
+  const first = cv.str('firstName', { min: 1, max: 40 });
+  const last = cv.str('lastName', { max: 40 });
+  if (first) return { name: `${first} ${last ?? ''}`.trim(), firstName: first, lastName: last ?? '' };
+  const name = cv.str('name', { required, min: 2, max: 80 });
+  return { name };
+}
+
 /** Finds the customer by phone (or email) within what staff may see, or creates a walk-in record without a login. */
-export function findOrCreateCustomer(c: { name: string; phone: string; email?: string }): UserRow {
+export function findOrCreateCustomer(c: { name: string; phone: string; email?: string; firstName?: string; lastName?: string }): UserRow {
   const phone = normalizePhone(c.phone)!;
   if (c.email) {
     const byEmail = one<UserRow>("SELECT * FROM users WHERE lower(email) = lower(?) AND role = 'customer'", c.email);
@@ -328,7 +337,34 @@ export function findOrCreateCustomer(c: { name: string; phone: string; email?: s
   }
   const byPhone = one<UserRow>("SELECT * FROM users WHERE phone = ? AND role = 'customer' ORDER BY (password_hash IS NOT NULL) DESC, created_at LIMIT 1", phone);
   if (byPhone) return byPhone;
-  return createUser({ role: 'customer', name: c.name, phone, email: c.email ?? null });
+  return createUser({ role: 'customer', name: c.name, ...(c.firstName ? { firstName: c.firstName, lastName: c.lastName ?? '' } : {}), phone, email: c.email ?? null });
+}
+
+export interface CustomerMatch {
+  found: boolean; hasAccount: boolean; known: boolean; id?: string; name?: string; phone?: string | null; email?: string | null;
+  matchedOn: ('phone' | 'email')[]; conflict: boolean;
+}
+/**
+ * Looks for an existing customer by phone and email, the same way a booking will. `hasAccount` means they can already sign in
+ * (so they should reset their password, not get a second account). Details are only returned for someone this owner has booked before.
+ * `conflict` means the phone and the email belong to two different people.
+ */
+export function lookupCustomer(ownerId: string | null, q: { phone?: string | null; email?: string | null }): CustomerMatch {
+  const phone = q.phone ? normalizePhone(q.phone) : null;
+  const email = q.email?.trim() || null;
+  const byEmail = email ? one<UserRow>("SELECT * FROM users WHERE lower(email) = lower(?) AND role = 'customer'", email) : undefined;
+  const byPhone = phone ? one<UserRow>("SELECT * FROM users WHERE phone = ? AND role = 'customer' ORDER BY (password_hash IS NOT NULL) DESC, created_at LIMIT 1", phone) : undefined;
+  const row = byEmail ?? byPhone;
+  const matchedOn: ('phone' | 'email')[] = [];
+  if (byPhone) matchedOn.push('phone');
+  if (byEmail) matchedOn.push('email');
+  if (!row) return { found: false, hasAccount: false, known: false, matchedOn, conflict: false };
+  const known = !ownerId || !!one('SELECT 1 FROM bookings WHERE customer_id = ? AND owner_id = ? LIMIT 1', row.id, ownerId);
+  const conflict = !!(byEmail && byPhone && byEmail.id !== byPhone.id);
+  const hasAccount = !!(byEmail?.password_hash || byPhone?.password_hash);
+  return known
+    ? { found: true, hasAccount, known, id: row.id, name: row.name, phone: row.phone, email: row.email, matchedOn, conflict }
+    : { found: true, hasAccount, known, matchedOn, conflict };
 }
 
 /**
@@ -367,7 +403,7 @@ export function createStaffBooking(staff: UserRow, input: WalkInInput): Booking 
 
 export interface BlockInput {
   groundId: string; fromDate: string; toDate: string; startTime: string; endTime: string; totalPaise: number;
-  customer: { name: string; phone: string; email?: string };
+  customer: { name: string; phone: string; email?: string; firstName?: string; lastName?: string };
   payment: { method: Exclude<PayMethod, 'razorpay' | 'credit'>; amountPaise: number; reference?: string };
   notes?: string; enquiryId?: string; customerId?: string;
 }
@@ -385,9 +421,9 @@ export function parseBlock(body: unknown): BlockInput {
   if (!cust || typeof cust !== 'object') v.fail('customer', 'Required');
   else {
     const cv = new Validator(cust);
-    const name = cv.str('name', { required: true, min: 2, max: 80 }), phone = cv.phone('phone', true), email = cv.email('email');
+    const nm = readName(cv, true), phone = cv.phone('phone', true), email = cv.email('email');
     for (const f of cv.fields) v.fail(`customer.${f.field}`, f.message);
-    if (name && phone) customer = { name, phone, email };
+    if (nm.name && phone) customer = { name: nm.name, ...(nm.firstName ? { firstName: nm.firstName, lastName: nm.lastName } : {}), phone, email };
   }
   if (!pay || typeof pay !== 'object') v.fail('payment', 'Required');
   else {
@@ -431,7 +467,12 @@ export function createStaffBlock(staff: UserRow, input: BlockInput): { series: {
       const all = slotStarts(open, date);
       const first = all.findIndex((s) => timeOfDay(s) === input.startTime);
       if (first < 0) throw new HttpError(400, 'INVALID_SLOT', `${date}: the ground has no slot starting at ${input.startTime}`);
-      const count = all.slice(first).filter((s) => timeOfDay(s) < input.endTime).length;
+      // measured from midnight, so a ground that stays open past midnight does not count its 12 am to 2 am slots as "before 7 pm"
+      const base = istMidnight(date), toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+      const startMin = (all[first]! - base) / MIN;
+      let endMin = toMin(input.endTime);
+      if (endMin <= startMin) endMin += 24 * 60;                                   // an end like 02:00 means the next morning
+      const count = all.slice(first).filter((s) => (s - base) / MIN < endMin).length;
       if (count < 1) throw new HttpError(400, 'INVALID_SLOT', `${date}: nothing falls between ${input.startTime} and ${input.endTime}`);
       return planSlots(open, date, input.startTime, count, t, { ignoreMaxSlots: true });
     });
@@ -446,7 +487,7 @@ export function createStaffBlock(staff: UserRow, input: BlockInput): { series: {
     const ids: string[] = [];
     plans.forEach((p, i) => {
       const id = insertBooking({ ground, customerId: customer.id, date: p.date, starts: p.starts, totalPaise: dayTotal(i), advancePaise: i === 0 ? advance : 0, status: 'held', source: input.enquiryId ? 'enquiry' : 'walk_in', payMethod: null, holdExpiresAt: i === 0 ? t + 5 * MIN : null, players: undefined, notes: input.notes ?? null, createdBy: staff.id, enquiryId: input.enquiryId ?? null });
-      if (i === 0) run('INSERT INTO booking_series(id, owner_id, customer_id, ground_id, frequency, requested, first_booking_id, created_at) VALUES(?,?,?,?,?,?,?,?)', seriesId, ground.owner_id, customer.id, ground.id, 'daily', n, id, t);
+      if (i === 0) run('INSERT INTO booking_series(id, owner_id, customer_id, ground_id, frequency, requested, first_booking_id, created_at, kind) VALUES(?,?,?,?,?,?,?,?,?)', seriesId, ground.owner_id, customer.id, ground.id, 'daily', n, id, t, 'block');
       takeSlots(id, ground, p.starts);
       run('UPDATE bookings SET series_id = ?, series_index = ? WHERE id = ?', seriesId, i, id);
       ids.push(id);
@@ -472,3 +513,27 @@ export function bookingDetail(id: string) {
   return { booking: b, paymentRows: payments };
 }
 
+
+/** One payment against a whole block: it goes to the earliest day that still owes money, then the next, and so on. */
+export function recordBlockPayment(staff: UserRow, seriesId: string, input: { method: 'cash' | 'card' | 'upi' | 'bank_transfer'; amountPaise: number; reference?: string; note?: string }) {
+  const days = many<{ id: string; total_paise: number; paid_paise: number }>("SELECT id, total_paise, paid_paise FROM bookings WHERE series_id = ? AND status IN ('held','confirmed') ORDER BY series_index", seriesId);
+  if (!days.length || !one("SELECT 1 FROM booking_series WHERE id = ? AND kind = 'block'", seriesId)) throw new HttpError(404, 'NOT_FOUND', 'Multi-day booking not found');
+  accessBooking(staff, days[0]!.id, 'record_payments');
+  const owing = days.reduce((a, d) => a + (d.total_paise - d.paid_paise), 0);
+  if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0) throw new HttpError(400, 'VALIDATION_FAILED', 'Amount must be a positive whole number of paise');
+  if (input.amountPaise > owing) throw new HttpError(409, 'OVERPAYMENT', `Only ${owing} paise is outstanding on this multi-day booking`);
+  return tx(() => {
+    let left = input.amountPaise, first = true;
+    for (const d of days) {
+      if (left <= 0) break;
+      const put = Math.min(left, d.total_paise - d.paid_paise);
+      if (put <= 0) continue;
+      // a payment reference (UTR) can be used once, so it is kept on the first day and noted on the rest
+      const note = first ? input.note : [input.note, input.reference ? `Part of payment ${input.reference}` : 'Part of one multi-day payment'].filter(Boolean).join(' · ').slice(0, 200);
+      recordOffline(staff, d.id, { method: input.method, amountPaise: put, reference: first ? input.reference : undefined, note });
+      first = false;
+      left -= put;
+    }
+    return blockOf(seriesId)!;
+  });
+}

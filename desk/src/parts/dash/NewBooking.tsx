@@ -1,8 +1,8 @@
 // A booking taken at the desk (walk-in or phone): pick the ground, day and session, add the customer and the money received.
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Field, ErrorBox, Loading } from '../../ui';
+import { Modal, Field, ErrorBox, Loading, NameField, splitName } from '../../ui';
 import { api, post, useApi, inr, toPaise, todayISO } from '../../lib';
-import { HAND_METHODS, errText } from './common';
+import { HAND_METHODS, errText, useCustomerMatch, MatchNote } from './common';
 
 interface Ground { id: string; name: string; maxSlots: number; active: boolean }
 interface SlotView { start: number; time: string; pricePaise: number; state: string }
@@ -22,6 +22,7 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
   const [fixed, setFixed] = useState<string | null>(null);              // key of a chosen fixed session
   const [hr, setHr] = useState<{ group: string; start: number; n: number } | null>(null); // hourly: group, first slot index, hours
   const [cust, setCust] = useState({ name: '', phone: '', email: '' });
+  const match = useCustomerMatch(cust, setCust);
   const [method, setMethod] = useState('cash');
   const [amount, setAmount] = useState('');
   const [touched, setTouched] = useState(false);
@@ -79,7 +80,7 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
     setBusy(true); setErr(null);
     try {
       const r = await post<{ booking: { id: string } }>('/api/staff/bookings', {
-        groundId, date, ...picked.body, customer: { name: cust.name.trim(), phone: cust.phone.trim(), ...(cust.email.trim() ? { email: cust.email.trim() } : {}) },
+        groundId, date, ...picked.body, customer: { firstName: splitName(cust.name).first, lastName: splitName(cust.name).last, phone: cust.phone.trim(), ...(cust.email.trim() ? { email: cust.email.trim() } : {}) },
         payment: { method, amountPaise: paise, ...(reference.trim() ? { reference: reference.trim() } : {}) },
         ...(players ? { players: Number(players) } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}),
       });
@@ -129,9 +130,10 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
           <div>
             <div className="eyebrow">Customer</div>
             <div className="form-grid">
-              <Field label="Name"><input className="inp" value={cust.name} onChange={(e) => setCust({ ...cust, name: e.target.value })} autoComplete="off" /></Field>
+              <NameField value={cust.name} onChange={(n) => setCust((c) => ({ ...c, name: n }))} />
               <Field label="Mobile" hint="An existing customer is found by this number."><input className="inp" inputMode="tel" value={cust.phone} onChange={(e) => setCust({ ...cust, phone: e.target.value })} /></Field>
               <Field label="Email (optional)"><input className="inp" type="email" value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} /></Field>
+              <MatchNote m={match} />
               <Field label="Players (optional)"><input className="inp" inputMode="numeric" value={players} onChange={(e) => setPlayers(e.target.value.replace(/\D/g, ''))} /></Field>
               <Field label="Note (optional)" full><input className="inp" maxLength={300} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
             </div>

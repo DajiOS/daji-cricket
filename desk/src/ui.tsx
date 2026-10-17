@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 // ---------- icons (1.6px line, gold via currentColor) ----------
 const P: Record<string, string> = {
+  filter: 'M3 5h18l-7 8.2V20l-4-2v-4.8z',
   dashboard: 'M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z',
   warehouse: 'M3 21V9l9-6 9 6v12M7 21v-8h10v8M7 17h10',
   tenants: 'M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 20v-1a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
@@ -52,6 +53,16 @@ const P: Record<string, string> = {
   lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
   inbox: 'M22 12h-6l-2 3h-4l-2-3H2M5.5 5h13l3.5 7v7H2v-7z',
 };
+/** The Filters button used on every list that can be narrowed: it opens and closes the filter controls and shows how many are on. `inline` keeps the controls in the row they sit in. */
+export function Filters({ active = 0, children, startOpen, inline = true }: { active?: number; children: ReactNode; startOpen?: boolean; inline?: boolean }) {
+  const [open, setOpen] = useState(startOpen ?? active > 0);
+  return (
+    <>
+      <button type="button" className={`btn sm filter-btn${open ? ' on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="filter" size={15} />Filters{active > 0 && <span className="filter-n">{active}</span>}</button>
+      {open && (inline ? <span className="filter-body">{children}</span> : <div className="filter-panel">{children}</div>)}
+    </>
+  );
+}
 export function Icon({ name, size }: { name: string; size?: number }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
@@ -102,6 +113,29 @@ export const ErrorBox = ({ msg }: { msg: string | null }) => (msg ? <div classNa
 
 export function Field({ label, hint, children, full }: { label: string; hint?: string; children: ReactNode; full?: boolean }) {
   return <label className={`f${full ? ' full' : ''}`}><span>{label}</span>{children}{hint && <div className="hint">{hint}</div>}</label>;
+}
+
+/** "Asha Rao" becomes first "Asha", last "Rao"; the last word is the surname. */
+export function splitName(full: string): { first: string; last: string } {
+  const p = (full || '').trim().split(/\s+/).filter(Boolean);
+  return p.length < 2 ? { first: p[0] || '', last: '' } : { first: p.slice(0, -1).join(' '), last: p[p.length - 1]! };
+}
+export const joinName = (first: string, last: string) => `${first.trim()} ${last.trim()}`.trim();
+
+/** First name and last name as two fields, for any form that asks for a person. */
+export function NameFields({ first, last, onFirst, onLast, firstLabel = 'First name', lastLabel = 'Last name', autoFocus }: { first: string; last: string; onFirst: (v: string) => void; onLast: (v: string) => void; firstLabel?: string; lastLabel?: string; autoFocus?: boolean }) {
+  return (<>
+    <Field label={firstLabel}><input className="inp" maxLength={40} autoComplete="given-name" autoFocus={autoFocus} value={first} onChange={(e) => onFirst(e.target.value)} /></Field>
+    <Field label={lastLabel}><input className="inp" maxLength={40} autoComplete="family-name" value={last} onChange={(e) => onLast(e.target.value)} /></Field>
+  </>);
+}
+
+/** Drop-in for a single "Name" field: shows First name and Last name, and reports the full name. */
+export function NameField({ value, onChange, autoFocus, firstLabel = 'First name', lastLabel = 'Last name' }: { value: string; onChange: (full: string) => void; autoFocus?: boolean; firstLabel?: string; lastLabel?: string }) {
+  const [p, setP] = useState(() => splitName(value));
+  useEffect(() => { if (joinName(p.first, p.last) !== (value || '').trim()) setP(splitName(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const set = (k: 'first' | 'last') => (v: string) => { const n = { ...p, [k]: v }; setP(n); onChange(joinName(n.first, n.last)); };
+  return <NameFields first={p.first} last={p.last} onFirst={set('first')} onLast={set('last')} autoFocus={autoFocus} firstLabel={firstLabel} lastLabel={lastLabel} />;
 }
 
 export function Modal({ title, onClose, children, foot, wide }: { title: string; onClose: () => void; children: ReactNode; foot?: ReactNode; wide?: boolean }) {

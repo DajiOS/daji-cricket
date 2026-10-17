@@ -148,8 +148,12 @@ test('a custom multi-day programme: enquiry, quotation, then staff add one booki
   const conv = await h.post(`/api/staff/enquiries/${e.id}/convert-block`, { fromDate: dayFromNow(30), toDate: dayFromNow(37), startTime: '07:00', endTime: '19:00', quotationId: qid, payment: { method: 'bank_transfer', amountPaise: 4_000_000, reference: 'NEFT0001' } }, staff);
   assert.equal(conv.status, 201, JSON.stringify(conv.body));
   assert.equal(conv.body.status, 'converted');
-  const list = (await h.get(`/api/staff/bookings?limit=50`, staff)).body.items.filter((b: any) => b.source === 'enquiry' && b.customerId === e.customerId);
-  assert.equal(list.length, 8);
-  assert.equal(list.reduce((a: number, b: any) => a + b.totalPaise, 0), 25_500_000);
+  const list = (await h.get(`/api/staff/bookings?group=1&limit=50`, staff)).body.items.filter((b: any) => b.source === 'enquiry' && b.customerId === e.customerId);
+  assert.equal(list.length, 1, 'the block is one row');
+  assert.equal(list[0].block.days, 8);
+  assert.equal(list[0].block.totalPaise, 25_500_000);
+  const days = (await h.get(`/api/staff/bookings/${list[0].id}`, staff)).body.block.items;
+  assert.equal(days.length, 8);
+  assert.equal(days.reduce((a: number, b: any) => a + b.totalPaise, 0), 25_500_000);
   assert.equal((await h.post(`/api/staff/enquiries/${e.id}/convert-block`, { fromDate: dayFromNow(40), toDate: dayFromNow(41), startTime: '07:00', endTime: '19:00', totalPaise: 100000, payment: { method: 'upi', amountPaise: 100000, reference: 'x1234567' } }, staff)).status, 409, 'cannot convert twice');
 });

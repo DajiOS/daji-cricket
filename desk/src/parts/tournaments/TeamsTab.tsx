@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Chip, Confirm, ErrorBox, Field, Modal, Table, useForm, useToast } from '../../ui';
+import { Chip, Confirm, ErrorBox, Field, Modal, Table, useForm, NameField, useToast } from '../../ui';
 import { del, formatPhone, inr, patch, post } from '../../lib';
 import { API, type Detail, type Team } from './shared';
 
 function TeamForm({ tid, team, feePaise, onClose, onSaved }: { tid: string; team?: Team; feePaise: number; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
-  const { v, bind } = useForm({ name: team?.name ?? '', captain: team?.captain ?? '', phone: team?.phone ?? '', feePaid: team?.feePaid ?? false, paymentRef: team?.paymentRef ?? '' });
+  const { v, bind, setV } = useForm({ name: team?.name ?? '', captain: team?.captain ?? '', phone: team?.phone ?? '', feePaid: team?.feePaid ?? false, paymentRef: team?.paymentRef ?? '' });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function save() {
@@ -21,7 +21,7 @@ function TeamForm({ tid, team, feePaise, onClose, onSaved }: { tid: string; team
       <ErrorBox msg={err} />
       <div className="form-grid">
         <Field label="Team name" full><input className="inp" {...bind('name')} autoFocus /></Field>
-        <Field label="Captain"><input className="inp" {...bind('captain')} /></Field>
+        <NameField value={v.captain} onChange={(n) => setV((x: any) => ({ ...x, captain: n }))} firstLabel="Captain first name" lastLabel="Captain last name" />
         <Field label="Captain's phone"><input className="inp" inputMode="tel" {...bind('phone')} placeholder="98765 43210" /></Field>
         <Field label={`Entry fee ${inr(feePaise)} paid`} full>
           <label className="row" style={{ gap: 8 }}><input type="checkbox" checked={v.feePaid} onChange={bind('feePaid').onChange} /><span className="small">Fee received</span></label>

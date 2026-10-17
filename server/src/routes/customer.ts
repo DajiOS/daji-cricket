@@ -8,8 +8,9 @@ import { deleteMyAccount } from '../accountDeletion.ts';
 import { checkPasswordStrength, setPassword, signToken, toUser, userByEmail, userRow, verifyPassword } from '../auth.ts';
 import { run, one } from '../db.ts';
 import { now } from '../clock.ts';
+import { splitName, titleCase } from '../names.ts';
 import { accessBooking, bookingPayments, listBookings, viewBooking } from '../bookings.ts';
-import { holdSlots, parseHold, planFor } from '../hold.ts';
+import { readName, holdSlots, parseHold, planFor } from '../hold.ts';
 import { cancelSeries, seriesOf } from '../recurring.ts';
 import { cancelMandate, confirmMandate, mandateView, startMandate, LIMITS } from '../autodebit.ts';
 import { evaluatePromo } from '../promo.ts';
@@ -77,7 +78,7 @@ export function customerRoutes(r: Router): void {
     const u = U(c);
     const body = c.json() as any;
     const v = new Validator(body);
-    const name = v.str('name', { min: 2, max: 80 });
+    const nm = readName(v, false); const name = nm.name;
     const phone = v.phone('phone');
     const email = v.email('email');
     const businessName = u.role === 'owner' ? v.str('businessName', { max: 80 }) : undefined;
@@ -91,7 +92,10 @@ export function customerRoutes(r: Router): void {
       for (const f of cv.fields) v.fail(`consent.${f.field}`, f.message);
     }
     v.done();
-    if (name !== undefined) run('UPDATE users SET name = ?, updated_at = ? WHERE id = ?', name, now(), u.id);
+    if (name !== undefined) {
+      const p = nm.firstName ? { first: titleCase(nm.firstName), last: titleCase(nm.lastName ?? '') } : (() => { const x = splitName(titleCase(name)); return { first: x.first, last: x.last }; })();
+      run('UPDATE users SET name = ?, first_name = ?, last_name = ?, updated_at = ? WHERE id = ?', [p.first, p.last].filter(Boolean).join(' ') || name, p.first, p.last, now(), u.id);
+    }
     if (email !== undefined) {
       const other = userByEmail(email);
       if (other && other.id !== u.id) throw new HttpError(409, 'EMAIL_TAKEN', 'That email is already used by another account');

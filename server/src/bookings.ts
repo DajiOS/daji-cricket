@@ -1,6 +1,6 @@
 import { istDate } from './time.ts';
 import { assertOpen } from './accounting/store.ts';
-import type { Booking, BookingStatus, Page, Payment } from '@daji/shared';
+import type { BlockPayment, BlockSummary, Booking, BookingStatus, Page, Payment } from '@daji/shared';
 import { many, one, run, registerSchema } from './db.ts';
 import { now } from './clock.ts';
 import { HttpError, forbidden, notFound } from './errors.ts';
@@ -23,6 +23,8 @@ registerSchema('series-1', `CREATE TABLE booking_series(
 ALTER TABLE bookings ADD COLUMN series_id TEXT;
 ALTER TABLE bookings ADD COLUMN series_index INTEGER;
 CREATE INDEX idx_bookings_series ON bookings(series_id);`);
+registerSchema('series-kind-1', `ALTER TABLE booking_series ADD COLUMN kind TEXT;
+UPDATE booking_series SET kind = 'block' WHERE frequency = 'daily' AND first_booking_id IN (SELECT id FROM bookings WHERE source <> 'online');`);
 registerSchema('offers-1', `ALTER TABLE bookings ADD COLUMN cancel_offers TEXT;`);
 
 export interface BookingRow {
@@ -155,7 +157,7 @@ export function clearReview(actor: Actor, id: string): BookingRow {
 }
 
 export function listBookings(f: {
-  ownerId?: string | null; customerId?: string; groundId?: string; status?: string; from?: string; to?: string; q?: string; needsReview?: boolean; approval?: 'pending' | 'approved'; resolution?: 'awaiting'; limit: number; offset: number;
+  ownerId?: string | null; customerId?: string; groundId?: string; status?: string; from?: string; to?: string; q?: string; needsReview?: boolean; approval?: 'pending' | 'approved'; resolution?: 'awaiting'; limit: number; offset: number; collapse?: boolean;
 }): Page<Booking> {
   const where: string[] = [];
   const p: (string | number)[] = [];
@@ -163,8 +165,20 @@ export function listBookings(f: {
   if (f.customerId) { where.push('b.customer_id = ?'); p.push(f.customerId); }
   if (f.groundId) { where.push('b.ground_id = ?'); p.push(f.groundId); }
   if (f.status) { where.push('b.status = ?'); p.push(f.status); }
-  if (f.from) { where.push('b.date >= ?'); p.push(f.from); }
-  if (f.to) { where.push('b.date <= ?'); p.push(f.to); }
+  if (f.collapse) {
+    // a multi-day block is one row: its first day stands for it, and a date filter looks at every day of the block
+    where.push(`NOT (b.series_index > 0 AND b.series_id IN (SELECT id FROM booking_series WHERE kind = 'block'))`);
+    if (f.from || f.to) {
+      const c: string[] = []; const q: string[] = [];
+      if (f.from) { c.push('x.date >= ?'); q.push(f.from); }
+      if (f.to) { c.push('x.date <= ?'); q.push(f.to); }
+      where.push(`EXISTS (SELECT 1 FROM bookings x WHERE (x.id = b.id OR (b.series_id IS NOT NULL AND x.series_id = b.series_id AND b.series_id IN (SELECT id FROM booking_series WHERE kind = 'block'))) AND ${c.join(' AND ')})`);
+      p.push(...q);
+    }
+  } else {
+    if (f.from) { where.push('b.date >= ?'); p.push(f.from); }
+    if (f.to) { where.push('b.date <= ?'); p.push(f.to); }
+  }
   if (f.needsReview) where.push('b.needs_review = 1');
   if (f.approval) { where.push("b.approval = ? AND b.status = 'confirmed'"); p.push(f.approval); }
   if (f.resolution) { where.push('b.resolution = ?'); p.push(f.resolution); }
@@ -176,7 +190,41 @@ export function listBookings(f: {
   const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const total = one<{ n: number }>(`SELECT COUNT(*) n FROM bookings b JOIN users u ON u.id = b.customer_id ${w}`, ...p)?.n ?? 0;
   const rows = many<Joined>(`${JOIN} ${w} ORDER BY b.start_at DESC, b.id DESC LIMIT ? OFFSET ?`, ...p, f.limit, f.offset);
-  return { items: rows.map(toBooking), total, limit: f.limit, offset: f.offset };
+  const items = rows.map(toBooking);
+  if (f.collapse) for (const b of items) if (b.seriesId) b.block = blockOf(b.seriesId, false);
+  return { items, total, limit: f.limit, offset: f.offset };
+}
+
+/** A multi-day block as one booking: its dates, the money across every day and (with `days`) each day. Null when the series is not a block. */
+export function blockOf(seriesId: string, withDays = true): BlockSummary | null {
+  const s = one<{ kind: string | null }>('SELECT kind FROM booking_series WHERE id = ?', seriesId);
+  if (!s || s.kind !== 'block') return null;
+  const rows = many<BookingRow>('SELECT * FROM bookings WHERE series_id = ? ORDER BY series_index, date', seriesId);
+  if (!rows.length) return null;
+  const live = rows.filter((r) => r.status !== 'cancelled' && r.status !== 'expired');
+  const use = live.length ? live : rows;
+  const sum = (k: 'total_paise' | 'paid_paise') => use.reduce((a, r) => a + r[k], 0);
+  const total = sum('total_paise'), paid = sum('paid_paise');
+  // A payment that was spread over several days is one line: grouped by when it was taken and how
+  const pays: BlockPayment[] = [];
+  if (withDays) {
+    const rs = many<any>(`SELECT * FROM payments WHERE booking_id IN (${rows.map(() => '?').join(',')}) ORDER BY created_at, rowid`, ...rows.map((r) => r.id));
+    for (const x of rs) {
+      const at = Math.floor(x.created_at / 1000), prev = pays[pays.length - 1];
+      if (prev && Math.floor(prev.createdAt / 1000) === at && prev.method === x.method && prev.status === x.status) { prev.amountPaise += x.amount_paise; prev.refundedPaise += x.refunded_paise; prev.reference = prev.reference ?? x.reference; }
+      else pays.push({ createdAt: x.created_at, method: x.method, status: x.status, amountPaise: x.amount_paise, refundedPaise: x.refunded_paise, reference: x.reference });
+    }
+  }
+  return {
+    seriesId, cancelled: live.length === 0,
+    awaitingPaise: rows.filter((r) => r.status === 'cancelled' && r.resolution === 'awaiting').reduce((a, r) => a + r.paid_paise, 0),
+    refundedPaise: rows.reduce((a, r) => a + r.refund_paise, 0), creditedPaise: rows.reduce((a, r) => a + r.credit_paise, 0),
+    cancellableDays: rows.filter((r) => (r.status === 'confirmed' || r.status === 'held') && r.start_at > now()).length,
+    tournament: one<{ id: string; name: string }>('SELECT id, name FROM tournaments WHERE series_id = ? AND deleted_at IS NULL', seriesId) ?? null,
+    days: use.length, fromDate: use[0]!.date, toDate: use[use.length - 1]!.date, totalPaise: total, paidPaise: paid, balancePaise: Math.max(total - paid, 0),
+    ...(withDays ? { payments: pays } : {}),
+    ...(withDays ? { items: rows.map((r) => ({ id: r.id, ref: r.ref, date: r.date, startAt: r.start_at, endAt: r.end_at, status: r.status, totalPaise: r.total_paise, paidPaise: r.paid_paise, balancePaise: Math.max(r.total_paise - r.paid_paise, 0) })) } : {}),
+  };
 }
 
 export function bookingPayments(bookingId: string): Payment[] {

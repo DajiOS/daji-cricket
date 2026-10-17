@@ -1,6 +1,6 @@
 // Academy: attendance, fees with the coach's share, the progress-card skills and the coaching staff.
 import { useEffect, useRef, useState } from 'react';
-import { Field, Modal, Stat, Status, Table, useToast } from '../../ui';
+import { Field, Modal, Stat, Status, Table, NameField, useToast } from '../../ui';
 import { inr, post, put, sendFile, todayISO, toPaise, rupees, useApi } from '../../lib';
 import { Async, Select, errMsg, monthName } from './common';
 
@@ -200,7 +200,7 @@ export function Coaches({ adding }: { adding: number }) {
               <div className="coach-top">
                 {c.photo ? <img className="coach-ph" src={c.photo} alt="" /> : <div className="coach-ph none">{(c.name || '?')[0]}</div>}
                 <div className="stack" style={{ flex: 1, minWidth: 0 }}>
-                  <Field label="Name"><input className="inp" maxLength={80} placeholder="Full name" value={c.name} onChange={(e) => upd(i, 'name', e.target.value)} /></Field>
+                  <div className="form-grid"><NameField value={c.name} onChange={(n) => upd(i, 'name', n)} /></div>
                 </div>
               </div>
               <Field label="Title"><input className="inp" maxLength={80} placeholder="e.g. Head coach, BCCI Level 2" value={c.title} onChange={(e) => upd(i, 'title', e.target.value)} /></Field>

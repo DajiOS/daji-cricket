@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ErrorBox, Loading, PageHead, Stat, Status, Table, Tabs, Confirm, useToast } from '../ui';
-import { del, fmtDate, go, inr, useApi } from '../lib';
+import { Chip, ErrorBox, Loading, PageHead, Stat, Status, Table, Tabs, Confirm, useToast } from '../ui';
+import { del, fmtDate, formatPhone, go, inr, useApi } from '../lib';
 import { TournamentForm } from '../parts/tournaments/TournamentForm';
 import { TeamsTab } from '../parts/tournaments/TeamsTab';
 import { FixturesTab } from '../parts/tournaments/FixturesTab';
@@ -33,7 +33,7 @@ function List() {
             cols={[
               { head: 'Tournament', cell: (t) => <><b>{t.name}</b><div className="small muted">{formatLabel(t.format)} · {t.overs} overs</div></> },
               { head: 'Dates', cell: (t) => `${fmtDate(t.startDate)} to ${fmtDate(t.endDate)}` },
-              { head: 'Status', cell: (t) => <Status s={t.status} map={STATUS} /> },
+              { head: 'Status', cell: (t) => <span className="row" style={{ gap: 6 }}><Status s={t.status} map={STATUS} />{t.booking && <Chip tone="info">Ground booked</Chip>}</span> },
               { head: 'Teams', num: true, cell: (t) => t.teamCount },
               { head: 'Played', num: true, cell: (t) => `${t.playedCount}/${t.fixtureCount}` },
               { head: 'Entry fee', num: true, cell: (t) => inr(t.entryFeePaise) },
@@ -63,6 +63,13 @@ function One({ id }: { id: string }) {
       </PageHead>
       <ErrorBox msg={delErr} />
       {t.notes && <div className="muted small">{t.notes}</div>}
+      {t.organiser && (t.organiser.firstName || t.organiser.phone) && <div className="small muted">Organiser: <b>{`${t.organiser.firstName} ${t.organiser.lastName}`.trim() || '—'}</b>{t.organiser.phone ? ` · ${formatPhone(t.organiser.phone)}` : ''}{t.organiser.email ? ` · ${t.organiser.email}` : ''}</div>}
+      {t.booking && (
+        <div className="card card-pad row" style={{ justifyContent: 'space-between', gap: 12 }}>
+          <div><b>Ground booked</b> {t.booking.cancelled ? <Chip tone="bad">Cancelled</Chip> : t.booking.balancePaise > 0 ? <Chip tone="warn">{inr(t.booking.balancePaise)} to collect</Chip> : <Chip tone="good">Paid</Chip>}
+            <div className="small muted">{t.booking.groundName} · {fmtDate(t.booking.fromDate)} to {fmtDate(t.booking.toDate)} · {inr(t.booking.paidPaise)} of {inr(t.booking.totalPaise)} received</div></div>
+          {t.booking.firstBookingId && <button className="btn sm" onClick={() => go('/bookings/' + t.booking!.firstBookingId)}>Open booking</button>}
+        </div>)}
       <div className="grid g4">
         <Stat label="Teams" value={t.teamCount} foot={`${d.fees.paidTeams} paid, ${d.fees.unpaidTeams} due`} />
         <Stat label="Matches played" value={`${t.playedCount}/${t.fixtureCount}`} meter={t.fixtureCount ? (t.playedCount / t.fixtureCount) * 100 : 0} />

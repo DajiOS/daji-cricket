@@ -1,10 +1,16 @@
 import { useState } from 'react';
-import { PageHead, Stat, Chip, Field, Modal, Loading, ErrorBox, Empty, useToast } from '../ui';
+import { PageHead, Stat, Chip, Field, Modal, Loading, ErrorBox, Empty, Filters, NameField, useToast } from '../ui';
 import { useApi, post, patch, formatPhone } from '../lib';
 import { errText } from '../parts/admin/common';
 
 interface Member { id: string; name: string; email: string | null; phone: string | null; active: boolean; permissions: string[] }
 interface TeamData { items: Member[]; allPermissions: string[]; presets: Record<string, { title: string; permissions: string[] }> }
+/** The role a member's rights add up to: a preset's title when they match it exactly, otherwise Custom. */
+const roleOf = (m: Member, presets: TeamData['presets']): string => {
+  const mine = [...(m.permissions || [])].sort().join(',');
+  const hit = Object.values(presets).find((p) => [...p.permissions].sort().join(',') === mine);
+  return hit ? hit.title : 'Custom rights';
+};
 const words = (p: string) => (p === 'view_revenue' ? 'Can see revenue' : p.replace(/_/g, ' '));
 
 function AddMember({ presets, onClose, onDone }: { presets: TeamData['presets']; onClose: () => void; onDone: () => void }) {
@@ -20,7 +26,7 @@ function AddMember({ presets, onClose, onDone }: { presets: TeamData['presets'];
   return (
     <Modal title="Add to team" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={add}>{busy ? 'Adding…' : 'Add to team'}</button></>}>
       <div className="form-grid">
-        <Field label="Name" full><input className="inp" maxLength={80} placeholder="Full name" value={f.name} onChange={set('name')} /></Field>
+        <NameField value={f.name} onChange={(n) => setF((s) => ({ ...s, name: n }))} />
         <Field label="Email"><input className="inp" type="email" value={f.email} onChange={set('email')} /></Field>
         <Field label="Mobile number"><input className="inp" type="tel" placeholder="10 digit mobile number" value={f.phone} onChange={set('phone')} /></Field>
         <Field label="Role"><select className="inp" value={f.preset} onChange={set('preset')}>{Object.entries(presets).map(([k, p]) => <option key={k} value={k}>{p.title}</option>)}</select></Field>
@@ -57,7 +63,11 @@ export default function Team({ sub }: { sub: string }) {
   async function toggle(m: Member) {
     try { await patch(`/api/staff/team/${encodeURIComponent(m.id)}`, { active: !m.active }); toast('Saved'); reload(); } catch (e) { toast(errText(e)); }
   }
-  const items = data?.items || [];
+  const [q, setQ] = useState(''), [st, setSt] = useState(''), [rl, setRl] = useState('');
+  const all = data?.items || [];
+  const roles = data ? [...new Set(all.map((m) => roleOf(m, data.presets)))] : [];
+  const items = all.filter((m) => (!st || (st === 'on') === m.active) && (!rl || roleOf(m, data!.presets) === rl)
+    && (!q.trim() || [m.name, m.email, m.phone].filter(Boolean).join(' ').toLowerCase().includes(q.trim().toLowerCase())));
   return (
     <div className="stack">
       <PageHead eyebrow="Administration" title="Users & Access" lede="An Admin runs the day to day (bookings, payments, customers, the academy and matches) and can read reports. Prices, the books, promo codes, the team and settings stay with you.">
@@ -67,18 +77,25 @@ export default function Team({ sub }: { sub: string }) {
       {!data && !error && <Loading />}
       {data && <>
         <div className="grid g3">
-          <Stat label="Team members" value={items.length} />
-          <Stat label="Can sign in" value={items.filter((m) => m.active).length} />
-          <Stat label="Switched off" value={items.filter((m) => !m.active).length} />
+          <Stat label="Team members" value={all.length} />
+          <Stat label="Can sign in" value={all.filter((m) => m.active).length} />
+          <Stat label="Switched off" value={all.filter((m) => !m.active).length} />
         </div>
         <div className="card">
           <div className="card-head"><h3>Your team</h3></div>
-          {!items.length ? <Empty>No one on your team yet.</Empty> : (
+          <div className="row" style={{ padding: '10px 16px 0' }}>
+            <input className="inp" style={{ flex: '1 1 220px', width: 'auto' }} type="search" placeholder="Search name, email or phone" aria-label="Search the team" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Filters active={(st ? 1 : 0) + (rl ? 1 : 0)}>
+              <select className="inp" style={{ width: 150 }} aria-label="Status" value={st} onChange={(e) => setSt(e.target.value)}><option value="">Any status</option><option value="on">Active</option><option value="off">Switched off</option></select>
+              <select className="inp" style={{ width: 170 }} aria-label="Role" value={rl} onChange={(e) => setRl(e.target.value)}><option value="">Any role</option>{roles.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+            </Filters>
+          </div>
+          {!items.length ? <Empty>{all.length ? 'No one matches.' : 'No one on your team yet.'}</Empty> : (
             <div className="card-pad">
               {items.map((m) => (
                 <div className="ad-line" key={m.id}>
                   <div>
-                    <b>{m.name}</b> <Chip tone={m.active ? 'good' : 'mute'}>{m.active ? 'Active' : 'Switched off'}</Chip>
+                    <b>{m.name || m.email || m.phone || 'Unnamed member'}</b> <Chip tone={m.active ? 'good' : 'mute'}>{m.active ? 'Active' : 'Switched off'}</Chip> <Chip tone="gold">{roleOf(m, data.presets)}</Chip>
                     <div className="small muted">{[m.email, m.phone && formatPhone(m.phone)].filter(Boolean).join('  ·  ')}</div>
                     <div className="hint">{(m.permissions || []).length} permissions</div>
                   </div>

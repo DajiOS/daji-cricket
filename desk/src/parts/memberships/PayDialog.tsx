@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { post, inr, toPaise, rupees, formatPhone, fmtDate, todayISO, addDaysISO } from '../../lib';
-import { Modal, Field, ErrorBox, useToast } from '../../ui';
+import { Modal, Field, ErrorBox, NameField, useToast } from '../../ui';
 import { METHODS, needsRef, errText, type Member, type Plan } from './shared';
 
 /** Sell a new membership (no `member`) or renew an existing one. One form, one payment. */
@@ -46,7 +46,7 @@ export default function PayDialog({ plans, member, onClose, onDone }: { plans: P
           {member ? (
             <div className="full small muted">{formatPhone(member.phone)} · now {member.planName}, ends {fmtDate(member.endDate)}</div>
           ) : (<>
-            <Field label="Member name"><input className="inp" value={name} onChange={(e) => setName(e.target.value)} autoFocus maxLength={80} /></Field>
+            <NameField value={name} onChange={setName} autoFocus />
             <Field label="Mobile number"><input className="inp" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" /></Field>
           </>)}
           <Field label="Plan" full={!!member}>

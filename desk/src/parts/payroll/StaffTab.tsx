@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApi, post, patch, inr, toPaise, rupees, fmtDate, todayISO } from '../../lib';
-import { Table, Chip, Modal, Field, ErrorBox, Loading, useToast, useForm } from '../../ui';
+import { Table, Chip, Modal, Field, ErrorBox, Loading, NameField, useToast, useForm } from '../../ui';
 import { PAY, type PayStaff } from './common';
 
 export function StaffTab({ onChanged }: { onChanged: () => void }) {
@@ -69,7 +69,7 @@ function StaffForm({ staff, onClose, onSaved }: { staff: PayStaff | null; onClos
         <button className="btn primary" disabled={busy} onClick={save}>Save</button>
       </>}>
       <div className="form-grid">
-        <Field label="Name"><input className="inp" {...f.bind('name')} autoFocus /></Field>
+        <NameField value={f.v.name} onChange={(n) => f.setV((x: any) => ({ ...x, name: n }))} autoFocus />
         <Field label="Role"><input className="inp" {...f.bind('role')} placeholder="Groundsman, coach, scorer" /></Field>
         <Field label="Pay type"><select className="inp" {...f.bind('payType')}><option value="monthly">Monthly salary</option><option value="daily">Daily wage</option></select></Field>
         <Field label={f.v.payType === 'monthly' ? 'Monthly salary (rupees)' : 'Daily wage (rupees)'} hint={f.v.payType === 'monthly' ? 'Cut pro rata for unpaid days in the month' : 'Paid for each day present; half day is half'}>
