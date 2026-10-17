@@ -1,12 +1,12 @@
-/* The hybrid motion layer for the website: kinetic type, stop-motion reveals and a clay accent, on top of the editorial layout.
-   Everything is shot "on twos" (steps, about 12 frames a second) so it reads as stop-motion, and nothing runs for people who ask for less motion. */
+/* The motion layer for the website: headlines rise into place and blocks fade up, slowly and with easing, on top of the editorial layout.
+   Nothing runs for people who ask for less motion. */
 (function () {
   'use strict';
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reduce || !('IntersectionObserver' in window)) return;
   var root = document.documentElement;
 
-  // kinetic type: split a headline into letters that drop in, overshoot, squash and settle
+  // split a headline into letters that rise into place one after another
   function kinetic(el, base) {
     if (!el || el.dataset.kn) return;
     var text = el.textContent;
@@ -38,9 +38,6 @@
     document.querySelectorAll('section h2, .head h2, .head .display').forEach(function (h) { if (!h.closest('header.hero')) { kinetic(h, 0); h.classList.add('kin-view'); io.observe(h); } });
     // cards and blocks arrive in stop-motion
     document.querySelectorAll('section .card, section .plate, .gal figure, .facts > *').forEach(function (c) { c.classList.add('sm-in'); io.observe(c); });
-    // the clay ball beside the hero buttons
-    var cta = document.querySelector('header.hero .cta');
-    if (cta && !cta.querySelector('.clay-ball')) { var b = document.createElement('span'); b.className = 'clay-ball'; b.setAttribute('aria-hidden', 'true'); cta.appendChild(b); }
     root.classList.add('luxury-on');
     setTimeout(function () { document.querySelectorAll('.sm-in:not(.in)').forEach(function (e) { e.style.opacity = '1'; }); }, 6000); // never leave anything hidden
   }

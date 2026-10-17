@@ -1407,16 +1407,10 @@ html[data-theme] #splash::before,#splash::before{background:radial-gradient(elli
 .sp-logo svg{display:block}
 html #splash #splash-skip{color:#e8d9b0;border:1px solid rgba(232,217,176,.45);background:transparent;border-radius:99px;z-index:2}
 
-/* ===== Opening animation: white studio, glossy 3D stumps and a leather ball with soft shadows ===== */
-html[data-theme] #splash::before,html #splash::before{background:radial-gradient(ellipse at 50% 45%,#fff 0%,#f4f6f5 100%)!important;background-image:radial-gradient(ellipse at 50% 45%,#fff 0%,#f4f6f5 100%)!important;opacity:1}
-#sp-scene{perspective:1100px;perspective-origin:50% 35%}
-.sp-floor{position:absolute;border-radius:50%;background:radial-gradient(ellipse at center,rgba(10,40,30,.28),rgba(10,40,30,0) 70%);filter:blur(6px)}
-.sp-st{background:linear-gradient(90deg,#8a6a22 0%,#e9d392 22%,#fff6d6 34%,#d3b26a 52%,#9b7a2c 78%,#5e4713 100%)!important;border-radius:3px 3px 1px 1px!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),10px 14px 22px rgba(10,40,30,.22)!important}
-.sp-bail{background:linear-gradient(180deg,#fff6d6,#c9a96b 60%,#8a6a22)!important;border-radius:4px!important;box-shadow:0 6px 10px rgba(10,40,30,.25)!important}
-.sp-ball{background:radial-gradient(circle at 30% 24%,#fff 0 4%,rgba(255,255,255,.0) 14%),radial-gradient(circle at 34% 30%,#e9594a 0%,#b3261e 46%,#5b0d08 100%)!important;box-shadow:inset -.9vmin -1.2vmin 2vmin rgba(0,0,0,.45),inset .5vmin .6vmin 1vmin rgba(255,255,255,.25),1.6vmin 3vmin 3.2vmin rgba(10,40,30,.32)!important}
-.sp-ring{border:2px solid rgba(15,61,46,.55)!important}
-.sp-glow{background:radial-gradient(ellipse at center,rgba(15,61,46,.12),transparent 70%)!important}
-html #splash #splash-skip{color:#0f3d2e!important;border:1px solid rgba(15,61,46,.45)!important;background:rgba(255,255,255,.8)!important;border-radius:99px!important;backdrop-filter:blur(6px)}
+/* ===== Opening animation: the launch-film sequence from intro.js. The cover follows the theme (dark screen, or white for the light themes). ===== */
+html[data-theme] #splash::before,html #splash::before{background:#07090a!important;background-image:none!important;opacity:1}
+html[data-theme="ivory"] #splash::before,html[data-theme="pearl"] #splash::before{background:#fbfaf7!important}
+#splash video,#splash-logo{display:none!important}
 
 /* light / dark icon, far right of the top bar */
 .theme-toggle{flex:none;width:44px;height:44px;margin-left:10px;display:inline-flex;align-items:center;justify-content:center;background:none;border:1px solid var(--line);border-radius:var(--radius-sm);cursor:pointer;color:var(--text,currentColor)}
@@ -1428,34 +1422,22 @@ html #splash #splash-skip{color:#0f3d2e!important;border:1px solid rgba(15,61,46
 .theme-toggle:focus-visible{outline:2px solid var(--gold,currentColor);outline-offset:2px}
 html.splash-on .theme-toggle{visibility:hidden}
 
-/* with the 3D layer on, the plain page elements keep animating (the 3D reads them) but are not shown */
-#sp-scene.gl .sp-st,#sp-scene.gl .sp-bail,#sp-scene.gl .sp-ball{visibility:hidden}
-#sp-scene::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;mix-blend-mode:multiply;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .1 0 0 0 0 .2 0 0 0 0 .15 0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
 
-/* ===== Hybrid motion layer (luxury.js): kinetic type, stop-motion reveals, clay accent. All of it is on twos: about 12 frames a second. ===== */
-.kn .kw{display:inline-block;white-space:nowrap}
-.kn .k{display:inline-block;transform-origin:50% 100%;animation:k-drop .72s steps(9,end) both;animation-delay:calc(var(--i) * 45ms)}
+/* ===== Motion layer (luxury.js): headlines rise into place, blocks fade up. Slow, eased and quiet. ===== */
+.kn .kw{display:inline-block;white-space:nowrap;overflow:hidden;vertical-align:top;padding-bottom:.14em;margin-bottom:-.14em}
+.kn .k{display:inline-block;animation:k-rise 1s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i) * 28ms)}
 html.splash-on .kn .k{animation-play-state:paused}
 .kin-view.kn .k{animation-play-state:paused}
 .kin-view.kn.in .k{animation-play-state:running}
 .ln > span.kn{animation:none!important}
-@keyframes k-drop{
-  0%{opacity:0;transform:translateY(-115%) rotate(var(--tilt)) scale(.8,1.2)}
-  45%{opacity:1;transform:translateY(7%) rotate(calc(var(--tilt) / -2)) scale(1.1,.86)}
-  70%{transform:translateY(-4%) rotate(calc(var(--tilt) / 4)) scale(.98,1.05)}
-  100%{opacity:1;transform:none}
-}
+@keyframes k-rise{0%{opacity:0;transform:translateY(105%)}100%{opacity:1;transform:none}}
 .sm-in{opacity:0}
-.sm-in.in{animation:sm-in .5s steps(6,end) both}
-@keyframes sm-in{0%{opacity:0;transform:translateY(22px) rotate(-.8deg)}50%{opacity:1;transform:translateY(-4px) rotate(.5deg)}100%{opacity:1;transform:none}}
-/* a press feels like squeezing clay; every hover change is under 200ms */
+.sm-in.in{animation:sm-in .9s cubic-bezier(.2,.7,.2,1) both}
+@keyframes sm-in{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:none}}
 .btn{transition:transform .16s ease,background-color .16s ease,border-color .16s ease,color .16s ease}
 .btn:hover{transform:translateY(-1px)}
-.btn:active{transform:scale(1.03,.95)}
-.clay-ball{display:inline-block;width:26px;height:26px;margin-left:18px;border-radius:50%;vertical-align:middle;background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.55) 0 9%,transparent 22%),radial-gradient(circle at 40% 36%,#e9695c,#c53a2f 62%,#8e231b);box-shadow:inset -3px -4px 6px rgba(80,10,5,.35),0 8px 8px -4px rgba(0,0,0,.3);animation:clay-bounce 2.4s steps(1,end) infinite;pointer-events:none}
-@keyframes clay-bounce{0%{transform:translateY(0) scale(1,1)}8%{transform:translateY(-14px) scale(.94,1.08)}16%{transform:translateY(-26px) scale(.96,1.05)}25%{transform:translateY(-32px)}33%{transform:translateY(-26px) scale(.97,1.04)}41%{transform:translateY(-14px) scale(.95,1.07)}50%{transform:translateY(0) scale(1.18,.78)}58%{transform:translateY(-6px) scale(.98,1.03)}66%{transform:translateY(0) scale(1.06,.92)}75%,100%{transform:translateY(0) scale(1,1)}}
-html.splash-on .clay-ball{visibility:hidden}
-@media (prefers-reduced-motion:reduce){.sm-in{opacity:1}.clay-ball{animation:none}.kn .k{animation:none}}
+.btn:active{transform:scale(.985)}
+@media (prefers-reduced-motion:reduce){.sm-in{opacity:1}.kn .k{animation:none}}
 
 /* the light / dark icon sits at the far right of the screen, above everything, with its own chip so it reads on any colour */
 .theme-toggle{position:fixed;top:16px;right:max(16px,env(safe-area-inset-right,0px));margin:0;z-index:150;background:var(--bg);border-color:var(--line-strong,var(--line));box-shadow:0 6px 18px -10px rgba(0,0,0,.45);transition:transform .16s ease,border-color .16s ease}

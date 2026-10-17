@@ -31,18 +31,6 @@
 :root:not([data-theme="light"]) .theme-toggle .sun { display: block; }
 :root:not([data-theme="light"]) .theme-toggle .moon { display: none; }
 
-/* opening animation: white screen, real-time 3D ball and stumps (splash-gl.js), once per visit */
-#intro { position: fixed; inset: 0; z-index: 400; background: radial-gradient(ellipse at 50% 45%, #fff, #f2f4f3); display: grid; place-items: center; transition: opacity .6s ease; }
-#intro.out { opacity: 0; pointer-events: none; }
-#intro .intro-name { position: absolute; left: 0; right: 0; top: calc(50% + 17vmin); text-align: center; font: 800 clamp(26px, 5.4vmin, 52px)/1.1 var(--sans); letter-spacing: .5px; }
-/* kinetic type, shot on twos: each letter drops in tilted, overshoots, squashes and settles in nine jumps */
-#intro .kin { display: inline-block; transform-origin: 50% 100%; opacity: 0; text-shadow: 2px 4px 0 rgba(60,30,10,.32); animation: kin .72s steps(9, end) both; }
-@keyframes kin {
-  0% { opacity: 0; transform: translateY(-190px) rotate(var(--tilt)) scale(.7, 1.25); }
-  50% { opacity: 1; transform: translateY(14px) rotate(calc(var(--tilt) / -2)) scale(1.22, .7); }
-  72% { transform: translateY(-26px) rotate(calc(var(--tilt) / 3)) scale(.94, 1.1); }
-  88% { transform: translateY(0) rotate(0) scale(1.04, .97); }
-  100% { opacity: 1; transform: none; }
-}
+/* opening animation: played by intro.js (the same film as the website) */
+#intro { position: fixed; inset: 0; z-index: 400; }
 @media (prefers-reduced-motion: reduce) { #intro { display: none; } }
-#intro .intro-skip { position: absolute; right: 16px; bottom: 16px; font: 600 12px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: #0f3d2e; background: rgba(255,255,255,.85); border: 1px solid rgba(15,61,46,.45); border-radius: 99px; padding: 9px 15px; cursor: pointer; }

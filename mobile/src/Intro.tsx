@@ -1,26 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { mode } from './theme';
 
-// The opening animation: a white screen, clay stumps and a clay ball moved by hand one frame at a time (12 a second, with a little
-// wobble on every frame), and the name spelled out in kinetic type that pops, overshoots and settles. It plays once per launch.
+// The opening film, matching the website: thin brass arcs, three short lines that rise into place with one word in brass,
+// a phone showing the booking screen, then the name. Eased throughout and in the app's current theme. It plays once per launch.
 let played = false;
-const FRAME = 83, HIT = 1500, WORDS = 2100, END = 5200;
+const FRAME = 33, END = 10400;
 const clamp = (t: number) => Math.min(1, Math.max(0, t));
 const ease = (t: number) => 1 - Math.pow(1 - clamp(t), 3);
-const hash = (n: number) => { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); };
-const jit = (f: number, k: number, amp: number) => (hash(f * 7 + k) - 0.5) * 2 * amp;
-const CLAY = ['#e2574c', '#f2b134', '#2f9e8f', '#4a7fd1', '#e2574c', '#f2b134', '#2f9e8f'];
+const inOut = (t: number) => { const x = clamp(t); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
 
-/** A clay lump: a base colour, a darker underside, and a pale thumb-smudge highlight. */
-function Lump({ x, y, w, h, r, color, dark, rot = 0, alpha = 1 }: { x: number; y: number; w: number; h: number; r: number; color: string; dark: string; rot?: number; alpha?: number }) {
-  return (
-    <View style={{ position: 'absolute', left: x, top: y, width: w, height: h, opacity: alpha, transform: [{ rotate: `${rot}deg` }] }}>
-      <View style={{ flex: 1, backgroundColor: color, borderRadius: r, borderBottomWidth: Math.max(3, w * 0.07), borderRightWidth: Math.max(2, w * 0.04), borderColor: dark, overflow: 'hidden' }}>
-        <View style={{ position: 'absolute', left: '14%', top: '8%', width: '30%', height: '22%', borderRadius: 99, backgroundColor: 'rgba(255,255,255,.38)' }} />
-      </View>
-    </View>
-  );
-}
+type Phrase = { words: [string, boolean][]; at: number; out: number; top?: boolean };
+const PHRASES: Phrase[] = [
+  { words: [['Floodlit', true], ['ground.', false]], at: 300, out: 2100 },
+  { words: [['Pick', false], ['your', false], ['time.', true]], at: 2800, out: 5500, top: true },
+  { words: [['Held', true], ['in', false], ['your', false], ['name.', true]], at: 6300, out: 7700 },
+];
 
 export function Intro({ onDone }: { onDone: () => void }) {
   const { width: W, height: H } = useWindowDimensions();
@@ -35,43 +30,69 @@ export function Intro({ onDone }: { onDone: () => void }) {
   }, [on, onDone]);
   if (!on) return null;
 
-  const f = Math.floor(t / FRAME), u = Math.min(W, H) / 100, cx = W / 2, base = H * 0.5, sH = 26 * u, sW = 5 * u, gap = 9 * u, D = 14 * u;
-  const out = clamp((t - (END - 500)) / 500);
-  const stumps = [-1, 0, 1].map((i, k) => {
-    const rise = ease((t - k * 120) / 600), fall = clamp((t - HIT - k * 60) / 900);
-    return <Lump key={'s' + k} x={cx + i * gap - sW / 2 + jit(f, k, 0.8)} y={base - sH * rise + fall * 3 * u} w={sW} h={Math.max(1, sH * rise)} r={sW / 2.2} color="#f2d9a0" dark="#c79d4f" rot={fall * [-24, -8, 26][k]! * 1.6 + jit(f, k + 9, 1.1)} alpha={t < 80 ? 0 : 1 - ease(fall)} />;
-  });
-  const fly = ease((t - HIT) / 900);
-  const bails = [-0.5, 0.5].map((i, k) => (
-    <Lump key={'b' + k} x={cx + i * gap - gap * 0.4 + (k ? 20 : -22) * u * fly} y={base - sH - 3 * u - (k ? 22 : 16) * u * fly + 12 * u * fly * fly} w={gap * 0.8} h={2.4 * u} r={u} color="#2f9e8f" dark="#1b6b60" rot={(k ? 540 : -620) * fly + jit(f, k + 3, 1.5)} alpha={t < 700 ? 0 : 1 - fly} />
+  const dark = mode === 'dark';
+  const bg = dark ? '#07090a' : '#fbfaf7', fg = dark ? '#f3eee3' : '#16130c', ac = dark ? '#d6b36a' : '#8c6f2a';
+  const line = dark ? 'rgba(214,179,106,.28)' : 'rgba(140,111,42,.28)', chip = dark ? '#1a1d20' : '#efeadc', scr = dark ? '#0d0f11' : '#fffdf8';
+  const u = Math.min(W, H) / 100;
+
+  const arcIn = ease((t - 100) / 2600), arcOut = 1 - clamp((t - 8200) / 900);
+  const arcs = [46, 62, 80, 100].map((r, i) => (
+    <View key={'a' + i} style={{ position: 'absolute', left: W / 2 - r * u, top: H / 2 - r * u, width: r * 2 * u, height: r * 2 * u, borderRadius: r * u, borderWidth: 1, borderColor: line, opacity: arcIn * arcOut, transform: [{ scale: 0.85 + 0.15 * arcIn }] }} />
   ));
-  const a = clamp((t - 500) / (HIT - 500)), bounce = clamp((t - HIT) / 1500);
-  const squash = t > HIT && t < HIT + 300 ? 1 - Math.abs(Math.sin(((t - HIT) / 300) * Math.PI)) * 0.25 : 1;
-  const bx = t < HIT ? cx + (1 - ease(a)) * W * 0.4 : cx + 20 * u * ease(bounce);
-  const by = t < HIT ? base - sH * 0.8 - (1 - ease(a)) * 30 * u : base - sH * 0.8 + 18 * u * ease(bounce) - 18 * u * Math.sin(Math.PI * bounce);
-  const ballA = t < 500 ? 0 : 1;
-  const word = (text: string, from: number, size: number, top: number) => {
-    const n = text.length, gapPx = size * 0.62, left = cx - (n * gapPx) / 2;
-    return text.split('').map((ch, i) => {
-      const s0 = (t - from - i * 120) / 520;
-      if (s0 <= 0 || ch === ' ') return null;
-      const p = clamp(s0), over = p < 0.55 ? ease(p / 0.55) * 1.25 : p < 0.8 ? 1.25 - ((p - 0.55) / 0.25) * 0.3 : 0.95 + ((p - 0.8) / 0.2) * 0.05;
-      const lift = p < 0.55 ? (1 - ease(p / 0.55)) * -size * 1.6 : 0;
-      const wob = p >= 1 ? jit(f, i + 40, 0.9) : 0;
-      return (
-        <Text key={text + i} style={{ position: 'absolute', left: left + i * gapPx, top: top + lift, width: gapPx * 1.1, textAlign: 'center', fontSize: size, fontWeight: '900', color: CLAY[i % CLAY.length], opacity: p < 0.12 ? 0 : 1, transform: [{ scale: over }, { rotate: `${(1 - p) * (i % 2 ? 22 : -22) + wob * 2}deg` }], textShadowColor: 'rgba(60,30,10,.35)', textShadowOffset: { width: 2, height: 4 }, textShadowRadius: 0 }}>{ch}</Text>
-      );
-    });
+
+  const phrase = (p: Phrase, k: number) => {
+    if (t < p.at || t > p.out + 700) return null;
+    const size = Math.max(26, Math.min(W * 0.1, 40));
+    return (
+      <View key={'p' + k} pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: p.top ? H * 0.1 : 0, bottom: p.top ? undefined : 0, alignItems: 'center', justifyContent: p.top ? 'flex-start' : 'center', paddingHorizontal: 5 * u }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {p.words.map(([w, a], i) => {
+            const inn = ease((t - p.at - i * 110) / 800), o = ease((t - p.out - i * 40) / 420), v = inn * (1 - o);
+            return <Text key={i} style={{ fontSize: size, fontWeight: '600', letterSpacing: -0.6, color: a ? ac : fg, opacity: v, marginRight: size * 0.28, transform: [{ translateY: (1 - inn) * size * 0.5 - o * size * 0.3 }] }}>{w}</Text>;
+          })}
+        </View>
+      </View>
+    );
   };
+
+  // the phone: rises in, holds, lifts away
+  const pIn = ease((t - 2500) / 2400), pOut = ease((t - 5700) / 700);
+  const pw = Math.min(W * 0.52, H * 0.3), ph = pw * 2.0;
+  const slot = t > 4000, btn = t > 4500;
+  const phone = t >= 2500 && t <= 6500 ? (
+    <View pointerEvents="none" style={{ position: 'absolute', left: W / 2 - pw / 2, top: H - ph - H * 0.07 + (1 - pIn) * H * 0.6 - pOut * H * 0.14, width: pw, height: ph, borderRadius: pw * 0.15, padding: 4, backgroundColor: dark ? '#23272b' : '#d9d3c3', opacity: pIn * (1 - pOut), shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 12 }}>
+      <View style={{ flex: 1, borderRadius: pw * 0.12, backgroundColor: scr, padding: pw * 0.07, paddingTop: pw * 0.2, gap: pw * 0.05, overflow: 'hidden' }}>
+        <Text style={{ fontSize: pw * 0.05, letterSpacing: 1.4, color: ac, fontWeight: '700' }}>RESERVE</Text>
+        <Text style={{ fontSize: pw * 0.1, fontWeight: '700', color: fg, lineHeight: pw * 0.115 }}>Pick a day{'\n'}and a time</Text>
+        <View style={{ flexDirection: 'row', gap: pw * 0.03 }}>
+          {['13', '14', '15'].map((d, i) => <View key={d} style={{ flex: 1, borderRadius: 8, paddingVertical: pw * 0.03, alignItems: 'center', backgroundColor: i === 1 ? ac : chip }}><Text style={{ fontWeight: '700', fontSize: pw * 0.075, color: i === 1 ? bg : fg }}>{d}</Text></View>)}
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: pw * 0.03 }}>
+          {['7 am', '8 am', '4 pm', '5 pm', '6 pm', '7 pm'].map((s, i) => { const sel = slot && i === 3; return <View key={s} style={{ width: '30%', borderRadius: 7, paddingVertical: pw * 0.035, alignItems: 'center', backgroundColor: sel ? ac : chip }}><Text style={{ fontSize: pw * 0.055, fontWeight: '600', color: sel ? bg : fg }}>{s}</Text></View>; })}
+        </View>
+        <View style={{ marginTop: 'auto', borderRadius: 9, paddingVertical: pw * 0.045, alignItems: 'center', backgroundColor: btn ? ac : chip }}><Text style={{ fontSize: pw * 0.056, fontWeight: '700', color: btn ? bg : fg }}>{btn ? 'Pay the advance' : 'Choose your slot'}</Text></View>
+      </View>
+    </View>
+  ) : null;
+
+  const lg = inOut((t - 8100) / 1400), logoOut = 1 - clamp((t - 9800) / 600);
+  const logo = t >= 8100 ? (
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', opacity: lg * logoOut, transform: [{ scale: 0.94 + 0.06 * lg }] }}>
+      <Text style={{ fontFamily: 'serif', fontStyle: 'italic', fontSize: Math.min(W * 0.26, 110), color: ac }}>Daji</Text>
+      <Text style={{ fontWeight: '800', letterSpacing: 2, fontSize: Math.min(W * 0.075, 30), color: ac }}>CRICKET GROUND</Text>
+      <Text style={{ marginTop: 10, fontWeight: '700', letterSpacing: 3, fontSize: 10, color: dark ? '#9b9484' : '#7a7260' }}>PROJECT BY DAJI PARIVAR</Text>
+    </View>
+  ) : null;
+
+  const out = clamp((t - (END - 500)) / 500);
   return (
-    <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: '#ffffff', opacity: 1 - out, zIndex: 100 }} pointerEvents={out > 0.98 ? 'none' : 'auto'}>
-      <View style={{ position: 'absolute', left: cx - 24 * u, top: base - 1 * u, width: 48 * u, height: 4 * u, borderRadius: 99, backgroundColor: 'rgba(15,61,46,.12)' }} />
-      {stumps}{bails}
-      <Lump x={bx - D / 2 + jit(f, 1, 0.6)} y={by - (D * squash) / 2 + (D * (1 - squash)) / 2} w={D * (2 - squash)} h={D * squash} r={D} color="#e2574c" dark="#9c2820" rot={t * 0.35} alpha={ballA * (t > HIT + 1600 ? 0 : 1)} />
-      {t >= WORDS - 200 && word('DAJI', WORDS, 14 * u, H * 0.2)}
-      {t >= WORDS + 300 && word('CRICKET GROUND', WORDS + 700, 6.4 * u, H * 0.68)}
-      <Pressable onPress={() => { setOn(false); onDone(); }} accessibilityRole="button" style={{ position: 'absolute', right: 16, bottom: 36, paddingVertical: 9, paddingHorizontal: 15, borderRadius: 99, borderWidth: 1, borderColor: 'rgba(15,61,46,.45)', backgroundColor: 'rgba(255,255,255,.9)' }}>
-        <Text style={{ color: '#0f3d2e', fontWeight: '700', letterSpacing: 1.2, fontSize: 12 }}>SKIP</Text>
+    <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: bg, opacity: 1 - out, zIndex: 100 }} pointerEvents={out > 0.98 ? 'none' : 'auto'}>
+      {arcs}
+      {PHRASES.map(phrase)}
+      {phone}
+      {logo}
+      <Pressable onPress={() => { setOn(false); onDone(); }} accessibilityRole="button" style={{ position: 'absolute', right: 16, bottom: 36, paddingVertical: 9, paddingHorizontal: 15, borderRadius: 99, borderWidth: 1, borderColor: line, backgroundColor: dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)' }}>
+        <Text style={{ color: fg, fontWeight: '700', letterSpacing: 1.2, fontSize: 12 }}>SKIP</Text>
       </Pressable>
     </View>
   );
