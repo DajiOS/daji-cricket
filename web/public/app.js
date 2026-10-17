@@ -466,8 +466,9 @@ async function fillLibrary() {
   if (hero && lead && !$('#hero-media')) {
     const box = h('div', { id: 'hero-media', class: 'hero-media' });
     if (hero.kind === 'video') {
-      const v = h('video', { muted: '', loop: '', playsinline: '', autoplay: '', preload: 'metadata', 'aria-label': 'The ground' });
-      v.muted = true; v.defaultMuted = true; v.setAttribute('playsinline', ''); v.src = src(hero);
+      const v = h('video', { muted: '', loop: '', playsinline: '', autoplay: '', preload: 'auto', 'aria-label': 'The ground' });
+      if (hero.thumb) v.poster = src({ url: hero.thumb });
+      v.muted = true; v.defaultMuted = true; v.setAttribute('playsinline', ''); v.src = src({ url: hero.web || hero.url });
       box.append(v); v.play && v.play().catch(() => {});
     } else box.append(h('img', { src: src(hero), alt: 'The ground', loading: 'eager' }));
     lead.parentNode.insertBefore(box, lead);
@@ -478,12 +479,11 @@ async function fillLibrary() {
     const none = grid.querySelector('.none'); if (none) none.remove();
     for (const it of pics) {
       const open = () => openModal([h('div', { class: 'lightbox' }, it.kind === 'video'
-        ? h('video', { src: src(it), controls: '', autoplay: '', playsinline: '', preload: 'auto' })
+        ? h('video', { src: src({ url: it.web || it.url }), controls: '', autoplay: '', playsinline: '', preload: 'auto' })
         : h('img', { src: src(it), alt: 'Daji Cricket Ground photo' }))], { photo: true });
-      const thumb = it.kind === 'video'
-        ? h('video', { src: src(it) + '#t=0.5', preload: 'metadata', muted: '', playsinline: '', tabindex: '-1' })
-        : h('img', { src: src(it), alt: '', loading: 'lazy' });
-      if (it.kind === 'video') thumb.muted = true;
+      const thumb = it.thumb
+        ? h('img', { src: src({ url: it.thumb }), alt: '', loading: 'lazy' })
+        : it.kind === 'video' ? h('div', { class: 'vid-fallback' }) : h('img', { src: src(it), alt: '', loading: 'lazy' });
       grid.append(h('button', { type: 'button', class: it.kind === 'video' ? 'is-video' : null, 'aria-label': it.kind === 'video' ? 'Play video' : 'Open photo', onclick: open }, thumb));
     }
   }

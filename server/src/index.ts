@@ -1,6 +1,7 @@
 import { loadConfig, configWarnings } from './config.ts';
 import { openDb, closeDb } from './db.ts';
 import { buildServer } from './app.ts';
+import { backfillThumbs, setLibraryRoot } from './library.ts';
 import { seedDemo, hasAdmin } from './seed.ts';
 import { startScheduler, stopScheduler } from './jobs.ts';
 import { flushNotifications, registerProvider, setAlertSender, setOtpSender, setOtpSmsSender } from './notifications.ts';
@@ -29,6 +30,8 @@ const server = buildServer(cfg);
 startScheduler(cfg, (e) => console.error(JSON.stringify({ level: 'error', where: 'sweep', error: String((e as Error)?.stack ?? e) })));
 // Node closes any request that takes longer than 5 minutes to arrive, which cuts off big photo and video uploads on a slow connection.
 server.requestTimeout = 2 * 60 * 60 * 1000;
+setLibraryRoot(cfg.dataDir);
+setTimeout(() => backfillThumbs(cfg.dataDir), 20_000);
 server.listen(cfg.port, cfg.host, () => console.log(`Daji Cricket Ground API listening on ${cfg.host}:${cfg.port} (${cfg.publicUrl})`));
 
 async function shutdown(sig: string): Promise<void> {

@@ -3,7 +3,7 @@ import { PageHead, Stat, Loading, ErrorBox, useToast } from '../ui';
 import { useApi, del, patch, getToken } from '../lib';
 import { errText } from '../parts/admin/common';
 
-interface Item { id: string; name: string; kind: 'image' | 'video'; bytes: number; tag: string; url: string; createdAt: number }
+interface Item { thumb?: string | null; web?: string | null; id: string; name: string; kind: 'image' | 'video'; bytes: number; tag: string; url: string; createdAt: number }
 interface Lib { items: Item[]; freeBytes: number | null; libraryBytes: number }
 const API = ((window as any).DAJI_API || '').replace(/\/$/, '');
 const TAGS: [string, string][] = [['hero', 'Top banner'], ['gallery', 'Gallery'], ['academy', 'Academy'], ['other', 'Other']];
@@ -89,11 +89,14 @@ export default function Media() {
         <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))' }}>
           {lib.items.map((it) => (
             <div key={it.id} className="card" style={{ padding: 10, display: 'grid', gap: 8, minWidth: 0 }}>
-              {it.kind === 'video'
-                ? <video src={API + it.url} preload="metadata" controls muted playsInline style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, background: '#000' }} />
-                : <img src={API + it.url} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10 }} />}
+              <a href={API + (it.web || it.url)} target="_blank" rel="noreferrer" style={{ display: 'block', position: 'relative' }} title="Open the original">
+                {it.thumb ? <img src={API + it.thumb} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
+                  : it.kind === 'image' ? <img src={API + it.url} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
+                  : <div style={{ width: '100%', aspectRatio: '16/10', borderRadius: 10, background: '#0f3d2e', display: 'grid', placeItems: 'center', color: '#f3ead2' }}>Video</div>}
+                {it.kind === 'video' && <span style={{ position: 'absolute', left: '50%', top: '50%', width: 44, height: 44, margin: '-22px 0 0 -22px', borderRadius: '50%', background: 'rgba(15,61,46,.75)', color: '#f6f2e9', display: 'grid', placeItems: 'center', fontSize: 18 }}>▶</span>}
+              </a>
               <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.name}>{it.name}</div>
-              <div className="hint">{it.kind === 'video' ? 'Video' : 'Photo'} · {size(it.bytes)}</div>
+              <div className="hint">{it.kind === 'video' ? 'Video' : 'Photo'} · {size(it.bytes)}{it.kind === 'video' && !it.web ? ' · preparing a light copy…' : ''}</div>
               <select className="inp" value={it.tag} onChange={(e) => void retag(it, e.target.value)}>{TAGS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
               <div style={{ display: 'flex', gap: 8 }}><button className="btn ghost" onClick={() => void copy(it)}>Copy link</button><button className="btn ghost" onClick={() => void remove(it)}>Remove</button></div>
             </div>

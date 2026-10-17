@@ -58,3 +58,4 @@ h1, h2 { color: #0f3d2e; }
 .cal-ev.s-pending, .cal-ev.s-held { background: color-mix(in srgb, var(--c, #14573e) 8%, #fffdf7); }
 .cal-chip { background: color-mix(in srgb, var(--c, #14573e) 22%, #fffdf7); }
 select option { color: #16201b; background: #fff; }
+video:fullscreen,video:-webkit-full-screen{object-fit:contain!important;background:#000}
