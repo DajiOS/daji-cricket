@@ -1196,3 +1196,27 @@ html[data-theme="ivory"] .resbar{background:#14573e!important;color:#fbf9f2!impo
 /* the intro stays dark, then melts into the ivory page */
 html[data-theme="ivory"] #splash::before{background-color:#08090a;background-image:none}
 html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home header.hero h1 .ln + .ln > span{color:#14573e}
+
+/* ===== Green booking panel, emerald logo, outer frame ===== */
+html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after{content:"";position:fixed;inset:0;z-index:90;pointer-events:none;border:0 solid #0f3d2e;box-shadow:inset 0 0 0 10px #0f3d2e,inset 0 0 0 11px rgba(201,169,107,.55);animation:frame-in 1.1s .2s cubic-bezier(.2,.7,.2,1) both}
+@keyframes frame-in{from{box-shadow:inset 0 0 0 0 #0f3d2e,inset 0 0 0 0 rgba(201,169,107,0);opacity:.0}to{box-shadow:inset 0 0 0 10px #0f3d2e,inset 0 0 0 11px rgba(201,169,107,.55);opacity:1}}
+html.splash-on body::after{display:none!important}
+@media (prefers-reduced-motion:reduce){html[data-theme="ivory"] body::after{animation:none}}
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .hero .panel,
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{
+    --text:#f3efe3;--text-muted:#c4d2c8;--text-faint:#8fa89a;--line:rgba(243,239,227,.2);--line-strong:rgba(243,239,227,.4);--surface:rgba(255,255,255,.06);--surface-high:rgba(255,255,255,.12);--gold:#d8bf86;--gold-bright:#ecd9a6;--on-gold:#0f3d2e;
+    background:#0f3d2e;color:#f3efe3;border-left:0;padding-right:calc(clamp(24px,2.8vw,44px) + 10px);padding-top:46px}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book h3,
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home .hero .panel h3{color:#f6f2e6}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book .btn.primary{background:#e9dcb4;color:#0f3d2e}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home #p-hold{box-shadow:0 -18px 18px -6px #0f3d2e}
+  html[data-theme="ivory"] #view-home aside.panel#book .slot,html[data-theme="ivory"] #view-home aside.panel#book button{color:inherit}
+}
+html[data-theme="ivory"] .resbar{box-shadow:0 0 0 1px rgba(201,169,107,.5)}
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book input,
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book select{background:rgba(255,255,255,.06);color:#f3efe3;border-color:rgba(243,239,227,.3);color-scheme:dark}
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book .legend,
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book .legend *{color:#b9c9be}
+}
