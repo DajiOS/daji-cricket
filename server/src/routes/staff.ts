@@ -313,7 +313,8 @@ export function staffRoutes(r: Router): void {
 
   r.post('/api/staff/customers/:id/credit', (c) => {
     const u = U(c);
-    if (u.role === 'staff') requirePermission(u, 'manage_bookings');
+    // Credit spends like cash, so a team member needs the payments permission as well, and only up to a limit. The owner has no limit.
+    if (u.role === 'staff') { requirePermission(u, 'manage_bookings'); requirePermission(u, 'record_payments'); }
     const owner = ownerFilter(c);
     if (!owner) throw new HttpError(400, 'OWNER_REQUIRED', 'Pass ?ownerId= to adjust one owner\'s credit');
     const cust = userRow(c.params.id!);
@@ -322,6 +323,7 @@ export function staffRoutes(r: Router): void {
     const amountPaise = v.int('amountPaise', { required: true });
     const note = v.str('note', { required: true, min: 3, max: 200 });
     v.done();
+    if (u.role === 'staff' && amountPaise! > 5_000_000) throw new HttpError(403, 'CREDIT_LIMIT', 'A team member can adjust up to ₹50,000 of credit at a time. Ask the owner for more.');
     credits.adjust(cust.id, owner, amountPaise!, note!, { id: u.id, role: u.role });
     return ok({ balancePaise: credits.balance(cust.id, owner) });
   }, A);
