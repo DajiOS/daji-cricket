@@ -1286,5 +1286,4 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after
 }
 @media (min-width:1021px){
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .links [data-book]{display:none}
-  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home #book>.eyebrow{font-size:13px;letter-spacing:.2em;color:var(--gold-bright)}
 }
