@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 // ---------- icons (1.6px line, gold via currentColor) ----------
 const P: Record<string, string> = {
+  filter: 'M3 5h18l-7 8.2V20l-4-2v-4.8z',
   dashboard: 'M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z',
   warehouse: 'M3 21V9l9-6 9 6v12M7 21v-8h10v8M7 17h10',
   tenants: 'M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 20v-1a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
@@ -52,6 +53,16 @@ const P: Record<string, string> = {
   lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
   inbox: 'M22 12h-6l-2 3h-4l-2-3H2M5.5 5h13l3.5 7v7H2v-7z',
 };
+/** The Filters button used on every list that can be narrowed: it opens and closes the filter controls and shows how many are on. `inline` keeps the controls in the row they sit in. */
+export function Filters({ active = 0, children, startOpen, inline = true }: { active?: number; children: ReactNode; startOpen?: boolean; inline?: boolean }) {
+  const [open, setOpen] = useState(startOpen ?? active > 0);
+  return (
+    <>
+      <button type="button" className={`btn sm filter-btn${open ? ' on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="filter" size={15} />Filters{active > 0 && <span className="filter-n">{active}</span>}</button>
+      {open && (inline ? <span className="filter-body">{children}</span> : <div className="filter-panel">{children}</div>)}
+    </>
+  );
+}
 export function Icon({ name, size }: { name: string; size?: number }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"

@@ -44,7 +44,7 @@ export function staffRoutes(r: Router): void {
     const { limit, offset } = page(c);
     return ok(listBookings({
       ownerId: ownerFilter(c), groundId: c.query.get('groundId') ?? undefined, status: c.query.get('status') ?? undefined, from: c.query.get('from') ?? undefined,
-      to: c.query.get('to') ?? undefined, q: c.query.get('q') ?? undefined, needsReview: c.query.get('needsReview') === '1', collapse: true, approval: c.query.get('approval') === 'pending' ? 'pending' : undefined, resolution: c.query.get('resolution') === 'awaiting' ? 'awaiting' : undefined, limit, offset,
+      to: c.query.get('to') ?? undefined, q: c.query.get('q') ?? undefined, needsReview: c.query.get('needsReview') === '1', collapse: c.query.get('group') === '1', approval: c.query.get('approval') === 'pending' ? 'pending' : undefined, resolution: c.query.get('resolution') === 'awaiting' ? 'awaiting' : undefined, limit, offset,
     }));
   }, A);
 
@@ -305,6 +305,22 @@ export function staffRoutes(r: Router): void {
       if (--m === 0) { m = 12; y--; }
     }
     return ok({ items: out });
+  }, A);
+
+  // Money already booked for the months ahead: what the confirmed sessions are worth, what has been paid and what is still to collect.
+  r.get('/api/staff/reports/upcoming', (c) => {
+    const u = U(c);
+    requirePermission(u, 'view_reports');
+    requireRevenue(u);
+    const n = Math.min(12, Math.max(1, Number(c.query.get('months')) || 6));
+    const owner = ownerFilter(c);
+    const today = istDate(Date.now());
+    const rows = many<{ period: string; n: number; total: number; paid: number }>(
+      `SELECT substr(date, 1, 7) AS period, COUNT(*) AS n, COALESCE(SUM(total_paise), 0) AS total, COALESCE(SUM(paid_paise), 0) AS paid
+       FROM bookings WHERE status = 'confirmed' AND date >= ? ${owner ? 'AND owner_id = ?' : ''} GROUP BY period ORDER BY period LIMIT ?`,
+      ...[today, ...(owner ? [owner] : []), n]);
+    const items = rows.map((r) => ({ period: r.period, bookings: r.n, totalPaise: r.total, paidPaise: r.paid, balancePaise: Math.max(r.total - r.paid, 0) }));
+    return ok({ items, totalPaise: items.reduce((a, x) => a + x.totalPaise, 0), paidPaise: items.reduce((a, x) => a + x.paidPaise, 0), balancePaise: items.reduce((a, x) => a + x.balancePaise, 0), bookings: items.reduce((a, x) => a + x.bookings, 0) });
   }, A);
 
   r.get('/api/staff/today', (c) => {

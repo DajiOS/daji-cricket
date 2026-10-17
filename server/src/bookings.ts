@@ -1,6 +1,6 @@
 import { istDate } from './time.ts';
 import { assertOpen } from './accounting/store.ts';
-import type { Booking, BookingStatus, Page, Payment } from '@daji/shared';
+import type { BlockPayment, BlockSummary, Booking, BookingStatus, Page, Payment } from '@daji/shared';
 import { many, one, run, registerSchema } from './db.ts';
 import { now } from './clock.ts';
 import { HttpError, forbidden, notFound } from './errors.ts';
@@ -205,8 +205,19 @@ export function blockOf(seriesId: string, withDays = true): BlockSummary | null 
   const use = live.length ? live : rows;
   const sum = (k: 'total_paise' | 'paid_paise') => use.reduce((a, r) => a + r[k], 0);
   const total = sum('total_paise'), paid = sum('paid_paise');
+  // A payment that was spread over several days is one line: grouped by when it was taken and how
+  const pays: BlockPayment[] = [];
+  if (withDays) {
+    const rs = many<any>(`SELECT * FROM payments WHERE booking_id IN (${rows.map(() => '?').join(',')}) ORDER BY created_at, rowid`, ...rows.map((r) => r.id));
+    for (const x of rs) {
+      const at = Math.floor(x.created_at / 1000), prev = pays[pays.length - 1];
+      if (prev && Math.floor(prev.createdAt / 1000) === at && prev.method === x.method && prev.status === x.status) { prev.amountPaise += x.amount_paise; prev.refundedPaise += x.refunded_paise; prev.reference = prev.reference ?? x.reference; }
+      else pays.push({ createdAt: x.created_at, method: x.method, status: x.status, amountPaise: x.amount_paise, refundedPaise: x.refunded_paise, reference: x.reference });
+    }
+  }
   return {
     seriesId, days: use.length, fromDate: use[0]!.date, toDate: use[use.length - 1]!.date, totalPaise: total, paidPaise: paid, balancePaise: Math.max(total - paid, 0),
+    ...(withDays ? { payments: pays } : {}),
     ...(withDays ? { items: rows.map((r) => ({ id: r.id, ref: r.ref, date: r.date, startAt: r.start_at, endAt: r.end_at, status: r.status, totalPaise: r.total_paise, paidPaise: r.paid_paise, balancePaise: Math.max(r.total_paise - r.paid_paise, 0) })) } : {}),
   };
 }

@@ -1,7 +1,7 @@
 // The bank transactions list: account cards, pending/posted tabs, filters, inline categories, receipts, edit.
 import { useEffect, useState } from 'react';
 import { api, qs, inr, fmtDate, useApi, patch } from '../../lib';
-import { Tabs, Chip, ErrorBox, Loading, useToast, Icon } from '../../ui';
+import { Tabs, Chip, ErrorBox, Loading, useToast, Icon, Filters } from '../../ui';
 import { Grid, CatSelect, ExportBar, useShared } from './kit';
 import { AddTxnDialog, TransferDialog, EditTxnDialog, FilesDialog } from './dialogs';
 
@@ -43,9 +43,11 @@ export function Txns({ initialTab = 'pending', initialAccount = '', actions }: {
       <div className="card">
         <div className="bk-tool">
           <input className="inp" type="search" placeholder="Search description" aria-label="Search description" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Filters active={[f.from, f.to, f.direction].filter(Boolean).length}>
           <input className="inp" type="date" aria-label="From date" value={f.from} onChange={(e) => upd('from', e.target.value)} />
           <input className="inp" type="date" aria-label="To date" value={f.to} onChange={(e) => upd('to', e.target.value)} />
           <select className="inp" aria-label="Direction" value={f.direction} onChange={(e) => upd('direction', e.target.value)}><option value="">All transactions</option><option value="in">Money in</option><option value="out">Money out</option></select>
+          </Filters>
           <ExportBar path={() => '/api/accounting/transactions/export' + qs(filters)} name={() => 'bank-transactions'} />
         </div>
         {e ? <ErrorBox msg={e} /> : !r ? <Loading /> : (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSession } from '../App';
-import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Status, Icon, useToast } from '../ui';
+import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Status, Icon, Filters, useToast } from '../ui';
 import { useApi, api, post, go, inr, fmtDay, fmtDateTime, formatPhone, can, qs, todayISO, addDaysISO } from '../lib';
 import { type Booking, type Page, BookingChip, METHOD_LABEL, PAY_STATUS, STATUS_LABEL, errText, timeRange, whatOf } from '../parts/dash/common';
 import { BookingDetail } from '../parts/dash/Detail';
@@ -59,7 +59,7 @@ function List({ version, preset }: { version: number; preset: string }) {
   const [view, setView] = useView();
   const [grounds] = useApi<{ items: { id: string; name: string }[] }>('/api/staff/grounds');
   useEffect(() => { const t = setTimeout(() => { setDq(q.trim()); setPage(0); }, 300); return () => clearTimeout(t); }, [q]);
-  const params = { q: dq, status, groundId, from, to, ...(preset === 'review' ? { needsReview: 1 } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}), limit: PAGE, offset: page * PAGE };
+  const params = { group: 1, q: dq, status, groundId, from, to, ...(preset === 'review' ? { needsReview: 1 } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}), limit: PAGE, offset: page * PAGE };
   const [d, err] = useApi<Page<Booking>>(`/api/staff/bookings${qs(params)}`, [version]);
   const set = (f: (v: string) => void) => (e: any) => { f(e.target.value); setPage(0); };
   const filtered = !!(dq || status || groundId || from || to || preset);
@@ -68,14 +68,18 @@ function List({ version, preset }: { version: number; preset: string }) {
   const quick = (a: string, b: string) => { setFrom(a); setTo(b); setPage(0); };
   return (
     <div className="card">
-      <div className="card-pad filters">
-        <input className="inp" type="search" placeholder="Search name, phone or reference" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="inp" aria-label="Status" value={status} onChange={set(setStatus)}>
-          <option value="">Any status</option>{Object.entries(STATUS_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-        <select className="inp" aria-label="Ground" value={groundId} onChange={set(setGroundId)}>
-          <option value="">All grounds</option>{(grounds?.items || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
-        {view === 'list' && <><input className="inp" type="date" aria-label="From date" value={from} onChange={set(setFrom)} />
-        <input className="inp" type="date" aria-label="To date" value={to} onChange={set(setTo)} /></>}
+      <div className="card-pad row" style={{ gap: 10 }}>
+        <input className="inp" style={{ flex: '1 1 260px', width: 'auto' }} type="search" placeholder="Search name, phone or reference" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Filters inline={false} active={[status, groundId, view === 'list' ? from : '', view === 'list' ? to : ''].filter(Boolean).length}>
+          <div className="filters filters2">
+            <select className="inp" aria-label="Status" value={status} onChange={set(setStatus)}>
+              <option value="">Any status</option>{Object.entries(STATUS_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+            <select className="inp" aria-label="Ground" value={groundId} onChange={set(setGroundId)}>
+              <option value="">All grounds</option>{(grounds?.items || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
+            {view === 'list' && <><input className="inp" type="date" aria-label="From date" value={from} onChange={set(setFrom)} />
+            <input className="inp" type="date" aria-label="To date" value={to} onChange={set(setTo)} /></>}
+          </div>
+        </Filters>
       </div>
       <div className="card-pad row filters-foot">
         <ViewToggle value={view} onChange={setView} />

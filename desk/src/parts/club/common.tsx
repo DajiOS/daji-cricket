@@ -1,6 +1,6 @@
 // Small helpers shared by the Academy, Matches, Contacts and Tasks pages.
 import { useEffect, useState, type ReactNode } from 'react';
-import { ErrorBox, Loading } from '../../ui';
+import { ErrorBox, Icon, Loading } from '../../ui';
 import { ApiError } from '../../lib';
 
 /** Error text for a toast or an inline box, with the server's field messages appended. */
@@ -34,4 +34,12 @@ export function Select({ value, onChange, options, label, disabled }: { value: s
 }
 
 /** The compact bar of filters above a table. */
-export const FilterBar = ({ children }: { children: ReactNode }) => <div className="filters">{children}</div>;
+/** The filter controls of a list, behind the Filters button (open at first on a wide screen, closed on a phone). */
+export const FilterBar = ({ children }: { children: ReactNode }) => {
+  const [open, setOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 760);
+  return (
+    <div className="filterbar">
+      <button type="button" className={`btn sm filter-btn${open ? ' on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="filter" size={15} />Filters</button>
+      {open && <div className="filters">{children}</div>}
+    </div>);
+};

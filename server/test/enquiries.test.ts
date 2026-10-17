@@ -148,7 +148,7 @@ test('a custom multi-day programme: enquiry, quotation, then staff add one booki
   const conv = await h.post(`/api/staff/enquiries/${e.id}/convert-block`, { fromDate: dayFromNow(30), toDate: dayFromNow(37), startTime: '07:00', endTime: '19:00', quotationId: qid, payment: { method: 'bank_transfer', amountPaise: 4_000_000, reference: 'NEFT0001' } }, staff);
   assert.equal(conv.status, 201, JSON.stringify(conv.body));
   assert.equal(conv.body.status, 'converted');
-  const list = (await h.get(`/api/staff/bookings?limit=50`, staff)).body.items.filter((b: any) => b.source === 'enquiry' && b.customerId === e.customerId);
+  const list = (await h.get(`/api/staff/bookings?group=1&limit=50`, staff)).body.items.filter((b: any) => b.source === 'enquiry' && b.customerId === e.customerId);
   assert.equal(list.length, 1, 'the block is one row');
   assert.equal(list[0].block.days, 8);
   assert.equal(list[0].block.totalPaise, 25_500_000);

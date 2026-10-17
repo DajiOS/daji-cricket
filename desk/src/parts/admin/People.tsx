@@ -1,7 +1,7 @@
 // Find any account and fix its name, phone, email or whether it can sign in.
 import { useEffect, useState } from 'react';
 import { api, patch, qs } from '../../lib';
-import { Chip, Empty, ErrorBox } from '../../ui';
+import { Chip, Empty, ErrorBox, Filters } from '../../ui';
 import { Panel, errText } from './common';
 
 const cap = (s: string) => s.replace(/(^|[\s'’-])(\p{L})/gu, (_m, a, c) => a + c.toUpperCase());
@@ -59,7 +59,7 @@ export default function People() {
     <Panel title="People and accounts" note="Search customers, staff and owners. Names are saved with a capital first letter.">
       <div className="row" style={{ marginBottom: 8 }}>
         <input className="inp" style={{ flex: '1 1 220px', width: 'auto' }} type="search" placeholder="Search name, phone or email" aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="inp" style={{ width: 150 }} aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+        <Filters active={role ? 1 : 0}><select className="inp" style={{ width: 150 }} aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Filters>
       </div>
       <ErrorBox msg={error} />
       {items.map((u) => <Person key={u.id} u0={u} />)}

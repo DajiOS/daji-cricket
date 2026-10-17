@@ -1,14 +1,14 @@
 import { useState } from 'react';
 
 const KEY = 'daji.desk.theme';
-const read = (): 'light' | 'dark' => (document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
+const read = (): 'light' | 'dark' => (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
 
 /** Sun and moon icon at the far right of the top bar. The choice is remembered on this device. */
 export function ThemeToggle() {
   const [mode, setMode] = useState<'light' | 'dark'>(read());
   const flip = () => {
     const next = mode === 'light' ? 'dark' : 'light';
-    if (next === 'light') document.documentElement.setAttribute('data-theme', 'light'); else document.documentElement.removeAttribute('data-theme');
+    if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.removeAttribute('data-theme');
     try { localStorage.setItem(KEY, next); } catch { /* private window: the choice lasts until the page closes */ }
     setMode(next);
   };

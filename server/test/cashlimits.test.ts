@@ -69,13 +69,14 @@ test('a multi-day block is one row in the staff list, opens with every day, and 
   const staff = await h.login('staff1'), g = (await grounds(h))[0]!;
   const r = await h.post('/api/staff/bookings/block', { groundId: g.id, fromDate: dayFromNow(90), toDate: dayFromNow(93), startTime: '07:00', endTime: '19:00', totalPaise: 4_000_000, customer: { name: 'Camp Group', phone: '9890000044' }, payment: { method: 'upi', amountPaise: 1_000_000, reference: 'UTRGROUP0001' } }, staff);
   assert.equal(r.status, 201, JSON.stringify(r.body));
-  const list = await h.get('/api/staff/bookings?q=Camp%20Group', staff);
+  const list = await h.get('/api/staff/bookings?group=1&q=Camp%20Group', staff);
   assert.equal(list.body.total, 1); assert.equal(list.body.items.length, 1);
   const row = list.body.items[0];
   assert.equal(row.block.days, 4); assert.equal(row.block.totalPaise, 4_000_000); assert.equal(row.block.paidPaise, 1_000_000); assert.equal(row.block.balancePaise, 3_000_000);
   assert.equal(row.block.fromDate, dayFromNow(90)); assert.equal(row.block.toDate, dayFromNow(93));
-  const inRange = await h.get(`/api/staff/bookings?from=${dayFromNow(92)}&to=${dayFromNow(92)}&q=Camp%20Group`, staff);
+  const inRange = await h.get(`/api/staff/bookings?group=1&from=${dayFromNow(92)}&to=${dayFromNow(92)}&q=Camp%20Group`, staff);
   assert.equal(inRange.body.items.length, 1, 'a date inside the block finds it');
+  assert.equal((await h.get('/api/staff/bookings?q=Camp%20Group', staff)).body.items.length, 4, 'without group, every day is its own row (day view, approvals)');
   const detail = await h.get(`/api/staff/bookings/${row.id}`, staff);
   assert.equal(detail.body.block.items.length, 4);
   const pay = await h.post(`/api/staff/bookings/block/${row.block.seriesId}/payments`, { method: 'upi', amountPaise: 3_000_000, reference: 'UTRGROUP0002' }, staff);
@@ -91,4 +92,14 @@ test('a block of 7 am to 7 pm on a ground open past midnight books only those 12
   const r = await h.post('/api/staff/bookings/block', { groundId: g.id, fromDate: dayFromNow(100), toDate: dayFromNow(101), startTime: '07:00', endTime: '19:00', totalPaise: 2_000_000, customer: { name: 'Late Ground', phone: '9890000033' }, payment: { method: 'upi', amountPaise: 2_000_000, reference: 'UTRLATE00001' } }, staff);
   assert.equal(r.status, 201, JSON.stringify(r.body));
   for (const b of r.body.bookings) assert.equal(b.slotCount, 12, 'only 7 am to 7 pm is booked');
+});
+
+test('the dashboard can see the money already booked for the months ahead', async () => {
+  const owner = await h.login('owner1'), staff = await h.login('staff1'), g = (await grounds(h))[0]!;
+  const r = await h.post('/api/staff/bookings/block', { groundId: g.id, fromDate: dayFromNow(120), toDate: dayFromNow(121), startTime: '07:00', endTime: '19:00', totalPaise: 3_000_000, customer: { name: 'Ahead Group', phone: '9890000022' }, payment: { method: 'upi', amountPaise: 1_000_000, reference: 'UTRAHEAD0001' } }, staff);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const a = await h.get('/api/staff/reports/upcoming', owner);
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal(a.body.totalPaise, 3_000_000); assert.equal(a.body.paidPaise, 1_000_000); assert.equal(a.body.balancePaise, 2_000_000);
+  assert.equal((await h.get('/api/staff/reports/upcoming', staff)).status, 403, 'staff without the revenue switch cannot see it');
 });

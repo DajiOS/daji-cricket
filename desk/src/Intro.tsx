@@ -8,7 +8,7 @@ export function Intro() {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!on || !box.current) return;
-    const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
     try { window.DajiIntro!.play(box.current, { dark, logo: dark ? 'assets/logo.svg' : 'assets/logo-brass.svg', onDone: () => { try { sessionStorage.setItem('daji.desk.intro', '1'); } catch { /* ignore */ } setOn(false); } }); } catch { setOn(false); }
   }, [on]);
   if (!on) return null;

@@ -27,7 +27,7 @@ export function StaffScreen({ user }: { user: User }) {
       if (view === 'payments') setPays((await api<{ items: PaymentRow[] }>('/api/staff/payments?status=submitted&limit=50')).items);
       else if (view === 'today') { const r = await api<{ bookings: StaffBooking[]; awaitingVerification: number; needsReview: number }>('/api/staff/today'); setBooks(r.bookings); setCounts({ awaiting: r.awaitingVerification, review: r.needsReview }); }
       else if (view === 'approvals') setBooks((await api<{ items: StaffBooking[] }>('/api/staff/bookings?approval=pending&limit=50')).items);
-      else { const today = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10); setBooks((await api<{ items: StaffBooking[] }>(`/api/staff/bookings?from=${today}&limit=60`)).items.filter((b) => b.status !== 'cancelled' && b.status !== 'expired')); }
+      else { const today = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10); setBooks((await api<{ items: StaffBooking[] }>(`/api/staff/bookings?group=1&from=${today}&limit=60`)).items.filter((b) => b.status !== 'cancelled' && b.status !== 'expired')); }
     } catch (e: any) { setErr(e.message); setBooks([]); } finally { setBusy(false); }
   }, [view]);
   useEffect(() => { setBooks(null); setOpen(''); setMode(''); void load(); }, [load]);

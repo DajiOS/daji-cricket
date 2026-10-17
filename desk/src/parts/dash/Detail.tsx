@@ -176,11 +176,18 @@ function BlockDetail({ d, onClose, onChanged }: { d: Detail; onClose: () => void
             <div className="card"><Table rows={days} onRow={(x) => go(`/bookings/${x.id}/day`)} empty="No days." cols={[
               { head: 'Date', cell: (x) => <><div className="strong">{fmtDay(x.date)}</div><div className="small muted mono">{x.ref}</div></> },
               { head: 'Status', cell: (x) => <Chip tone={x.status === 'confirmed' || x.status === 'completed' ? 'good' : x.status === 'held' ? 'warn' : 'mute'}>{STATUS_LABEL[x.status] || x.status}</Chip> },
-              { head: 'Total', num: true, cell: (x) => inr(x.totalPaise) },
-              { head: 'Paid', num: true, cell: (x) => inr(x.paidPaise) },
-              { head: 'Balance', num: true, cell: (x) => (x.balancePaise > 0 && x.status !== 'cancelled' && x.status !== 'expired' ? <b className="warnText">{inr(x.balancePaise)}</b> : <span className="muted">—</span>) },
+              { head: 'Time', cell: () => <span className="muted tabular">{timeRange(b)}</span> },
             ]} /></div>
-            <div className="small muted" style={{ marginTop: 8 }}>Open a day to see its payments, or to cancel just that day.</div>
+            <div className="small muted" style={{ marginTop: 8 }}>One agreed amount covers all the days. Open a day to cancel just that day.</div>
+          </div>
+          <div>
+            <div className="eyebrow">Payments</div>
+            <div className="card"><Table rows={k.payments || []} empty="No payments yet." cols={[
+              { head: 'When', cell: (p) => fmtDateTime(p.createdAt) },
+              { head: 'Method', cell: (p) => <>{METHOD_LABEL[p.method] || p.method}{p.reference && <div className="small muted">{p.reference}</div>}</> },
+              { head: 'Status', cell: (p) => <Status s={p.status} map={PAY_STATUS} /> },
+              { head: 'Amount', num: true, cell: (p) => <>{inr(p.amountPaise)}{p.refundedPaise > 0 && <div className="small muted">{inr(p.refundedPaise)} back</div>}</> },
+            ]} /></div>
           </div>
         </div>
       </Modal>
