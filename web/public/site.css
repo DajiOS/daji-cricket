@@ -1245,3 +1245,26 @@ html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) body::after
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand{margin:0 56px 0 auto}
   html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .wm-nav{height:62px;margin:0}
 }
+
+/* ===== Booking panel fits one screen and scrolls when it has more to show ===== */
+@media (min-width:1021px){
+  html:not([data-embed]):not([data-embed-section]) #view-home .hero .panel,
+  html:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{overflow-y:auto;overscroll-behavior:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;padding-top:clamp(22px,3.6vh,40px)!important;padding-bottom:18px;scrollbar-width:thin;scrollbar-color:rgba(243,239,227,.3) transparent}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book>*{flex:0 0 auto}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book h3{font-size:clamp(28px,3.4vh,38px);margin:0 0 2px}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .sub{margin:0 0 10px;font-size:14px}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .tabs{margin:0 0 10px;gap:6px}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .step{margin:10px 0 6px}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .datebar{margin:2px 0 4px}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .hint{margin:0 0 6px;font-size:12.5px}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .slots{grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin:0}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .slot{height:clamp(42px,5.6vh,52px);font-size:13.5px}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .slot small,
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .slot .prn{font-size:9.5px;margin-top:1px}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .legend{margin:8px 0 6px}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book #p-hold{margin-top:auto;position:sticky;bottom:0}
+  html:not([data-embed]):not([data-embed-section]) #view-home #book .datepick input{height:auto;padding:8px 10px}
+}
+@media (min-width:1021px){
+  html[data-theme="ivory"]:not([data-embed]):not([data-embed-section]) #view-home nav .brand{margin:0 22px 0 auto}
+}
