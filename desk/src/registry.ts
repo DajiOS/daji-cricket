@@ -22,6 +22,7 @@ const Team = lazy(() => import('./pages/Team'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Platform = lazy(() => import('./pages/Platform'));
 const Media = lazy(() => import('./pages/Media'));
+const Cameras = lazy(() => import('./pages/Cameras'));
 
 export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals' }
 /** The sections inside a page (the pills at its top), so the side menu can list them too. The first one is the page's own address. */
@@ -48,7 +49,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/accounting', page: Accounting }, { path: '/transactions', page: Transactions }, { path: '/bank', page: BankImport },
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
-  { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/compliance', page: Compliance },
+  { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
 ];
 export const HOME = Dashboard;
 
@@ -61,6 +62,7 @@ export const NAV: NavGroup[] = [
     { to: '/memberships', label: 'Memberships', icon: 'card', perm: 'manage_bookings' },
     { to: '/tournaments', label: 'Tournaments', icon: 'trophy', perm: 'manage_matches' },
   ] },
+  { group: 'Ground cameras', items: [{ to: '/cameras', label: 'Live cameras', icon: 'camera', perm: 'view_cameras' }] },
   { group: 'Task Management', items: [{ to: '/tasks', label: 'Tasks', icon: 'tasks', perm: 'manage_tasks' }] },
   { group: 'People & Messages', items: [
     { to: '/contacts', label: 'Contacts', icon: 'users', perm: 'view_customers' },

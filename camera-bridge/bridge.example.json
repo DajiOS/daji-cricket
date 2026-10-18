@@ -1,0 +1,9 @@
+{
+  "server": "https://www.dajicricket.com",
+  "nvr": { "host": "192.168.1.108", "port": 554, "user": "viewer", "password": "put-the-viewer-password-here", "subtype": 1 },
+  "fps": 4,
+  "width": 960,
+  "cameras": [
+    { "id": "cam_xxxxxxxx", "token": "cam_xxxxxxxxxxxxxxxx", "channel": 1 }
+  ]
+}

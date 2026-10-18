@@ -11,7 +11,7 @@ const roleOf = (m: Member, presets: TeamData['presets']): string => {
   const hit = Object.values(presets).find((p) => [...p.permissions].sort().join(',') === mine);
   return hit ? hit.title : 'Custom rights';
 };
-const words = (p: string) => (p === 'view_revenue' ? 'Can see revenue' : p.replace(/_/g, ' '));
+const words = (p: string) => (p === 'view_revenue' ? 'Can see revenue' : p === 'view_cameras' ? 'Can watch live cameras' : p.replace(/_/g, ' '));
 
 function AddMember({ presets, onClose, onDone }: { presets: TeamData['presets']; onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState({ name: '', email: '', phone: '', password: '', preset: Object.keys(presets)[0] || '' });

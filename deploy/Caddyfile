@@ -1,7 +1,10 @@
 # Caddy gets and renews the HTTPS certificate by itself once the DNS record for the host points at this server.
 {$API_HOST} {
 	encode zstd gzip
-	reverse_proxy api:4000
+	reverse_proxy api:4000 {
+		# live camera pictures are a long-running stream: pass each picture on straight away
+		flush_interval -1
+	}
 	header -Server
 	log
 }
@@ -10,7 +13,10 @@
 # HTTPS certificates start working once the DNS records for these names point at this server.
 www.{$SITE_HOST:dajicricket.com} {
 	encode zstd gzip
-	reverse_proxy api:4000
+	reverse_proxy api:4000 {
+		# live camera pictures are a long-running stream: pass each picture on straight away
+		flush_interval -1
+	}
 	header -Server
 	log
 }

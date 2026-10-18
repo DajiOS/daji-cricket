@@ -16,6 +16,7 @@ export const STAFF_PERMISSIONS = [
   'manage_academy',
   'manage_matches',
   'manage_tasks',
+  'view_cameras',
   'view_revenue',
 ] as const;
 export type StaffPermission = (typeof STAFF_PERMISSIONS)[number];

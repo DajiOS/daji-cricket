@@ -52,3 +52,7 @@ Copy the new files, then repeat step 3. Data lives in the `daji-data` volume and
 4. Wait for DNS (minutes to a few hours), then open `https://dajicricket.com`. Caddy gets the certificate on the first visit.
 5. To go back to Wix: put the original Wix records back and reconnect the domain to the Wix site.
 6. The `api.` address keeps working for the apps and Razorpay. Set `PUBLIC_URL=https://dajicricket.com` (already the example value).
+
+## Live cameras (Dahua NVR/XVR)
+
+Live view in the desk needs a small program at the ground. See `camera-bridge/README.md`. The server needs no extra setup: after this update, add cameras in the desk under Live cameras. Give a staff member the right "Can watch live cameras" in Users & Access.
