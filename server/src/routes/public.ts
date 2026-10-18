@@ -89,16 +89,13 @@ export function publicRoutes(r: Router): void {
     for (const f of cv.fields) v.fail(`consent.${f.field}`, f.message);
     if (password) { const pw = checkPasswordStrength(password); if (pw) v.fail('password', pw); }
     v.done();
-    // Someone already booked at the desk has a record without a login. Signing up with that email claims it instead of making a second one.
-    // The phone alone is not enough to claim it: numbers are not verified here, and family members share them.
+    // Someone already booked at the desk has a record without a login. An email address alone does not prove it is theirs, and taking
+    // the record over would hand a stranger that person's bookings and credit. They claim it by signing in with the code sent to their mobile.
     const sameEmail = email ? userByEmail(email) : undefined;
-    if (sameEmail && (sameEmail.role !== 'customer' || sameEmail.password_hash)) throw new HttpError(409, 'ACCOUNT_EXISTS', 'There is already an account with this email. Sign in with a code sent to your mobile, or reset your password, instead of making a new one.');
-    let row: UserRow;
-    if (sameEmail) {
-      run('UPDATE users SET password_hash = ?, phone = COALESCE(phone, ?), first_name = ?, last_name = ?, name = ?, updated_at = ? WHERE id = ?',
-        hashPassword(password!), phone ?? null, titleCase(firstName ?? splitName(name!).first), titleCase(lastName ?? splitName(name ?? '').last), (firstName ? `${titleCase(firstName)} ${titleCase(lastName ?? '')}`.trim() : titleCase(name!)), now(), sameEmail.id);
-      row = userRow(sameEmail.id)!;
-    } else row = createUser({ role: 'customer', name: name ?? `${firstName} ${lastName ?? ''}`, ...(firstName ? { firstName, lastName: lastName ?? '' } : {}), email: email!, phone: phone ?? null, password: password! });
+    if (sameEmail) throw new HttpError(409, 'ACCOUNT_EXISTS', sameEmail.role === 'customer' && !sameEmail.password_hash
+      ? 'This email is already with us from a booking at the ground. Sign in with the code sent to your mobile number to use that record, or ask the ground to help.'
+      : 'There is already an account with this email. Sign in with a code sent to your mobile, or reset your password, instead of making a new one.');
+    const row = createUser({ role: 'customer', name: name ?? `${firstName} ${lastName ?? ''}`, ...(firstName ? { firstName, lastName: lastName ?? '' } : {}), email: email!, phone: phone ?? null, password: password! });
     if (ce || cs || cw) {
       run('UPDATE users SET consent_email = ?, consent_sms = ?, consent_whatsapp = ?, consent_updated_at = ? WHERE id = ?', ce ? 1 : 0, cs ? 1 : 0, cw ? 1 : 0, now(), row.id);
       audit({ id: row.id, role: 'customer' }, 'consent.set', 'user', row.id, { email: !!ce, sms: !!cs, whatsapp: !!cw });

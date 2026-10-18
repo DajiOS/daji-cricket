@@ -172,7 +172,8 @@ function lockFail(key: string): void {
 
 /** Sign in with an email address or a mobile number, and the password. */
 export function login(cfg: Config, identifier: string, password: string, code?: string): { token: string; user: User } {
-  const lockKey = identifier.trim().toLowerCase().slice(0, 120);
+  // The same person can write a number many ways, so the lock is kept on the cleaned-up email or number, not on the raw text.
+  const lockKey = (identifier.includes('@') ? identifier.trim().toLowerCase() : (normalizePhone(identifier) ?? identifier.trim().toLowerCase())).slice(0, 120);
   lockCheck(lockKey);
   const found = candidatesFor(identifier);
   let r = found[0], ok = false;
@@ -195,6 +196,7 @@ export function authenticate(cfg: Config, header: string | undefined): UserRow |
   if (!p) return null;
   const r = userRow(p.sub);
   if (!r || !r.active || r.token_version !== p.tv) return null;
+  if (r.role === 'staff' && r.owner_id && !one('SELECT 1 FROM users WHERE id = ? AND active = 1', r.owner_id)) return null; // their business has been switched off
   if (p.jti && one('SELECT 1 FROM revoked_tokens WHERE jti = ?', p.jti)) return null;
   return r;
 }
