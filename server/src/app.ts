@@ -1,4 +1,5 @@
 import { libraryRoutes } from './routes/library.ts';
+import { cameraRoutes } from './routes/cameras.ts';
 import { cardRoutes } from './routes/cards.ts';
 import { mediaRoutes } from './routes/media.ts';
 import type { Server } from 'node:http';
@@ -44,6 +45,7 @@ export function buildRouter(): Router {
   remindersRoutes(r);
   mediaRoutes(r);
   libraryRoutes(r);
+  cameraRoutes(r);
   cardRoutes(r);
   complianceRoutes(r);
   return r;

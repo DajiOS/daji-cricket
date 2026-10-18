@@ -25,7 +25,7 @@ export const getViewOwner = () => viewOwner;
 export const setViewOwner = (id: string | null) => { viewOwner = id; store.set('daji.viewOwner', id); };
 let isSuper = false;
 export const setIsSuper = (v: boolean) => { isSuper = v; };
-const OWNER_SCOPED = ['/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk'];
+const OWNER_SCOPED = ['/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras'];
 
 export interface ApiOptions { method?: string; body?: unknown; headers?: Record<string, string>; raw?: BodyInit }
 
