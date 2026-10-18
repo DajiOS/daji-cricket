@@ -33,13 +33,13 @@
     document.querySelectorAll('header.hero h1 .ln > span').forEach(function (s, i) { kinetic(s, i * 14); });
     // other headlines play when they scroll into view
     var io = new IntersectionObserver(function (es) {
-      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('revealed'); io.unobserve(e.target); } });
     }, { rootMargin: '0px 0px -12% 0px', threshold: 0.15 });
     document.querySelectorAll('section h2, .head h2, .head .display').forEach(function (h) { if (!h.closest('header.hero')) { kinetic(h, 0); h.classList.add('kin-view'); io.observe(h); } });
     // cards and blocks arrive in stop-motion
     document.querySelectorAll('section .card, section .plate, .gal figure, .facts > *').forEach(function (c) { c.classList.add('sm-in'); io.observe(c); });
     root.classList.add('luxury-on');
-    setTimeout(function () { document.querySelectorAll('.sm-in:not(.in)').forEach(function (e) { e.style.opacity = '1'; }); }, 6000); // never leave anything hidden
+    setTimeout(function () { document.querySelectorAll('.sm-in:not(.revealed)').forEach(function (e) { e.style.opacity = '1'; }); }, 6000); // never leave anything hidden
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
