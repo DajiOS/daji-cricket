@@ -1430,11 +1430,11 @@ html.splash-on .theme-toggle{visibility:hidden}
 .kn .k{display:inline-block;animation:k-rise 1s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i) * 28ms)}
 html.splash-on .kn .k{animation-play-state:paused}
 .kin-view.kn .k{animation-play-state:paused}
-.kin-view.kn.in .k{animation-play-state:running}
+.kin-view.kn.revealed .k{animation-play-state:running}
 .ln > span.kn{animation:none!important}
 @keyframes k-rise{0%{opacity:0;transform:translateY(105%)}100%{opacity:1;transform:none}}
 .sm-in{opacity:0}
-.sm-in.in{animation:sm-in .9s cubic-bezier(.2,.7,.2,1) both}
+.sm-in.revealed{animation:sm-in .9s cubic-bezier(.2,.7,.2,1) both}
 @keyframes sm-in{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:none}}
 .btn{transition:transform .16s ease,background-color .16s ease,border-color .16s ease,color .16s ease}
 .btn:hover{transform:translateY(-1px)}
