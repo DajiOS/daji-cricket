@@ -141,9 +141,11 @@ async function readCapped(req: IncomingMessage, max: number): Promise<Buffer> {
   let n = 0;
   for await (const c of req) {
     n += (c as Buffer).length;
-    if (n > max) throw new HttpError(413, 'TOO_LARGE', 'Picture is too large');
-    chunks.push(c as Buffer);
+    if (n <= max) chunks.push(c as Buffer);
+    // Too big: keep reading (and throwing the rest away) so the sender finishes and gets a clean 413, not a dropped connection.
+    else if (n > 8 * max) { req.destroy(); throw new HttpError(413, 'TOO_LARGE', 'Picture is too large'); }
   }
+  if (n > max) throw new HttpError(413, 'TOO_LARGE', 'Picture is too large');
   return Buffer.concat(chunks);
 }
 
