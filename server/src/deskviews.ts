@@ -4,6 +4,9 @@ import { canSeeRevenue, hasPermission, type UserRow } from './auth.ts';
 import { addDays, istDate, istMidnight, monthRange } from './time.ts';
 import { manages } from './tasks.ts';
 import { now } from './clock.ts';
+import { overview } from './reports.ts';
+import { profitAndLoss } from './accounting/statements.ts';
+import { budgetVsActual } from './accounting/plus.ts';
 
 // Views that gather what the desk already holds into one picture (the starter kit's operations calendar and money flow).
 // Each part shows only what the same person can already open on its own page, so nothing new becomes visible.
@@ -251,4 +254,110 @@ export function closeChecklist(u: UserRow, owner: string, monthIn: string | null
   const over = to < istDate(now());
   add('signoff', 'Sign off the month', signed ? 'done' : 'todo', 0, signed ? 'The month is signed off and locked.' : !over ? 'A month can be signed off once its last day has passed.' : unc ? 'Categorise every line first, then sign off.' : 'Ready to sign off. This locks the month and keeps its profit and loss on record.', null);
   return { month, over, signedOff: signed, steps };
+}
+
+// ---------------------------------------------------------------- side-by-side compare
+// Two months of the books, a month against its budget, or the grounds against each other.
+
+export interface CmpRow { label: string; kind: 'money' | 'count' | 'pct'; values: (number | null)[]; head?: boolean; better?: 'up' | 'down' }
+export interface Compare { mode: 'months' | 'budget' | 'grounds'; columns: string[]; rows: CmpRow[]; notes: string[] }
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const mlabel = (m: string) => `${MON[Number(m.slice(5)) - 1]} ${m.slice(0, 4)}`;
+
+export function compare(u: UserRow, owner: string, mode: string | null, aIn: string | null, bIn: string | null): Compare {
+  const a = monthOrFail(aIn).month;
+  if (mode === 'grounds') {
+    if (!hasPermission(u, 'manage_bookings')) throw forbidden('This needs the "manage_bookings" permission');
+    const r = monthRange(a)!;
+    const ov = overview(owner, r);
+    const money = canSeeRevenue(u);
+    const per = many<{ ground_id: string; n: number; total: number; paid: number }>(`SELECT ground_id, COUNT(*) n, SUM(total_paise) total, SUM(paid_paise) paid FROM bookings WHERE owner_id = ? AND date BETWEEN ? AND ? AND status IN ('confirmed','completed','no_show') GROUP BY ground_id`, owner, r.from, r.to);
+    const by = new Map(per.map((x) => [x.ground_id, x]));
+    const gs = ov.utilization;
+    const rows: CmpRow[] = [
+      { label: 'Sessions booked', kind: 'count', values: gs.map((g) => by.get(g.groundId)?.n ?? 0), better: 'up' },
+      { label: 'Hours booked', kind: 'count', values: gs.map((g) => g.bookedSlots), better: 'up' },
+      { label: 'Hours open', kind: 'count', values: gs.map((g) => g.availableSlots) },
+      { label: 'Use of open hours', kind: 'pct', values: gs.map((g) => g.utilization), better: 'up' },
+    ];
+    if (money) rows.push(
+      { label: 'Booked value', kind: 'money', values: gs.map((g) => by.get(g.groundId)?.total ?? 0), better: 'up' },
+      { label: 'Collected', kind: 'money', values: gs.map((g) => by.get(g.groundId)?.paid ?? 0), better: 'up' },
+      { label: 'Value per booked hour', kind: 'money', values: gs.map((g) => (g.bookedSlots ? Math.round((by.get(g.groundId)?.total ?? 0) / g.bookedSlots) : null)), better: 'up' },
+    );
+    return { mode: 'grounds', columns: gs.map((g) => g.groundName), rows, notes: [`${mlabel(a)}. Hours count the slots that were really open, including winter hours and weekly closed days.`] };
+  }
+  if (!readsBooks(u)) throw forbidden('This needs the "view_reports" permission and "Can see revenue"');
+  if (mode === 'budget') {
+    const b = budgetVsActual(owner, monthRange(a)!);
+    const line = (x: { name: string; budgetPaise: number; actualPaise: number; type: string }): CmpRow => ({ label: x.name, kind: 'money', values: [x.actualPaise, x.budgetPaise], better: x.type === 'income' ? 'up' : 'down' });
+    return {
+      mode: 'budget', columns: ['Actual', 'Budget'],
+      rows: [
+        { label: 'Income', kind: 'money', values: [b.totals.actualIncomePaise, b.totals.budgetIncomePaise], head: true, better: 'up' }, ...b.income.map(line),
+        { label: 'Expenses', kind: 'money', values: [b.totals.actualExpensePaise, b.totals.budgetExpensePaise], head: true, better: 'down' }, ...b.expenses.map(line),
+        { label: 'Profit', kind: 'money', values: [b.totals.actualProfitPaise, b.totals.budgetProfitPaise], head: true, better: 'up' },
+      ],
+      notes: [`${mlabel(a)}.`, ...b.notes],
+    };
+  }
+  // two months of the profit and loss, row by row
+  const bm = bIn ? monthOrFail(bIn).month : addDays(a + '-01', -1).slice(0, 7);
+  const [pa, pb] = [profitAndLoss(owner, monthRange(a)!), profitAndLoss(owner, monthRange(bm)!)];
+  const rows: CmpRow[] = [];
+  for (const [title, ka, kb, better] of [['Revenue', pa.revenue, pb.revenue, 'up'], ['Expenses', pa.expenses, pb.expenses, 'down']] as const) {
+    rows.push({ label: title, kind: 'money', values: [ka.totalPaise, kb.totalPaise], head: true, better });
+    const names = [...new Set([...ka.groups, ...kb.groups].flatMap((g) => g.rows.map((r) => r.name)))];
+    const val = (sec: typeof ka, n: string) => sec.groups.flatMap((g) => g.rows).filter((r) => r.name === n).reduce((t, r) => t + r.paise, 0);
+    for (const n of names) rows.push({ label: n, kind: 'money', values: [val(ka, n), val(kb, n)], better });
+  }
+  rows.push({ label: 'Net profit', kind: 'money', values: [pa.netProfitPaise, pb.netProfitPaise], head: true, better: 'up' });
+  rows.push({ label: 'Margin', kind: 'pct', values: [pa.marginPercent, pb.marginPercent], better: 'up' });
+  const notes = [pa, pb].filter((p) => p.uncategorised.count).map((p) => `${mlabel(p.range.from.slice(0, 7))} has ${p.uncategorised.count} uncategorised bank line${p.uncategorised.count === 1 ? '' : 's'}, so its profit is not complete yet.`);
+  return { mode: 'months', columns: [mlabel(a), mlabel(bm)], rows, notes };
+}
+
+// ---------------------------------------------------------------- ground health (the orbit hub)
+// Eight parts of the business around one score. Each part scores 0 to 100 from simple rules that are shown with it.
+
+export interface HubPart { key: string; title: string; score: number; line: string; rule: string; href: string }
+export function groundHealth(u: UserRow, owner: string): { score: number | null; parts: HubPart[] } {
+  const today = istDate(now()), month = today.slice(0, 7), from = month + '-01';
+  const n = (sql: string, ...p: (string | number)[]) => one<{ n: number | null }>(sql, ...p)?.n ?? 0;
+  const clamp = (x: number) => Math.max(0, Math.min(100, Math.round(x)));
+  const parts: HubPart[] = [];
+  if (hasPermission(u, 'manage_bookings')) {
+    const ov = overview(owner, { from, to: today });
+    const open = ov.utilization.reduce((t, g) => t + g.availableSlots, 0), used = ov.utilization.reduce((t, g) => t + g.bookedSlots, 0);
+    const pct = open ? (used / open) * 100 : 0;
+    parts.push({ key: 'use', title: 'Ground use', score: clamp((pct / 40) * 100), line: `${Math.round(pct)}% of open hours booked this month`, rule: '40% or more of open hours booked scores full marks.', href: '/bookings/day' });
+    const waiting = n(`SELECT COUNT(*) n FROM bookings WHERE owner_id = ? AND approval = 'pending' AND status = 'confirmed'`, owner) + n(`SELECT COUNT(*) n FROM payments WHERE owner_id = ? AND status = 'submitted'`, owner);
+    parts.push({ key: 'queue', title: 'Bookings queue', score: clamp(100 - waiting * 15), line: waiting ? `${waiting} booking${waiting === 1 ? '' : 's'} or UPI payment${waiting === 1 ? '' : 's'} waiting` : 'Nothing waiting for approval or checking', rule: 'Each booking or UPI payment waiting takes 15 points.', href: '/pipeline/bookings' });
+    const played = one<{ t: number | null; p: number | null }>(`SELECT SUM(total_paise) t, SUM(paid_paise) p FROM bookings WHERE owner_id = ? AND date BETWEEN ? AND ? AND status IN ('confirmed','completed','no_show')`, owner, from, today)!;
+    const rate = played.t ? ((played.p ?? 0) / played.t) * 100 : 100;
+    parts.push({ key: 'collect', title: 'Collections', score: clamp(rate), line: played.t ? `${Math.round(rate)}% collected on sessions played this month` : 'No sessions played yet this month', rule: 'The share of this month\'s played sessions that is paid.', href: '/bookings' });
+  }
+  if (readsBooks(u)) {
+    const overdue = n(`SELECT COUNT(*) n FROM acct_bills WHERE owner_id = ? AND deleted_at IS NULL AND status IN ('pending_approval','approved') AND due_date < ?`, owner, today);
+    parts.push({ key: 'bills', title: 'Bills', score: clamp(100 - overdue * 25), line: overdue ? `${overdue} bill${overdue === 1 ? ' is' : 's are'} overdue` : 'No bill is overdue', rule: 'Each overdue bill takes 25 points.', href: '/pipeline/bills' });
+    const stale = n('SELECT COUNT(*) n FROM acct_transactions WHERE owner_id = ? AND deleted_at IS NULL AND category_id IS NULL AND txn_date < ?', owner, addDays(today, -7));
+    const last = one<{ d: string | null }>(`SELECT MAX(t.txn_date) d FROM acct_transactions t JOIN acct_accounts a ON a.id = t.account_id WHERE t.owner_id = ? AND t.deleted_at IS NULL AND a.kind = 'bank'`, owner)?.d ?? null;
+    const age = last ? Math.round((istMidnight(today) - istMidnight(last)) / 86_400_000) : null;
+    parts.push({ key: 'books', title: 'Books', score: clamp(100 - stale * 5 - (age === null ? 50 : Math.max(0, age - 7) * 3)), line: [stale ? `${stale} line${stale === 1 ? '' : 's'} uncategorised for over a week` : 'Lines are categorised', age === null ? 'no bank statement yet' : `bank to ${age} day${age === 1 ? '' : 's'} ago`].join(', '), rule: 'Each line left uncategorised for over a week takes 5 points; a bank statement older than a week takes 3 points a day.', href: '/close' });
+  }
+  {
+    // jobs: the same ones the task list shows this person
+    const late = n(`SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ? ${u.role === 'staff' && !manages(u) ? 'AND (assigned_to IS NULL OR assigned_to = ?)' : ''}`, owner, today, ...(u.role === 'staff' && !manages(u) ? [u.id] : []));
+    parts.push({ key: 'jobs', title: 'Jobs', score: clamp(100 - late * 15), line: late ? `${late} job${late === 1 ? ' is' : 's are'} late` : 'No job is late', rule: 'Each late job takes 15 points.', href: '/tasks' });
+  }
+  if (hasPermission(u, 'manage_academy')) {
+    const f = one<{ due: number | null; paid: number | null }>(`SELECT SUM(f.amount_paise) due, SUM(MIN(f.amount_paise, COALESCE((SELECT SUM(p.amount_paise) FROM academy_fee_payments p WHERE p.fee_id = f.id), 0))) paid FROM academy_fees f WHERE f.owner_id = ? AND f.month = ? AND f.due_on <= ?`, owner, month, today)!;
+    const rate = f.due ? ((f.paid ?? 0) / f.due) * 100 : 100;
+    parts.push({ key: 'academy', title: 'Academy fees', score: clamp(rate), line: f.due ? `${Math.round(rate)}% of this month's fees due so far are paid` : 'No fees due yet this month', rule: 'The share of fees due so far this month that is paid.', href: '/academy/fees' });
+  }
+  if (u.role === 'owner' || u.role === 'super_admin') {
+    const due = n('SELECT COUNT(*) n FROM compliance_items WHERE next_review_on < ?', today);
+    parts.push({ key: 'compliance', title: 'Compliance', score: clamp(100 - due * 34), line: due ? `${due} rule${due === 1 ? ' is' : 's are'} past the review date` : 'Every rule is reviewed on time', rule: 'Each rule past its review date takes 34 points.', href: '/compliance/rules' });
+  }
+  return { score: parts.length ? Math.round(parts.reduce((t, p) => t + p.score, 0) / parts.length) : null, parts };
 }

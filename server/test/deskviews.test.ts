@@ -125,3 +125,41 @@ test('the month-end close lists eight checks; uncategorised lines block the sign
   assert.equal((await h.get('/api/desk/close?month=2026-13', owner)).status, 400);
 });
 const month0 = () => dayFromNow(0).slice(0, 7);
+
+test('compare puts two months, a month and its budget, or the two grounds side by side', async () => {
+  const g = (await grounds(h)).find((x) => x.name === 'Cricket Ground')!;
+  await bookAndPay(h, cust, g.id, dayFromNow(1), '07:00', 2);
+  const gr = await h.get(`/api/desk/compare?mode=grounds&a=${month}`, owner);
+  assert.equal(gr.status, 200, JSON.stringify(gr.body));
+  assert.deepEqual(gr.body.columns, ['Cricket Ground', 'Practice Nets']);
+  assert.deepEqual(gr.body.rows.find((r: any) => r.label === 'Sessions booked').values, [1, 0]);
+  assert.deepEqual(gr.body.rows.find((r: any) => r.label === 'Hours booked').values, [2, 0]);
+  assert.ok(gr.body.rows.some((r: any) => r.kind === 'money'));
+  const st = await h.get(`/api/desk/compare?mode=grounds&a=${month}`, staff);
+  assert.equal(st.status, 200);
+  assert.ok(!st.body.rows.some((r: any) => r.kind === 'money'), 'no money without "Can see revenue"');
+  const mm = await h.get(`/api/desk/compare?mode=months&a=${month}`, owner);
+  assert.equal(mm.status, 200, JSON.stringify(mm.body));
+  assert.equal(mm.body.columns.length, 2);
+  assert.ok(mm.body.rows.some((r: any) => r.label === 'Net profit'));
+  const bud = await h.get(`/api/desk/compare?mode=budget&a=${month}`, owner);
+  assert.equal(bud.status, 200, JSON.stringify(bud.body));
+  assert.deepEqual(bud.body.columns, ['Actual', 'Budget']);
+  assert.equal((await h.get(`/api/desk/compare?mode=months&a=${month}`, staff)).status, 403);
+});
+
+test('the ground health scores each part the login can see and averages them', async () => {
+  const r = await h.get('/api/desk/health', owner);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const keys = r.body.parts.map((p: any) => p.key);
+  for (const k of ['use', 'queue', 'collect', 'bills', 'books', 'jobs', 'academy', 'compliance']) assert.ok(keys.includes(k), k);
+  assert.equal(r.body.parts.length, 8);
+  assert.ok(r.body.parts.every((p: any) => p.score >= 0 && p.score <= 100 && p.rule && p.href));
+  assert.equal(r.body.score, Math.round(r.body.parts.reduce((t: number, p: any) => t + p.score, 0) / 8));
+  await billDue(-3);
+  const owed = (await h.get('/api/desk/health', owner)).body.parts.find((p: any) => p.key === 'bills');
+  assert.equal(owed.score, 100, 'a draft bill is not overdue');
+  const s = await h.get('/api/desk/health', staff);
+  const sk = s.body.parts.map((p: any) => p.key);
+  assert.ok(sk.includes('use') && !sk.includes('bills') && !sk.includes('compliance') && !sk.includes('academy'));
+});

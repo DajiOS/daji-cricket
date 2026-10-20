@@ -53,6 +53,7 @@ const P: Record<string, string> = {
   pie: 'M21 12A9 9 0 1 1 12 3v9zM15 3.5A9 9 0 0 1 20.5 9H15z',
   lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
   inbox: 'M22 12h-6l-2 3h-4l-2-3H2M5.5 5h13l3.5 7v7H2v-7z',
+  pulse: 'M3 12h4l3-7 4 14 3-7h4',
 };
 /** The Filters button used on every list that can be narrowed: it opens and closes the filter controls and shows how many are on. `inline` keeps the controls in the row they sit in. */
 export function Filters({ active = 0, children, startOpen, inline = true }: { active?: number; children: ReactNode; startOpen?: boolean; inline?: boolean }) {
