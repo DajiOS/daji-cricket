@@ -29,6 +29,8 @@ const MoneyFlow = lazy(() => import('./pages/MoneyFlow'));
 const Pipeline = lazy(() => import('./pages/Pipeline'));
 const Activity = lazy(() => import('./pages/Activity'));
 const CloseWizard = lazy(() => import('./pages/CloseWizard'));
+const Compare = lazy(() => import('./pages/Compare'));
+const Health = lazy(() => import('./pages/Health'));
 
 export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
 /** Who may see a menu entry: the same rules the server applies to the page behind it. */
@@ -50,7 +52,9 @@ export const SUBS: Record<string, [string, string][]> = {
 };
 export const subHref = (to: string, k: string): string => (k ? `${to}/${k}` : to);
 
-export interface NavGroup { group: string; items: NavItem[] }
+/** "daily" groups sit under Every day at the top of the menu, the rest under Departments (the starter kit's split). */
+export interface NavGroup { group: string; items: NavItem[]; part?: 'daily' }
+export const PART_TITLES = { daily: 'Every day', dept: 'Departments' } as const;
 
 /** First match wins, so longer paths come before shorter ones. A page receives the rest of the path in `sub` (for example /bills/bil_123 gives sub "bil_123"). */
 export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
@@ -60,19 +64,22 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
-  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard },
+  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health },
 ];
 export const HOME = Dashboard;
 
 export const NAV: NavGroup[] = [
-  { group: 'Portfolio', items: [{ to: '/', label: 'Dashboard', icon: 'dashboard' }] },
-  { group: 'Views', items: [
+  { group: 'Portfolio', part: 'daily', items: [{ to: '/', label: 'Dashboard', icon: 'dashboard' }] },
+  { group: 'Views', part: 'daily', items: [
+    { to: '/health', label: 'Ground health', icon: 'pulse' },
     { to: '/calendar', label: 'Operations calendar', icon: 'calendar' },
     { to: '/money', label: 'Money flow', icon: 'swap', check: seesMoney },
     { to: '/pipeline', label: 'Pipeline', icon: 'list', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
     { to: '/activity', label: 'Activity', icon: 'bell' },
     { to: '/close', label: 'Month-end close', icon: 'lock', check: seesMoney },
+    { to: '/compare', label: 'Compare', icon: 'pie', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
   ] },
+  { group: 'Task Management', part: 'daily', items: [{ to: '/tasks', label: 'Tasks', icon: 'tasks', perm: 'manage_tasks' }] },
   { group: 'Ground', items: [
     { to: '/bookings', label: 'Bookings', icon: 'calendar', perm: 'manage_bookings' },
     { to: '/promos', label: 'Promo codes', icon: 'tag', ownerOnly: true },
@@ -81,7 +88,6 @@ export const NAV: NavGroup[] = [
     { to: '/tournaments', label: 'Tournaments', icon: 'trophy', perm: 'manage_matches' },
   ] },
   { group: 'Ground cameras', items: [{ to: '/cameras', label: 'Live cameras', icon: 'camera', perm: 'view_cameras' }] },
-  { group: 'Task Management', items: [{ to: '/tasks', label: 'Tasks', icon: 'tasks', perm: 'manage_tasks' }] },
   { group: 'People & Messages', items: [
     { to: '/contacts', label: 'Contacts', icon: 'users', perm: 'view_customers' },
     { to: '/cards', label: 'Business cards', icon: 'card', perm: 'view_customers' },

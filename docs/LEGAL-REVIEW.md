@@ -21,4 +21,5 @@ The public pages (legal.html, privacy.html, the Terms window) are drafts written
 - Fonts: Google Fonts (SIL Open Font Licence). Libraries: open source (MIT, BSD, Apache 2.0). Run `npx license-checker --summary` in server, web, desk and mobile and keep the output with this file.
 - No logos or trademarks of other companies are used as our own.
 - Photos and video must come with written permission or be your own. The Instagram clips of others are not to be used without it.
+- `docs/MEDIA-INVENTORY.md` lists every image, video and logo file in the project with who owns it and what to do. Two need action: the signage photo looks AI-generated (do not use it), and the logo was traced from the sign maker's drawing (get a written copyright assignment).
 - Payment, WhatsApp and push providers are used through their official APIs under their own terms.

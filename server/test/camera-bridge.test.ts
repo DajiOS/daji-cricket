@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 // @ts-expect-error plain JS module outside the server package
-import { FrameSplitter, makeGate, redact, rtspUrl } from '../../camera-bridge/lib.mjs';
+import { FrameSplitter, makeGate, redact, rtspUrl, subnetHosts, describeHost } from '../../camera-bridge/lib.mjs';
 
 const jpeg = (n: number, fill: number) => Buffer.concat([Buffer.from([0xff, 0xd8]), Buffer.alloc(n, fill), Buffer.from([0xff, 0xd9])]);
 
@@ -26,4 +26,24 @@ test('bridge sends fast when watched and slowly when not', () => {
   assert.equal(g.allow(100300), false);
   g.setWatchers(2);
   assert.equal(g.allow(100300), true);
+});
+
+test('the recorder finder tries every address on the local network except the PC itself', () => {
+  const hosts = subnetHosts('192.168.1.23', '255.255.255.0');
+  assert.equal(hosts.length, 253);
+  assert.equal(hosts[0], '192.168.1.1');
+  assert.equal(hosts.at(-1), '192.168.1.254');
+  assert.ok(!hosts.includes('192.168.1.23'));
+  assert.equal(subnetHosts('10.0.5.9', '255.255.0.0').length, 253, 'a big network is cut to the PC\'s own /24');
+  assert.equal(subnetHosts('10.0.5.9', '255.255.0.0')[0], '10.0.5.1');
+  assert.deepEqual(subnetHosts('192.168.1.2', '255.255.255.252'), ['192.168.1.1']);
+});
+
+test('the recorder finder says which device the bridge can use', () => {
+  assert.equal(describeHost([80, 554, 37777]).usable, true);
+  assert.match(describeHost([80, 554, 37777]).likely, /Dahua/);
+  assert.equal(describeHost([554]).usable, true);
+  assert.equal(describeHost([37777]).usable, false);
+  assert.match(describeHost([37777]).likely, /turn RTSP on/);
+  assert.equal(describeHost([80]).usable, false);
 });
