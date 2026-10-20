@@ -31,12 +31,23 @@ Then hard-refresh the site and the desk (Ctrl+Shift+R). Secrets (WhatsApp, payme
 ## Backups
 The server takes an encrypted snapshot daily at 03:15 IST and keeps `BACKUP_KEEP`. **That is on the same disk, so it does not protect against losing the server.** Schedule `deploy/offsite-backup.sh` (rsync or rclone) so copies leave the machine.
 
+Set it up once, on the server, as root:
+1. Pick where the copies go: another machine you can `rsync` to (`user@host:/srv/daji-backups/`), or an rclone remote such as Google Drive (`rclone config`, then `gdrive:daji-backups`).
+2. Try it by hand: `DEST=gdrive:daji-backups sh /opt/daji/deploy/offsite-backup.sh`. It prints how many snapshots it copied.
+3. Schedule it with `crontab -e`: `0 4 * * * DEST=gdrive:daji-backups /opt/daji/deploy/offsite-backup.sh >> /var/log/daji-offsite.log 2>&1` (04:00 IST, after the 03:15 snapshot; adjust the path to where the project lives).
+Each run leaves a note with the time and count (never the destination), and the desk shows it under Settings, Backups.
+
+## Practising a restore (do this before opening day)
+`sh deploy/restore-practice.sh` restores the newest snapshot into a throw-away folder inside the container, checks the database and that every file came back, then deletes the folder. **The live data is not touched.** It prints `OK: Restored <snapshot>: N users, N bookings and N files read back.` and the desk shows the date under Settings, Backups (where the software owner can also press **Practise a restore**). Do it once now, and again after any change to `BACKUP_PASSPHRASE`.
+
+To practise from the offsite copy too (the real disaster case), copy one snapshot folder back from the offsite store into the volume's `backups/` folder and run `sh deploy/restore-practice.sh <snapshot name>`.
+
 ## Restoring
 ```
 BACKUP_PASSPHRASE=... docker compose -f deploy/docker-compose.yml run --rm -e BACKUP_PASSPHRASE api \
   node scripts/restore-backup.ts /data/backups/<snapshot> /data/restored
 ```
-It prints the integrity check and the user and booking counts. Then stop the `api` container, copy `daji.db` and the folders `uploads/`, `task-photos/`, `avatars/`, `cards/`, `library/` and `media/` from `/data/restored` into `/data`, and start it again. Do a practice restore once before you need one.
+It prints the integrity check and the user and booking counts. This is the real restore, for when the data is lost. Then stop the `api` container, copy `daji.db` and the folders `uploads/`, `task-photos/`, `avatars/`, `cards/`, `library/` and `media/` from `/data/restored` into `/data`, and start it again. Do a practice restore once before you need one.
 
 ## Database
 This build uses SQLite (one file, safe for one server and one owner's traffic, with the snapshots above). A move to Postgres is only worth it for many tenants or several servers; it is **not done**, and `db/postgres` is empty.
