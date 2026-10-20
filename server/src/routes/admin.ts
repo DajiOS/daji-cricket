@@ -18,6 +18,7 @@ import { integrationStatuses, testIntegration } from '../integrations.ts';
 import { addService, deleteService, listServices, updateService } from '../services.ts';
 import { saveAaSettings, viewAaSettings } from '../accounting/aa.ts';
 import { saveYodleeSettings, subscribeYodleeWebhooks, testYodlee, viewYodleeSettings } from '../yodleeSettings.ts';
+import { readiness } from '../readiness.ts';
 import { backupNow, BACKUP_AT, lastOffsiteCopy, lastRestorePractice, listBackups, nextBackupAt, practiceRestore } from '../backup.ts';
 
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
@@ -41,6 +42,9 @@ export function adminRoutes(r: Router): void {
     for (const [k, v] of Object.entries(changed)) audit({ id: u.id, role: u.role }, k === 'razorpayEnabled' ? 'settings.razorpay_toggle' : 'settings.update', 'setting', k, v);
     return ok(getSettings());
   }, A);
+
+  // The go-live check: what is still unset before opening day, by name only (never a secret's value).
+  r.get('/api/admin/readiness', (c) => ok(readiness(c.cfg, U(c), c.query.get('ownerId'))), A);
 
   // Switch single days off (or back on) for online booking.
   r.get('/api/admin/closed-dates', () => ok({ items: closedDates() }), A);
