@@ -45,8 +45,9 @@ export function overview(ownerId: string | null, range: Range) {
     return { groundId: g.id, groundName: g.name, availableSlots: available, bookedSlots: used, utilization: available ? Math.round((used / available) * 1000) / 10 : 0 };
   });
 
+  // Money counts on the day it was received (verified), as in the books; a UPI payment sent on the 31st and checked on the 1st belongs to the 1st.
   const payments = many<{ method: string; n: number; amount: number; refunded: number }>(
-    `SELECT p.method, COUNT(*) n, SUM(p.amount_paise) amount, SUM(p.refunded_paise) refunded FROM payments p WHERE p.status IN ('captured','refunded','partially_refunded') AND p.created_at >= ? AND p.created_at < ? ${op.sql} GROUP BY p.method`, fromMs, toMs, ...op.p);
+    `SELECT p.method, COUNT(*) n, SUM(p.amount_paise) amount, SUM(p.refunded_paise) refunded FROM payments p WHERE p.status IN ('captured','refunded','partially_refunded') AND COALESCE(p.verified_at, p.created_at) >= ? AND COALESCE(p.verified_at, p.created_at) < ? ${op.sql} GROUP BY p.method`, fromMs, toMs, ...op.p);
   const awaiting = one<{ n: number; amount: number }>(`SELECT COUNT(*) n, COALESCE(SUM(p.amount_paise),0) amount FROM payments p WHERE p.status = 'submitted' ${op.sql}`, ...op.p)!;
   const outstanding = one<{ n: number; amount: number }>(`SELECT COUNT(*) n, COALESCE(SUM(b.total_paise - b.paid_paise),0) amount FROM bookings b WHERE b.status IN ('confirmed','completed') AND b.total_paise > b.paid_paise AND b.date BETWEEN ? AND ? ${ob.sql}`, from, to, ...ob.p)!;
   const refunds = many<{ status: string; n: number; amount: number }>(`SELECT r.status, COUNT(*) n, SUM(r.amount_paise) amount FROM refunds r WHERE r.created_at >= ? AND r.created_at < ? ${own('r.owner_id', ownerId).sql} GROUP BY r.status`, fromMs, toMs, ...own('r.owner_id', ownerId).p);

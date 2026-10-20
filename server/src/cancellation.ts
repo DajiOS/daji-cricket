@@ -100,7 +100,7 @@ export function cancelBooking(user: UserRow, bookingId: string, input: { reason?
         if (p.method === 'credit' || (p.status !== 'captured' && p.status !== 'partially_refunded')) continue;
         const refundable = p.amount_paise - p.refunded_paise;
         const take = Math.min(refundable, toRefund);
-        if (take > 0) { refundPayment(p, take, input.reason ? `cancelled: ${input.reason}` : 'free cancellation', actor); toRefund -= take; refundTotal += take; }
+        if (take > 0) { refundPayment(p, take, input.reason ? `cancelled: ${input.reason}` : 'free cancellation', actor, { onBooking: true }); toRefund -= take; refundTotal += take; }
       }
       for (const p of pays) if (p.method === 'credit' && p.status === 'captured') run("UPDATE payments SET status = 'refunded', refunded_paise = amount_paise, updated_at = ? WHERE id = ?", t, p.id);
       if (out.creditPaise > 0) credits.issueCredit({ customerId: b.customer_id, ownerId: b.owner_id, amountPaise: out.creditPaise, source: 'restore', bookingId: b.id, note: `Booking ${b.ref} cancelled`, by: user.id, silent: true });
@@ -176,7 +176,7 @@ export function resolveOwnerCancel(user: UserRow, bookingId: string, choice: 're
         if (toRefund <= 0) break;
         if (p.method === 'credit' || (p.status !== 'captured' && p.status !== 'partially_refunded')) continue;
         const take = Math.min(p.amount_paise - p.refunded_paise, toRefund);
-        if (take > 0) { refundPayment(p, take, `cancelled by the ground: ${b.cancel_reason ?? ''}`.slice(0, 200), actor); toRefund -= take; refund += take; }
+        if (take > 0) { refundPayment(p, take, `cancelled by the ground: ${b.cancel_reason ?? ''}`.slice(0, 200), actor, { onBooking: true }); toRefund -= take; refund += take; }
       }
     }
     const credit = choice === 'refund' || choice === 'half' ? creditPaid : paid;
