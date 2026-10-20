@@ -75,4 +75,4 @@ A clickable mockup (Stone & Forest theme) exists as a design canvas: https://cla
 - Payments tested with Razorpay test mode, then live.
 - Offsite backup scheduled and a restore practised.
 - Phone app built and installed on the owner's and staff phones.
-- Cameras connected (bridge or Imou).
+- Cameras connected (bridge or Imou): steps in `docs/CAMERAS.md`; `node camera-bridge/find-recorder.mjs` finds the recorder's address.

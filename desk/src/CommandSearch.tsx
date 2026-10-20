@@ -37,8 +37,28 @@ function score(text: string, q: string): number {
   return s;
 }
 
+/** Opens the search with a question already asked: the assistant box in the top bar and on Home use this. */
+export const askAssistant = (question: string) => dispatchEvent(new CustomEvent('daji:ask', { detail: question }));
+
+/** The starter kit's assistant box: type a question about the business and the answer opens in the search. */
+export function AskBox({ className = '', placeholder = 'Ask about the ground…' }: { className?: string; placeholder?: string }) {
+  const [q, setQ] = useState('');
+  return (
+    <form className={`ask-box ${className}`} role="search" onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 3) { askAssistant(q.trim()); setQ(''); } }}>
+      <Icon name="ai" size={16} />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label="Ask a question about the business" />
+      <button type="submit" className="ask-go" aria-label="Ask" disabled={q.trim().length < 3}><Icon name="chevron" size={14} /></button>
+    </form>
+  );
+}
+
 export function CommandSearch({ me, visible }: { me: Me; visible: (i: NavItem) => boolean }) {
   const [open, setOpen] = useState(false);
+  const [question, setQuestion] = useState<string | null>(null);
+  useEffect(() => {
+    const f = (e: Event) => { setQuestion((e as CustomEvent<string>).detail); setOpen(true); };
+    addEventListener('daji:ask', f); return () => removeEventListener('daji:ask', f);
+  }, []);
   const mac = useMemo(() => /Mac|iPhone|iPad/.test(navigator.platform), []);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
@@ -54,13 +74,13 @@ export function CommandSearch({ me, visible }: { me: Me; visible: (i: NavItem) =
         <Icon name="search" size={16} /><span className="hide-sm">Search, jump or ask</span><kbd className="hide-sm">{mac ? '⌘K' : 'Ctrl K'}</kbd>
       </button>
       {/* the top bar blurs what is behind it, which would trap a fixed overlay inside it, so the search opens on the page body */}
-      {open && createPortal(<Palette me={me} visible={visible} onClose={() => setOpen(false)} />, document.body)}
+      {open && createPortal(<Palette key={question ?? ''} me={me} visible={visible} question={question} onClose={() => { setOpen(false); setQuestion(null); }} />, document.body)}
     </>
   );
 }
 
-function Palette({ me, visible, onClose }: { me: Me; visible: (i: NavItem) => boolean; onClose: () => void }) {
-  const [q, setQ] = useState('');
+function Palette({ me, visible, question, onClose }: { me: Me; visible: (i: NavItem) => boolean; question: string | null; onClose: () => void }) {
+  const [q, setQ] = useState(question ?? '');
   const [at, setAt] = useState(0);
   const [found, setFound] = useState<Hit[]>([]);
   const [asking, setAsking] = useState(false);
@@ -106,6 +126,7 @@ function Palette({ me, visible, onClose }: { me: Me; visible: (i: NavItem) => bo
     catch (e: any) { setErr(e.message); }
     finally { setAsking(false); }
   }
+  useEffect(() => { if (question) ask(question); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hits: Hit[] = useMemo(() => {
     const t = q.trim();
