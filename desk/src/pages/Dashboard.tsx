@@ -6,7 +6,7 @@ import { api, useApi, inr, inrShort, fmtDay, todayISO, can, go, type Me } from '
 import { Schedule, Attention, type TodayData } from '../parts/dash/Today';
 import { timeRange } from '../parts/dash/common';
 import { AskBox, askAssistant } from '../CommandSearch';
-import { NAV, PART_TITLES, navVisible } from '../registry';
+import { NAV, SECTIONS, navVisible } from '../registry';
 
 interface Overview {
   range: { from: string; to: string };
@@ -168,16 +168,21 @@ function Timeline({ today }: { today: TodayData | null }) {
   );
 }
 
-/** Every page this login can open, by part of the menu, at the foot of Home. */
+/** "What do you want to do?": every job in the menu as a card, with the pages under it that this login can open. */
 function AllTools({ me }: { me: Me }) {
-  const parts = (['daily', 'dept'] as const).map((p) => [p, NAV.filter((g) => (g.part ?? 'dept') === p).flatMap((g) => g.items.filter((i) => navVisible(me, i) && i.to !== '/'))] as const).filter(([, xs]) => xs.length);
+  const secs = SECTIONS.filter((x) => x.key !== 'home').map((x) => ({ ...x, jobs: NAV.filter((g) => g.section === x.key).map((g) => ({ ...g, items: g.items.filter((i) => navVisible(me, i)) })).filter((g) => g.items.length) })).filter((x) => x.jobs.length);
   return (
-    <section className="stack" style={{ gap: 12 }} aria-label="All tools">
-      <h2 style={{ margin: '8px 0 0' }}>All tools</h2>
-      {parts.map(([p, xs]) => (
-        <div key={p}>
-          <div className="eyebrow" style={{ marginBottom: 8 }}>{PART_TITLES[p]}</div>
-          <div className="tools">{xs.map((i) => <a key={i.to} href={`#${i.to}`} className="tool"><span className="tool-ic" aria-hidden="true"><Icon name={i.icon} size={18} /></span>{i.label}</a>)}</div>
+    <section className="stack" style={{ gap: 14 }} aria-label="What do you want to do?">
+      <h2 style={{ margin: '8px 0 0' }}>What do you want to do?</h2>
+      {secs.map((x) => (
+        <div key={x.key}>
+          <div className="eyebrow" style={{ marginBottom: 8 }}>{x.title}</div>
+          <div className="jobs">{x.jobs.map((g) => (
+            <div key={g.group} className="card job">
+              <h3><span className="tool-ic" aria-hidden="true"><Icon name={g.items[0]!.icon} size={17} /></span>{g.group}</h3>
+              <ul>{g.items.map((i) => <li key={i.to}><a href={`#${i.to}`}>{i.label}<Icon name="chevron" size={13} /></a></li>)}</ul>
+            </div>))}
+          </div>
         </div>))}
     </section>
   );
