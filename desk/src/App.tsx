@@ -3,7 +3,8 @@ import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, 
 import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
-import { HOME, NAV, PAGES, SUBS, SUB_ICONS, subHref, type NavItem } from './registry';
+import { HOME, NAV, PAGES, SUBS, SUB_ICONS, subHref, navVisible, type NavItem } from './registry';
+import { CommandSearch } from './CommandSearch';
 
 // ---------- session shared by every page ----------
 export interface Owner { id: string; name: string; businessName: string | null }
@@ -34,7 +35,7 @@ function Shell({ route }: { route: string }) {
   /** Which section of a page is showing (the first one when the address is just the page). */
   const subOn = (to: string, k: string) => { const first = SUBS[to]![0]![0]; const rest = route === to ? '' : route.startsWith(to + '/') ? route.slice(to.length + 1).split('/')[0]! : null; return rest !== null && (rest === k || (!SUBS[to]!.some(([x]) => x === rest) && k === first) || (rest === '' && k === first)); };
   const isOn = (to: string) => (to === '/' ? route === '/' || route === '' : route === to || route.startsWith(to + '/'));
-  const visible = (i: NavItem) => can(s.me, i.perm) && (!i.ownerOnly || s.me.role !== 'staff') && (!i.superOnly || s.me.role === 'super_admin');
+  const visible = (i: NavItem) => navVisible(s.me, i);
 
   const hit = PAGES.find((p) => route === p.path || route.startsWith(p.path + '/'));
   const Page = hit ? hit.page : HOME;
@@ -125,6 +126,7 @@ function Shell({ route }: { route: string }) {
             ? <div className="seg hide-sm" role="group" aria-label="Business">{s.owners.map((o) => <button key={o.id} className={o.id === s.ownerId ? 'on' : ''} onClick={() => s.setOwner(o.id)}>{o.businessName || o.name}</button>)}</div>
             : <div className="seg hide-sm" role="group" aria-label="Business"><button className="on">{owner?.businessName || s.me.businessName || 'Daji Cricket Ground'}</button></div>}
           <div className="spacer" />
+          <CommandSearch me={s.me} visible={visible} />
           <a className="btn ghost sm hide-sm" href="./">View website</a>
           <span className="badge b-gold hide-sm">{roleLabel(s.me)}</span>
           <ThemeToggle />
@@ -139,8 +141,8 @@ function Shell({ route }: { route: string }) {
 }
 
 /** Short names under the icons of the folded menu (the starter kit's labelled rail). */
-const RAIL_LABELS: Record<string, string> = { Portfolio: 'Home', Ground: 'Ground', 'Ground cameras': 'Cameras', 'Task Management': 'Tasks', 'People & Messages': 'People', 'MP13 Academy': 'Academy', Finance: 'Finance', Settings: 'Settings' };
-const GROUP_ICONS: Record<string, string> = { Portfolio: 'dashboard', Ground: 'ball', 'Task Management': 'tasks', 'People & Messages': 'users', 'MP13 Academy': 'grad', Finance: 'accounts', Settings: 'settings' };
+const RAIL_LABELS: Record<string, string> = { Portfolio: 'Home', Views: 'Views', Ground: 'Ground', 'Ground cameras': 'Cameras', 'Task Management': 'Tasks', 'People & Messages': 'People', 'MP13 Academy': 'Academy', Finance: 'Finance', Settings: 'Settings' };
+const GROUP_ICONS: Record<string, string> = { Portfolio: 'dashboard', Views: 'pie', Ground: 'ball', 'Task Management': 'tasks', 'People & Messages': 'users', 'MP13 Academy': 'grad', Finance: 'accounts', Settings: 'settings' };
 interface Terms { version: number; sha256: string; title: string; body: string; accepted: unknown }
 
 /** Team members read and accept the current terms before the desk opens. The server refuses everything else until they do. */

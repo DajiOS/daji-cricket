@@ -1,5 +1,6 @@
 // The desk's menu and routes in one place. To add a page: create src/pages/<Name>.tsx that exports a default component, then add one line to PAGES and one to NAV.
 import { lazy, type ComponentType } from 'react';
+import { can, type Me } from './lib';
 import Dashboard from './pages/Dashboard';
 const Compliance = lazy(() => import('./pages/Compliance'));
 const Bookings = lazy(() => import('./pages/Bookings'));
@@ -23,8 +24,14 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Platform = lazy(() => import('./pages/Platform'));
 const Media = lazy(() => import('./pages/Media'));
 const Cameras = lazy(() => import('./pages/Cameras'));
+const Calendar = lazy(() => import('./pages/Calendar'));
+const MoneyFlow = lazy(() => import('./pages/MoneyFlow'));
 
-export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals' }
+export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
+/** Who may see a menu entry: the same rules the server applies to the page behind it. */
+export const navVisible = (me: Me, i: NavItem) => can(me, i.perm) && (!i.ownerOnly || me.role !== 'staff') && (!i.superOnly || me.role === 'super_admin') && (!i.check || i.check(me));
+/** The books and the money reports: "view_reports" or "manage_accounting", and "Can see revenue". */
+export const seesMoney = (me: Me) => (can(me, 'view_reports') || can(me, 'manage_accounting')) && can(me, 'view_revenue');
 /** The sections inside a page (the pills at its top), so the side menu can list them too. The first one is the page's own address. */
 export const SUBS: Record<string, [string, string][]> = {
   '/bookings': [['', 'All bookings'], ['day', 'Day view'], ['approvals', 'Approvals'], ['payments', 'UPI to verify']],
@@ -50,11 +57,16 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
+  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow },
 ];
 export const HOME = Dashboard;
 
 export const NAV: NavGroup[] = [
   { group: 'Portfolio', items: [{ to: '/', label: 'Dashboard', icon: 'dashboard' }] },
+  { group: 'Views', items: [
+    { to: '/calendar', label: 'Operations calendar', icon: 'calendar' },
+    { to: '/money', label: 'Money flow', icon: 'swap', check: seesMoney },
+  ] },
   { group: 'Ground', items: [
     { to: '/bookings', label: 'Bookings', icon: 'calendar', perm: 'manage_bookings' },
     { to: '/promos', label: 'Promo codes', icon: 'tag', ownerOnly: true },
