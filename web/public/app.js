@@ -12,18 +12,101 @@ const store = {
   set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* storage can be blocked */ } },
 };
 
-// colour theme: ?theme= in the address or the admin picker; remembered in this browser
-const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', 'Pitch green & gold', '#0b2e23', '#d3b26a'], ['navy', 'Navy & brass', '#0e192d', '#c8a96b'], ['ivory', 'Ivory & emerald', '#f6f2e9', '#0f3d2e'], ['pearl', 'White, red & green', '#ffffff', '#b3261e'], ['rose-onyx', 'Onyx & rose gold', '#0b0909', '#d9a08e'], ['rose-plum', 'Plum & rose gold', '#150d14', '#e0a9a0'], ['rose-wine', 'Wine & rose gold', '#1c0a10', '#e8b09c'], ['rose-slate', 'Slate & rose gold', '#101417', '#dfa592'], ['slate-gold', 'Slate & gold', '#101417', '#c9a96b'], ['slate-black', 'Slate-black & gold', '#0a0d0f', '#c9a96b'], ['onyx-slate', 'Onyx & gold (slate glow)', '#0a0c0b', '#c9a96b']];
-/** Light pages use the emerald logo; the dark ones keep the gold. */
-function swapLogos() { const light = document.documentElement.getAttribute('data-theme') === 'ivory'; for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
+// colour theme: the theme button at the top right, ?theme= in the address or the admin picker; remembered in this browser.
+// With nothing chosen (or "Automatic" picked), the festival look for today switches on by itself; see FESTIVALS.
+const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', 'Pitch green & gold', '#0b2e23', '#d3b26a'], ['navy', 'Navy & brass', '#0e192d', '#c8a96b'], ['ivory', 'Ivory & emerald', '#f6f2e9', '#0f3d2e'], ['pearl', 'White, red & green', '#ffffff', '#b3261e'], ['rose-onyx', 'Onyx & rose gold', '#0b0909', '#d9a08e'], ['rose-plum', 'Plum & rose gold', '#150d14', '#e0a9a0'], ['rose-wine', 'Wine & rose gold', '#1c0a10', '#e8b09c'], ['rose-slate', 'Slate & rose gold', '#101417', '#dfa592'], ['slate-gold', 'Slate & gold', '#101417', '#c9a96b'], ['slate-black', 'Slate-black & gold', '#0a0d0f', '#c9a96b'], ['onyx-slate', 'Onyx & gold (slate glow)', '#0a0c0b', '#c9a96b'],
+  // designer themes
+  ['noir', 'Floodlight Noir', '#07090a', '#d6b36a'], ['pavilion', 'Emerald Pavilion', '#0b2a20', '#dcc289'], ['whites', 'Test Whites', '#fbfbf8', '#b3261e'], ['pinkball', 'Pink Ball Night', '#0b0c22', '#ff7ab6'], ['monsoon', 'Monsoon Glass', '#0d1a1e', '#7fd6c3'], ['maroon', 'Royal Maroon', '#260a10', '#e4bb6a'], ['carbon', 'Carbon T20', '#0c0e11', '#9fd8ff'], ['champagne', 'Champagne Minimal', '#ffffff', '#9a7a3e'], ['stadium', 'Stadium Royal Blue', '#06184a', '#ffcb3d'], ['willow', 'Willow & Leather', '#1c120b', '#dca66b'],
+  // festival looks
+  ['uttarayan', 'Uttarayan', '#eef6fc', '#d9461a'], ['tiranga', 'Tiranga (Republic and Independence Day)', '#fffdf8', '#c45800'], ['holi', 'Holi', '#fff8fc', '#c41f6f'], ['ganesh', 'Ganesh Chaturthi', '#2b0d06', '#ffa21a'], ['navratri', 'Navratri', '#1a0626', '#ffb703'], ['diwali', 'Diwali', '#0d0820', '#ffb547'], ['christmas', 'Christmas and New Year', '#0c1f17', '#d9b25e']];
+const DESIGNER_THEMES = ['noir', 'pavilion', 'whites', 'pinkball', 'monsoon', 'maroon', 'carbon', 'champagne', 'stadium', 'willow'];
+const FESTIVAL_THEMES = ['uttarayan', 'tiranga', 'holi', 'ganesh', 'navratri', 'diwali', 'christmas'];
+/** Festival dates, India time, both days included. 'MM-DD' repeats every year; lunar festivals move, so add each new year's dates here. */
+const FESTIVALS = [
+  ['01-01', '01-01', 'christmas', 'Happy New Year'],
+  ['01-13', '01-15', 'uttarayan', 'Happy Uttarayan'],
+  ['01-25', '01-26', 'tiranga', 'Happy Republic Day'],
+  ['08-14', '08-15', 'tiranga', 'Happy Independence Day'],
+  ['12-24', '12-31', 'christmas', 'Merry Christmas and a happy New Year'],
+  ['2026-11-05', '2026-11-11', 'diwali', 'Happy Diwali and Saal Mubarak'],
+  ['2027-03-20', '2027-03-22', 'holi', 'Happy Holi'],
+  ['2027-09-04', '2027-09-14', 'ganesh', 'Ganpati Bappa Morya'],
+  ['2027-09-30', '2027-10-09', 'navratri', 'Happy Navratri'],
+  ['2027-10-26', '2027-11-01', 'diwali', 'Happy Diwali and Saal Mubarak'],
+];
+const FEST_GREETING = { uttarayan: 'Happy Uttarayan', tiranga: 'Happy Independence Day', holi: 'Happy Holi', ganesh: 'Ganpati Bappa Morya', navratri: 'Happy Navratri', diwali: 'Happy Diwali and Saal Mubarak', christmas: 'Merry Christmas and a happy New Year' };
+const FEST_ICON = {
+  uttarayan: '<path d="M12 2 20 11 12 20 4 11Z" fill="#e8501f"/><path d="M12 2v18M4 11h16" stroke="#fff" stroke-width="1.2"/><path d="M12 20c-1 2 1 2 0 4" stroke="#0a8ac8" stroke-width="1.4" fill="none"/>',
+  tiranga: '<rect x="2" y="4" width="20" height="5" fill="#ff9933"/><rect x="2" y="9" width="20" height="6" fill="#fff" stroke="#ddd" stroke-width=".4"/><rect x="2" y="15" width="20" height="5" fill="#138808"/><circle cx="12" cy="12" r="2.2" fill="none" stroke="#000080" stroke-width=".8"/>',
+  holi: '<circle cx="7" cy="8" r="4" fill="#f0479a"/><circle cx="16" cy="7" r="3.5" fill="#ffc800"/><circle cx="9" cy="16" r="3.6" fill="#00bedc"/><circle cx="17" cy="15.5" r="4" fill="#8c3cdc"/>',
+  ganesh: '<path d="M6 15c0-5 2.7-9 6-11 3.3 2 6 6 6 11a6 6 0 0 1-12 0Z" fill="#ffa21a"/><path d="M8 14c1.5 1 6.5 1 8 0" stroke="#c42828" stroke-width="1.4" fill="none"/>',
+  navratri: '<path d="M5 20 15 4M9 20 19 4" stroke="#ffb703" stroke-width="2" stroke-linecap="round"/><circle cx="15" cy="4" r="1.6" fill="#ff3ca0"/><circle cx="19" cy="4" r="1.6" fill="#00beb4"/>',
+  diwali: '<path d="M12 3c2 3 2.6 5 0 8-2.6-3-2-5 0-8Z" fill="#ffc94d"/><path d="M3 13h18c-1 5-5 7-9 7s-8-2-9-7Z" fill="#e08a1e"/>',
+  christmas: '<path d="M12 2l2.6 6.4 6.9.5-5.3 4.4 1.7 6.7L12 16.4 6.1 20l1.7-6.7L2.5 8.9l6.9-.5Z" fill="#d9b25e"/>',
+};
+/** Faces the newer themes use, fetched from Google Fonts only when that theme is shown. */
+const THEME_FONTS = {
+  noir: 'Bodoni+Moda:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700', pavilion: 'Manrope:wght@400;500;600;700', whites: 'DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600',
+  pinkball: 'Unbounded:wght@400;500;700&family=Sora:wght@400;500;600', monsoon: 'Syne:wght@500;600;700&family=Manrope:wght@400;500;600;700', maroon: 'Marcellus&family=Mulish:wght@400;500;600;700',
+  carbon: 'Barlow+Condensed:ital,wght@0,400;0,600;0,800;1,800&family=Barlow:wght@400;500;600', champagne: 'Italiana&family=Jost:wght@300;400;500;600', stadium: 'Big+Shoulders+Display:wght@400;700;900&family=Figtree:wght@400;500;600;700',
+  willow: 'Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,400&family=Karla:wght@400;500;600', uttarayan: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700', tiranga: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700',
+  holi: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700', ganesh: 'Yatra+One&family=Mulish:wght@400;500;600;700', navratri: 'Yatra+One&family=Mulish:wght@400;500;600;700', diwali: 'Yatra+One&family=Mulish:wght@400;500;600;700', christmas: 'Manrope:wght@400;500;600;700',
+};
+function loadThemeFonts(t) { const f = THEME_FONTS[t]; if (!f || document.getElementById('tf-' + t)) return; const l = document.createElement('link'); l.id = 'tf-' + t; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + f + '&display=swap'; document.head.appendChild(l); }
+/** Today's festival as a FESTIVALS row, by the date in India, or null. */
+function festivalToday() {
+  let d; try { d = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch { d = new Date().toISOString().slice(0, 10); }
+  return FESTIVALS.find(([a, b]) => (a.length === 5 ? d.slice(5) : d) >= a && (b.length === 5 ? d.slice(5) : d) <= b) || null;
+}
+/** The greeting chip above the home headline, while a festival look is on. */
+function syncFestGreet() {
+  const t = document.documentElement.getAttribute('data-theme'), hero = document.querySelector('#view-home header.hero > div'), old = document.querySelector('.fest-greet');
+  if (!FESTIVAL_THEMES.includes(t) || !hero) { if (old) old.remove(); return; }
+  const f = festivalToday(), text = f && f[2] === t ? f[3] : FEST_GREETING[t];
+  const el = old || document.createElement('p'); el.className = 'fest-greet';
+  el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${FEST_ICON[t]}</svg><span></span>`; el.lastChild.textContent = text + ' from Daji Cricket Ground';
+  if (!old) hero.insertBefore(el, hero.querySelector('h1'));
+}
+/** Light pages use the brass logo; the dark ones keep the gold. */
+const LIGHT_LOGO_THEMES = ['ivory', 'whites', 'champagne', 'uttarayan', 'tiranga', 'holi'];
+function swapLogos() { const light = LIGHT_LOGO_THEMES.includes(document.documentElement.getAttribute('data-theme')); for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
 try { matchMedia('(min-width:1021px)').addEventListener('change', swapLogos); } catch { /* older browser: logo stays as loaded */ }
-function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); } catch { /* not ready yet */ } if (save) store.set('daji.theme', t); }
+function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; loadThemeFonts(t); document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); syncFestGreet(); } catch { /* not ready yet */ } if (save) store.set('daji.theme', t); }
+/** "Automatic": today's festival look, or the usual light look. */
+function applyAutoTheme(save) { const f = festivalToday(); applyTheme(f ? f[2] : 'ivory'); if (save) store.set('daji.theme', 'auto'); }
 // light / dark icon at the far right of the top bar: ivory is the light look, obsidian the dark one
 const DARK_THEMES = THEMES.filter((t) => { const h = t[2].slice(1); return (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000 < 110; }).map((t) => t[0]);
 const isDarkTheme = () => DARK_THEMES.includes(document.documentElement.getAttribute('data-theme'));
 function syncThemeIcon() { const b = document.getElementById('theme-toggle'); if (!b) return; const d = isDarkTheme(); b.setAttribute('aria-label', d ? 'Switch to light theme' : 'Switch to dark theme'); b.dataset.mode = d ? 'dark' : 'light'; }
 document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#theme-toggle')) { applyTheme(isDarkTheme() ? 'ivory' : 'obsidian', true); syncThemeIcon(); } });
-try { const q = new URLSearchParams(location.search).get('theme'); if (window.parent === window) applyTheme(q || store.get('daji.theme'), !!q); } catch { /* keep the default */ }
+// the theme button left of the light / dark switch: Light, Dark, the designer themes and the festival looks
+function themeMenu() {
+  let m = document.getElementById('theme-menu');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'theme-menu'; m.className = 'theme-menu'; m.hidden = true; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Colour theme');
+    const item = (id, label, sub) => { const x = THEMES.find((t) => t[0] === id); return `<button type="button" role="menuitemradio" data-pick="${id}"><span class="sw" style="--sw-in:${x ? x[2] : 'conic-gradient(#ff9933,#f0479a,#ffb547,#138808,#ff9933)'};--sw:${x ? x[3] : '#d9b25e'}"></span><span>${label}${sub ? `<small>${sub}</small>` : ''}</span></button>`; };
+    const name = (id) => THEMES.find((t) => t[0] === id)[1];
+    m.innerHTML = '<h6>Built in</h6>' + item('ivory', 'Light') + item('obsidian', 'Dark')
+      + '<h6>Designer themes</h6>' + DESIGNER_THEMES.map((id) => item(id, name(id))).join('')
+      + '<h6>Festival looks</h6>' + item('auto', 'Automatic', 'Festival look on festival days, Light otherwise') + FESTIVAL_THEMES.map((id) => item(id, name(id))).join('')
+      + '<p>Saved on this device only.</p>';
+    m.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; if (b.dataset.pick === 'auto') applyAutoTheme(true); else applyTheme(b.dataset.pick, true); markThemeMenu(); });
+    document.body.appendChild(m);
+  }
+  return m;
+}
+function markThemeMenu() { const m = document.getElementById('theme-menu'); if (!m) return; const saved = store.get('daji.theme'), cur = (!saved || saved === 'auto') ? 'auto' : document.documentElement.getAttribute('data-theme'); for (const b of m.querySelectorAll('[data-pick]')) b.setAttribute('aria-checked', String(b.dataset.pick === cur)); }
+function closeThemeMenu() { const m = document.getElementById('theme-menu'), b = document.getElementById('theme-pick'); if (m && !m.hidden) { m.hidden = true; if (b) b.setAttribute('aria-expanded', 'false'); } }
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('#theme-pick');
+  if (b) { const m = themeMenu(), open = m.hidden; m.hidden = !open; b.setAttribute('aria-expanded', String(open)); if (open) { markThemeMenu(); (m.querySelector('[aria-checked="true"]') || m.querySelector('button')).focus(); } return; }
+  if (!(e.target.closest && e.target.closest('#theme-menu'))) closeThemeMenu();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = document.getElementById('theme-menu'); if (m && !m.hidden) { closeThemeMenu(); const b = document.getElementById('theme-pick'); if (b) b.focus(); } } });
+try {
+  const q = new URLSearchParams(location.search).get('theme'), saved = store.get('daji.theme');
+  if (window.parent === window) { if (q) applyTheme(q, true); else if (saved && saved !== 'auto') applyTheme(saved); else applyAutoTheme(false); }
+} catch { /* keep the default */ }
 swapLogos();
 const state = {
   config: null, grounds: [], ground: null, date: null, slots: [], sel: [],
