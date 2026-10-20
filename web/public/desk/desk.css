@@ -802,6 +802,41 @@ html[data-theme="dark"] .dap-mark.now { color: var(--on-strong); }
 .ai-form button { width: 46px; height: 46px; border-radius: 12px; border: 0; background: var(--gold); color: #14241F; display: grid; place-items: center; cursor: pointer; }
 .ai-form button:disabled { opacity: .5; cursor: default; }
 
+/* Approval rules builder (/approvals/rules) and the history drawer on the Approvals board. */
+.apr-edit { flex: 999 1 560px; min-width: 0; gap: 14px; }
+.apr-intro { display: flex; flex-direction: column; gap: 6px; }
+.apr-intro h2 { margin: 0; font: 500 32px/1.05 var(--serif); }
+.apr-now { font-size: 14px; background: var(--soft); border-radius: 12px; padding: 10px 12px; }
+.apr-now b { font-weight: 600; }
+.apr-small { font-size: 12.5px; }
+.apr-h { margin: 10px 0 0; font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-3); }
+.apr-none { margin: 0; font-size: 14px; color: var(--fg-2, var(--fg)); }
+.apr-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.apr-step { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.apr-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.apr-f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.apr-f > span:first-child { font-size: 12px; color: var(--fg-3); }
+.apr-f .inp { width: 100%; }
+.apr-money { display: flex; align-items: center; gap: 6px; }
+.apr-money i { font-style: normal; color: var(--fg-3); }
+.apr-tools { display: flex; flex-direction: column; gap: 4px; }
+.apr-del { color: var(--i-red); }
+.apr-adds { display: flex; flex-wrap: wrap; gap: 8px; }
+.apr-radios { display: flex; flex-direction: column; gap: 6px; }
+.apr-save { margin-top: 6px; }
+.apr-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.apr-log li { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.apr-log li b { font-weight: 600; }
+.dap-trail summary { cursor: pointer; font-size: 13.5px; }
+.dap-trail ol { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.dap-trail li { display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
+.dap-trail li b { font-weight: 500; }
+@media (max-width: 640px) {
+  .apr-step { grid-template-columns: 28px minmax(0, 1fr); }
+  .apr-tools { grid-column: 2; flex-direction: row; flex-wrap: wrap; }
+}
+.apr-save .dap-yes:disabled { opacity: .45; cursor: default; }
+
 .bills-search { width: 260px; max-width: 100%; }
 .bills-bad { color: var(--bad); }
 .bills-kv > div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--line2); font-size: 13.5px; }

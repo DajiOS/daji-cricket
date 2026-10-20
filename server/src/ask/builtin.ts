@@ -10,7 +10,7 @@ import * as T from './tools.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -30,6 +30,9 @@ const RULES: [Intent, RegExp][] = [
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?|how does (this|it) work|what (do|can) you (do|know))\b/],
   ['balance_sheet', /balance ?sheet|\bassets\b|liabilit|net worth|\bequity\b|what (do )?(we|i) own/],
   ['pnl', /profit (and|&|n|\/) ?loss|\bp ?(&|and|n|\/) ?l\b|\bpnl\b|income statement|how (much )?(did|do|have) (we|i) (make|made|earn|earned|do|done)|how are we doing|how.?s (the )?business|how is (the )?business|financial summary|financial position/],
+  ['approvals_why', /why (cant|cannot|am i not|do i not|wont|isnt)\b.*\b(sign|approve|approval)|\b(cant|cannot|unable to|not able to) (i )?(sign|approve)\b|why.* (greyed|disabled|locked)/],
+  ['approvals_report', /(how many|report|summary|history|stats|statistics)\b.*\b(approvals?|sign.?offs?|signed off|sent back)|\b(approvals?|sign.?offs?) (report|summary|history)\b/],
+  ['approvals_waiting', /\b(whom|who)\b.*\b(waiting|holding|pending)|(waiting|pending|stuck|open|outstanding) (on|for)? ?(whom|who|which)\b|\bapprovals?\b|sign.?offs?|waiting (for|on) (my )?(sign|approval)|bills? (waiting|pending)|pay ?roll (waiting|pending)/],
   ['awaiting', /awaiting|to verify|verification|waiting for (me|us|approval|verification)|payments? (to|waiting|pending) (verify|check|approv)|upi (proof|screenshot)s?/],
   ['outstanding', /outstanding|\bowe[ds]?\b|\bdues?\b|unpaid|pending (payment|balance|amount|dues)|to collect|receivables?|balance (due|pending|remaining|left|owed)|yet to (pay|collect)|hasn.?t paid|haven.?t paid|not (yet )?paid|who (still )?owes/],
   ['refunds', /refund/],
@@ -49,7 +52,7 @@ const RULES: [Intent, RegExp][] = [
   ['bookings', /bookings?|sessions?|\bslots?\b|matches|games|reservations?|hours (booked|played)/],
 ];
 
-const PRIORITY: Intent[] = ['help', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'approvals_why', 'approvals_report', 'approvals_waiting', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -60,7 +63,9 @@ export function classify(question: string): { intent: Intent; matched: Intent[] 
   if (!matched.length) return { intent: 'unknown', matched };
   const money = matched.filter((i) => i === 'revenue' || i === 'expenses' || i === 'profit' || i === 'pnl');
   if (money.length >= 2) return { intent: 'pnl', matched };
-  const intent = PRIORITY.find((i) => matched.includes(i))!;
+  // "payments waiting for approval" means the UPI proofs, not the Approvals page
+  const paymentTalk = /payments?|upi|proof|screenshot/.test(t) && !/\b(bills?|pay ?roll|pay ?run|sign.?offs?)\b/.test(t);
+  const intent = PRIORITY.find((i) => matched.includes(i) && !(i === 'approvals_waiting' && paymentTalk && matched.includes('awaiting')))!;
   return { intent, matched };
 }
 
@@ -122,7 +127,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -170,7 +175,7 @@ export function answerBuiltin(input: AskInput): Built {
   };
   let span: Span | null = parsed.span;
   let defaulted = false;
-  const usesRange = !['account_balance', 'balance_sheet', 'outstanding', 'awaiting', 'credits', 'uncategorised'].includes(intent);
+  const usesRange = !['account_balance', 'balance_sheet', 'outstanding', 'awaiting', 'credits', 'uncategorised', 'approvals_waiting', 'approvals_why'].includes(intent);
   if (usesRange && !span) { span = noRangeDefault(); defaulted = true; }
   if (span && span.from === '1970-01-01') span = { ...span, from: T.earliestDate(ctx.ownerId) };
   if (span && defaulted) notes.push(`You did not say which dates, so I used ${describe(span)}.`);
@@ -283,6 +288,33 @@ export function answerBuiltin(input: AskInput): Built {
       });
     }
 
+    case 'approvals_waiting': {
+      const w = T.approvalsWaiting(ctx);
+      if (!w.items.length) return base(intent, 'Nothing is waiting for a sign-off right now.', { open: { tab: 'accounts' } });
+      return base(intent, `${count(w.waiting, 'item')} ${w.waiting === 1 ? 'is' : 'are'} waiting for a sign-off.`, {
+        details: w.items.slice(0, 8).map((i) => ({ label: `${i.title} (${i.kind})`, text: `${R(i.amountPaise)} · waiting on ${i.waitingOn} · step ${Math.min(i.stepsDone + 1, i.stepsTotal)} of ${i.stepsTotal}${i.youCanSign ? ' · you can sign this' : ''}` })),
+        suggestions: ["Why can't I sign the first one?"], notes: ['This is the same list as the Approvals page.'],
+      });
+    }
+
+    case 'approvals_why': {
+      const w = T.whyCantISign(ctx, { text: '' });
+      const named = w.matches.length > 1 ? (T.whyCantISign(ctx, { text: titleHint(question, w.matches.map((m) => m.title)) }).matches) : w.matches;
+      const hit = named.length ? named : w.matches;
+      if (!hit.length) return base(intent, 'Nothing is waiting for a sign-off, so there is nothing to sign right now.');
+      return base(intent, hit.length === 1 ? (hit[0]!.canSign ? `You can sign "${hit[0]!.title}" now.` : `You cannot sign "${hit[0]!.title}" yet: ${hit[0]!.reason}.`) : `${count(hit.length, 'item')} are waiting. Here is whether you can sign each.`, {
+        details: hit.map((m) => ({ label: m.title, text: `${m.canSign ? 'You can sign this' : m.reason ?? 'You cannot sign this'} · waiting on ${m.waitingOn ?? 'nobody'}` })),
+        notes: [hit[0]!.rule],
+      });
+    }
+
+    case 'approvals_report': {
+      const d = T.approvalsDecided(ctx, { from: p.from, to: p.to });
+      const rows = Object.entries(d.decisions);
+      const total = rows.reduce((a, [, n]) => a + n, 0);
+      return done(total ? `In ${describe(p)}, ${count(total, 'approval step')} ${total === 1 ? 'was' : 'were'} recorded.` : `No approval decisions were recorded in ${describe(p)}.`, { details: rows.map(([k, n]) => ({ label: k.replace('.', ' · '), text: String(n) })) });
+    }
+
     case 'awaiting': {
       const o = T.outstanding(ctx);
       const a = o.paymentsAwaitingVerification;
@@ -379,6 +411,12 @@ function groundRevenue(ctx: T.Ctx, g: { id: string; name: string }, p: Span, don
     open: { tab: 'reports', report: 'schedule/past', params: { from: p.from, to: p.to, groundId: g.id } }, notes: ['This is booking income only. Other income, such as canteen sales, is not recorded per ground.'],
     details: [{ label: 'Price of sessions played', text: R(b.played.valuePaise) }, { label: 'Advances kept', text: R(b.noShows.advanceKeptPaise + b.cancellations.advanceKeptPaise) }],
   });
+}
+
+/** Picks the words of the question that name one waiting item, so "why can't I sign the Acme bill" finds it. */
+function titleHint(question: string, titles: string[]): string {
+  const t = normalise(question);
+  return titles.find((x) => t.includes(x.toLowerCase())) ?? titles.map((x) => x.toLowerCase().split(/\s+/).find((w) => w.length > 3 && t.includes(w)) ?? '').find(Boolean) ?? '';
 }
 
 function help(ctx: T.Ctx): Built {

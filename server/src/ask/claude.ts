@@ -34,6 +34,10 @@ export const TOOL_DEFS = [
   { name: 'get_gst', description: 'GST on sessions played in a period, and GST owed right now.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_jobs', description: 'Jobs on the task board: how many are open, overdue and finished, with the titles of overdue jobs.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_team_attendance', description: 'Staff attendance totals for a period: present, half days, absent and on leave, and how many staff are active.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
+  { name: 'get_approvals_waiting', description: 'What is waiting for a sign-off right now (bills and staff pay runs): who it waits on, how far along it is, and whether the asker can sign it and if not why not.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_approval_rules', description: 'The sign-off rules for bills and for staff pay, in words.', input_schema: { type: 'object', properties: {} } },
+  { name: 'why_cant_i_sign', description: 'Explains why the asker can or cannot sign a waiting approval, found by part of its title (for example a vendor name). Leave text empty for all waiting ones.', input_schema: { type: 'object', properties: { text: { type: 'string' } } } },
+  { name: 'get_approvals_decided', description: 'How many approvals were signed off, approved, sent back or rejected in a period.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'list_grounds', description: 'The names and ids of the grounds.', input_schema: { type: 'object', properties: {} } },
 ] as const;
 
@@ -70,6 +74,10 @@ export function runTool(ctx: T.Ctx, name: string, i: Input): unknown {
     case 'get_gst': return T.gst(ctx, range(i));
     case 'get_jobs': return T.jobs(ctx, range(i));
     case 'get_team_attendance': return T.team(ctx, range(i));
+    case 'get_approvals_waiting': return T.approvalsWaiting(ctx);
+    case 'get_approval_rules': return T.approvalRules(ctx);
+    case 'why_cant_i_sign': return T.whyCantISign(ctx, { text: typeof i.text === 'string' ? i.text.slice(0, 80) : '' });
+    case 'get_approvals_decided': return T.approvalsDecided(ctx, range(i));
     case 'list_grounds': return T.grounds(ctx);
     default: throw new Error(`There is no tool called ${name}`);
   }

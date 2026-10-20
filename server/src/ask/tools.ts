@@ -9,16 +9,17 @@ import { summarize } from '../contacts.ts';
 import { balanceSheet, profitAndLoss, type BalanceSheet } from '../accounting/statements.ts';
 import { futureSchedule, pastSchedule } from '../accounting/schedule.ts';
 import { listAccounts } from '../accounting/store.ts';
+import { listOpen, getFlow, describe, APPROVAL_KINDS, KIND_INFO } from '../approvals.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
 // can never disagree with a report. They are read-only, scoped to one owner and checked against the asker's permissions.
 // The built-in answerer and the optional Claude mode use exactly these.
 
 export interface Ctx { ownerId: string; user: UserRow }
-export type Area = 'reports' | 'bookings' | 'customers' | 'tasks' | 'team';
+export type Area = 'reports' | 'bookings' | 'customers' | 'tasks' | 'team' | 'approvals';
 
-const AREA_PERMISSION: Record<Area, string> = { reports: 'view_reports', bookings: 'manage_bookings', customers: 'view_customers', tasks: 'manage_tasks', team: 'owner' };
-const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', bookings: 'bookings', customers: 'customers', tasks: 'the jobs', team: 'the team' };
+const AREA_PERMISSION: Record<Area, string> = { reports: 'view_reports', bookings: 'manage_bookings', customers: 'view_customers', tasks: 'manage_tasks', team: 'owner', approvals: 'manage_accounting' };
+const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', bookings: 'bookings', customers: 'customers', tasks: 'the jobs', team: 'the team', approvals: 'the approvals' };
 
 export function can(ctx: Ctx, area: Area): boolean {
   const u = ctx.user;
@@ -26,6 +27,7 @@ export function can(ctx: Ctx, area: Area): boolean {
   if (area === 'bookings') return hasPermission(u, 'manage_bookings') || hasPermission(u, 'view_reports');
   if (area === 'tasks') return hasPermission(u, 'manage_tasks');
   if (area === 'team') return u.role !== 'staff';
+  if (area === 'approvals') return hasPermission(u, 'manage_accounting');
   return hasPermission(u, 'view_customers');
 }
 export function need(ctx: Ctx, area: Area): void {
@@ -272,4 +274,41 @@ export function team(ctx: Ctx, a: Range) {
   const get = (s: string) => rows.find((r) => r.status === s)?.n ?? 0;
   const active = one<{ n: number }>('SELECT COUNT(*) n FROM payroll_staff WHERE owner_id = ? AND active = 1', ctx.ownerId)!.n;
   return { from: a.from, to: a.to, activeStaff: active, present: get('present'), halfDays: get('half'), absent: get('absent'), onLeave: get('leave') };
+}
+
+/** What is waiting for a sign-off, and on whom: the same list, and the same visibility, as the Approvals page. Titles and amounts, never bank details. */
+export function approvalsWaiting(ctx: Ctx) {
+  need(ctx, 'approvals');
+  const open = listOpen(ctx.ownerId, ctx.user);
+  return {
+    waiting: open.length,
+    items: open.slice(0, 20).map((r) => {
+      const now = r.steps.find((s) => s.state === 'now');
+      return { kind: KIND_INFO[r.kind as keyof typeof KIND_INFO].name, title: r.title, amountPaise: r.amountPaise, sentInBy: r.submittedByName, sentInAt: r.submittedAt, round: r.round,
+        waitingOn: now ? `${now.label} (${now.who})` : 'nobody', stepsDone: r.steps.filter((s) => s.state === 'done').length, stepsTotal: r.steps.length,
+        youCanSign: r.canSign, whyNot: r.whyNot, rule: r.rule };
+    }),
+  };
+}
+
+/** The sign-off rules for each kind of approval, in words. */
+export function approvalRules(ctx: Ctx) {
+  need(ctx, 'approvals');
+  return { rules: APPROVAL_KINDS.map((k) => ({ kind: KIND_INFO[k].name, rule: describe(k, getFlow(ctx.ownerId, k).flow) })) };
+}
+
+/** Why this person may not sign one waiting item, found by what it is called. */
+export function whyCantISign(ctx: Ctx, a: { text: string }) {
+  need(ctx, 'approvals');
+  const q = a.text.trim().toLowerCase();
+  const hit = listOpen(ctx.ownerId, ctx.user).filter((r) => !q || r.title.toLowerCase().includes(q)).slice(0, 5);
+  return { matches: hit.map((r) => ({ title: r.title, amountPaise: r.amountPaise, canSign: r.canSign, reason: r.whyNot, waitingOn: r.steps.find((s) => s.state === 'now')?.who ?? null, rule: r.rule })) };
+}
+
+/** A count of approvals decided in a period, from the audit trail. */
+export function approvalsDecided(ctx: Ctx, a: Range) {
+  need(ctx, 'approvals');
+  checkRange(a);
+  const rows = many<{ action: string; n: number }>("SELECT action, COUNT(*) n FROM audit_log WHERE owner_id = ? AND at >= ? AND at < ? AND action IN ('bill.signoff','bill.sendback','bill.approve','bill.reject','payroll.signoff','payroll.approve','payroll.sendback','payroll.submit','payroll.withdraw') GROUP BY action", ctx.ownerId, istMidnight(a.from), istMidnight(addDays(a.to, 1)));
+  return { from: a.from, to: a.to, decisions: Object.fromEntries(rows.map((r) => [r.action, r.n])) };
 }
