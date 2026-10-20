@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Field, Modal, useToast, DateInput } from '../../ui';
 import { fmtDateTime, getToken, patch, post, sendFile, useApi } from '../../lib';
 import { Select, errMsg } from './common';
-import { COLS, PRI, type Project, type Task, type TaskPhoto } from './taskTypes';
+import { COLS, PRI, REPEAT, type Project, type Task, type TaskPhoto } from './taskTypes';
 
 /** A task photo needs the sign-in header, so it is fetched and shown from a blob. */
 function Photo({ p }: { p: TaskPhoto }) {
@@ -24,13 +24,13 @@ export default function TaskDialog({ task, projects, team, manager, defaultProje
   task: Task | null; projects: Project[]; team: { id: string; name: string }[]; manager: boolean; defaultProject: string; onClose: () => void; onChanged: () => void;
 }) {
   const toast = useToast(); const t = task; const isNew = !t; const editable = manager && (isNew || t!.status === 'open');
-  const [f, setF] = useState({ title: t?.title || '', details: t?.details || '', who: t?.assignedTo || '', pri: t?.priority || 'medium', due: t?.dueDate || '', need: String(t ? t.photosRequired : 1), proj: t ? t.projectId || '' : defaultProject, mile: t?.milestoneId || '' });
+  const [f, setF] = useState({ title: t?.title || '', details: t?.details || '', who: t?.assignedTo || '', pri: t?.priority || 'medium', due: t?.dueDate || '', need: String(t ? t.photosRequired : 1), proj: t ? t.projectId || '' : defaultProject, mile: t?.milestoneId || '', rep: t?.repeat || '', list: (t?.checklist ?? []).map((c) => c.text).join('\n') });
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: any) => setF((x) => ({ ...x, [k]: e.target.value }));
   const proj = projects.find((p) => p.id === f.proj);
   const save = async () => {
     setErr(null); setBusy(true);
-    const body = { title: f.title.trim(), details: f.details.trim() || undefined, assignedTo: f.who || null, priority: f.pri, dueDate: f.due || null, photosRequired: Number(f.need), projectId: f.proj || null, milestoneId: f.mile || null };
+    const body = { title: f.title.trim(), details: f.details.trim() || undefined, assignedTo: f.who || null, priority: f.pri, dueDate: f.due || null, photosRequired: Number(f.need), projectId: f.proj || null, milestoneId: f.mile || null, repeat: f.rep || null, checklist: f.list.split('\n').map((x) => x.trim()).filter(Boolean) };
     try { await (isNew ? post('/api/tasks', body) : patch('/api/tasks/' + encodeURIComponent(t!.id), body)); toast(isNew ? 'Task added.' : 'Saved.'); onChanged(); onClose(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
   const cancel = async () => { try { await post(`/api/tasks/${encodeURIComponent(t!.id)}/cancel`, {}); onChanged(); onClose(); } catch (e) { setErr(errMsg(e)); } };
@@ -46,6 +46,8 @@ export default function TaskDialog({ task, projects, team, manager, defaultProje
         <Field label="Due day"><DateInput className="inp" disabled={!editable} value={f.due} onChange={set('due')} /></Field>
         <Field label="Photos needed"><input className="inp" type="number" min={0} max={10} disabled={!editable} value={f.need} onChange={set('need')} /></Field>
         <Field label="Project"><Select disabled={!editable} value={f.proj} onChange={(v) => setF((x) => ({ ...x, proj: v, mile: '' }))} options={[['', 'No project'], ...projects.filter((p) => p.status === 'active' || p.id === t?.projectId).map((p) => [p.id, p.name] as [string, string])]} /></Field>
+        <Field label="Repeats" hint={f.rep ? 'Closing it adds the next one to To do.' : undefined}><Select disabled={!editable} value={f.rep} onChange={(v) => setF((x) => ({ ...x, rep: v }))} options={Object.entries(REPEAT)} /></Field>
+        <Field label="Checklist" full hint="One step per line. Ticks stay on steps you do not reword."><textarea className="inp" rows={3} maxLength={3000} placeholder={'e.g. Sweep the crease\nRoll the pitch'} disabled={!editable} value={f.list} onChange={set('list')} /></Field>
         <Field label="Milestone"><Select disabled={!editable} value={f.mile} onChange={(v) => setF((x) => ({ ...x, mile: v }))} options={[['', 'No milestone'], ...(proj?.milestones ?? []).map((m) => [m.id, m.title + (m.done ? ' (done)' : '')] as [string, string])]} /></Field>
       </div>
       {err && <div className="err" role="alert" style={{ marginTop: 12 }}>{err}</div>}
@@ -73,6 +75,7 @@ function Extras({ t, onMove, onChanged, setErr }: { t: Task; onMove: (s: string)
       <div className="divider" style={{ margin: '20px 0 14px' }} />
       <div className="eyebrow" style={{ marginBottom: 8 }}>Move to</div>
       <Select value={t.stage} onChange={onMove} label="Move to" options={COLS.map(([k, l]) => [k, l] as [string, string])} />
+      {t.checklist.length > 0 && <Checklist t={t} onChanged={onChanged} setErr={setErr} />}
       <div className="eyebrow" style={{ margin: '18px 0 8px' }}>Photos ({t.photos.length} of {t.photosRequired})</div>
       {t.photos.length ? <div className="tphotos">{t.photos.map((p, i) => <Photo key={p.url + i} p={p} />)}</div>
         : <p className="hint">{need ? 'Taken with the phone camera, within the last 5 minutes. Gallery pictures and screenshots are turned away.' : 'No photos needed.'}</p>}
@@ -86,6 +89,23 @@ function Extras({ t, onMove, onChanged, setErr }: { t: Task; onMove: (s: string)
       <div className="row" style={{ marginTop: 10, flexWrap: 'nowrap' }}>
         <input className="inp" maxLength={1000} placeholder="Write a comment…" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } }} />
         <button className="btn sm" onClick={send}>Send</button>
+      </div>
+    </>
+  );
+}
+
+/** The card's steps. Ticking saves at once; the person who may close the job may tick its steps. */
+function Checklist({ t, onChanged, setErr }: { t: Task; onChanged: () => void; setErr: (m: string | null) => void }) {
+  const [list, setList] = useState(t.checklist);
+  const tick = async (index: number, done: boolean) => {
+    setList((l) => l.map((c, i) => (i === index ? { ...c, done } : c)));
+    try { const r = await post<Task>(`/api/tasks/${encodeURIComponent(t.id)}/checklist`, { index, done }); setList(r.checklist); onChanged(); } catch (e) { setErr(errMsg(e)); setList(t.checklist); }
+  };
+  return (
+    <>
+      <div className="eyebrow" style={{ margin: '18px 0 8px' }}>Checklist ({list.filter((c) => c.done).length} of {list.length})</div>
+      <div className="tchecks">
+        {list.map((c, i) => <label key={i} className={'check' + (c.done ? ' done' : '')}><input type="checkbox" checked={c.done} disabled={t.status !== 'open'} onChange={(e) => tick(i, e.target.checked)} /><span>{c.text}</span></label>)}
       </div>
     </>
   );

@@ -8,7 +8,7 @@ import { HttpError, notFound, forbidden } from './errors.ts';
 import { audit } from './audit.ts';
 import { hasPermission, userRow, type UserRow } from './auth.ts';
 import { readExif } from './exif.ts';
-import { MIN, istDate } from './time.ts';
+import { MIN, addDays, istDate } from './time.ts';
 import { Validator } from './input.ts';
 
 // Jobs the owner hands to staff, closed with proof: photos taken with the camera right then.
@@ -86,6 +86,14 @@ CREATE TABLE task_comments (
 CREATE INDEX ix_task_comments_task ON task_comments(task_id, created_at);
 `);
 
+// Repeating jobs and checklists (from the starter kit's task board). Closing a repeating job adds the next one to To do,
+// due one day, week or month later. A checklist is a short list of steps the team ticks off on the card.
+registerSchema('tasks-4', `
+ALTER TABLE tasks ADD COLUMN repeat TEXT;
+ALTER TABLE tasks ADD COLUMN series_id TEXT;
+ALTER TABLE tasks ADD COLUMN checklist TEXT;
+`);
+
 /** How old the moment of the shot may be when it arrives, and how far ahead of the server clock a phone clock may be. */
 export const MAX_PHOTO_AGE_MS = 5 * MIN;
 export const FUTURE_SLACK_MS = 2 * MIN;
@@ -94,18 +102,24 @@ export const MAX_PHOTOS_PER_TASK = 10;
 
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 export const STAGES = ['todo', 'doing', 'review', 'done'] as const;
+export const REPEATS = ['daily', 'weekly', 'monthly'] as const;
+export const MAX_CHECKLIST_ITEMS = 30;
 export type Priority = (typeof PRIORITIES)[number];
 export type Stage = (typeof STAGES)[number];
-interface TaskRow { id: string; owner_id: string; title: string; details: string | null; assigned_to: string | null; due_date: string | null; photos_required: number; status: 'open' | 'done' | 'cancelled'; created_at: number; created_by: string; completed_at: number | null; completed_by: string | null; completion_note: string | null; priority: Priority; stage: Stage; project_id: string | null; milestone_id: string | null; position: number }
+export type Repeat = (typeof REPEATS)[number];
+export interface CheckItem { text: string; done: boolean }
+interface TaskRow { id: string; owner_id: string; title: string; details: string | null; assigned_to: string | null; due_date: string | null; photos_required: number; status: 'open' | 'done' | 'cancelled'; created_at: number; created_by: string; completed_at: number | null; completed_by: string | null; completion_note: string | null; priority: Priority; stage: Stage; project_id: string | null; milestone_id: string | null; position: number; repeat: Repeat | null; series_id: string | null; checklist: string | null }
 interface PhotoRow { source: string; id: string; task_id: string; uploaded_by: string; taken_at: number; uploaded_at: number; ext: string; bytes: number; camera: string | null; note: string | null }
 
 export interface TaskOut {
   id: string; title: string; details: string | null; assignedTo: string | null; assignedName: string | null; dueDate: string | null; overdue: boolean;
   priority: Priority; stage: Stage; projectId: string | null; projectName: string | null; milestoneId: string | null; milestoneTitle: string | null; commentCount: number;
+  repeat: Repeat | null; checklist: CheckItem[];
   photosRequired: number; status: TaskRow['status']; createdAt: number; completedAt: number | null; completedByName: string | null; completionNote: string | null;
   photos: { id: string; url: string; takenAt: number; uploadedAt: number; uploadedByName: string | null; note: string | null; camera: string | null; source: string }[];
 }
 
+const checklistOf = (t: TaskRow): CheckItem[] => { try { const v = JSON.parse(t.checklist || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
 const nameOf = (id: string | null): string | null => (id ? userRow(id)?.name ?? null : null);
 
 /** Managers (owner, super admin, or staff with manage_tasks) work with every job of the owner; other staff see only theirs and the open-to-all ones. */
@@ -119,6 +133,7 @@ export function toOut(t: TaskRow): TaskOut {
     priority: t.priority, stage: t.stage, projectId: t.project_id, projectName: t.project_id ? one<{ name: string }>('SELECT name FROM projects WHERE id = ?', t.project_id)?.name ?? null : null,
     milestoneId: t.milestone_id, milestoneTitle: t.milestone_id ? one<{ title: string }>('SELECT title FROM milestones WHERE id = ?', t.milestone_id)?.title ?? null : null,
     commentCount: one<{ c: number }>('SELECT COUNT(*) c FROM task_comments WHERE task_id = ?', t.id)!.c,
+    repeat: t.repeat, checklist: checklistOf(t),
     photosRequired: t.photos_required, status: t.status, createdAt: t.created_at, completedAt: t.completed_at, completedByName: nameOf(t.completed_by), completionNote: t.completion_note,
     photos: photos.map((p) => ({ id: p.id, url: `/api/tasks/photos/${p.id}`, takenAt: p.taken_at, uploadedAt: p.uploaded_at, uploadedByName: nameOf(p.uploaded_by), note: p.note, camera: p.camera, source: p.source })),
   };
@@ -140,7 +155,7 @@ export function visibleTask(u: UserRow, id: string): TaskRow {
   return t;
 }
 
-export function parseTask(body: unknown, forUpdate = false): { title?: string; details?: string; assignedTo?: string | null; dueDate?: string | null; photosRequired?: number; priority?: Priority; projectId?: string | null; milestoneId?: string | null } {
+export function parseTask(body: unknown, forUpdate = false): { title?: string; details?: string; assignedTo?: string | null; dueDate?: string | null; photosRequired?: number; priority?: Priority; projectId?: string | null; milestoneId?: string | null; repeat?: Repeat | null; checklist?: string[] } {
   const v = new Validator(body);
   const title = v.str('title', { min: 3, max: 120, required: !forUpdate });
   const details = v.str('details', { max: 1000 });
@@ -150,8 +165,10 @@ export function parseTask(body: unknown, forUpdate = false): { title?: string; d
   const priority = v.oneOf('priority', PRIORITIES);
   const projectId = v.src.projectId === null || v.src.projectId === '' ? null : v.str('projectId', { max: 60 });
   const milestoneId = v.src.milestoneId === null || v.src.milestoneId === '' ? null : v.str('milestoneId', { max: 60 });
+  const repeat = v.src.repeat === null || v.src.repeat === '' ? null : v.oneOf('repeat', REPEATS);
+  const checklist = v.strArray('checklist', { max: MAX_CHECKLIST_ITEMS, itemMax: 200 });
   v.done();
-  return { ...(priority !== undefined ? { priority } : {}), ...(v.src.projectId !== undefined ? { projectId: projectId ?? null } : {}), ...(v.src.milestoneId !== undefined ? { milestoneId: milestoneId ?? null } : {}), ...(title !== undefined ? { title } : {}), ...(details !== undefined ? { details } : {}), ...(photosRequired !== undefined ? { photosRequired } : {}), ...(v.src.dueDate !== undefined ? { dueDate: dueDate ?? null } : {}), ...(v.src.assignedTo !== undefined ? { assignedTo: assignedTo ?? null } : {}) };
+  return { ...(priority !== undefined ? { priority } : {}), ...(v.src.projectId !== undefined ? { projectId: projectId ?? null } : {}), ...(v.src.milestoneId !== undefined ? { milestoneId: milestoneId ?? null } : {}), ...(title !== undefined ? { title } : {}), ...(details !== undefined ? { details } : {}), ...(photosRequired !== undefined ? { photosRequired } : {}), ...(v.src.dueDate !== undefined ? { dueDate: dueDate ?? null } : {}), ...(v.src.assignedTo !== undefined ? { assignedTo: assignedTo ?? null } : {}), ...(v.src.repeat !== undefined ? { repeat: repeat ?? null } : {}), ...(checklist !== undefined ? { checklist } : {}) };
 }
 
 function checkAssignee(ownerId: string, id: string | null | undefined): void {
@@ -178,9 +195,10 @@ export function createTask(u: UserRow, ownerId: string, body: unknown): TaskOut 
   checkProject(ownerId, t.projectId, t.milestoneId);
   const id = newId('tsk');
   const pos = (one<{ m: number | null }>("SELECT MAX(position) m FROM tasks WHERE owner_id = ? AND stage = 'todo'", ownerId)?.m ?? -1) + 1;
-  run('INSERT INTO tasks(id, owner_id, title, details, assigned_to, due_date, photos_required, priority, project_id, milestone_id, position, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    id, ownerId, t.title!, t.details ?? null, t.assignedTo ?? null, t.dueDate ?? null, t.photosRequired ?? 1, t.priority ?? 'medium', t.projectId ?? null, t.milestoneId ?? null, pos, now(), u.id);
-  audit({ id: u.id, role: u.role }, 'task.create', 'task', id, { title: t.title, assignedTo: t.assignedTo ?? null }, ownerId);
+  run('INSERT INTO tasks(id, owner_id, title, details, assigned_to, due_date, photos_required, priority, project_id, milestone_id, position, repeat, series_id, checklist, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    id, ownerId, t.title!, t.details ?? null, t.assignedTo ?? null, t.dueDate ?? null, t.photosRequired ?? 1, t.priority ?? 'medium', t.projectId ?? null, t.milestoneId ?? null, pos,
+    t.repeat ?? null, t.repeat ? id : null, t.checklist?.length ? JSON.stringify(t.checklist.map((text) => ({ text, done: false }))) : null, now(), u.id);
+  audit({ id: u.id, role: u.role }, 'task.create', 'task', id, { title: t.title, assignedTo: t.assignedTo ?? null, repeat: t.repeat ?? null }, ownerId);
   return toOut(getTask(id));
 }
 
@@ -193,8 +211,13 @@ export function updateTask(u: UserRow, id: string, body: unknown): TaskOut {
   const proj = t.projectId === undefined ? cur.project_id : t.projectId;
   const mile = t.milestoneId === undefined ? (t.projectId !== undefined && t.projectId !== cur.project_id ? null : cur.milestone_id) : t.milestoneId;
   checkProject(cur.owner_id, proj, mile);
-  run('UPDATE tasks SET title = ?, details = ?, assigned_to = ?, due_date = ?, photos_required = ?, priority = ?, project_id = ?, milestone_id = ? WHERE id = ?',
-    t.title ?? cur.title, t.details ?? cur.details, t.assignedTo === undefined ? cur.assigned_to : t.assignedTo, t.dueDate === undefined ? cur.due_date : t.dueDate, t.photosRequired ?? cur.photos_required, t.priority ?? cur.priority, proj, mile, id);
+  // A new checklist keeps the ticks of the steps whose wording did not change.
+  const was = checklistOf(cur);
+  const list = t.checklist === undefined ? cur.checklist : t.checklist.length ? JSON.stringify(t.checklist.map((text) => ({ text, done: was.some((w) => w.text === text && w.done) }))) : null;
+  const repeat = t.repeat === undefined ? cur.repeat : t.repeat;
+  run('UPDATE tasks SET title = ?, details = ?, assigned_to = ?, due_date = ?, photos_required = ?, priority = ?, project_id = ?, milestone_id = ?, repeat = ?, series_id = ?, checklist = ? WHERE id = ?',
+    t.title ?? cur.title, t.details ?? cur.details, t.assignedTo === undefined ? cur.assigned_to : t.assignedTo, t.dueDate === undefined ? cur.due_date : t.dueDate, t.photosRequired ?? cur.photos_required, t.priority ?? cur.priority, proj, mile,
+    repeat, repeat ? cur.series_id ?? id : cur.series_id, list, id);
   audit({ id: u.id, role: u.role }, 'task.update', 'task', id, t, cur.owner_id);
   return toOut(getTask(id));
 }
@@ -255,6 +278,50 @@ export function completeTask(u: UserRow, id: string, noteIn?: string): TaskOut {
   if (have < t.photos_required) throw new HttpError(409, 'PHOTOS_NEEDED', `This task needs ${t.photos_required} photo${t.photos_required === 1 ? '' : 's'} taken with the camera first (${have} added).`, { required: t.photos_required, have });
   run("UPDATE tasks SET status = 'done', stage = 'done', completed_at = ?, completed_by = ?, completion_note = ? WHERE id = ?", now(), u.id, noteIn?.trim().slice(0, 300) || null, id);
   audit({ id: u.id, role: u.role }, 'task.done', 'task', id, { photos: have }, t.owner_id);
+  if (t.repeat) nextInSeries(u, getTask(id));
+  return toOut(getTask(id));
+}
+
+/** The due day one step after `from`. A monthly job due on the 31st falls on the last day of a shorter month. */
+export function stepDate(from: string, repeat: Repeat): string {
+  if (repeat === 'daily') return addDays(from, 1);
+  if (repeat === 'weekly') return addDays(from, 7);
+  const [y, m, d] = from.split('-').map(Number) as [number, number, number];
+  const ny = m === 12 ? y + 1 : y, nm = m === 12 ? 1 : m + 1;
+  const last = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+  return `${ny}-${String(nm).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+}
+
+/** Adds the next job of a repeating series to To do, unless one is already open. Its due day is the next step that is today or later. */
+function nextInSeries(u: UserRow, t: TaskRow): void {
+  const series = t.series_id ?? t.id;
+  if (one("SELECT 1 FROM tasks WHERE series_id = ? AND status = 'open'", series)) return;
+  const today = istDate(now());
+  let due = stepDate(t.due_date ?? today, t.repeat!);
+  for (let i = 0; due < today && i < 400; i++) due = stepDate(due, t.repeat!);
+  const steps = checklistOf(t).map((c) => ({ text: c.text, done: false }));
+  const id = newId('tsk');
+  const pos = (one<{ m: number | null }>("SELECT MAX(position) m FROM tasks WHERE owner_id = ? AND stage = 'todo'", t.owner_id)?.m ?? -1) + 1;
+  run('INSERT INTO tasks(id, owner_id, title, details, assigned_to, due_date, photos_required, priority, project_id, milestone_id, position, repeat, series_id, checklist, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    id, t.owner_id, t.title, t.details, t.assigned_to, due, t.photos_required, t.priority, t.project_id, t.milestone_id, pos, t.repeat, series, steps.length ? JSON.stringify(steps) : null, now(), u.id);
+  audit({ id: u.id, role: u.role }, 'task.repeat', 'task', id, { after: t.id, dueDate: due, repeat: t.repeat }, t.owner_id);
+}
+
+/** Ticks or unticks one step of the checklist. Whoever may close the job may tick its steps. */
+export function checkStep(u: UserRow, id: string, body: unknown): TaskOut {
+  if (u.role === 'customer') throw forbidden('Only the team can tick off steps');
+  const t = visibleTask(u, id);
+  if (u.role === 'staff' && t.assigned_to !== null && t.assigned_to !== u.id) throw notFound('Task not found');
+  if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'This task is already closed');
+  const v = new Validator(body);
+  const index = v.int('index', { min: 0, max: MAX_CHECKLIST_ITEMS - 1, required: true })!;
+  const done = v.bool('done', true)!;
+  v.done();
+  const list = checklistOf(t);
+  if (!list[index]) throw new HttpError(400, 'VALIDATION_FAILED', 'No such step', { fields: [{ field: 'index', message: 'No such step' }] });
+  list[index] = { ...list[index]!, done };
+  run('UPDATE tasks SET checklist = ? WHERE id = ?', JSON.stringify(list), id);
+  audit({ id: u.id, role: u.role }, 'task.check', 'task', id, { step: list[index]!.text, done }, t.owner_id);
   return toOut(getTask(id));
 }
 

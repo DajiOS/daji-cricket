@@ -21,7 +21,7 @@ import * as credits from '../credits.ts';
 import { listAudit } from '../audit.ts';
 import { istDate, istMidnight } from '../time.ts';
 import { moveTask, listComments, addComment, listProjects, createProject, updateProject, addMilestone, updateMilestone } from '../taskboard.ts';
-import { addTaskPhoto, cancelTask, completeTask, createTask, getTaskOut, listTasks, readTaskPhoto, reopenTask, updateTask, MAX_TASK_PHOTO_BYTES } from '../tasks.ts';
+import { addTaskPhoto, cancelTask, checkStep, completeTask, createTask, getTaskOut, listTasks, readTaskPhoto, reopenTask, updateTask, MAX_TASK_PHOTO_BYTES } from '../tasks.ts';
 import type { Reply } from '../http.ts';
 
 const STAFF_ROLES: ('owner' | 'staff' | 'super_admin')[] = ['owner', 'staff', 'super_admin'];
@@ -165,6 +165,7 @@ export function staffRoutes(r: Router): void {
   r.get('/api/tasks/:id', (c) => ok(getTaskOut(U(c), c.params.id!)), A);
   r.patch('/api/tasks/:id', (c) => ok(updateTask(U(c), c.params.id!, c.json())), A);
   r.post('/api/tasks/:id/photos', (c) => created(addTaskPhoto(c.cfg.dataDir, U(c), c.params.id!, c.raw, c.query.get('note') ?? undefined, c.req.headers['x-app-shot-at'] ? Number(c.req.headers['x-app-shot-at']) : undefined)), { auth: STAFF_ROLES, maxBody: MAX_TASK_PHOTO_BYTES + 1024 });
+  r.post('/api/tasks/:id/checklist', (c) => ok(checkStep(U(c), c.params.id!, c.json())), A);
   r.post('/api/tasks/:id/complete', (c) => { const v = new Validator(c.json()); const note = v.str('note', { max: 300 }); v.done(); return ok(completeTask(U(c), c.params.id!, note)); }, A);
   r.post('/api/tasks/:id/reopen', (c) => ok(reopenTask(U(c), c.params.id!)), A);
   r.post('/api/tasks/:id/cancel', (c) => ok(cancelTask(U(c), c.params.id!)), A);

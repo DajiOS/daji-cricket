@@ -3,7 +3,7 @@ import { PageHead, ErrorBox, Loading, Filters, useToast } from '../ui';
 import { api, can, fmtDate, post } from '../lib';
 import { useSession } from '../App';
 import { errMsg } from '../parts/club/common';
-import { COLS, PRI, type Project, type Task } from '../parts/club/taskTypes';
+import { COLS, PRI, REPEAT, type Project, type Task } from '../parts/club/taskTypes';
 import TaskDialog from '../parts/club/TaskDialog';
 import ProjectsDialog from '../parts/club/ProjectsDialog';
 
@@ -13,7 +13,7 @@ export default function Tasks({ sub }: { sub: string }) {
   void sub;
   const { me } = useSession(); const toast = useToast(); const manager = can(me, 'manage_tasks');
   const [tasks, setTasks] = useState<Task[] | null>(null); const [projects, setProjects] = useState<Project[]>([]); const [team, setTeam] = useState<{ id: string; name: string }[]>([]);
-  const [error, setError] = useState<string | null>(null); const [projectId, setProjectId] = useState(''); const [who, setWho] = useState(''); const [pri, setPri] = useState('');
+  const [error, setError] = useState<string | null>(null); const [projectId, setProjectId] = useState(''); const [who, setWho] = useState(''); const [pri, setPri] = useState(''); const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | 'new' | null>(null); const [projDlg, setProjDlg] = useState(false); const [over, setOver] = useState<string | null>(null);
   const load = async () => {
     try {
@@ -37,7 +37,7 @@ export default function Tasks({ sub }: { sub: string }) {
     move(id, stage, index);
   };
 
-  const visible = (tasks ?? []).filter((t) => t.status !== 'cancelled' && (!projectId || t.projectId === projectId) && (!who || (who === 'none' ? !t.assignedTo : t.assignedTo === who)) && (!pri || t.priority === pri));
+  const visible = (tasks ?? []).filter((t) => t.status !== 'cancelled' && (!projectId || t.projectId === projectId) && (!who || (who === 'none' ? !t.assignedTo : t.assignedTo === who)) && (!pri || t.priority === pri) && (!q || (t.title + ' ' + (t.details || '') + ' ' + (t.assignedName || '')).toLowerCase().includes(q.trim().toLowerCase())));
   const current = open && open !== 'new' ? (tasks ?? []).find((t) => t.id === open) ?? null : null;
   return (
     <div className="stack">
@@ -49,9 +49,10 @@ export default function Tasks({ sub }: { sub: string }) {
         <select className="inp kproj-sel" aria-label="Project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
           <option value="">All projects</option>{projects.filter((p) => p.status === 'active').map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        <input className="inp ksearch" type="search" placeholder="Search tasks" aria-label="Search tasks" value={q} onChange={(e) => setQ(e.target.value)} />
         <Filters active={(who ? 1 : 0) + (pri ? 1 : 0)}>
           <select className="inp" style={{ width: 170 }} aria-label="Assigned to" value={who} onChange={(e) => setWho(e.target.value)}><option value="">Anyone</option><option value="none">Open to the whole team</option>{team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
-          <select className="inp" style={{ width: 140 }} aria-label="Priority" value={pri} onChange={(e) => setPri(e.target.value)}><option value="">Any priority</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+          <select className="inp" style={{ width: 140 }} aria-label="Priority" value={pri} onChange={(e) => setPri(e.target.value)}><option value="">Any priority</option>{Object.entries(PRI).reverse().map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
         </Filters>
         <span className="muted small">{(tasks ?? []).filter((t) => t.status === 'open').length} open</span>
       </div>
@@ -75,6 +76,8 @@ export default function Tasks({ sub }: { sub: string }) {
                       {t.milestoneTitle && <div className="kmile">Milestone: {t.milestoneTitle}</div>}
                       <div className="kmeta">
                         <span className={t.overdue ? 'kdue bad' : 'kdue'}>{t.stage === 'done' ? 'Done' : t.dueDate ? (t.overdue ? 'Overdue · ' : 'Due ') + fmtDate(t.dueDate) : 'No due day'}</span>
+                        {t.repeat && <span title={REPEAT[t.repeat]}>{REPEAT[t.repeat]}</span>}
+                        {t.checklist.length > 0 && <span title="Checklist">Steps {t.checklist.filter((c) => c.done).length}/{t.checklist.length}</span>}
                         {t.photosRequired > 0 && <span title="Photos">Photos {t.photos.length}/{t.photosRequired}</span>}
                         {t.commentCount > 0 && <span title="Comments">{t.commentCount} comments</span>}
                         <span className="kwho" title={t.assignedName || 'Open to the whole team'}>{t.assignedName ? initials(t.assignedName) : '·'}</span>
