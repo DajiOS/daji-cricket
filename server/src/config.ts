@@ -14,6 +14,8 @@ export interface Config {
   frameAncestors: string[];
   isLocal: boolean;
   demoMode: boolean;
+  /** Phone number and WhatsApp code sign-up and sign-in. Off until the WhatsApp OTP template is approved in Meta (Facebook Developer); set OTP_SIGNIN=on to switch it back on. */
+  otpSignIn: boolean;
   jwtSecret: string;
   jwtTtlDays: number;
   corsOrigins: string[] | '*';
@@ -137,6 +139,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     frameAncestors,
     isLocal,
     demoMode: truthy(env.DEMO_MODE, isLocal),
+    otpSignIn: truthy(env.OTP_SIGNIN, false),
     jwtSecret: secret || DEV_SECRET,
     jwtTtlDays: Number(env.JWT_TTL_DAYS ?? 30),
     corsOrigins,

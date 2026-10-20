@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { startHarness, advance, type Harness } from './helpers.ts';
 
 let h: Harness;
-before(async () => { h = await startHarness(); });
+before(async () => { h = await startHarness({ OTP_SIGNIN: 'on' }); });
 after(async () => { await h.close(); });
 beforeEach(() => { h.reset(); });
 
