@@ -77,6 +77,8 @@ Generated from `server/src/routes`. All bodies are JSON unless noted; errors use
 | GET | `/api/admin/audit` | admin |
 | GET | `/api/admin/backups` | admin |
 | POST | `/api/admin/backups` | admin |
+| POST | `/api/admin/backups/practice-restore` | admin (restores the newest snapshot into a throw-away folder and checks it) |
+| GET | `/api/admin/readiness` | owner, admin (the go-live check: what is still unset, by name only) |
 | GET | `/api/admin/leads` | platform |
 | PATCH | `/api/admin/leads/:id` | platform |
 | GET | `/api/admin/settings` | admin |

@@ -7,8 +7,9 @@ import Website from '../parts/admin/Website';
 import Backups from '../parts/admin/Backups';
 import People from '../parts/admin/People';
 import { Connections, Services } from '../parts/admin/Platform';
+import GoLive from '../parts/admin/GoLive';
 
-const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['backups', 'Backups'], ['people', 'People'], ['connections', 'Connections'], ['services', 'Services']];
+const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['backups', 'Backups'], ['people', 'People'], ['connections', 'Connections'], ['services', 'Services'], ['golive', 'Go-live check']];
 
 export default function Settings({ sub }: { sub: string }) {
   const tab = sectionOf(sub, TABS.map(([k]) => k));
@@ -24,6 +25,7 @@ export default function Settings({ sub }: { sub: string }) {
       {tab === 'people' && <People />}
       {tab === 'connections' && <Connections />}
       {tab === 'services' && <Services />}
+      {tab === 'golive' && <GoLive />}
     </div>
   );
 }
