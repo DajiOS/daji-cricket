@@ -1,6 +1,7 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { startHarness, grounds, bookAndPay, dayFromNow, type Harness } from './helpers.ts';
+import { addDays } from '../src/time.ts';
 
 // The operations calendar and the money flow gather what the desk already holds. Each person sees only the parts they can already open.
 let h: Harness, owner: string, staff: string, cust: string, owner2: string;
@@ -104,3 +105,23 @@ test('the activity feed lists the business\'s events with the next step, and hid
   assert.equal((await h.get('/api/desk/activity', owner2)).body.items.filter((i: any) => i.entityId === b.id || i.entityId === bill.id).length, 0);
   assert.equal((await h.get('/api/desk/activity', cust)).status, 403);
 });
+
+test('the month-end close lists eight checks; uncategorised lines block the sign-off; staff without the books are refused', async () => {
+  const last = (await h.get('/api/desk/close', owner)).body;
+  assert.equal(last.month, addDays(dayFromNow(0).slice(0, 7) + '-01', -1).slice(0, 7), 'the month just gone');
+  assert.equal(last.over, true);
+  const month = month0();
+  const r = await h.get(`/api/desk/close?month=${month}`, owner);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.steps.map((s: any) => s.key), ['statements', 'categorise', 'reconcile', 'upi', 'balances', 'bills', 'payroll', 'signoff']);
+  const a = await h.post('/api/accounting/accounts', { kind: 'bank', name: 'Daji Current A/c', bankName: 'HDFC Bank', last4: '4321', openingPaise: 0, openingDate: `${month}-01` }, owner);
+  assert.equal(a.status, 201, JSON.stringify(a.body));
+  assert.equal((await h.post('/api/accounting/transactions', { accountId: a.body.id, date: `${month}-02`, amountPaise: -5000, description: 'Diesel' }, owner)).status, 201);
+  const after = (await h.get(`/api/desk/close?month=${month}`, owner)).body.steps;
+  const cat = after.find((s: any) => s.key === 'categorise');
+  assert.equal(cat.state, 'todo'); assert.equal(cat.count, 1); assert.equal(cat.blocks, true);
+  assert.equal(after.find((s: any) => s.key === 'statements').state, 'todo', 'no lines in the last week');
+  assert.equal((await h.get(`/api/desk/close?month=${month}`, staff)).status, 403);
+  assert.equal((await h.get('/api/desk/close?month=2026-13', owner)).status, 400);
+});
+const month0 = () => dayFromNow(0).slice(0, 7);

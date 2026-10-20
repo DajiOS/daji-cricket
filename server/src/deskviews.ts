@@ -59,7 +59,7 @@ export function opsCalendar(u: UserRow, owner: string, monthIn: string | null): 
       `SELECT b.id, b.due_date, b.amount_paise, b.status, v.name vendor FROM acct_bills b JOIN acct_vendors v ON v.id = b.vendor_id WHERE b.owner_id = ? AND b.deleted_at IS NULL AND b.status <> 'rejected' AND b.due_date BETWEEN ? AND ?`, owner, from, to))
       items.push({ date: b.due_date, kind: 'bill', title: `Bill due: ${b.vendor}`, href: `/bills/${b.id}`, done: b.status === 'paid', amountPaise: b.amount_paise });
     const signed = !!one('SELECT 1 FROM acct_signoffs WHERE owner_id = ? AND month = ? AND reopened_at IS NULL', owner, month);
-    items.push({ date: to, kind: 'close', title: 'Month-end close', href: '/accounting/close', done: signed });
+    items.push({ date: to, kind: 'close', title: 'Month-end close', href: `/close/${month}`, done: signed });
   }
   if (hasPermission(u, 'manage_academy')) {
     kinds.push('fees');
@@ -166,7 +166,7 @@ function nextStep(action: string, entity: string, id: string | null, d: Record<s
   if (action === 'bill.reject') return { href: `/bills/${id}`, cta: 'Fix' };
   if (entity === 'acct_bill') return { href: `/bills/${id}`, cta: 'Open' };
   if (entity === 'acct_vendor') return { href: '/bills/vendors', cta: 'Open' };
-  if (entity === 'acct_signoff') return { href: '/accounting/close', cta: 'Open' };
+  if (entity === 'acct_signoff') return { href: id ? `/close/${id}` : '/close', cta: 'Open' };
   if (entity === 'acct_transaction' || entity === 'acct_import') return { href: '/transactions', cta: 'Categorise' };
   if (action.startsWith('refund.') && action !== 'refund.complete') return { href: '/bookings', cta: 'Open' };
   if (bookingId) return { href: `/bookings/${bookingId}`, cta: 'Open' };
@@ -195,4 +195,60 @@ export function activityFeed(u: UserRow, owner: string, beforeIn: string | null,
     return { id: r.id, at: r.at, area: AREA_OF[r.action.split('.')[0]!]!, action: r.action, entity: r.entity, entityId: r.entity_id, who: r.name ?? (r.actor_role === 'customer' ? 'A customer' : 'System'), detail: money ? raw : null, ...nextStep(r.action, r.entity, r.entity_id, raw) };
   });
   return { items: out, next: out.length >= limit ? out[out.length - 1]!.id : null };
+}
+
+// ---------------------------------------------------------------- month-end close
+// The starter kit's guided month-end: eight checks in order, each worked out from the books, ending with the sign-off.
+
+export type StepState = 'done' | 'todo' | 'warn' | 'na';
+export interface CloseStep { key: string; title: string; state: StepState; count: number; text: string; href: string | null; blocks: boolean }
+
+export function closeChecklist(u: UserRow, owner: string, monthIn: string | null): { month: string; over: boolean; signedOff: boolean; steps: CloseStep[] } {
+  if (!readsBooks(u)) throw forbidden('This needs the "view_reports" permission and "Can see revenue"');
+  // the month just gone, unless one is named
+  const month = monthIn ?? addDays(istDate(now()).slice(0, 7) + '-01', -1).slice(0, 7);
+  const { from, to } = monthOrFail(month);
+  const fromMs = istMidnight(from), toMs = istMidnight(addDays(to, 1));
+  const n = (sql: string, ...p: (string | number)[]) => one<{ n: number | null }>(sql, ...p)?.n ?? 0;
+  const isOwner = u.role === 'owner' || u.role === 'super_admin';
+  const steps: CloseStep[] = [];
+  const add = (key: string, title: string, state: StepState, count: number, text: string, href: string | null, blocks = false) => steps.push({ key, title, state, count, text, href, blocks });
+
+  // 1. statements: every bank account has lines into the last week of the month
+  const accts = many<{ name: string; last: string | null }>(`SELECT a.name, (SELECT MAX(t.txn_date) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL AND t.txn_date <= ?) last
+    FROM acct_accounts a WHERE a.owner_id = ? AND a.deleted_at IS NULL AND a.kind = 'bank'`, to, owner);
+  const short = accts.filter((a) => !a.last || a.last < addDays(to, -6));
+  add('statements', 'Import the bank statements', !accts.length ? 'warn' : short.length ? 'todo' : 'done', short.length,
+    !accts.length ? 'No bank account is set up in Accounting yet.' : short.length ? `${short.map((a) => a.name).join(', ')} ${short.length === 1 ? 'has' : 'have'} no lines in the last week of the month.` : 'Every bank account has lines to the end of the month.', '/bank');
+  // 2. categorise: sign-off refuses while any line is uncategorised
+  const unc = n('SELECT COUNT(*) n FROM acct_transactions WHERE owner_id = ? AND deleted_at IS NULL AND category_id IS NULL AND txn_date BETWEEN ? AND ?', owner, from, to);
+  add('categorise', 'Categorise every bank and cash line', unc ? 'todo' : 'done', unc, unc ? `${unc} line${unc === 1 ? '' : 's'} still need a category.` : 'Every line has a category.', '/transactions/pending', true);
+  // 3. match online payments to the bank
+  const unmatched = n(`SELECT COUNT(*) n FROM payments p WHERE p.owner_id = ? AND p.status IN ('captured','partially_refunded') AND p.method IN ('razorpay','upi','bank_transfer') AND p.created_at >= ? AND p.created_at < ?
+    AND NOT EXISTS (SELECT 1 FROM acct_transactions t WHERE t.payment_id = p.id AND t.deleted_at IS NULL)`, owner, fromMs, toMs);
+  add('reconcile', 'Match payments to the bank', unmatched ? 'warn' : 'done', unmatched, unmatched ? `${unmatched} online payment${unmatched === 1 ? ' is' : 's are'} not matched to a bank line yet.` : 'Every online payment is matched.', '/accounting/reconcile');
+  // 4. UPI payments customers sent that nobody has checked
+  const upi = n(`SELECT COUNT(*) n FROM payments WHERE owner_id = ? AND status = 'submitted' AND created_at < ?`, owner, toMs);
+  add('upi', 'Verify UPI payments', upi ? 'todo' : 'done', upi, upi ? `${upi} UPI payment${upi === 1 ? ' waits' : 's wait'} to be checked.` : 'No UPI payment is waiting.', '/bookings/payments');
+  // 5. sessions played with money still owed
+  const owed = one<{ n: number; s: number | null }>(`SELECT COUNT(*) n, SUM(total_paise - paid_paise) s FROM bookings WHERE owner_id = ? AND date BETWEEN ? AND ? AND status IN ('confirmed','completed') AND total_paise > paid_paise`, owner, from, to)!;
+  add('balances', 'Collect booking balances', owed.n ? 'warn' : 'done', owed.n, owed.n ? `${owed.n} session${owed.n === 1 ? '' : 's'} in the month still owe ₹${((owed.s ?? 0) / 100).toLocaleString('en-IN')}.` : 'Every session in the month is paid.', '/bookings');
+  // 6. bills dated in the month that are not settled
+  const bills = one<{ pend: number; appr: number }>(`SELECT SUM(CASE WHEN status IN ('draft','pending_approval') THEN 1 ELSE 0 END) pend, SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) appr
+    FROM acct_bills WHERE owner_id = ? AND deleted_at IS NULL AND bill_date <= ?`, owner, to)!;
+  const bp = bills.pend ?? 0, ba = bills.appr ?? 0;
+  add('bills', 'Approve and pay the bills', bp + ba ? 'todo' : 'done', bp + ba, bp + ba ? [bp ? `${bp} waiting for approval` : '', ba ? `${ba} approved but not paid` : ''].filter(Boolean).join(', ') + '.' : 'No bill from the month is open.', bp ? '/approvals' : '/bills');
+  // 7. payroll, the owner's step
+  if (isOwner) {
+    const pr = one<{ lines: number; paid: number }>(`SELECT COUNT(l.id) lines, SUM(CASE WHEN l.paid_on IS NOT NULL THEN 1 ELSE 0 END) paid FROM payroll_runs r LEFT JOIN payroll_lines l ON l.run_id = r.id WHERE r.owner_id = ? AND r.month = ? AND r.deleted_at IS NULL`, owner, month);
+    const finalised = !!one('SELECT 1 FROM payroll_runs WHERE owner_id = ? AND month = ? AND deleted_at IS NULL', owner, month);
+    const staffN = n('SELECT COUNT(*) n FROM payroll_staff WHERE owner_id = ? AND active = 1 AND deleted_at IS NULL', owner);
+    const unpaid = finalised ? (pr?.lines ?? 0) - (pr?.paid ?? 0) : 0;
+    add('payroll', 'Run and pay payroll', !staffN ? 'na' : !finalised || unpaid ? 'todo' : 'done', unpaid, !staffN ? 'No staff are on payroll.' : !finalised ? 'The payroll for the month is not finalised yet.' : unpaid ? `${unpaid} salar${unpaid === 1 ? 'y is' : 'ies are'} not marked paid.` : 'Payroll is finalised and paid.', '/payroll/run');
+  } else add('payroll', 'Run and pay payroll', 'na', 0, 'The owner runs payroll.', null);
+  // 8. sign off
+  const signed = !!one('SELECT 1 FROM acct_signoffs WHERE owner_id = ? AND month = ? AND reopened_at IS NULL', owner, month);
+  const over = to < istDate(now());
+  add('signoff', 'Sign off the month', signed ? 'done' : 'todo', 0, signed ? 'The month is signed off and locked.' : !over ? 'A month can be signed off once its last day has passed.' : unc ? 'Categorise every line first, then sign off.' : 'Ready to sign off. This locks the month and keeps its profit and loss on record.', null);
+  return { month, over, signedOff: signed, steps };
 }
