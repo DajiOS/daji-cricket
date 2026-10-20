@@ -39,7 +39,7 @@ function Shell({ route }: { route: string }) {
   const jobsOf = (sec?: string) => NAV.filter((g) => g.section === sec).map((g) => ({ ...g, items: g.items.filter(visible) })).filter((g) => g.items.length);
   const rail = RAIL.map((r) => {
     const jobs = r.section ? jobsOf(r.section) : [];
-    return { ...r, jobs, first: r.to ?? jobs[0]?.items[0]?.to };
+    return { ...r, jobs, first: r.to ?? (r.hub ? `/hub/${r.section}` : jobs[0]?.items[0]?.to) };
   }).filter((r) => (r.to ? allowed(r) : r.jobs.length > 0));
 
   const hit = PAGES.find((p) => route === p.path || route.startsWith(p.path + '/'));
