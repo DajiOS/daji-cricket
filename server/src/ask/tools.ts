@@ -15,15 +15,17 @@ import { listAccounts } from '../accounting/store.ts';
 // The built-in answerer and the optional Claude mode use exactly these.
 
 export interface Ctx { ownerId: string; user: UserRow }
-export type Area = 'reports' | 'bookings' | 'customers';
+export type Area = 'reports' | 'bookings' | 'customers' | 'tasks' | 'team';
 
-const AREA_PERMISSION: Record<Area, string> = { reports: 'view_reports', bookings: 'manage_bookings', customers: 'view_customers' };
-const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', bookings: 'bookings', customers: 'customers' };
+const AREA_PERMISSION: Record<Area, string> = { reports: 'view_reports', bookings: 'manage_bookings', customers: 'view_customers', tasks: 'manage_tasks', team: 'owner' };
+const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', bookings: 'bookings', customers: 'customers', tasks: 'the jobs', team: 'the team' };
 
 export function can(ctx: Ctx, area: Area): boolean {
   const u = ctx.user;
   if (area === 'reports') return (hasPermission(u, 'view_reports') || hasPermission(u, 'manage_accounting')) && hasPermission(u, 'view_revenue');
   if (area === 'bookings') return hasPermission(u, 'manage_bookings') || hasPermission(u, 'view_reports');
+  if (area === 'tasks') return hasPermission(u, 'manage_tasks');
+  if (area === 'team') return u.role !== 'staff';
   return hasPermission(u, 'view_customers');
 }
 export function need(ctx: Ctx, area: Area): void {
@@ -243,4 +245,31 @@ export function customers(ctx: Ctx, a: Range) {
 
 export function grounds(ctx: Ctx): { id: string; name: string }[] {
   return many<{ id: string; name: string }>('SELECT id, name FROM grounds WHERE owner_id = ? ORDER BY name', ctx.ownerId);
+}
+
+/** Jobs on the task board: how many are open, overdue and finished, and the titles of what is overdue. Titles only; no names. */
+export function jobs(ctx: Ctx, a: Range) {
+  need(ctx, 'tasks');
+  checkRange(a);
+  const today = todayIst();
+  const n = (sql: string, ...p: (string | number)[]) => one<{ n: number }>(sql, ctx.ownerId, ...p)!.n;
+  const overdue = many<{ title: string; due_date: string }>("SELECT title, due_date FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ? ORDER BY due_date LIMIT 10", ctx.ownerId, today);
+  return {
+    today,
+    open: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open'"),
+    overdue: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ?", today),
+    dueInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date BETWEEN ? AND ?", a.from, a.to),
+    doneInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'done' AND completed_at >= ? AND completed_at < ?", istMidnight(a.from), istMidnight(addDays(a.to, 1))),
+    overdueJobs: overdue.map((t) => ({ title: t.title, due: t.due_date })),
+  };
+}
+
+/** The team's attendance sheet for a period: days present, half days, absences and leave, as totals. No names. */
+export function team(ctx: Ctx, a: Range) {
+  need(ctx, 'team');
+  checkRange(a);
+  const rows = many<{ status: string; n: number }>('SELECT status, COUNT(*) n FROM payroll_attendance WHERE owner_id = ? AND deleted_at IS NULL AND date BETWEEN ? AND ? GROUP BY status', ctx.ownerId, a.from, a.to);
+  const get = (s: string) => rows.find((r) => r.status === s)?.n ?? 0;
+  const active = one<{ n: number }>('SELECT COUNT(*) n FROM payroll_staff WHERE owner_id = ? AND active = 1', ctx.ownerId)!.n;
+  return { from: a.from, to: a.to, activeStaff: active, present: get('present'), halfDays: get('half'), absent: get('absent'), onLeave: get('leave') };
 }

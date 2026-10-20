@@ -8,7 +8,6 @@ import { NAV, SUBS, SUB_ICONS, subHref, seesMoney, type NavItem } from './regist
 // It lists only the pages and records the person can already open. Ctrl+K or ⌘K (or "/") opens it from anywhere in the desk.
 
 interface Hit { key: string; kind: 'Go to' | 'Do' | 'Booking' | 'Bill' | 'Vendor' | 'Ask'; label: string; hint?: string; icon: string; run: () => void }
-interface Answer { question: string; answer: string; understood: string; details: { label: string; text: string }[]; suggestions: string[] }
 
 /** Things people do often, each opening the page or form that does it. */
 const ACTIONS: (NavItem & { words: string })[] = [
@@ -38,7 +37,7 @@ function score(text: string, q: string): number {
 }
 
 /** Opens the search with a question already asked: the assistant box in the top bar and on Home use this. */
-export const askAssistant = (question: string) => dispatchEvent(new CustomEvent('daji:ask', { detail: question }));
+export const askAssistant = (question = '') => dispatchEvent(new CustomEvent('daji:ask', { detail: question }));
 
 /** The starter kit's assistant box: type a question about the business and the answer opens in the search. */
 export function AskBox({ className = '', placeholder = 'Ask about the ground…' }: { className?: string; placeholder?: string }) {
@@ -57,11 +56,9 @@ export const openSearch = () => dispatchEvent(new Event('daji:open'));
 
 export function CommandSearch({ me, visible }: { me: Me; visible: (i: NavItem) => boolean }) {
   const [open, setOpen] = useState(false);
-  const [question, setQuestion] = useState<string | null>(null);
   useEffect(() => {
-    const f = (e: Event) => { setQuestion((e as CustomEvent<string>).detail); setOpen(true); };
     const o = () => setOpen(true);
-    addEventListener('daji:ask', f); addEventListener('daji:open', o); return () => { removeEventListener('daji:ask', f); removeEventListener('daji:open', o); };
+    addEventListener('daji:open', o); return () => removeEventListener('daji:open', o);
   }, []);
   const mac = useMemo(() => /Mac|iPhone|iPad/.test(navigator.platform), []);
   useEffect(() => {
@@ -80,18 +77,15 @@ export function CommandSearch({ me, visible }: { me: Me; visible: (i: NavItem) =
         </button>
       </div>
       {/* the top bar blurs what is behind it, which would trap a fixed overlay inside it, so the search opens on the page body */}
-      {open && createPortal(<Palette key={question ?? ''} me={me} visible={visible} question={question} onClose={() => { setOpen(false); setQuestion(null); }} />, document.body)}
+      {open && createPortal(<Palette me={me} visible={visible} onClose={() => setOpen(false)} />, document.body)}
     </>
   );
 }
 
-function Palette({ me, visible, question, onClose }: { me: Me; visible: (i: NavItem) => boolean; question: string | null; onClose: () => void }) {
-  const [q, setQ] = useState(question ?? '');
+function Palette({ me, visible, onClose }: { me: Me; visible: (i: NavItem) => boolean; onClose: () => void }) {
+  const [q, setQ] = useState('');
   const [at, setAt] = useState(0);
   const [found, setFound] = useState<Hit[]>([]);
-  const [asking, setAsking] = useState(false);
-  const [answer, setAnswer] = useState<Answer | null>(null);
-  const [err, setErr] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const jump = (to: string) => { onClose(); go(to); };
 
@@ -128,18 +122,10 @@ function Palette({ me, visible, question, onClose }: { me: Me; visible: (i: NavI
     return () => { live = false; clearTimeout(timer); };
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function ask(question: string) {
-    setAsking(true); setErr(null); setAnswer(null);
-    try { setAnswer(await api<Answer>('/api/staff/ask', { method: 'POST', body: { question } })); }
-    catch (e: any) { setErr(e.message); }
-    finally { setAsking(false); }
-  }
-  useEffect(() => { if (question) ask(question); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const hits: Hit[] = useMemo(() => {
     const t = q.trim();
     const rank = <T extends { text: string }>(xs: T[], n: number) => xs.map((x) => [x, score(x.text, t)] as const).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).slice(0, n).map(([x]) => x);
-    const askRow: Hit[] = t.length >= 3 ? [{ key: 'ask', kind: 'Ask', label: t.endsWith('?') ? t : `${t}?`, hint: 'Answered from your bookings and books', icon: 'ai', run: () => ask(t) }] : [];
+    const askRow: Hit[] = t.length >= 3 ? [{ key: 'ask', kind: 'Ask', label: t.endsWith('?') ? t : `${t}?`, hint: 'Opens Ask AI', icon: 'ai', run: () => { onClose(); askAssistant(t); } }] : [];
     const pages = rank(places.pages, t ? 8 : 6), acts = rank(places.acts, t ? 5 : 6);
     // a question goes first; otherwise the closest page or shortcut
     return t.endsWith('?') ? [...askRow, ...acts, ...pages, ...found] : [...acts, ...pages, ...found, ...askRow];
@@ -160,23 +146,11 @@ function Palette({ me, visible, question, onClose }: { me: Me; visible: (i: NavI
       <div className="cmdk" role="dialog" aria-modal="true" aria-label="Search, jump or ask">
         <div className="cmdk-input">
           <Icon name="search" size={19} />
-          <input autoFocus value={q} onChange={(e) => { setQ(e.target.value); setAnswer(null); setErr(null); }} onKeyDown={onKey}
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey}
             placeholder="Type a page, a booking reference, a vendor, or ask a question…" aria-label="Search" role="combobox" aria-expanded="true" aria-controls="cmdk-list"
             aria-activedescendant={hits[at] ? `cmdk-${at}` : undefined} />
           <kbd>Esc</kbd>
         </div>
-        {(asking || answer || err) && (
-          <div className="cmdk-answer" aria-live="polite">
-            {asking && <p className="muted">Working it out…</p>}
-            {err && <p style={{ color: 'var(--bad)', margin: 0 }}>{err}</p>}
-            {answer && <>
-              <div className="eyebrow">{answer.understood}</div>
-              <p className="cmdk-answer-text">{answer.answer}</p>
-              {answer.details.length > 0 && <dl>{answer.details.slice(0, 6).map((d) => <div key={d.label}><dt>{d.label}</dt><dd>{d.text}</dd></div>)}</dl>}
-              {answer.suggestions.length > 0 && <div className="pills">{answer.suggestions.slice(0, 3).map((s) => <button key={s} className="btn sm" onClick={() => { setQ(s); ask(s); }}>{s}</button>)}</div>}
-            </>}
-          </div>
-        )}
         <div className="cmdk-list" id="cmdk-list" role="listbox" ref={list}>
           {hits.length === 0 && <p className="muted" style={{ padding: '14px 18px', margin: 0 }}>Nothing matches. End with a question mark to ask instead.</p>}
           {hits.map((h, i) => {

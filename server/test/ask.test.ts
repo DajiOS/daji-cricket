@@ -598,3 +598,20 @@ test('a booking made today shows up in tomorrow\'s answers (no stale caching)', 
   assert.match(after.body.answer, /1 booking still to come/);
   assert.match(after.body.details[0].text, /Walk In/);
 });
+
+test('Claude mode: it can look up the jobs and the team attendance, for the owner only', async () => {
+  let tool = 'get_jobs';
+  // the first request of a question asks for a tool; the follow-up, which carries the tool result, just answers
+  const f = await useClaude((req) => ({ body: typeof req.body.messages.at(-1).content === 'string' ? toolUse(tool, { from: '2026-10-01', to: '2026-10-31' }) : say('Done.') }), 'claude');
+  assert.equal((await ask('How many jobs are open and how many are overdue?')).status, 200);
+  const jobs = JSON.parse(lastResult(f.seen[1]!).content) as { open: number; overdueJobs: unknown[] };
+  assert.equal(typeof jobs.open, 'number');
+  assert.ok(Array.isArray(jobs.overdueJobs));
+  tool = 'get_team_attendance';
+  assert.equal((await ask('How many staff were absent this month?')).status, 200);
+  assert.equal(typeof (JSON.parse(lastResult(f.seen[3]!).content) as { absent: number }).absent, 'number');
+  // staff without the jobs permission: the tool refuses, whatever the model asks for
+  tool = 'get_jobs'; perms(['manage_bookings']);
+  assert.equal((await ask('How many jobs are open?', sc.staff)).status, 200);
+  assert.equal(lastResult(f.seen[5]!).is_error, true);
+});

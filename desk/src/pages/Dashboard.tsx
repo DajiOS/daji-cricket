@@ -87,7 +87,7 @@ export default function Dashboard({ sub }: { sub: string }) {
         <span className="eyebrow">{fmtDay(todayISO())} · {me.role === 'super_admin' ? 'Software owner' : me.businessName || 'Daji Cricket Ground'}</span>
         <h1>{greet}, {first}. What would you like to know?</h1>
         <form className="dask" onSubmit={(e) => { e.preventDefault(); if (ask.trim().length >= 3) { askAssistant(ask.trim()); setAsk(''); } }}>
-          <label><span className="sr">Ask the assistant</span>
+          <label><span className="sr">Ask AI</span>
             <input type="text" value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="e.g. Which ground had the most sessions last week?" /></label>
           <button type="submit" aria-label="Ask"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
         </form>

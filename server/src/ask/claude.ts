@@ -32,6 +32,8 @@ export const TOOL_DEFS = [
   { name: 'get_refunds', description: 'Refunds still to send and refunds made in a period.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_customer_counts', description: 'How many people played in a period, how many for the first time, and how many have ever played.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_gst', description: 'GST on sessions played in a period, and GST owed right now.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
+  { name: 'get_jobs', description: 'Jobs on the task board: how many are open, overdue and finished, with the titles of overdue jobs.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
+  { name: 'get_team_attendance', description: 'Staff attendance totals for a period: present, half days, absent and on leave, and how many staff are active.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'list_grounds', description: 'The names and ids of the grounds.', input_schema: { type: 'object', properties: {} } },
 ] as const;
 
@@ -66,6 +68,8 @@ export function runTool(ctx: T.Ctx, name: string, i: Input): unknown {
     case 'get_refunds': return T.refunds(ctx, range(i));
     case 'get_customer_counts': return T.customers(ctx, range(i));
     case 'get_gst': return T.gst(ctx, range(i));
+    case 'get_jobs': return T.jobs(ctx, range(i));
+    case 'get_team_attendance': return T.team(ctx, range(i));
     case 'list_grounds': return T.grounds(ctx);
     default: throw new Error(`There is no tool called ${name}`);
   }
