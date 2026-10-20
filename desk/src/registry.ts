@@ -31,6 +31,7 @@ const Activity = lazy(() => import('./pages/Activity'));
 const CloseWizard = lazy(() => import('./pages/CloseWizard'));
 const Compare = lazy(() => import('./pages/Compare'));
 const Health = lazy(() => import('./pages/Health'));
+const Explorer = lazy(() => import('./pages/Explorer'));
 
 export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
 /** Who may see a menu entry: the same rules the server applies to the page behind it. */
@@ -64,7 +65,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
-  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health },
+  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health }, { path: '/explore', page: Explorer },
 ];
 export const HOME = Dashboard;
 
@@ -77,6 +78,7 @@ export const NAV: NavGroup[] = [
     { to: '/pipeline', label: 'Pipeline', icon: 'list', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
     { to: '/activity', label: 'Activity', icon: 'bell' },
     { to: '/close', label: 'Month-end close', icon: 'lock', check: seesMoney },
+    { to: '/explore', label: 'Explorer', icon: 'list' },
     { to: '/compare', label: 'Compare', icon: 'pie', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
   ] },
   { group: 'Task Management', part: 'daily', items: [{ to: '/tasks', label: 'Tasks', icon: 'tasks', perm: 'manage_tasks' }] },
