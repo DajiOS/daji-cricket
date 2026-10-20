@@ -343,6 +343,36 @@ function openAuth({ after, mode = 'in', note } = {}) {
     });
     return form;
   };
+  /** Forgot password: a code goes to the email, then the code and a new password. Also gives a password to someone who never had one. */
+  const forgotForm = () => {
+    const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' }), info = h('div', { class: 'hint', style: 'margin:0 0 12px' });
+    const email = input('email', 'email', { autocomplete: 'email', required: true, autocapitalize: 'none', spellcheck: 'false' });
+    const code = input('code', 'text', { autocomplete: 'one-time-code', inputmode: 'numeric', maxlength: '8' }), password = input('password', 'password', { autocomplete: 'new-password' });
+    const codeRow = h('div', { hidden: true }, field('Code from the email', code), field('New password', password), h('div', { class: 'hint', style: 'margin:-4px 0 12px;font-size:12px' }, 'At least 8 characters with a capital letter, a small letter and a number.'));
+    const submit = h('button', { class: 'btn primary block', type: 'submit' }, 'Email me a code');
+    let sent = false;
+    form.append(h('p', { class: 'hint', style: 'margin:0 0 12px' }, 'Enter the email on your account and we will send you a code to set a new password.'), field('Email', email), info, codeRow, errBox, submit);
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault(); errBox.textContent = ''; submit.disabled = true;
+      try {
+        if (!sent) {
+          const r = await api('/api/auth/password/forgot', { method: 'POST', body: { email: email.value.trim() } });
+          sent = true; codeRow.hidden = false; submit.textContent = 'Set new password';
+          info.textContent = `If ${email.value.trim()} has an account, a code is on its way. It works for ${Math.round(r.expiresInSeconds / 60)} minutes. Check your spam folder too.`;
+          if (r.devCode) info.append(h('div', { style: 'margin-top:6px;color:var(--accent,#c9a96a)' }, `Demo mode: no email is sent. Your code is ${r.devCode}.`));
+          code.focus();
+        } else {
+          await api('/api/auth/password/reset', { method: 'POST', body: { email: email.value.trim(), code: code.value.trim(), password: password.value } });
+          toast('Password changed. You are signed out on other devices.');
+          try { const a = await api('/api/auth/login', { method: 'POST', body: { identifier: email.value.trim(), password: password.value }, keepToken: true }); finishAuth(a, after); }
+          catch { method = 'pw'; render(); }
+          return;
+        }
+      } catch (e) { const f = fieldErrors(e); errBox.textContent = f.password || f.email || f.code || e.message; }
+      submit.disabled = false;
+    });
+    return form;
+  };
   let upMethod = cfg.codesEnabled ? 'otp' : 'email';
   /** Create an account with an email and a password (a mobile number is optional). */
   const emailSignup = () => {
@@ -378,6 +408,10 @@ function openAuth({ after, mode = 'in', note } = {}) {
       body.append(otpForm(false), h('div', { style: 'margin-top:14px' }, h('button', { type: 'button', class: 'linkbtn', onclick: () => { method = 'pw'; render(); } }, 'Use my password instead')));
       return;
     }
+    if (method === 'forgot') {
+      body.append(forgotForm(), h('div', { style: 'margin-top:14px' }, h('button', { type: 'button', class: 'linkbtn', onclick: () => { method = 'pw'; render(); } }, 'Back to sign in')));
+      return;
+    }
     const errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' });
     const form = h('form', { novalidate: true });
     const submit = h('button', { class: 'btn primary block', type: 'submit' }, 'Sign in');
@@ -389,15 +423,15 @@ function openAuth({ after, mode = 'in', note } = {}) {
       try { const a = await api('/api/auth/login', { method: 'POST', body: { identifier: email.value.trim(), password: password.value }, keepToken: true }); finishAuth(a, after); }
       catch (e) { errBox.textContent = e.message; submit.disabled = false; }
     });
-    const back = null;
+    const forgotLink = h('div', { style: 'margin-top:14px' }, h('button', { type: 'button', class: 'linkbtn', onclick: () => { method = 'forgot'; render(); } }, 'Forgot password?'));
     if (cfg.demoMode) {
       const fill = (e, p) => { email.value = e; password.value = p; form.requestSubmit(); };
       body.append(form, h('div', { class: 'demo' }, 'Demo mode is on. Try: ',
         h('button', { type: 'button', onclick: () => fill('customer@daji.test', 'Customer@12345') }, 'customer'), ' · ',
         h('button', { type: 'button', onclick: () => fill('owner1@daji.test', 'Owner@12345') }, 'owner'), ' · ',
         h('button', { type: 'button', onclick: () => fill('staff1@daji.test', 'Staff@12345') }, 'staff'), ' · ',
-        h('button', { type: 'button', onclick: () => fill('admin@daji.test', 'Admin@12345') }, 'super admin')));
-    } else body.append(form);
+        h('button', { type: 'button', onclick: () => fill('admin@daji.test', 'Admin@12345') }, 'super admin')), forgotLink);
+    } else body.append(form, forgotLink);
   };
   const tabs = h('div', { class: 'tabs', style: 'margin:14px 0 22px' },
     h('button', { class: 'tab' + (current === 'in' ? ' on' : ''), type: 'button', onclick: (e) => { current = 'in'; method = 'pw'; sync(); } }, 'Sign in'),

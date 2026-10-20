@@ -58,11 +58,13 @@ export async function sendOtpCode(phone: string, code: string): Promise<boolean>
 }
 
 /** Sends one message straight away (not stored with the user's messages), for example a sign-in code. False when no provider is set up. */
-export async function sendDirect(channel: Channel, to: string, body: string): Promise<boolean> {
+export async function sendDirect(channel: Channel, to: string, body: string, subject: string | null = null): Promise<boolean> {
   const p = providers.get(channel);
   if (!p) return false;
-  try { const r = await p({ id: 'direct', userId: '', channel, category: 'transactional', template: 'direct', subject: null, body, to, bookingId: null }); return !!r.ok; } catch { return false; }
+  try { const r = await p({ id: 'direct', userId: '', channel, category: 'transactional', template: 'direct', subject, body, to, bookingId: null }); return !!r.ok; } catch { return false; }
 }
+/** True when an email provider is set up (GMAIL_APP_PASSWORD), so a message like a password reset code can go out. */
+export const emailAvailable = (): boolean => providers.has('email');
 
 export interface TemplateData {
   ref?: string; ground?: string; startAt?: number; amountPaise?: number; creditPaise?: number; refundPaise?: number;
