@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSession } from '../App';
-import { PageHead, Stat, Loading, ErrorBox, Empty, Icon } from '../ui';
-import { CollectionChart, Ring } from '../charts';
-import { api, useApi, inr, inrShort, fmtDay, todayISO, can, go, type Me } from '../lib';
-import { Schedule, Attention, type TodayData } from '../parts/dash/Today';
-import { timeRange } from '../parts/dash/common';
-import { AskBox, askAssistant } from '../CommandSearch';
-import { NAV, SECTIONS, navVisible } from '../registry';
+import { Icon } from '../ui';
+import { api, useApi, inr, inrShort, fmtDay, fmtTime, todayISO, can, type Me } from '../lib';
+import type { TodayData } from '../parts/dash/Today';
+import { askAssistant } from '../CommandSearch';
+import { NAV, navVisible } from '../registry';
 
 interface Overview {
   range: { from: string; to: string };
@@ -23,8 +21,7 @@ const SOLD = ['confirmed', 'completed', 'no_show']; // sessions that count as bo
 export default function Dashboard({ sub }: { sub: string }) {
   void sub;
   const { me, ownerId } = useSession();
-  const [version, setVersion] = useState(0);
-  const bump = () => setVersion((v) => v + 1);
+  const version = 0;
   const canBookings = can(me, 'manage_bookings'), canSeeReports = can(me, 'view_reports') || can(me, 'manage_accounting');
   // money (revenue, profit, billed and collected, balances to collect) shows only to the owner and to team members the owner has given "Can see revenue"
   const canMoney = canSeeReports && can(me, 'view_revenue');
@@ -53,137 +50,118 @@ export default function Dashboard({ sub }: { sub: string }) {
     return () => { live = false; };
   }, [canReports, ownerId, version]);
 
+  const [ex] = useApi<{ items: string[] }>('/api/staff/ask/examples');
+  const [appr] = useApi<{ count: number }>(can(me, 'manage_accounting') ? '/api/accounting/approvals/count' : null, [ownerId]);
+  const [ask, setAsk] = useState('');
   const hour = Number(new Date(Date.now() + 19800000).toISOString().slice(11, 13));
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const first = me.name.split(' ')[0];
   const toCollect = (today?.bookings || []).reduce((a, b) => a + (b.status === 'confirmed' ? Math.max(0, b.balancePaise || 0) : 0), 0);
-  const monthName = MONTHS[Number(month.slice(5)) - 1]!.slice(0, 3);
+  const monthName = MONTHS[Number(month.slice(5)) - 1]!;
   const booked = util?.utilization.reduce((a, g) => a + g.bookedSlots, 0) || 0, avail = util?.utilization.reduce((a, g) => a + g.availableSlots, 0) || 0;
-  const thisMonth = trend?.[trend.length - 1];
+  const waiting = (appr?.count ?? 0) + (today?.awaitingVerification ?? 0) + (today?.needsReview ?? 0);
+  const t = Date.now();
+  const rows = (today?.bookings ?? []).filter((b) => b.status !== 'cancelled' && b.status !== 'expired').sort((a, b) => a.startAt - b.startAt);
+
+  type Ev = { time: string; title: string; detail: string; dot: string; href?: string };
+  const events: Ev[] = [];
+  if (today) {
+    if (today.awaitingVerification) events.push({ time: 'Now', title: `${today.awaitingVerification} UPI payment${today.awaitingVerification === 1 ? '' : 's'} to check`, detail: 'Match them with the bank, then confirm the booking', dot: '#B86E12', href: '#/bookings/payments' });
+    if (today.needsReview) events.push({ time: 'Now', title: `${today.needsReview} booking${today.needsReview === 1 ? '' : 's'} to approve`, detail: 'Waiting for your decision', dot: '#B86E12', href: '#/bookings/approvals' });
+    for (const b of rows) events.push({ time: fmtTime(b.startAt), title: `${b.customerName} · ${b.groundName}`, detail: `${fmtTime(b.startAt)} – ${fmtTime(b.endAt)}${b.status === 'held' ? ' · held, not paid' : b.status === 'confirmed' && b.balancePaise > 0 ? ` · ${inr(b.balancePaise)} to collect` : ''}`, dot: b.endAt <= t ? '#9AA39F' : b.startAt <= t ? '#1E6E4A' : '#2F6FB0', href: `#/bookings/${b.id}` });
+  }
+
+  const tiles: { label: string; value: string; note: string; bg: string; href: string }[] = [];
+  if (canBookings) tiles.push({ label: 'Sessions today', value: today ? String(rows.length) : '…', note: today ? `${rows.filter((b) => b.startAt > t).length} still to play` : ' ', bg: 'var(--t-blue)', href: '#/bookings/day' });
+  if (canReports) tiles.push({ label: `Open hours used · ${monthName.slice(0, 3)}`, value: avail ? `${Math.round((booked / avail) * 100)}%` : '…', note: avail ? `${booked} of ${avail} hours booked` : ' ', bg: 'var(--t-teal)', href: '#/compare/grounds' });
+  if (canMoney) tiles.push({ label: 'Booked ahead', value: ahead ? inrShort(ahead.totalPaise) : '…', note: ahead ? `${ahead.bookings} upcoming sessions` : ' ', bg: 'var(--t-violet)', href: '#/accounting/reports' });
+  if (canBookings || canMoney) tiles.push({ label: 'Approvals', value: String(waiting), note: waiting ? 'waiting on you' : 'nothing waiting', bg: 'var(--t-amber)', href: can(me, 'manage_accounting') ? '#/approvals' : '#/bookings/approvals' });
+  if (canMoney) tiles.push({ label: 'To collect today', value: today ? inr(toCollect) : '…', note: "balances on today's sessions", bg: 'var(--t-green)', href: '#/bookings/payments' });
+
+  const points = (trend ?? []).map((x, i) => ({ d: x.period, v: x.collected, i }));
+  const bigValue = canMoney ? (pnl ? inrShort(pnl.revenue.totalPaise) : trend?.length ? inrShort(trend[trend.length - 1]!.collected) : '—') : String(rows.length);
 
   return (
-    <div className="stack">
-      <PageHead eyebrow={me.role === 'super_admin' ? 'Software owner' : me.businessName || 'Daji Cricket Ground'} title={`${greet}, ${me.name.split(' ')[0]}`}
-        lede={`Here is the ground as of ${fmtDay(todayISO())}.`}>
-        {canBookings && <button className="btn primary" onClick={() => go('/bookings/add')}><Icon name="plus" />Add booking</button>}
-      </PageHead>
-
-      <Assistant />
-
-      <div className={canBookings ? 'home-top' : ''}>
-      {(canBookings || canMoney) && <div className="grid g4" style={canMoney ? { gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" } : undefined}>
-        {canBookings && <Stat label="Sessions today" value={today ? today.bookings.length : '…'} foot={today ? (today.bookings.length ? `${today.bookings.filter((b) => b.startAt > Date.now()).length} still to play` : 'A quiet day') : ' '} />}
-        {canMoney && <Stat label={`Revenue · ${monthName}`} value={pnl ? inrShort(pnl.revenue.totalPaise) : canReports && !pnlErr ? '…' : thisMonth ? inrShort(thisMonth.collected) : '—'}
-          foot={pnl ? 'from sessions played this month' : pnlErr ? 'Sessions played, from payments received' : canReports ? ' ' : 'Your role does not include reports'} />}
-        {canMoney && <Stat label={`Net profit · ${monthName}`} value={pnl ? <span style={pnl.netProfitPaise < 0 ? { color: 'var(--bad)' } : undefined}>{inrShort(pnl.netProfitPaise)}</span> : canReports && !pnlErr ? '…' : '—'}
-          foot={pnl ? (pnl.uncategorised.count ? `${pnl.uncategorised.count} bank transactions still need a category` : 'after expenses') : pnlErr ? 'Accounting is not available here' : ' '} />}
-        {canMoney && <Stat label="Booked ahead" value={ahead ? inrShort(ahead.totalPaise) : '…'} foot={ahead ? `${ahead.bookings} upcoming sessions · ${inrShort(ahead.balancePaise)} still to collect` : ' '} />}
-        {canMoney && <Stat label="To collect today" value={today ? <span style={toCollect ? { color: 'var(--warn)' } : undefined}>{inr(toCollect)}</span> : '…'} foot="balances on today's sessions" />}
-      </div>}
-      {canBookings && <Timeline today={today} />}
+    <div className="dhome">
+      <section className="dhero">
+        <span className="eyebrow">{fmtDay(todayISO())} · {me.role === 'super_admin' ? 'Software owner' : me.businessName || 'Daji Cricket Ground'}</span>
+        <h1>{greet}, {first}. What would you like to know?</h1>
+        <form className="dask" onSubmit={(e) => { e.preventDefault(); if (ask.trim().length >= 3) { askAssistant(ask.trim()); setAsk(''); } }}>
+          <label><span className="sr">Ask the assistant</span>
+            <input type="text" value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="e.g. Which ground had the most sessions last week?" /></label>
+          <button type="submit" aria-label="Ask"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
+        </form>
+        {!!ex?.items.length && <div className="dprompts">{ex.items.slice(0, 4).map((q) => <button key={q} type="button" onClick={() => askAssistant(q)}>{q}</button>)}</div>}
+      </section>
+      <div className="drow">
+        {canBookings && <section className="dcard dtoday" aria-label="Today">
+          <div className="dtoday-hd"><h2>Today</h2><span className="muted">{me.businessName || 'Daji Cricket Ground'}</span></div>
+          <ol>
+            {events.map((e, i) => (
+              <li key={i}>
+                <span className="dtl-time">{e.time}</span>
+                <span className="dtl-dot"><i /><b style={{ borderColor: e.dot }} /><i /></span>
+                <a className="dtl-body" href={e.href}><b>{e.title}</b><span>{e.detail}</span></a>
+              </li>))}
+            {!today && <li className="muted small" style={{ display: 'block', padding: '12px 0' }}>Loading today…</li>}
+            {today && !events.length && <li className="muted small" style={{ display: 'block', padding: '12px 0' }}>Nothing on today.</li>}
+          </ol>
+          <a className="dbtn" href="#/calendar">See the full day</a>
+        </section>}
+        <div className="dtiles">
+          <a className="dcard dspan2" href={canMoney ? '#/accounting/reports' : '#/bookings/day'}>
+            <span className="eyebrow">{canMoney ? `Money received · ${monthName}` : 'Sessions today'}</span>
+            <span className="dbig">{bigValue}</span>
+            {canMoney && points.length > 1 ? <Trend points={points} /> : <div className="dtrend-empty">{canMoney ? 'The trend draws once there are a few months of bookings.' : 'Sessions on the ground today.'}</div>}
+          </a>
+          {tiles.map((x) => (
+            <a key={x.label} className="dcard dtile" href={x.href} style={{ background: x.bg, borderColor: x.bg }}>
+              <span className="eyebrow">{x.label}</span>
+              <span className="dval">{x.value}</span>
+              <span className="muted">{x.note}</span>
+            </a>))}
+        </div>
       </div>
-
-      {canReports && <div className={canMoney ? 'grid g-2-1' : 'grid'}>
-        {canMoney && <div className="card">
-          <div className="card-head"><h3>Sessions billed vs collected</h3><span className="muted small">Last 6 months</span></div>
-          <div className="card-pad">
-            {!canReports ? <Empty>The reports are not available to your role.</Empty> : trendErr ? <ErrorBox msg={trendErr} /> : !trend ? <Loading h={240} /> : <CollectionChart data={trend} />}
-          </div>
-        </div>}
-        <div className="card">
-          <div className="card-head"><h3>Ground utilisation</h3><span className="muted small">{MONTHS[Number(month.slice(5)) - 1]}</span></div>
-          <div className="card-pad">
-            {!canReports ? <Empty>The reports are not available to your role.</Empty> : !util ? <Loading h={200} /> : (
-              <>
-                <div className="row" style={{ gap: 20, alignItems: 'center', flexWrap: 'nowrap' }}>
-                  <Ring value={booked} total={avail} label="Booked" />
-                  <div className="stack" style={{ flex: 1, minWidth: 120, gap: 10 }}>
-                    {util.utilization.map((g) => (
-                      <div key={g.groundId}>
-                        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><span className="small">{g.groundName}</span><b className="tabular small">{Math.round(g.utilization)}%</b></div>
-                        <div className="meter" style={{ marginTop: 5 }}><span style={{ width: `${Math.min(100, g.utilization)}%` }} /></div>
-                      </div>))}
-                  </div>
-                </div>
-                <div className="divider" />
-                <div className="small muted">{booked} of {avail} hours booked this month</div>
-                {canMoney && util.payments.outstandingBalances.bookings > 0 && <div className="small muted" style={{ marginTop: 6 }}>Balances still to collect: <b className="gold tabular">{inr(util.payments.outstandingBalances.amountPaise)}</b> on {util.payments.outstandingBalances.bookings} bookings</div>}
-              </>)}
-          </div>
-        </div>
-      </div>}
-
-      {canMoney && ahead && ahead.items.length > 0 && <div className="card">
-        <div className="card-head"><h3>Revenue already booked</h3><span className="muted small">Confirmed sessions from today, by month</span></div>
-        <div className="card-pad"><CollectionChart data={ahead.items.map((x) => ({ period: x.period, billed: x.totalPaise, collected: x.paidPaise }))} /></div>
-      </div>}
-
-      {canBookings && <div className="grid g-2-1 dash-lists">
-        <div className="card">
-          <div className="card-head"><h3>Today's schedule</h3><a className="small" href="#/bookings/day">Day view →</a></div>
-          {canBookings ? <Schedule data={today} err={todayErr} onChanged={bump} /> : <Empty>Your role does not include bookings.</Empty>}
-        </div>
-        <div className="card">
-          <div className="card-head"><h3>Needs your attention</h3><a className="small" href="#/bookings/approvals">Approvals →</a></div>
-          <Attention today={today} canBookings={canBookings} canVerify={can(me, 'verify_payments')} onChanged={bump} version={version} />
-        </div>
-      </div>}
-
       <AllTools me={me} />
     </div>
   );
 }
 
-/** The starter kit's assistant box on Home, with a few questions it can answer for this login. */
-function Assistant() {
-  const [ex] = useApi<{ items: string[] }>('/api/staff/ask/examples');
-  return (
-    <div className="stack" style={{ gap: 10 }}>
-      <AskBox className="big" placeholder="Ask anything about the ground, the bookings or the books…" />
-      {!!ex?.items.length && <div className="pills">{ex.items.slice(0, 4).map((q) => <button key={q} className="btn sm ghost" onClick={() => askAssistant(q)}>{q}</button>)}</div>}
-    </div>
-  );
-}
+const TINT: Record<string, string> = { ground: 'var(--t-green)', people: 'var(--t-blue)', money: 'var(--t-violet)', settings: 'var(--t-amber)' };
+const TITLE: Record<string, string> = { ground: 'Ground', people: 'People', money: 'Finance', settings: 'Settings' };
 
-/** Today as a timeline beside the tiles: each session in time order, with a line where now is. */
-function Timeline({ today }: { today: TodayData | null }) {
-  const t = Date.now();
-  const rows = (today?.bookings ?? []).filter((b) => b.status !== 'cancelled' && b.status !== 'expired').sort((a, b) => a.startAt - b.startAt);
-  const nowAt = rows.findIndex((b) => b.endAt > t);
-  return (
-    <section className="card tl" aria-label="Today">
-      <div className="card-head"><h3>Today</h3><a className="small" href="#/calendar">Calendar →</a></div>
-      {!today ? <Loading h={200} /> : !rows.length ? <p className="muted card-pad" style={{ margin: 0 }}>No sessions today.</p> : (
-        <ol className="tl-list">
-          {rows.map((b, i) => (
-            <li key={b.id} className={`${b.endAt <= t ? 'past' : b.startAt <= t ? 'live' : ''}`}>
-              {i === nowAt && b.startAt > t && <span className="tl-now" aria-label="Now" />}
-              <a href={`#/bookings/${b.id}`}>
-                <span className="tl-time num">{timeRange(b)}</span>
-                <span className="tl-what"><b>{b.customerName}</b><span className="small muted">{b.groundName}{b.status === 'held' ? ' · held, not paid' : b.balancePaise > 0 && b.status === 'confirmed' ? ` · ${inr(b.balancePaise)} to collect` : ''}</span></span>
-              </a>
-            </li>))}
-          {nowAt < 0 && <li className="tl-end small muted">Nothing more today</li>}
-        </ol>)}
-    </section>
-  );
-}
-
-/** "What do you want to do?": every job in the menu as a card, with the pages under it that this login can open. */
+/** "All tools": a round icon tile for every page this login can open, grouped by department. */
 function AllTools({ me }: { me: Me }) {
-  const secs = SECTIONS.filter((x) => x.key !== 'home').map((x) => ({ ...x, jobs: NAV.filter((g) => g.section === x.key).map((g) => ({ ...g, items: g.items.filter((i) => navVisible(me, i)) })).filter((g) => g.items.length) })).filter((x) => x.jobs.length);
+  const groups = Object.keys(TINT).map((k) => {
+    const seen = new Set<string>();
+    const apps = NAV.filter((g) => g.section === k).flatMap((g) => g.items).filter((i) => navVisible(me, i) && !seen.has(i.to) && seen.add(i.to));
+    return { key: k, apps };
+  }).filter((g) => g.apps.length);
   return (
-    <section className="stack" style={{ gap: 14 }} aria-label="What do you want to do?">
-      <h2 style={{ margin: '8px 0 0' }}>What do you want to do?</h2>
-      {secs.map((x) => (
-        <div key={x.key}>
-          <div className="eyebrow" style={{ marginBottom: 8 }}>{x.title}</div>
-          <div className="jobs">{x.jobs.map((g) => (
-            <div key={g.group} className="card job">
-              <h3><span className="tool-ic" aria-hidden="true"><Icon name={g.items[0]!.icon} size={17} /></span>{g.group}</h3>
-              <ul>{g.items.map((i) => <li key={i.to}><a href={`#${i.to}`}>{i.label}<Icon name="chevron" size={13} /></a></li>)}</ul>
-            </div>))}
-          </div>
-        </div>))}
+    <section className="dtools" aria-label="All tools">
+      <div className="dtools-hd"><h2>All tools</h2><span className="muted">Everything on the desk, one click away</span></div>
+      <div className="dtools-grid">
+        {groups.map((g) => (
+          <div key={g.key} className="dtools-grp">
+            <h3 className="eyebrow">{TITLE[g.key]}</h3>
+            <div className="dapps">
+              {g.apps.map((i) => <a key={i.to} href={`#${i.to}`} className="dapp-btn"><span style={{ background: TINT[g.key] }}><Icon name={i.icon} size={26} /></span>{i.label}</a>)}
+            </div>
+          </div>))}
+      </div>
     </section>
+  );
+}
+
+/** Money received month by month as a soft area line in the theme's accent. */
+function Trend({ points }: { points: { d: string; v: number }[] }) {
+  const W = 600, H = 150, max = Math.max(...points.map((p) => p.v)) * 1.1 || 1;
+  const xy = points.map((p, i) => [(i / (points.length - 1)) * W, H - (p.v / max) * (H - 10)] as const);
+  const line = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  return (
+    <svg className="dtrend" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`Money received over the last ${points.length} months`}>
+      <path d={`${line} L${W},${H} L0,${H} Z`} fill="var(--gold)" opacity=".16" />
+      <path d={line} fill="none" stroke="var(--gold)" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+    </svg>
   );
 }

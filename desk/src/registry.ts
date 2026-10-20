@@ -32,6 +32,8 @@ const CloseWizard = lazy(() => import('./pages/CloseWizard'));
 const Compare = lazy(() => import('./pages/Compare'));
 const Health = lazy(() => import('./pages/Health'));
 const Explorer = lazy(() => import('./pages/Explorer'));
+const Spots = lazy(() => import('./pages/Spots'));
+const Hub = lazy(() => import('./pages/Hub'));
 
 export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
 /** Who may see a menu entry: the same rules the server applies to the page behind it. */
@@ -64,7 +66,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
-  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health }, { path: '/explore', page: Explorer },
+  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub }, { path: '/grounds', page: Spots },
 ];
 export const HOME = Dashboard;
 
@@ -93,11 +95,15 @@ export const NAV: NavGroup[] = [
     { to: '/tournaments', label: 'Tournaments', icon: 'trophy', perm: 'manage_matches' },
     { to: '/matches', label: 'Matches', icon: 'ball', perm: 'manage_matches' },
   ] },
+  { section: 'ground', group: 'Grounds & nets', items: [
+    { to: '/grounds', label: 'Status board', icon: 'ball', check: (me) => can(me, 'manage_bookings') || can(me, 'manage_tasks') },
+    { to: '/grounds/layout', label: 'Layout', icon: 'map', check: (me) => can(me, 'manage_bookings') || can(me, 'manage_tasks') },
+    { to: '/health', label: 'Ground health', icon: 'pulse' },
+    { to: '/cameras', label: 'Live cameras', icon: 'camera', perm: 'view_cameras' },
+  ] },
   { section: 'ground', group: 'Keep an eye on it', items: [
     { to: '/calendar', label: 'Calendar', icon: 'calendar' },
     { to: '/activity', label: 'What happened', icon: 'bell' },
-    { to: '/health', label: 'Ground health', icon: 'pulse' },
-    { to: '/cameras', label: 'Live cameras', icon: 'camera', perm: 'view_cameras' },
   ] },
 
   { section: 'people', group: 'Talk to customers', items: [
@@ -161,6 +167,47 @@ export const NAV: NavGroup[] = [
     { to: '/platform', label: 'Software owner', icon: 'vault', superOnly: true },
   ] },
 ];
+/** The slim rail, as in the design: "Every day" pages that open directly, then the departments whose task groups open beside it. */
+export interface RailItem { key: string; label: string; short: string; icon: string; sep?: string; to?: string; section?: string; hub?: boolean; eyebrow?: string; desc?: string; perm?: string; anyPerm?: string[]; ownerOnly?: boolean }
+export const RAIL: RailItem[] = [
+  { key: 'home', label: 'Home', short: 'Home', icon: 'dashboard', sep: 'Every day', to: '/' },
+  { key: 'approvals', label: 'Approvals', short: 'Approvals', icon: 'check', to: '/approvals', anyPerm: ['manage_accounting', 'manage_bookings'] },
+  { key: 'calendar', label: 'Calendar', short: 'Calendar', icon: 'calendar', to: '/calendar' },
+  { key: 'tasks', label: 'Task boards', short: 'Tasks', icon: 'tasks', to: '/tasks', perm: 'manage_tasks' },
+  { key: 'ground', label: 'Ground', short: 'Ground', icon: 'ball', sep: 'Departments', section: 'ground', eyebrow: 'Book → play → collect', desc: 'Everything about the sessions on your ground, from the booking to the final over.' },
+  { key: 'people', label: 'People', short: 'People', icon: 'users', section: 'people', eyebrow: 'Customers → academy → team', desc: 'The people who play, learn and work here.' },
+  { key: 'money', label: 'Finance', short: 'Finance', icon: 'accounts', section: 'money', hub: true, eyebrow: 'Purchase → invoice → pay → books', desc: 'One section for the whole money flow, in the order it happens.' },
+  { key: 'settings', label: 'Settings', short: 'Settings', icon: 'settings', section: 'settings', eyebrow: 'Admin', desc: 'Set-up screens most people rarely open, kept out of the daily menu.' },
+];
+/** One line under each job in the rail's panel. */
+export const BLURBS: Record<string, string> = {
+  'Take bookings': 'Every booking, the day view and what is waiting on you.',
+  'Fill the ground': 'Memberships, promo codes, tournaments and matches.',
+  'Grounds & nets': 'What is ready, broken or being fixed, and where it sits.',
+  'Keep an eye on it': 'The calendar and what happened on the desk.',
+  'Talk to customers': 'Contacts, WhatsApp reminders and business cards.',
+  'Run the academy': 'Students, attendance, fees and coaches.',
+  'Look after the team': 'Jobs to do, staff attendance and access.',
+  'Buy & pay': 'Order, receive the bill, approve and pay.',
+  'Check the money': 'Make sure every rupee landed where it should.',
+  'See results': 'How the month is going against plan.',
+  'Close the month': 'A step-by-step close, then lock it.',
+  'Set up the ground': 'Prices, timings, payments and the website.',
+  'Connect and share': 'People, connections, services and photos.',
+  'Keep it safe': 'Compliance, backups and the software owner.',
+};
+/** The rail button an address belongs to: an "Every day" page, or the department of its menu item. */
+export const railOf = (route: string): RailItem | undefined => {
+  const r = route || '/';
+  const hubKey = r.match(/^\/hub\/(\w+)/)?.[1];
+  if (hubKey) return RAIL.find((x) => x.section === hubKey);
+  const direct = RAIL.find((x) => x.to && (x.to === '/' ? r === '/' : r === x.to || r.startsWith(x.to + '/')));
+  if (direct) return direct;
+  const it = itemFor(r, NAV.flatMap((g) => g.items));
+  const sec = it && NAV.find((g) => g.items.includes(it))?.section;
+  return RAIL.find((x) => x.section === sec);
+};
+
 /** The menu item for an address: the longest item address that the address starts with. */
 export const itemFor = (route: string, items: NavItem[]): NavItem | undefined => {
   const r = route || '/';

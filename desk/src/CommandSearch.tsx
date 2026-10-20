@@ -52,12 +52,16 @@ export function AskBox({ className = '', placeholder = 'Ask about the ground…'
   );
 }
 
+/** Opens the search with nothing typed: the assistant button in the top bar uses this. */
+export const openSearch = () => dispatchEvent(new Event('daji:open'));
+
 export function CommandSearch({ me, visible }: { me: Me; visible: (i: NavItem) => boolean }) {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState<string | null>(null);
   useEffect(() => {
     const f = (e: Event) => { setQuestion((e as CustomEvent<string>).detail); setOpen(true); };
-    addEventListener('daji:ask', f); return () => removeEventListener('daji:ask', f);
+    const o = () => setOpen(true);
+    addEventListener('daji:ask', f); addEventListener('daji:open', o); return () => { removeEventListener('daji:ask', f); removeEventListener('daji:open', o); };
   }, []);
   const mac = useMemo(() => /Mac|iPhone|iPad/.test(navigator.platform), []);
   useEffect(() => {
@@ -70,9 +74,11 @@ export function CommandSearch({ me, visible }: { me: Me; visible: (i: NavItem) =
   }, []);
   return (
     <>
-      <button className="cmdk-btn" onClick={() => setOpen(true)} aria-label="Search, jump or ask" aria-keyshortcuts={mac ? 'Meta+K' : 'Control+K'}>
-        <Icon name="search" size={16} /><span className="hide-sm">Search, jump or ask</span><kbd className="hide-sm">{mac ? '⌘K' : 'Ctrl K'}</kbd>
-      </button>
+      <div className="dsearch">
+        <button type="button" className="dsearch-btn" onClick={() => setOpen(true)} aria-label="Search, jump or ask" aria-keyshortcuts={mac ? 'Meta+K' : 'Control+K'}>
+          <Icon name="search" size={16} /><span>Search pages, bookings, bills… or ask a question</span><kbd>{mac ? '⌘K' : 'Ctrl K'}</kbd>
+        </button>
+      </div>
       {/* the top bar blurs what is behind it, which would trap a fixed overlay inside it, so the search opens on the page body */}
       {open && createPortal(<Palette key={question ?? ''} me={me} visible={visible} question={question} onClose={() => { setOpen(false); setQuestion(null); }} />, document.body)}
     </>

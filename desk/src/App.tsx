@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState, Suspense } from 'react';
 import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
-import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
+import { Icon, ToastHost, Loading, Crest } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
-import { HOME, NAV, PAGES, SECTIONS, itemFor, navVisible, type NavItem } from './registry';
-import { CommandSearch, AskBox } from './CommandSearch';
+import { HOME, NAV, PAGES, RAIL, BLURBS, railOf, itemFor, navVisible, type NavItem, type RailItem } from './registry';
+import { CommandSearch, openSearch } from './CommandSearch';
 import { GroundPicker } from './GroundPicker';
 
 // ---------- session shared by every page ----------
@@ -15,30 +15,32 @@ export const useSession = () => useContext(SessionCtx);
 
 const signInPage = () => { location.replace('./#login'); };
 
+function initialsOf(name: string) {
+  const parts = name.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1]![0] : '')).toUpperCase() || '?';
+}
+
 function Shell({ route }: { route: string }) {
   const s = useSession();
   const [open, setOpen] = useState(false);
-  // Menu groups fold away; the group holding the current page is always open. Choices are remembered in this browser.
-  const [openGroups, setOpenGroups] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('daji.deskSections') || '[]'); } catch { return []; } });
-  const toggleGroup = (g: string) => setOpenGroups((gs) => { const n = gs.includes(g) ? gs.filter((x) => x !== g) : [...gs, g]; try { localStorage.setItem('daji.deskSections', JSON.stringify(n)); } catch { /* ignore */ } return n; });
-  useEffect(() => { setOpen(false); setFly(null); }, [route]);
-  // The menu starts as a narrow icon rail and the three-line button opens the full menu with names (the choice is remembered in this browser). In the rail, a group opens as a pop-up list beside it.
-  const [rail, setRail] = useState<boolean>(() => { try { return localStorage.getItem('daji.deskRail2') !== '0'; } catch { return true; } });
-  const setRailSaved = (v: boolean) => { setRail(v); setFly(null); try { localStorage.setItem('daji.deskRail2', v ? '1' : '0'); } catch { /* ignore */ } };
-  const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 860px)').matches);
-  useEffect(() => { const m = matchMedia('(max-width: 860px)'); const f = () => setNarrow(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
-  const collapsed = rail && !narrow;
+  const [meOpen, setMeOpen] = useState(false);
   const [fly, setFly] = useState<{ key: string; top: number } | null>(null);
   const flyTimer = useRef<number | undefined>(undefined);
-  const openFly = (key: string, el: HTMLElement) => { clearTimeout(flyTimer.current); setFly({ key, top: Math.max(8, Math.min(el.getBoundingClientRect().top, innerHeight - 80)) }); };
-  const closeFlySoon = () => { clearTimeout(flyTimer.current); flyTimer.current = window.setTimeout(() => setFly(null), 180); };
-  useEffect(() => { if (!fly) return; const f = (e: KeyboardEvent) => e.key === 'Escape' && setFly(null); addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [fly]);
+  const phone = () => matchMedia('(max-width: 900px)').matches;
+  const show = (key: string, el: HTMLElement) => { clearTimeout(flyTimer.current); setFly({ key, top: Math.max(8, Math.min(el.getBoundingClientRect().top - 10, innerHeight - 560)) }); };
+  const hide = () => { clearTimeout(flyTimer.current); flyTimer.current = window.setTimeout(() => setFly(null), 160); };
+  useEffect(() => { setOpen(false); setFly(null); setMeOpen(false); }, [route]);
+  useEffect(() => { const f = (e: KeyboardEvent) => { if (e.key === 'Escape') { setFly(null); setMeOpen(false); } }; addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, []);
   const visible = (i: NavItem) => navVisible(s.me, i);
-  // the one menu item for this address (the longest match), and the section it sits in
+  const allowed = (r: RailItem) => can(s.me, r.perm) && (!r.anyPerm || r.anyPerm.some((p) => can(s.me, p))) && (!r.ownerOnly || s.me.role !== 'staff');
+  // the one menu item for this address (the longest match), and the rail button it sits under
   const active = itemFor(route, NAV.flatMap((g) => g.items));
-  const activeSection = active ? NAV.find((g) => g.items.includes(active))!.section : null;
-  const isOn = (to: string) => active?.to === to;
-  const jobsOf = (key: string) => NAV.filter((g) => g.section === key).map((g) => ({ ...g, items: g.items.filter(visible) })).filter((g) => g.items.length);
+  const here = railOf(route);
+  const jobsOf = (sec?: string) => NAV.filter((g) => g.section === sec).map((g) => ({ ...g, items: g.items.filter(visible) })).filter((g) => g.items.length);
+  const rail = RAIL.map((r) => {
+    const jobs = r.section ? jobsOf(r.section) : [];
+    return { ...r, jobs, first: r.to ?? (r.hub ? `/hub/${r.section}` : jobs[0]?.items[0]?.to) };
+  }).filter((r) => (r.to ? allowed(r) : r.jobs.length > 0));
 
   const hit = PAGES.find((p) => route === p.path || route.startsWith(p.path + '/'));
   const Page = hit ? hit.page : HOME;
@@ -48,101 +50,78 @@ function Shell({ route }: { route: string }) {
   const waiting = counts?.count ?? 0;
   s.refreshCounts = reloadCounts;
   const signOut = () => { const t = getToken(); const done = () => { setToken(null); location.href = './'; }; if (!t) return done(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + t } }).catch(() => {}).finally(done); };
-  const all = NAV.flatMap((g) => g.items);
-  const bottom = ([['/', 'Home'], ['/bookings', 'Bookings'], ['/bills', 'Bills'], ['/approvals', 'Approvals'], ['/settings', 'Settings']] as const).map(([to, label]): NavItem | null => { const i = all.find((x) => x.to === to); return i && visible(i) ? { ...i, label } : null; }).filter((i): i is NavItem => !!i);
-  const under = (to: string) => (to === '/' ? !route || route === '/' : route === to || route.startsWith(to + '/'));
+  const owner = s.owners.find((o) => o.id === s.ownerId);
+  const groundLabel = owner?.businessName || s.me.businessName || 'Daji Cricket Ground';
+  // the section bar above a department page: the department, where the page sits and the other pages in that job
+  const job = active ? NAV.find((g) => g.items.includes(active)) : undefined;
+  const bar = here?.section && job ? { rail: here, job, pages: job.items.filter(visible) } : null;
 
   return (
-    <div className={`shell${collapsed ? ' rail' : ''}`}>
-      <aside className={`side${open ? ' open' : ''}`} aria-label="Main navigation">
-        <a className="brand" href="./" aria-label="Daji Cricket Ground, back to the website">{collapsed ? <Crest size={36} /> : <Logo width={196} />}</a>
-        <button className="rail-toggle side-toggle" onClick={() => setRailSaved(!rail)} aria-label={rail ? 'Open the menu' : 'Fold the menu'} aria-pressed={rail} title={rail ? 'Open the menu' : 'Fold the menu'}><Icon name="menu" />{collapsed ? <span className="rail-label" aria-hidden="true">Menu</span> : <span>Fold menu</span>}</button>
-        {collapsed ? (
-          <nav className="nav rail-nav" aria-label="Menu">
-            {SECTIONS.map((sec) => {
-              const jobs = jobsOf(sec.key);
-              if (!jobs.length) return null;
-              const on = activeSection === sec.key;
-              const dot = jobs.some((g) => g.items.some((i) => i.count === 'approvals')) && waiting > 0;
-              const only = jobs.length === 1 && jobs[0]!.items.length === 1 ? jobs[0]!.items[0]! : null;
-              if (only) return <a key={sec.key} href={`#${only.to}`} className={`rail-btn${on ? ' on' : ''}`} title={sec.title} aria-label={sec.title}><Icon name={sec.icon} /><span className="rail-label" aria-hidden="true">{sec.title}</span></a>;
-              return (
-                <button key={sec.key} className={`rail-btn${on ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.key === sec.key} aria-label={sec.title} title={sec.title}
-                  onMouseEnter={(e) => openFly(sec.key, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(sec.key, e.currentTarget)}
-                  onClick={(e) => openFly(sec.key, e.currentTarget)}>
-                  <Icon name={sec.icon} /><span className="rail-label" aria-hidden="true">{sec.title}</span>{dot && <span className="rail-dot" aria-hidden="true" />}
-                </button>);
-            })}
-          </nav>
-        ) : (
-        <nav className="nav">
-          {SECTIONS.map((sec) => {
-            const jobs = jobsOf(sec.key);
-            if (!jobs.length) return null;
-            const only = jobs.length === 1 && jobs[0]!.items.length === 1 ? jobs[0]!.items[0]! : null;
-            if (only) return <a key={sec.key} href={`#${only.to}`} className={`nav-sec${isOn(only.to) ? ' on' : ''}`}><Icon name={sec.icon} />{sec.title}</a>;
-            const here = activeSection === sec.key;
-            const shown = here || openGroups.includes(sec.key);
+    <div className="dapp">
+      <nav className={`drail${open ? ' open' : ''}`} aria-label="Menu" id="main-menu" onScroll={() => setFly(null)}>
+        <a className="drail-mark" href="./" aria-label="Daji Cricket Ground, back to the website"><Crest size={40} /></a>
+        <div className="drail-items">
+          {rail.map((r) => {
+            const on = here?.key === r.key, hasSubs = r.jobs.length > 0, isOpen = fly?.key === r.key;
             return (
-              <div key={sec.key}>
-                <button className={`nav-sec nav-toggle${here ? ' here' : ''}`} onClick={() => !here && toggleGroup(sec.key)} aria-expanded={shown}><Icon name={sec.icon} />{sec.title}<span className="spacer" /><span aria-hidden="true">{shown ? '▾' : '▸'}</span></button>
-                {shown && jobs.map((g) => (
-                  <div key={g.group} className="nav-job">
-                    <div className="nav-group">{g.group}</div>
-                    {g.items.map((i) => (
-                      <a key={i.to} href={`#${i.to}`} className={isOn(i.to) ? 'on' : ''}>
-                        <Icon name={i.icon} />{i.label}
-                        {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
-                      </a>))}
-                  </div>))}
+              <div key={r.key} className="drail-item" onMouseEnter={(e) => { if (hasSubs && !phone()) show(r.key, e.currentTarget); }} onMouseLeave={hide}>
+                {r.sep && <span className="drail-sep">{r.sep}</span>}
+                <a href={`#${r.first}`} className={`drail-btn${on ? ' on' : ''}`} aria-current={on ? 'page' : undefined} aria-haspopup={hasSubs || undefined} aria-expanded={hasSubs ? isOpen : undefined} title={r.label}
+                  onFocus={(e) => { if (hasSubs && !phone()) show(r.key, e.currentTarget.parentElement!); }}
+                  onClick={(e) => { if (hasSubs && phone()) { e.preventDefault(); if (isOpen) setFly(null); else show(r.key, e.currentTarget.parentElement!); } }}>
+                  <Icon name={r.icon} size={22} /><span>{r.short}</span>
+                  {r.key === 'approvals' && waiting > 0 && <span className="drail-n" aria-label={`${waiting} waiting`}>{waiting}</span>}
+                </a>
+                {isOpen && (
+                  <div className="drail-fly" style={{ top: fly!.top }} onMouseEnter={() => clearTimeout(flyTimer.current)}>
+                    <div role="menu" aria-label={r.label} className="drail-panel" style={{ maxHeight: `min(86vh, ${innerHeight - fly!.top - 12}px)` }}>
+                      <span className="drail-title">{r.label}</span>
+                      {r.jobs.map((g) => (
+                        <div key={g.group} className={`drail-grp${job === g ? ' on' : ''}`}>
+                          <a role="menuitem" href={`#${g.items[0]!.to}`} className="drail-gname"><b>{g.group} ›</b><span>{BLURBS[g.group]}</span></a>
+                          <div className="drail-pages">
+                            {g.items.map((i) => <a key={i.to} role="menuitem" href={`#${i.to}`} className={`drail-page${active === i ? ' on' : ''}`} aria-current={active === i ? 'page' : undefined}>{i.label}{i.count === 'approvals' && waiting > 0 ? ` · ${waiting}` : ''}</a>)}
+                          </div>
+                        </div>))}
+                    </div>
+                  </div>)}
               </div>);
           })}
-        </nav>
-        )}
-        <div className="side-foot">
-          {collapsed ? <button className="rail-btn" onClick={signOut} title="Sign out" aria-label="Sign out"><Icon name="logout" /><span className="rail-label" aria-hidden="true">Sign out</span></button> : <>
-            <div style={{ color: 'var(--ivory)', fontWeight: 700 }}>{s.me.name}</div>
-            <div className="small">{roleLabel(s.me)}</div>
-            <button className="btn ghost sm" style={{ marginTop: 10, paddingLeft: 0 }} onClick={signOut}><Icon name="logout" />Sign out</button></>}
         </div>
-      </aside>
-      {collapsed && fly && (() => {
-        const sec = SECTIONS.find((x) => x.key === fly.key);
-        const jobs = sec ? jobsOf(sec.key) : [];
-        if (!sec || !jobs.length) return null;
-        return (
-          <div className={`flyout${jobs.length > 2 ? ' wide' : ''}`} role="menu" aria-label={sec.title} style={{ top: Math.min(fly.top, innerHeight - (jobs.length > 2 ? 360 : 260)) }} onMouseEnter={() => clearTimeout(flyTimer.current)} onMouseLeave={closeFlySoon}>
-            <div className="fly-title">{sec.title}</div>
-            <div className="fly-jobs">
-              {jobs.map((g) => (
-                <div key={g.group} className="fly-job">
-                  <div className="nav-group">{g.group}</div>
-                  {g.items.map((i) => (
-                    <a key={i.to} href={`#${i.to}`} role="menuitem" className={isOn(i.to) ? 'on' : ''} onClick={() => setFly(null)}>
-                      <Icon name={i.icon} />{i.label}
-                      {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
-                    </a>))}
-                </div>))}
-            </div>
-          </div>);
-      })()}
-      {open && <div className="overlay" style={{ zIndex: 35, padding: 0 }} onClick={() => setOpen(false)} />}
-      <main className="main">
-        <header className="top">
-          <button className="btn ghost sm menu-btn" onClick={() => setOpen(true)} aria-label="Open menu"><Icon name="menu" /></button>
-          <GroundPicker />
-          <div className="spacer" />
-          <CommandSearch me={s.me} visible={visible} />
-          <AskBox className="hide-md" />
-          <a className="btn ghost sm hide-sm" href="./">View website</a>
-          <span className="badge b-gold hide-sm">{roleLabel(s.me)}</span>
-          <ThemeToggle />
-        </header>
-        <div className="page" key={route}><Suspense fallback={<p className="muted" style={{ padding: 24 }}>Loading…</p>}><Page sub={sub} /></Suspense></div>
-      </main>
-      <nav className="bottom-nav" aria-label="Quick navigation">
-        {bottom.map((i) => <a key={i.to} href={`#${i.to}`} className={under(i.to) ? 'on' : ''}><Icon name={i.icon} />{i.label}</a>)}
+        <div className="drail-foot">
+          <button type="button" className="drail-me" onClick={() => setMeOpen(!meOpen)} aria-expanded={meOpen} aria-haspopup="menu" title={`${s.me.name} · ${roleLabel(s.me)} · ${groundLabel}`}>{initialsOf(s.me.name || s.me.email || '')}</button>
+          <span className="drail-hotel">{groundLabel}</span>
+          {meOpen && (
+            <div className="drail-mepop" role="menu">
+              <b>{s.me.name}</b>
+              <span className="muted small">{roleLabel(s.me)}</span>
+              <a role="menuitem" href="./">View website</a>
+              <button type="button" role="menuitem" className="link" onClick={signOut}>Sign out</button>
+            </div>)}
+        </div>
       </nav>
+      {open && <div className="scrim" onClick={() => setOpen(false)} />}
+      <div className="dmain">
+        <header className="dtop">
+          <button type="button" className="dround dburger" onClick={() => setOpen(true)} aria-label="Open the menu" aria-controls="main-menu" aria-expanded={open}><Icon name="menu" size={18} /></button>
+          <CommandSearch me={s.me} visible={visible} />
+          <GroundPicker />
+          <ThemeToggle />
+          <a className="dround" href="#/activity" aria-label="What happened" title="What happened"><Icon name="bell" size={18} /></a>
+          <button type="button" className="dconcierge" onClick={openSearch}><Icon name="ai" size={16} /><span>Assistant</span></button>
+        </header>
+        <main className="main dcontent">
+          {bar && (
+            <div className="dsechead no-print">
+              <div className="dsec-title"><span className="eyebrow">{bar.rail.eyebrow}</span><h1>{bar.rail.label}</h1>{bar.rail.desc && <span className="muted">{bar.rail.desc}</span>}</div>
+              <div className="dsection">
+                <span className="dcrumb">{bar.rail.label}{'  ›  '}{bar.job.group}</span>
+                {bar.pages.length > 1 && <div role="tablist" className="dtabs">{bar.pages.map((p) => <a key={p.to} role="tab" aria-selected={active === p} href={`#${p.to}`} className={`dchip${active === p ? ' on' : ''}`}>{p.label}</a>)}</div>}
+              </div>
+            </div>)}
+          <div className="page" key={route}><Suspense fallback={<p className="muted" style={{ padding: 24 }}>Loading…</p>}><Page sub={sub} /></Suspense></div>
+        </main>
+      </div>
     </div>
   );
 }
