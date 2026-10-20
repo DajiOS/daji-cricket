@@ -1021,7 +1021,7 @@ html:not([data-embed]):not([data-embed-section]) #view-home{
   .wm-nav{height:64px}
   .links{font-size:13px;letter-spacing:.06em;text-transform:none;gap:36px}
   .btn{height:56px;padding:0 36px;font-size:14px;letter-spacing:.04em;text-transform:none;font-weight:500}
-  .btn.primary{background:var(--gold);color:#0a0a08;box-shadow:none}
+  .btn.primary{background:var(--gold);color:var(--on-gold);box-shadow:none}
   .btn.primary:hover{background:var(--gold-bright);transform:none;box-shadow:none}
   .btn.outline{border-color:var(--lux-line);color:var(--text)}
   .btn.outline:hover{border-color:var(--gold);background:transparent}
@@ -1140,7 +1140,7 @@ html.splash-on:not(.splash-reveal) #view-home :is(.ln > span,header.hero p.lead,
   html:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{
     position:fixed;left:0;top:0;bottom:0;width:var(--split);max-width:none;margin:0;zoom:1;box-sizing:border-box;z-index:40;
     padding:36px clamp(24px,2.8vw,44px) 28px;overflow-y:auto;overscroll-behavior:contain;
-    background:#0d0f0e;border:0;border-right:1px solid rgba(236,230,216,.12);border-radius:0;box-shadow:none}
+    background:var(--bg-raised);border:0;border-right:1px solid var(--line);border-radius:0;box-shadow:none}
   html:not([data-embed]):not([data-embed-section]) #view-home .panel h3{font-size:clamp(34px,3.2vw,46px);margin:0 0 6px}
   html:not([data-embed]):not([data-embed-section]) #view-home header.hero{min-height:calc(100svh - 104px)}
   html:not([data-embed]):not([data-embed-section]) #view-home header.hero h1{font-size:clamp(52px,6.9vw,124px);max-width:none}
@@ -1170,7 +1170,7 @@ html.splash-on:not(.splash-reveal) #view-home :is(.ln > span,header.hero p.lead,
 }
 @media (max-width:1020px){html:not([data-embed]):not([data-embed-section]) #view-home header.hero .cta [data-jump]{display:none}}
 @media (min-width:1021px){
-  html:not([data-embed]):not([data-embed-section]) #view-home #p-hold{position:sticky;bottom:0;z-index:2;box-shadow:0 -18px 18px -6px #0d0f0e}
+  html:not([data-embed]):not([data-embed-section]) #view-home #p-hold{position:sticky;bottom:0;z-index:2;box-shadow:0 -18px 18px -6px var(--bg-raised)}
 }
 
 /* ===== Split swapped (booking on the right) and the ivory and green look ===== */
@@ -1499,7 +1499,6 @@ html[data-theme="navratri"]:not([data-embed]):not([data-embed-section]) #view-ho
 html[data-theme="diwali"]:not([data-embed]):not([data-embed-section]) #view-home{--font-display:'Yatra One',Georgia,serif;--lux-line:rgba(255,181,71,.18)}
 :root[data-theme="christmas"]{color-scheme:dark;--bg:#0c1f17;--bg-raised:#10271d;--surface:#153024;--surface-high:#1b3a2c;--surface-top:#244836;--line:rgba(217,178,94,.20);--line-strong:rgba(217,178,94,.42);--text:#f6efe0;--text-muted:#c9cdb8;--text-faint:#97a08c;--gold:#d9b25e;--gold-bright:#f0d58f;--gold-deep:#a9853a;--on-gold:#0c1f17;--glow:rgba(217,178,94,.2);--scrim:rgba(12,31,23,.76);--gradient-gold:linear-gradient(135deg,#f0d58f 0%,#d9b25e 50%,#a9853a 100%);--gradient-gold-hover:linear-gradient(135deg,#f0d58f 0%,#f0d58f 50%,#d9b25e 100%);--gradient-canvas:radial-gradient(900px 520px at 80% -10%,rgba(190,30,45,.24),transparent 60%),radial-gradient(800px 500px at 0% 0%,rgba(217,178,94,.10),transparent 55%);--font-display:'Cormorant Garamond',Garamond,Georgia,serif;--font-body:'Manrope',system-ui,sans-serif}
 html[data-theme="christmas"]:not([data-embed]):not([data-embed-section]) #view-home{--font-display:'Cormorant Garamond',Garamond,Georgia,serif;--lux-line:rgba(217,178,94,.18)}
-html[data-theme="noir"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="pavilion"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="whites"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="pinkball"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="monsoon"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="maroon"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="carbon"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="champagne"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="stadium"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="willow"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="uttarayan"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="tiranga"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="holi"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="ganesh"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="navratri"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="diwali"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary,html[data-theme="christmas"]:not([data-embed]):not([data-embed-section]) #view-home .btn.primary{color:var(--on-gold)}
 html[data-theme="whites"] #splash::before,html[data-theme="champagne"] #splash::before,html[data-theme="uttarayan"] #splash::before,html[data-theme="tiranga"] #splash::before,html[data-theme="holi"] #splash::before{background:var(--bg)!important}
 html:is([data-theme="whites"],[data-theme="champagne"],[data-theme="uttarayan"],[data-theme="tiranga"],[data-theme="holi"]) #view-home header.hero::before,
 html:is([data-theme="whites"],[data-theme="champagne"],[data-theme="uttarayan"],[data-theme="tiranga"],[data-theme="holi"]) #view-home header.hero::after{display:none}
@@ -1524,11 +1523,6 @@ html.splash-on .theme-pick{visibility:hidden}
 .theme-menu small{display:block;font-size:12px;color:var(--text-faint);font-weight:400}
 .theme-menu p{margin:8px 8px 4px;font-size:12px;color:var(--text-faint);line-height:1.45}
 
-/* the booking side panel takes each theme's own surface (the base rule paints it a fixed near-black) */
-@media (min-width:1021px){
-  html:is([data-theme="noir"],[data-theme="pavilion"],[data-theme="whites"],[data-theme="pinkball"],[data-theme="monsoon"],[data-theme="maroon"],[data-theme="carbon"],[data-theme="champagne"],[data-theme="stadium"],[data-theme="willow"],[data-theme="uttarayan"],[data-theme="tiranga"],[data-theme="holi"],[data-theme="ganesh"],[data-theme="navratri"],[data-theme="diwali"],[data-theme="christmas"]):not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{background:var(--bg-raised);border-left-color:var(--line)}
-  html:is([data-theme="noir"],[data-theme="pavilion"],[data-theme="whites"],[data-theme="pinkball"],[data-theme="monsoon"],[data-theme="maroon"],[data-theme="carbon"],[data-theme="champagne"],[data-theme="stadium"],[data-theme="willow"],[data-theme="uttarayan"],[data-theme="tiranga"],[data-theme="holi"],[data-theme="ganesh"],[data-theme="navratri"],[data-theme="diwali"],[data-theme="christmas"]):not([data-embed]):not([data-embed-section]) #view-home #p-hold{box-shadow:0 -18px 18px -6px var(--bg-raised)}
-}
 /* faces without a true italic keep the second headline line upright (a slanted copy gets clipped) */
 html:is([data-theme="pinkball"],[data-theme="monsoon"],[data-theme="maroon"],[data-theme="carbon"],[data-theme="champagne"],[data-theme="stadium"],[data-theme="uttarayan"],[data-theme="tiranga"],[data-theme="holi"],[data-theme="ganesh"],[data-theme="navratri"],[data-theme="diwali"]):not([data-embed]):not([data-embed-section]) #view-home .ln + .ln > span{font-style:normal}
 
