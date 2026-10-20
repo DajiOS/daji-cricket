@@ -53,9 +53,8 @@ export const SUBS: Record<string, [string, string][]> = {
 };
 export const subHref = (to: string, k: string): string => (k ? `${to}/${k}` : to);
 
-/** "daily" groups sit under Every day at the top of the menu, the rest under Departments (the starter kit's split). */
-export interface NavGroup { group: string; items: NavItem[]; part?: 'daily' }
-export const PART_TITLES = { daily: 'Every day', dept: 'Departments' } as const;
+/** One job in the menu ("Buy & pay"), inside a section of the rail. */
+export interface NavGroup { section: string; group: string; items: NavItem[] }
 
 /** First match wins, so longer paths come before shorter ones. A page receives the rest of the path in `sub` (for example /bills/bil_123 gives sub "bil_123"). */
 export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
@@ -69,49 +68,104 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
 ];
 export const HOME = Dashboard;
 
+/** The menu: a few sections, each split into plain-language jobs with at most four pages under each.
+ *  A page can sit under a job by its own address or by one of its sections (for example /bookings/day). Every page stays reachable. */
+export const SECTIONS: { key: string; title: string; icon: string }[] = [
+  { key: 'home', title: 'Home', icon: 'dashboard' },
+  { key: 'ground', title: 'Ground', icon: 'ball' },
+  { key: 'people', title: 'People', icon: 'users' },
+  { key: 'money', title: 'Money', icon: 'accounts' },
+  { key: 'settings', title: 'Settings', icon: 'settings' },
+];
+const books = { perm: 'view_revenue' }, acct = { perm: 'manage_accounting' }, owner = { ownerOnly: true };
 export const NAV: NavGroup[] = [
-  { group: 'Portfolio', part: 'daily', items: [{ to: '/', label: 'Dashboard', icon: 'dashboard' }] },
-  { group: 'Views', part: 'daily', items: [
-    { to: '/health', label: 'Ground health', icon: 'pulse' },
-    { to: '/calendar', label: 'Operations calendar', icon: 'calendar' },
-    { to: '/money', label: 'Money flow', icon: 'swap', check: seesMoney },
-    { to: '/pipeline', label: 'Pipeline', icon: 'list', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
-    { to: '/activity', label: 'Activity', icon: 'bell' },
-    { to: '/close', label: 'Month-end close', icon: 'lock', check: seesMoney },
-    { to: '/explore', label: 'Explorer', icon: 'list' },
-    { to: '/compare', label: 'Compare', icon: 'pie', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
+  { section: 'home', group: 'Home', items: [{ to: '/', label: 'Home', icon: 'dashboard' }] },
+
+  { section: 'ground', group: 'Take bookings', items: [
+    { to: '/bookings', label: 'All bookings', icon: 'list', perm: 'manage_bookings' },
+    { to: '/bookings/day', label: 'Day view', icon: 'calendar', perm: 'manage_bookings' },
+    { to: '/bookings/approvals', label: 'Bookings to approve', icon: 'check', perm: 'manage_bookings' },
+    { to: '/bookings/payments', label: 'UPI to verify', icon: 'payments', perm: 'manage_bookings' },
   ] },
-  { group: 'Task Management', part: 'daily', items: [{ to: '/tasks', label: 'Tasks', icon: 'tasks', perm: 'manage_tasks' }] },
-  { group: 'Ground', items: [
-    { to: '/bookings', label: 'Bookings', icon: 'calendar', perm: 'manage_bookings' },
-    { to: '/promos', label: 'Promo codes', icon: 'tag', ownerOnly: true },
-    { to: '/matches', label: 'Matches', icon: 'ball', perm: 'manage_matches' },
+  { section: 'ground', group: 'Fill the ground', items: [
     { to: '/memberships', label: 'Memberships', icon: 'card', perm: 'manage_bookings' },
+    { to: '/promos', label: 'Promo codes', icon: 'tag', ...owner },
     { to: '/tournaments', label: 'Tournaments', icon: 'trophy', perm: 'manage_matches' },
+    { to: '/matches', label: 'Matches', icon: 'ball', perm: 'manage_matches' },
   ] },
-  { group: 'Ground cameras', items: [{ to: '/cameras', label: 'Live cameras', icon: 'camera', perm: 'view_cameras' }] },
-  { group: 'People & Messages', items: [
+  { section: 'ground', group: 'Keep an eye on it', items: [
+    { to: '/calendar', label: 'Calendar', icon: 'calendar' },
+    { to: '/activity', label: 'What happened', icon: 'bell' },
+    { to: '/health', label: 'Ground health', icon: 'pulse' },
+    { to: '/cameras', label: 'Live cameras', icon: 'camera', perm: 'view_cameras' },
+  ] },
+
+  { section: 'people', group: 'Talk to customers', items: [
     { to: '/contacts', label: 'Contacts', icon: 'users', perm: 'view_customers' },
-    { to: '/cards', label: 'Business cards', icon: 'card', perm: 'view_customers' },
     { to: '/reminders', label: 'WhatsApp reminders', icon: 'chat', perm: 'send_broadcasts' },
+    { to: '/cards', label: 'Business cards', icon: 'card', perm: 'view_customers' },
+    { to: '/explore', label: 'Look anything up', icon: 'search' },
   ] },
-  { group: 'MP13 Academy', items: [{ to: '/academy', label: 'MP13 Academy', icon: 'grad', perm: 'manage_academy' }] },
-  { group: 'Finance', items: [
-    { to: '/approvals', label: 'Approvals', icon: 'check', perm: 'manage_accounting', count: 'approvals' },
-    { to: '/bills', label: 'Bills', icon: 'billing', perm: 'manage_accounting' },
-    { to: '/transactions', label: 'Transactions', icon: 'swap', perm: 'manage_accounting' },
-    { to: '/bank', label: 'Bank import', icon: 'upload', perm: 'manage_accounting' },
-    { to: '/accounting', label: 'Accounting', icon: 'accounts', perm: 'view_revenue' },
-    { to: '/payroll', label: 'Staff & payroll', icon: 'payroll', ownerOnly: true },
+  { section: 'people', group: 'Run the academy', items: [
+    { to: '/academy', label: 'Students', icon: 'users', perm: 'manage_academy' },
+    { to: '/academy/attendance', label: 'Attendance', icon: 'clock', perm: 'manage_academy' },
+    { to: '/academy/fees', label: 'Fees', icon: 'payroll', perm: 'manage_academy' },
+    { to: '/academy/coaches', label: 'Coaches and skills', icon: 'grad', perm: 'manage_academy' },
   ] },
-  { group: 'Settings', items: [
-    { to: '/team', label: 'Users & Access', icon: 'shield', ownerOnly: true },
-    { to: '/media', label: 'Photos & videos', icon: 'upload', ownerOnly: true },
-    { to: '/compliance', label: 'Compliance', icon: 'audit', ownerOnly: true },
-    { to: '/settings', label: 'Settings', icon: 'settings', ownerOnly: true },
-    { to: '/platform', label: 'Platform', icon: 'vault', superOnly: true },
+  { section: 'people', group: 'Look after the team', items: [
+    { to: '/tasks', label: 'Jobs to do', icon: 'tasks', perm: 'manage_tasks' },
+    { to: '/payroll/attendance', label: 'Staff attendance', icon: 'clock', ...owner },
+    { to: '/team', label: 'Users & Access', icon: 'shield', ...owner },
+  ] },
+
+  { section: 'money', group: 'Buy & pay', items: [
+    { to: '/bills', label: 'Bills', icon: 'billing', ...acct },
+    { to: '/approvals', label: 'Approvals', icon: 'check', ...acct, count: 'approvals' },
+    { to: '/bills/vendors', label: 'Vendors', icon: 'warehouse', ...acct },
+    { to: '/pipeline', label: 'Where things are', icon: 'list', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
+  ] },
+  { section: 'money', group: 'Check the money', items: [
+    { to: '/money', label: 'Money flow', icon: 'swap', check: seesMoney },
+    { to: '/transactions', label: 'Bank and cash lines', icon: 'swap', ...acct },
+    { to: '/bank', label: 'Bank import', icon: 'upload', ...acct },
+    { to: '/accounting/reconcile', label: 'Reconcile', icon: 'check', ...books },
+  ] },
+  { section: 'money', group: 'See results', items: [
+    { to: '/accounting', label: 'Overview', icon: 'dashboard', ...books },
+    { to: '/accounting/reports', label: 'Reports', icon: 'accounts', ...books },
+    { to: '/compare', label: 'Compare', icon: 'pie', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
+    { to: '/accounting/budget', label: 'Budget', icon: 'pie', ...books },
+  ] },
+  { section: 'money', group: 'Close the month', items: [
+    { to: '/close', label: 'Month-end, step by step', icon: 'lock', check: seesMoney },
+    { to: '/payroll', label: 'Payroll', icon: 'payroll', ...owner },
+    { to: '/accounting/gst', label: 'GST', icon: 'percent', ...books },
+    { to: '/accounting/review', label: 'Books review', icon: 'audit', ...books },
+  ] },
+
+  { section: 'settings', group: 'Set up the ground', items: [
+    { to: '/settings', label: 'Prices and timings', icon: 'tag', ...owner },
+    { to: '/settings/booking', label: 'Booking window', icon: 'calendar', ...owner },
+    { to: '/settings/payments', label: 'Payments', icon: 'payments', ...owner },
+    { to: '/settings/website', label: 'Website', icon: 'globe', ...owner },
+  ] },
+  { section: 'settings', group: 'Connect and share', items: [
+    { to: '/settings/people', label: 'People', icon: 'users', ...owner },
+    { to: '/settings/connections', label: 'Connections', icon: 'key', ...owner },
+    { to: '/settings/services', label: 'Services', icon: 'plug', ...owner },
+    { to: '/media', label: 'Photos & videos', icon: 'upload', ...owner },
+  ] },
+  { section: 'settings', group: 'Keep it safe', items: [
+    { to: '/compliance', label: 'Compliance', icon: 'audit', ...owner },
+    { to: '/settings/backups', label: 'Backups', icon: 'vault', ...owner },
+    { to: '/platform', label: 'Software owner', icon: 'vault', superOnly: true },
   ] },
 ];
+/** The menu item for an address: the longest item address that the address starts with. */
+export const itemFor = (route: string, items: NavItem[]): NavItem | undefined => {
+  const r = route || '/';
+  return items.filter((i) => (i.to === '/' ? r === '/' : r === i.to || r.startsWith(i.to + '/'))).sort((a, b) => b.to.length - a.to.length)[0];
+};
 
 /** One symbol for every page inside a group, keyed "path:key" (the same keys as SUBS). */
 export const SUB_ICONS: Record<string, string> = {

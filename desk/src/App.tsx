@@ -1,9 +1,9 @@
-import { createContext, useContext, useEffect, useRef, useState, Fragment, Suspense } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, Suspense } from 'react';
 import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
 import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
-import { HOME, NAV, PAGES, SUBS, SUB_ICONS, PART_TITLES, subHref, navVisible, type NavItem, type NavGroup } from './registry';
+import { HOME, NAV, PAGES, SECTIONS, itemFor, navVisible, type NavItem } from './registry';
 import { CommandSearch, AskBox } from './CommandSearch';
 import { GroundPicker } from './GroundPicker';
 
@@ -19,8 +19,8 @@ function Shell({ route }: { route: string }) {
   const s = useSession();
   const [open, setOpen] = useState(false);
   // Menu groups fold away; the group holding the current page is always open. Choices are remembered in this browser.
-  const [openGroups, setOpenGroups] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('daji.deskGroups') || '["Ground","Finance"]'); } catch { return ['Ground', 'Finance']; } });
-  const toggleGroup = (g: string) => setOpenGroups((gs) => { const n = gs.includes(g) ? gs.filter((x) => x !== g) : [...gs, g]; try { localStorage.setItem('daji.deskGroups', JSON.stringify(n)); } catch { /* ignore */ } return n; });
+  const [openGroups, setOpenGroups] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('daji.deskSections') || '[]'); } catch { return []; } });
+  const toggleGroup = (g: string) => setOpenGroups((gs) => { const n = gs.includes(g) ? gs.filter((x) => x !== g) : [...gs, g]; try { localStorage.setItem('daji.deskSections', JSON.stringify(n)); } catch { /* ignore */ } return n; });
   useEffect(() => { setOpen(false); setFly(null); }, [route]);
   // The menu starts as a narrow icon rail and the three-line button opens the full menu with names (the choice is remembered in this browser). In the rail, a group opens as a pop-up list beside it.
   const [rail, setRail] = useState<boolean>(() => { try { return localStorage.getItem('daji.deskRail2') !== '0'; } catch { return true; } });
@@ -33,10 +33,12 @@ function Shell({ route }: { route: string }) {
   const openFly = (key: string, el: HTMLElement) => { clearTimeout(flyTimer.current); setFly({ key, top: Math.max(8, Math.min(el.getBoundingClientRect().top, innerHeight - 80)) }); };
   const closeFlySoon = () => { clearTimeout(flyTimer.current); flyTimer.current = window.setTimeout(() => setFly(null), 180); };
   useEffect(() => { if (!fly) return; const f = (e: KeyboardEvent) => e.key === 'Escape' && setFly(null); addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [fly]);
-  /** Which section of a page is showing (the first one when the address is just the page). */
-  const subOn = (to: string, k: string) => { const first = SUBS[to]![0]![0]; const rest = route === to ? '' : route.startsWith(to + '/') ? route.slice(to.length + 1).split('/')[0]! : null; return rest !== null && (rest === k || (!SUBS[to]!.some(([x]) => x === rest) && k === first) || (rest === '' && k === first)); };
-  const isOn = (to: string) => (to === '/' ? route === '/' || route === '' : route === to || route.startsWith(to + '/'));
   const visible = (i: NavItem) => navVisible(s.me, i);
+  // the one menu item for this address (the longest match), and the section it sits in
+  const active = itemFor(route, NAV.flatMap((g) => g.items));
+  const activeSection = active ? NAV.find((g) => g.items.includes(active))!.section : null;
+  const isOn = (to: string) => active?.to === to;
+  const jobsOf = (key: string) => NAV.filter((g) => g.section === key).map((g) => ({ ...g, items: g.items.filter(visible) })).filter((g) => g.items.length);
 
   const hit = PAGES.find((p) => route === p.path || route.startsWith(p.path + '/'));
   const Page = hit ? hit.page : HOME;
@@ -47,10 +49,8 @@ function Shell({ route }: { route: string }) {
   s.refreshCounts = reloadCounts;
   const signOut = () => { const t = getToken(); const done = () => { setToken(null); location.href = './'; }; if (!t) return done(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + t } }).catch(() => {}).finally(done); };
   const all = NAV.flatMap((g) => g.items);
-  const bottom = ['/', '/bookings', '/bills', '/approvals', '/settings'].map((to) => all.find((i) => i.to === to)).filter((i): i is NavItem => !!i && visible(i));
-  // the caption (Every day, Departments) goes above the first group of each part that this person can see
-  const shownGroups = NAV.filter((g) => g.items.some(visible));
-  const caption = (g: NavGroup) => { const part = g.part ?? 'dept'; const first = shownGroups.find((x) => (x.part ?? 'dept') === part); return first === g ? PART_TITLES[part] : null; };
+  const bottom = ([['/', 'Home'], ['/bookings', 'Bookings'], ['/bills', 'Bills'], ['/approvals', 'Approvals'], ['/settings', 'Settings']] as const).map(([to, label]): NavItem | null => { const i = all.find((x) => x.to === to); return i && visible(i) ? { ...i, label } : null; }).filter((i): i is NavItem => !!i);
+  const under = (to: string) => (to === '/' ? !route || route === '/' : route === to || route.startsWith(to + '/'));
 
   return (
     <div className={`shell${collapsed ? ' rail' : ''}`}>
@@ -59,43 +59,42 @@ function Shell({ route }: { route: string }) {
         <button className="rail-toggle side-toggle" onClick={() => setRailSaved(!rail)} aria-label={rail ? 'Open the menu' : 'Fold the menu'} aria-pressed={rail} title={rail ? 'Open the menu' : 'Fold the menu'}><Icon name="menu" />{collapsed ? <span className="rail-label" aria-hidden="true">Menu</span> : <span>Fold menu</span>}</button>
         {collapsed ? (
           <nav className="nav rail-nav" aria-label="Menu">
-            {NAV.map((g) => {
-              const items = g.items.filter(visible);
-              if (!items.length) return null;
-              const on = items.some((i) => isOn(i.to));
-              const dot = items.some((i) => i.count === 'approvals') && waiting > 0;
-              const icon = GROUP_ICONS[g.group] ?? items[0]!.icon;
-              const cap = caption(g);
-              const head = cap && <div className="rail-part" aria-hidden="true">{cap === PART_TITLES.daily ? 'Daily' : 'Depts'}</div>;
-              if (items.length === 1 && !SUBS[items[0]!.to]) return <Fragment key={g.group}>{head}<a href={`#${items[0]!.to}`} className={`rail-btn${on ? ' on' : ''}`} title={g.group} aria-label={g.group}><Icon name={icon} /><span className="rail-label" aria-hidden="true">{RAIL_LABELS[g.group] ?? g.group}</span></a></Fragment>;
+            {SECTIONS.map((sec) => {
+              const jobs = jobsOf(sec.key);
+              if (!jobs.length) return null;
+              const on = activeSection === sec.key;
+              const dot = jobs.some((g) => g.items.some((i) => i.count === 'approvals')) && waiting > 0;
+              const only = jobs.length === 1 && jobs[0]!.items.length === 1 ? jobs[0]!.items[0]! : null;
+              if (only) return <a key={sec.key} href={`#${only.to}`} className={`rail-btn${on ? ' on' : ''}`} title={sec.title} aria-label={sec.title}><Icon name={sec.icon} /><span className="rail-label" aria-hidden="true">{sec.title}</span></a>;
               return (
-                <Fragment key={g.group}>{head}<button className={`rail-btn${on ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.key === g.group} aria-label={g.group} title={g.group}
-                  onMouseEnter={(e) => openFly(g.group, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(g.group, e.currentTarget)}
-                  onClick={(e) => openFly(g.group, e.currentTarget)}>
-                  <Icon name={icon} /><span className="rail-label" aria-hidden="true">{RAIL_LABELS[g.group] ?? g.group}</span>{dot && <span className="rail-dot" aria-hidden="true" />}
-                </button></Fragment>);
+                <button key={sec.key} className={`rail-btn${on ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.key === sec.key} aria-label={sec.title} title={sec.title}
+                  onMouseEnter={(e) => openFly(sec.key, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(sec.key, e.currentTarget)}
+                  onClick={(e) => openFly(sec.key, e.currentTarget)}>
+                  <Icon name={sec.icon} /><span className="rail-label" aria-hidden="true">{sec.title}</span>{dot && <span className="rail-dot" aria-hidden="true" />}
+                </button>);
             })}
           </nav>
         ) : (
         <nav className="nav">
-          {NAV.map((g) => {
-            const items = g.items.filter(visible);
-            if (!items.length) return null;
-            const active = items.some((i) => isOn(i.to));
-            const shown = g.group === 'Portfolio' || active || openGroups.includes(g.group);
+          {SECTIONS.map((sec) => {
+            const jobs = jobsOf(sec.key);
+            if (!jobs.length) return null;
+            const only = jobs.length === 1 && jobs[0]!.items.length === 1 ? jobs[0]!.items[0]! : null;
+            if (only) return <a key={sec.key} href={`#${only.to}`} className={`nav-sec${isOn(only.to) ? ' on' : ''}`}><Icon name={sec.icon} />{sec.title}</a>;
+            const here = activeSection === sec.key;
+            const shown = here || openGroups.includes(sec.key);
             return (
-              <div key={g.group}>
-                {caption(g) && <div className="nav-part">{caption(g)}</div>}
-                {g.group === 'Portfolio' ? <div className="nav-group">{g.group}</div>
-                  : <button className="nav-group nav-toggle" onClick={() => !active && toggleGroup(g.group)} aria-expanded={shown}>{g.group} <span aria-hidden="true">{shown ? '▾' : '▸'}</span></button>}
-                {shown && items.map((i) => (
-                  <Fragment key={i.to}>
-                    <a href={`#${i.to}`} className={isOn(i.to) ? 'on' : ''}>
-                      <Icon name={i.icon} />{i.label}
-                      {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
-                    </a>
-                    {SUBS[i.to] && isOn(i.to) && SUBS[i.to]!.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} className={`sub${subOn(i.to, k) ? ' on' : ''}`}><Icon name={SUB_ICONS[`${i.to}:${k}`] ?? 'chevron'} size={15} />{l}</a>)}
-                  </Fragment>))}
+              <div key={sec.key}>
+                <button className={`nav-sec nav-toggle${here ? ' here' : ''}`} onClick={() => !here && toggleGroup(sec.key)} aria-expanded={shown}><Icon name={sec.icon} />{sec.title}<span className="spacer" /><span aria-hidden="true">{shown ? '▾' : '▸'}</span></button>
+                {shown && jobs.map((g) => (
+                  <div key={g.group} className="nav-job">
+                    <div className="nav-group">{g.group}</div>
+                    {g.items.map((i) => (
+                      <a key={i.to} href={`#${i.to}`} className={isOn(i.to) ? 'on' : ''}>
+                        <Icon name={i.icon} />{i.label}
+                        {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
+                      </a>))}
+                  </div>))}
               </div>);
           })}
         </nav>
@@ -108,20 +107,23 @@ function Shell({ route }: { route: string }) {
         </div>
       </aside>
       {collapsed && fly && (() => {
-        const g = NAV.find((x) => x.group === fly.key);
-        const items = g ? g.items.filter(visible) : [];
-        if (!g || !items.length) return null;
+        const sec = SECTIONS.find((x) => x.key === fly.key);
+        const jobs = sec ? jobsOf(sec.key) : [];
+        if (!sec || !jobs.length) return null;
         return (
-          <div className="flyout" role="menu" aria-label={g.group} style={{ top: fly.top }} onMouseEnter={() => clearTimeout(flyTimer.current)} onMouseLeave={closeFlySoon}>
-            <div className="nav-group">{g.group}</div>
-            {items.map((i) => (
-              <Fragment key={i.to}>
-                <a href={`#${i.to}`} role="menuitem" className={isOn(i.to) ? 'on' : ''} onClick={() => setFly(null)}>
-                  <Icon name={i.icon} />{i.label}
-                  {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
-                </a>
-                {SUBS[i.to] && SUBS[i.to]!.map(([k, l]) => <a key={k} href={`#${subHref(i.to, k)}`} role="menuitem" className={`sub${isOn(i.to) && subOn(i.to, k) ? ' on' : ''}`} onClick={() => setFly(null)}><Icon name={SUB_ICONS[`${i.to}:${k}`] ?? 'chevron'} size={15} />{l}</a>)}
-              </Fragment>))}
+          <div className={`flyout${jobs.length > 2 ? ' wide' : ''}`} role="menu" aria-label={sec.title} style={{ top: Math.min(fly.top, innerHeight - (jobs.length > 2 ? 360 : 260)) }} onMouseEnter={() => clearTimeout(flyTimer.current)} onMouseLeave={closeFlySoon}>
+            <div className="fly-title">{sec.title}</div>
+            <div className="fly-jobs">
+              {jobs.map((g) => (
+                <div key={g.group} className="fly-job">
+                  <div className="nav-group">{g.group}</div>
+                  {g.items.map((i) => (
+                    <a key={i.to} href={`#${i.to}`} role="menuitem" className={isOn(i.to) ? 'on' : ''} onClick={() => setFly(null)}>
+                      <Icon name={i.icon} />{i.label}
+                      {i.count === 'approvals' && waiting > 0 && <span className="count" aria-label={`${waiting} waiting`}>{waiting}</span>}
+                    </a>))}
+                </div>))}
+            </div>
           </div>);
       })()}
       {open && <div className="overlay" style={{ zIndex: 35, padding: 0 }} onClick={() => setOpen(false)} />}
@@ -139,15 +141,12 @@ function Shell({ route }: { route: string }) {
         <div className="page" key={route}><Suspense fallback={<p className="muted" style={{ padding: 24 }}>Loading…</p>}><Page sub={sub} /></Suspense></div>
       </main>
       <nav className="bottom-nav" aria-label="Quick navigation">
-        {bottom.map((i) => <a key={i.to} href={`#${i.to}`} className={isOn(i.to) ? 'on' : ''}><Icon name={i.icon} />{i.label}</a>)}
+        {bottom.map((i) => <a key={i.to} href={`#${i.to}`} className={under(i.to) ? 'on' : ''}><Icon name={i.icon} />{i.label}</a>)}
       </nav>
     </div>
   );
 }
 
-/** Short names under the icons of the folded menu (the starter kit's labelled rail). */
-const RAIL_LABELS: Record<string, string> = { Portfolio: 'Home', Views: 'Views', Ground: 'Ground', 'Ground cameras': 'Cameras', 'Task Management': 'Tasks', 'People & Messages': 'People', 'MP13 Academy': 'Academy', Finance: 'Finance', Settings: 'Settings' };
-const GROUP_ICONS: Record<string, string> = { Portfolio: 'dashboard', Views: 'pie', Ground: 'ball', 'Task Management': 'tasks', 'People & Messages': 'users', 'MP13 Academy': 'grad', Finance: 'accounts', Settings: 'settings' };
 interface Terms { version: number; sha256: string; title: string; body: string; accepted: unknown }
 
 /** Team members read and accept the current terms before the desk opens. The server refuses everything else until they do. */

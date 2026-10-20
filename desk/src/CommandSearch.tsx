@@ -92,9 +92,11 @@ function Palette({ me, visible, question, onClose }: { me: Me; visible: (i: NavI
   // every page and section this person can open, and the shortcuts they are allowed to use
   const places = useMemo(() => {
     const out: (Hit & { text: string })[] = [];
+    // a page can be both a menu item and a section of another item, so each address is listed once
+    const seen = new Set(NAV.flatMap((g) => g.items.map((i) => i.to)));
     for (const g of NAV) for (const i of g.items.filter(visible)) {
       out.push({ key: i.to, kind: 'Go to', label: i.label, hint: g.group, icon: i.icon, run: () => jump(i.to), text: `${i.label} ${g.group}` });
-      for (const [k, l] of SUBS[i.to] ?? []) if (k) out.push({ key: `${i.to}/${k}`, kind: 'Go to', label: l, hint: `${g.group} › ${i.label}`, icon: SUB_ICONS[`${i.to}:${k}`] ?? 'chevron', run: () => jump(subHref(i.to, k)), text: `${l} ${i.label} ${g.group}` });
+      for (const [k, l] of SUBS[i.to] ?? []) if (k && !seen.has(subHref(i.to, k)) && seen.add(subHref(i.to, k))) out.push({ key: `${i.to}/${k}`, kind: 'Go to', label: l, hint: `${g.group} › ${i.label}`, icon: SUB_ICONS[`${i.to}:${k}`] ?? 'chevron', run: () => jump(subHref(i.to, k)), text: `${l} ${i.label} ${g.group}` });
     }
     const acts = ACTIONS.filter(visible).map((a) => ({ key: 'do:' + a.to, kind: 'Do' as const, label: a.label, icon: a.icon, run: () => jump(a.to), text: `${a.label} ${a.words}` }));
     return { pages: out, acts };
