@@ -33,7 +33,7 @@ export default function Backups() {
       </Panel>
       <Panel title="Off the server, and a practice restore" note="A backup on the same disk is lost with the disk, and a backup is only proven by restoring it."
         actions={<button className="btn sm" disabled={busy || !bk.items.length} onClick={practise}>Practise a restore</button>}>
-        <div className="card-pad stack">
+        <div className="stack">
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <span>Copied off the server</span>
             {bk.offsiteCopy ? <Chip tone="good">{fmtDateTime(bk.offsiteCopy.at)}, {bk.offsiteCopy.snapshots} snapshots</Chip>
