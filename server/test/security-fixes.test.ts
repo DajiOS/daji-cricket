@@ -12,7 +12,7 @@ const deskBooking = (staff: string, g: string, day: number, customer: Record<str
 test('signing up with the email of a desk record does not take that record over', async () => {
   const staff = await h.login('staff1'), g = (await grounds(h))[0]!;
   assert.equal((await deskBooking(staff, g.id, 140, { name: 'Vikram Desai', phone: '9877000001', email: 'vikram@x.in' })).status, 201);
-  const claim = await h.post('/api/auth/register', { firstName: 'Mallory', lastName: 'X', email: 'vikram@x.in', password: 'Mallory@12345' });
+  const claim = await h.post('/api/auth/register', { firstName: 'Mallory', lastName: 'X', email: 'vikram@x.in', phone: '9877000099', password: 'Mallory@12345' });
   assert.equal(claim.status, 409); assert.equal(claim.body.error.code, 'ACCOUNT_EXISTS');
   const look = await h.get('/api/staff/customers/lookup?email=vikram@x.in', staff);
   assert.equal(look.body.hasAccount, false, 'no password was put on the desk record');

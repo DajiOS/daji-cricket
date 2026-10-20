@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { api, upload } from './api';
+import { api, setToken, upload } from './api';
 import { pickProfilePhoto } from './camera';
 import type { User } from './types';
-import { Avatar, Btn, Field, Section, s, NameFields, splitName } from './ui';
+import { Avatar, Btn, Field, PhoneField, Section, s, NameFields, splitName, splitPhone } from './ui';
 import { C } from './theme';
 
 const ROLE: Record<string, string> = { customer: 'Customer', staff: 'Team member', owner: 'Owner', super_admin: 'Super admin' };
 
 /** A person's own details: picture (or their initial), name, email, mobile, password, and Sign out at the top. */
 export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser: (u: User) => void; onSignOut: () => void }) {
-  const [name, setName] = useState(user.name); const [email, setEmail] = useState(user.email ?? ''); const [phone, setPhone] = useState(user.phone ?? '');
+  const [name, setName] = useState(user.name); const [email, setEmail] = useState(user.email ?? ''); const [phone, setPhone] = useState(splitPhone(user.phone).number); const [cc, setCc] = useState(splitPhone(user.phone).code);
   const [biz, setBiz] = useState(user.businessName ?? ''); const [upi, setUpi] = useState(user.upiId ?? '');
   const [cur, setCur] = useState(''); const [nw, setNw] = useState('');
   const [delOpen, setDelOpen] = useState(false); const [delPw, setDelPw] = useState(''); const [delWord, setDelWord] = useState('');
@@ -20,7 +20,7 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const save = async () => {
     setErr(''); setNote(''); setBusy(true);
     try {
-      const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { firstName: splitName(name).first, lastName: splitName(name).last, email: email.trim() || undefined, phone: phone.trim() || undefined, ...(owner ? { businessName: biz.trim(), upiId: upi.trim() } : {}) } });
+      const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { firstName: splitName(name).first, lastName: splitName(name).last, email: email.trim() || undefined, ...(phone.trim() ? { countryCode: cc.trim(), phone: phone.trim() } : {}), ...(owner ? { businessName: biz.trim(), upiId: upi.trim() } : {}) } });
       onUser(r.user); setNote('Profile saved.');
     } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); } finally { setBusy(false); }
   };
@@ -31,7 +31,8 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const dropPic = async () => { try { await api('/api/me/avatar', { method: 'DELETE' }); onUser({ ...user, avatarUrl: null }); } catch (e: any) { setErr(e.message); } };
   const pw = async () => {
     setErr(''); setNote('');
-    try { await api('/api/me/password', { method: 'POST', body: { currentPassword: cur, newPassword: nw } }); setCur(''); setNw(''); setNote('Password changed.'); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
+    const first = user.hasPassword === false; // made with a phone code or at the desk: no current password to give
+    try { const r = await api<{ token: string; user: User }>('/api/me/password', { method: 'POST', body: { ...(first ? {} : { currentPassword: cur }), newPassword: nw } }); setCur(''); setNw(''); await setToken(r.token); onUser(r.user); setNote(first ? 'Password set. You can now sign in with your email or mobile number.' : 'Password changed.'); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
   };
 
   const del = async () => {
@@ -53,13 +54,14 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       <NameFields value={name} onChange={setName} />
       <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
-      <Field label="Mobile number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+      <PhoneField code={cc} number={phone} onCode={setCc} onNumber={setPhone} />
       {owner && <><Field label="Business name" value={biz} onChangeText={setBiz} autoCapitalize="words" /><Field label="UPI ID for payments" value={upi} onChangeText={setUpi} /></>}
       <Btn label="Save profile" onPress={save} busy={busy} />
       <Section>Password</Section>
-      <Field label="Current password" value={cur} onChangeText={setCur} secureTextEntry />
+      {user.hasPassword === false ? <Text style={[s.muted, { marginBottom: 10 }]}>Set a password to sign in with your email or mobile number.</Text>
+        : <Field label="Current password" value={cur} onChangeText={setCur} secureTextEntry />}
       <Field label="New password" value={nw} onChangeText={setNw} secureTextEntry />
-      <Btn kind="outline" label="Change password" onPress={pw} disabled={!cur || !nw} />
+      <Btn kind="outline" label={user.hasPassword === false ? 'Set password' : 'Change password'} onPress={pw} disabled={(user.hasPassword !== false && !cur) || !nw} />
       {user.role === 'customer' && <>
         <Section>Delete my account</Section>
         {!delOpen ? <Btn kind="ghost" label="Delete my account…" onPress={() => setDelOpen(true)} /> : <>

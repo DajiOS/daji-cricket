@@ -82,7 +82,8 @@ export function publicRoutes(r: Router): void {
     const lastName = v.str('lastName', { min: 1, max: 40 });
     const name = firstName ? undefined : v.str('name', { required: true, min: 2, max: 80 });
     const email = v.email('email', true);
-    const phone = v.phone('phone'); // optional: an account can be made with just an email
+    // Both are needed, and either one signs in afterwards. The number is not checked with a code while WhatsApp codes are off.
+    const phone = v.intlPhone('phone', true);
     const password = v.str('password', { required: true, trim: false });
     const consent = (c.json() as any).consent ?? {};
     const cv = new Validator(typeof consent === 'object' && consent ? consent : {});
@@ -96,7 +97,7 @@ export function publicRoutes(r: Router): void {
     if (sameEmail) throw new HttpError(409, 'ACCOUNT_EXISTS', sameEmail.role === 'customer' && !sameEmail.password_hash
       ? 'This email is already with us from a booking at the ground. Sign in with the code sent to your mobile number to use that record, or ask the ground to help.'
       : 'There is already an account with this email. Sign in with a code sent to your mobile, or reset your password, instead of making a new one.');
-    const row = createUser({ role: 'customer', name: name ?? `${firstName} ${lastName ?? ''}`, ...(firstName ? { firstName, lastName: lastName ?? '' } : {}), email: email!, phone: phone ?? null, password: password! });
+    const row = createUser({ role: 'customer', name: name ?? `${firstName} ${lastName ?? ''}`, ...(firstName ? { firstName, lastName: lastName ?? '' } : {}), email: email!, phone: phone!, password: password! });
     if (ce || cs || cw) {
       run('UPDATE users SET consent_email = ?, consent_sms = ?, consent_whatsapp = ?, consent_updated_at = ? WHERE id = ?', ce ? 1 : 0, cs ? 1 : 0, cw ? 1 : 0, now(), row.id);
       audit({ id: row.id, role: 'customer' }, 'consent.set', 'user', row.id, { email: !!ce, sms: !!cs, whatsapp: !!cw });
@@ -114,8 +115,9 @@ export function publicRoutes(r: Router): void {
     const who = v.str('identifier', { max: 120 }) ?? v.str('email', { max: 120, required: true });
     const password = v.str('password', { required: true, trim: false });
     const code = v.str('code', { max: 12 });
+    const countryCode = v.str('countryCode', { max: 4 });
     v.done();
-    return ok(login(c.cfg, who!, password!, code));
+    return ok(login(c.cfg, who!, password!, code, countryCode));
   }, { rate: 'auth' });
 
   // ---- forgot password: a code sent to the email, then the code and a new password. The answer never says whether the email has an account.

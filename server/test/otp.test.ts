@@ -74,8 +74,7 @@ test('the admin can edit first and last name; capitals are kept', async () => {
   assert.equal((await h.patch(`/api/admin/users/${a.body.user.id}`, { firstName: 'ravi' }, a.body.token)).status, 403);
 });
 
-test('an account can be made with just an email and a password', async () => {
+test('a password account needs a mobile number as well as an email', async () => {
   const r = await h.post('/api/auth/register', { firstName: 'asha', lastName: 'shah', email: 'asha@example.com', password: 'Passw0rdXyz' });
-  assert.equal(r.status, 201, JSON.stringify(r.body)); assert.equal(r.body.user.name, 'Asha Shah'); assert.equal(r.body.user.phone, null);
-  assert.equal((await h.post('/api/auth/login', { email: 'asha@example.com', password: 'Passw0rdXyz' })).status, 200);
+  assert.equal(r.status, 400, JSON.stringify(r.body)); assert.deepEqual(r.body.error.details.fields.map((f: any) => f.field), ['phone']);
 });
