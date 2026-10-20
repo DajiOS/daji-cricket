@@ -1,16 +1,19 @@
 import { lazy, Suspense, useState } from 'react';
-import { useApi, post, inr, fmtDay, can, go } from '../lib';
+import { useApi, post, inr, fmtDay, fmtDateTime, can, go } from '../lib';
 import { useSession } from '../App';
 import { ErrorBox, Loading, useToast } from '../ui';
 import { timeRange, errText, type Booking } from '../parts/dash/common';
 import type { Bill } from '../parts/bills/common';
 const BillsTable = lazy(() => import('./ApprovalsList'));
+const Rules = lazy(() => import('../parts/approvals/Rules'));
 
 // Approvals, as in the design: everything waiting on a decision on one stage board (Submitted, Review, Approval, Final sign-off, Done),
 // filtered by kind, with the selected item's facts, its sign-off chain and the decision. The old bills table is still at /approvals/bills.
-type Kind = 'bill' | 'book' | 'upi';
+// Bills and staff pay follow the owner's approval rules (built at /approvals/rules): the server sends each chain's steps, who may sign and its trail.
+type Kind = 'bill' | 'pay' | 'book' | 'upi';
 const K: Record<Kind, { name: string; ink: string; tint: string; href: string }> = {
   bill: { name: 'Bills', ink: '#B86E12', tint: 'var(--t-amber)', href: '/bills' },
+  pay: { name: 'Staff pay', ink: 'var(--i-violet)', tint: 'var(--t-violet)', href: '/payroll' },
   book: { name: 'Booking approvals', ink: 'var(--i-green)', tint: 'var(--t-green)', href: '/bookings/approvals' },
   upi: { name: 'UPI payments', ink: '#0B5F67', tint: 'var(--t-teal)', href: '/bookings/payments' },
 };
@@ -21,16 +24,26 @@ const ST: [string, string, string, string][] = [
 ];
 const CHAIN: Record<Kind, string[]> = {
   bill: ['Entered by the team', 'Approved by someone else', 'Paid'],
+  pay: ['Sent by the owner', 'Signed off', 'Month locked'],
   book: ['Customer pays the deposit', 'You approve the booking', 'Session played'],
   upi: ['Customer sends the UPI payment', 'Checked against the bank', 'Booking confirmed'],
 };
 const RULE: Record<Kind, string> = {
   bill: 'A bill is approved by someone other than the person who entered it. The owner can approve any bill.',
+  pay: 'The month locks when the last step signs.',
   book: 'The deposit is holding the slot until you approve it.',
   upi: 'Approve only once the money shows in the bank. Rejecting tells the customer it was not received.',
 };
 interface Pay { id: string; bookingId: string; amountPaise: number; reference: string | null; submittedAt: number | null; createdAt: number }
-type Item = { key: string; id: string; k: Kind; stage: number; step: number; title: string; who: string; amount: number | null; since: number | null; bill?: Bill };
+export interface Req {
+  id: string; kind: 'bill' | 'payroll'; entityId: string; title: string; amountPaise: number; status: string; round: number; submittedByName: string | null; submittedAt: number; atStep: number;
+  steps: { label: string; who: string; overPaise: number | null; state: 'done' | 'now' | 'later'; signedByName: string | null; signedAt: number | null; note: string | null }[];
+  rule: string; canSign: boolean; whyNot: string | null; trail: { id: number; at: number; action: string; actorName: string | null; detail: any }[];
+}
+type Item = { key: string; id: string; k: Kind; stage: number; step: number; title: string; who: string; amount: number | null; since: number | null; bill?: Bill; req?: Req };
+// Where a chain sits on the five columns: a one-step chain waits in Approval; a longer one starts in Review and its last step is Approval.
+const stageOf = (r: Req) => (r.steps.length > 1 && r.atStep < r.steps.length - 1 ? 1 : 2);
+const ACT: Record<string, string> = { submit: 'Sent in', signoff: 'Signed', approve: 'Approved', sendback: 'Sent back a step', reject: 'Sent back', withdraw: 'Taken back', create: 'Entered', finalise: 'Month locked', pay: 'Paid' };
 const age = (t: number | null) => {
   if (!t) return '—';
   const h = Math.floor((Date.now() - t) / 3600000);
@@ -38,6 +51,7 @@ const age = (t: number | null) => {
 };
 
 export default function Approvals({ sub }: { sub: string }) {
+  if (sub === 'rules') return <Suspense fallback={<Loading />}><Rules /></Suspense>;
   if (sub === 'bills') return <Suspense fallback={<Loading />}><BillsTable sub="" /></Suspense>;
   return <Board />;
 }
@@ -60,31 +74,46 @@ function Board() {
   const [paid] = useApi<{ items: Bill[] }>(acct ? '/api/accounting/bills?status=paid' : null, dep);
   const [bks] = useApi<{ items: Booking[] }>(books ? '/api/staff/bookings?approval=pending&limit=100' : null, dep);
   const [pays] = useApi<{ items: Pay[] }>(upiOk ? '/api/staff/payments?status=submitted&limit=50' : null, dep);
-  const loaded = (!acct || (draft && pend && appr && paid)) && (!books || bks) && (!upiOk || pays);
+  const [reqs] = useApi<{ items: Req[] }>(acct ? '/api/accounting/approvals/requests' : null, dep);
+  const loaded = (!acct || (draft && pend && appr && paid && reqs)) && (!books || bks) && (!upiOk || pays);
+  const chain = new Map((reqs?.items ?? []).map((r) => [`${r.kind}:${r.entityId}`, r]));
 
   const week = Date.now() - 7 * 86400000;
-  const bill = (b: Bill, stage: number, step: number): Item => ({ key: 'b' + b.id, id: b.id, k: 'bill', stage, step, title: `${b.vendorName}${b.billNo ? ' · ' + b.billNo : ''}`, who: b.createdByName ?? '', amount: b.amountPaise, since: stage === 4 ? Date.parse(b.paidDate ?? '') || null : b.submittedAt ?? b.createdAt, bill: b });
+  const bill = (b: Bill, stage: number, step: number): Item => {
+    const req = stage === 2 ? chain.get(`bill:${b.id}`) : undefined;
+    return { key: 'b' + b.id, id: b.id, k: 'bill', stage: req ? stageOf(req) : stage, step: req ? 1 + req.atStep : step, title: `${b.vendorName}${b.billNo ? ' · ' + b.billNo : ''}`, who: b.createdByName ?? '', amount: b.amountPaise, since: stage === 4 ? Date.parse(b.paidDate ?? '') || null : b.submittedAt ?? b.createdAt, bill: b, req };
+  };
   const all: Item[] = [
     ...(draft?.items ?? []).map((b) => bill(b, 0, 0)), ...(pend?.items ?? []).map((b) => bill(b, 2, 1)), ...(appr?.items ?? []).map((b) => bill(b, 3, 2)),
     ...(paid?.items ?? []).filter((b) => (Date.parse(b.paidDate ?? '') || 0) >= week).map((b) => bill(b, 4, 3)),
+    ...(reqs?.items ?? []).filter((r) => r.kind === 'payroll').map((r): Item => ({ key: 'p' + r.id, id: r.entityId, k: 'pay', stage: stageOf(r), step: 1 + r.atStep, title: r.title, who: r.submittedByName ?? '', amount: r.amountPaise, since: r.submittedAt, req: r })),
     ...(bks?.items ?? []).map((b): Item => ({ key: 'k' + b.id, id: b.id, k: 'book', stage: 2, step: 1, title: `${b.customerName} · ${fmtDay(b.date)}`, who: `${b.groundName} · ${timeRange(b)}`, amount: b.paidPaise, since: b.createdAt })),
     ...(pays?.items ?? []).map((p): Item => ({ key: 'u' + p.id, id: p.id, k: 'upi', stage: 1, step: 1, title: `UPI ${inr(p.amountPaise)}${p.reference ? ' · ' + p.reference : ''}`, who: '', amount: p.amountPaise, since: p.submittedAt ?? p.createdAt })),
   ];
-  const kinds = (Object.keys(K) as Kind[]).filter((k) => all.some((x) => x.k === k) || (k === 'bill' && acct) || (k === 'book' && books) || (k === 'upi' && upiOk));
+  const kinds = (Object.keys(K) as Kind[]).filter((k) => all.some((x) => x.k === k) || (k === 'bill' && acct) || (k === 'pay' && boss) || (k === 'book' && books) || (k === 'upi' && upiOk));
   const vis = all.filter((x) => filter === 'all' || x.k === filter);
   const open = all.filter((x) => x.stage < 4);
   const cur = all.find((x) => x.key === sel) ?? vis.find((x) => x.stage < 4) ?? vis[0];
-  const canDecide = (x: Item) => (x.k === 'bill' ? x.stage === 2 && acct && (boss || x.bill?.createdBy !== me.id) : x.k === 'book' ? books : upiOk);
+  const canDecide = (x: Item) => (x.req ? x.req.canSign : x.k === 'bill' ? x.stage === 2 && acct && (boss || x.bill?.createdBy !== me.id) : x.k === 'pay' ? false : x.k === 'book' ? books : upiOk);
+  const chainOf = (x: Item): string[] => x.req ? [x.k === 'pay' ? `Sent by ${x.req.submittedByName ?? 'the owner'}` : `Entered by ${x.who || 'the team'}`, ...x.req.steps.map((st) => st.label), x.k === 'pay' ? 'Month locked' : 'Paid'] : CHAIN[x.k];
+  const chainSub = (x: Item, i: number, done: boolean, now: boolean): string => {
+    const st = x.req && i >= 1 ? x.req.steps[i - 1] : undefined;
+    if (!st) return done ? 'Done' : now ? 'Waiting now' : 'Not yet';
+    if (st.state === 'done') return `Signed by ${st.signedByName ?? 'someone'}${st.note ? `: "${st.note}"` : ''}`;
+    return `${st.who}${st.overPaise ? `, for ${inr(st.overPaise)} or more` : ''} · ${st.state === 'now' ? 'Waiting now' : 'Not yet'}`;
+  };
   const canSendBack = (x: Item) => x.k !== 'book';
 
   async function decide(x: Item, yes: boolean) {
     if (!yes && !note.trim()) { setMsg('Write a short note first, so the person knows what to fix.'); return; }
     setBusy(true); setMsg(null);
     try {
-      if (x.k === 'bill') await post(`/api/accounting/bills/${x.id}/${yes ? 'approve' : 'reject'}`, yes ? undefined : { reason: note.trim() });
+      if (x.k === 'bill') await post(`/api/accounting/bills/${x.id}/${yes ? 'approve' : 'reject'}`, yes ? (note.trim() ? { note: note.trim() } : {}) : { reason: note.trim() });
+      else if (x.k === 'pay') await post(`/api/accounting/approvals/requests/${x.req!.id}/${yes ? 'approve' : 'send-back'}`, note.trim() ? { note: note.trim() } : {});
       else if (x.k === 'book') await post(`/api/staff/bookings/${encodeURIComponent(x.id)}/approve`, {});
       else await post(`/api/staff/payments/${encodeURIComponent(x.id)}/verify`, yes ? { approve: true } : { approve: false, reason: note.trim() });
-      toast(yes ? 'Approved.' : 'Sent back.'); setNote(''); setSel(null); setV((n) => n + 1); s.refreshCounts();
+      const last = !x.req || x.req.atStep >= x.req.steps.length - 1;
+      toast(yes ? (last ? 'Approved.' : 'Signed. It moves to the next step.') : 'Sent back.'); setNote(''); setSel(null); setV((n) => n + 1); s.refreshCounts();
     } catch (e) { setMsg(errText(e)); }
     setBusy(false);
   }
@@ -93,7 +122,7 @@ function Board() {
     <div className="dap">
       <div className="dap-hd">
         <div><span className="eyebrow">Everything waiting on a decision · {s.me.businessName || 'Daji Cricket Ground'}</span><h1>Approvals</h1></div>
-        <span className="muted">Waiting on you: {open.filter(canDecide).length} · <a href="#/approvals/bills">Bills table</a></span>
+        <span className="muted">Waiting on you: {open.filter(canDecide).length} · <a href="#/approvals/bills">Bills table</a>{boss && <> · <a href="#/approvals/rules">Approval rules</a></>}</span>
       </div>
       <div role="tablist" className="dtabs">
         <button type="button" role="tab" aria-selected={filter === 'all'} className={`dchip${filter === 'all' ? ' on' : ''}`} onClick={() => setFilter('all')}>All · {open.length}</button>
@@ -130,16 +159,17 @@ function Board() {
                 <div><span>{cur.stage === 4 ? 'Finished' : 'Waiting'}</span><b>{cur.stage === 4 ? 'Done' : age(cur.since)}</b></div>
               </div>
               <ol aria-label="Approval chain" className="dap-chain">
-                {CHAIN[cur.k].map((who, i, arr) => {
+                {chainOf(cur).map((who, i, arr) => {
                   const done = i < cur.step, now = i === cur.step;
                   return (
-                    <li key={who}>
+                    <li key={`${i}-${who}`}>
                       <span className="dap-rail"><span className={`dap-mark${done ? ' done' : now ? ' now' : ''}`}>{done ? '✓' : i + 1}</span>{i < arr.length - 1 && <i className={done ? 'done' : ''} />}</span>
-                      <span className="dap-step"><b>{who}</b><span className="muted">{done ? 'Done' : now ? 'Waiting now' : 'Not yet'}</span></span>
+                      <span className="dap-step"><b>{who}</b><span className="muted">{chainSub(cur, i, done, now)}</span></span>
                     </li>);
                 })}
               </ol>
-              <span className="dap-rule">{RULE[cur.k]}</span>
+              <span className="dap-rule">{cur.req ? cur.req.rule : RULE[cur.k]}</span>
+              {cur.req && !cur.req.canSign && cur.req.whyNot && <span className="muted" style={{ fontSize: 13 }}>{cur.req.whyNot}.</span>}
               {canDecide(cur) ? (<>
                 <div className="field" style={{ margin: 0 }}><label htmlFor="apNote">Note</label><textarea id="apNote" rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></div>
                 <div className="dap-acts">
@@ -149,6 +179,11 @@ function Board() {
                 </div>
               </>) : <button type="button" className="dbtn" onClick={() => go(cur.k === 'bill' ? `/bills/${cur.id}` : K[cur.k].href)}>Open in {K[cur.k].name}</button>}
               {msg && <div className="err" style={{ margin: 0 }}>{msg}</div>}
+              {cur.req && cur.req.trail.length > 0 && (
+                <details className="dap-trail">
+                  <summary>History · {cur.req.trail.length}</summary>
+                  <ol>{cur.req.trail.map((e) => <li key={e.id}><b>{ACT[e.action] ?? e.action}</b> <span className="muted">{e.actorName ?? 'System'} · {fmtDateTime(e.at)}</span>{(e.detail?.note || e.detail?.reason) && <span className="muted">"{e.detail.note || e.detail.reason}"</span>}</li>)}</ol>
+                </details>)}
             </aside>)}
         </div>
       </>)}

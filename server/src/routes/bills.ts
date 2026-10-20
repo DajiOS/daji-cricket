@@ -38,7 +38,7 @@ export function billsRoutes(r: Router): void {
   r.patch('/api/accounting/bills/:id', (c) => { const w = write(c); return ok(updateBill(w.owner, w.actor, c.params.id!, c.json())); }, A);
   r.del('/api/accounting/bills/:id', (c) => { const w = write(c); deleteBill(w.owner, w.actor, c.params.id!); return ok({ removed: true }); }, A);
   r.post('/api/accounting/bills/:id/submit', (c) => { const w = write(c); return ok(submitBill(w.owner, w.actor, c.params.id!)); }, A);
-  r.post('/api/accounting/bills/:id/approve', (c) => { const w = write(c); return ok(approveBill(w.owner, w.actor, c.params.id!)); }, A);
+  r.post('/api/accounting/bills/:id/approve', (c) => { const w = write(c); return ok(approveBill(w.owner, w.actor, c.params.id!, c.json())); }, A);
   r.post('/api/accounting/bills/:id/reject', (c) => { const w = write(c); return ok(rejectBill(w.owner, w.actor, c.params.id!, c.json())); }, A);
   r.post('/api/accounting/bills/:id/pay', (c) => { const w = write(c); return ok(payBill(w.owner, w.actor, c.params.id!, c.json())); }, A);
 
