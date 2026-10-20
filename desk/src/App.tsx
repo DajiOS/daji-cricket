@@ -32,7 +32,7 @@ function Shell({ route }: { route: string }) {
   useEffect(() => { setOpen(false); setFly(null); setMeOpen(false); }, [route]);
   useEffect(() => { const f = (e: KeyboardEvent) => { if (e.key === 'Escape') { setFly(null); setMeOpen(false); } }; addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, []);
   const visible = (i: NavItem) => navVisible(s.me, i);
-  const allowed = (r: RailItem) => can(s.me, r.perm) && (!r.ownerOnly || s.me.role !== 'staff');
+  const allowed = (r: RailItem) => can(s.me, r.perm) && (!r.anyPerm || r.anyPerm.some((p) => can(s.me, p))) && (!r.ownerOnly || s.me.role !== 'staff');
   // the one menu item for this address (the longest match), and the rail button it sits under
   const active = itemFor(route, NAV.flatMap((g) => g.items));
   const here = railOf(route);

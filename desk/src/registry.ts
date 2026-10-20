@@ -163,10 +163,10 @@ export const NAV: NavGroup[] = [
   ] },
 ];
 /** The slim rail, as in the design: "Every day" pages that open directly, then the departments whose task groups open beside it. */
-export interface RailItem { key: string; label: string; short: string; icon: string; sep?: string; to?: string; section?: string; hub?: boolean; eyebrow?: string; desc?: string; perm?: string; ownerOnly?: boolean }
+export interface RailItem { key: string; label: string; short: string; icon: string; sep?: string; to?: string; section?: string; hub?: boolean; eyebrow?: string; desc?: string; perm?: string; anyPerm?: string[]; ownerOnly?: boolean }
 export const RAIL: RailItem[] = [
   { key: 'home', label: 'Home', short: 'Home', icon: 'dashboard', sep: 'Every day', to: '/' },
-  { key: 'approvals', label: 'Approvals', short: 'Approvals', icon: 'check', to: '/approvals', perm: 'manage_accounting' },
+  { key: 'approvals', label: 'Approvals', short: 'Approvals', icon: 'check', to: '/approvals', anyPerm: ['manage_accounting', 'manage_bookings'] },
   { key: 'calendar', label: 'Calendar', short: 'Calendar', icon: 'calendar', to: '/calendar' },
   { key: 'tasks', label: 'Task boards', short: 'Tasks', icon: 'tasks', to: '/tasks', perm: 'manage_tasks' },
   { key: 'ground', label: 'Ground', short: 'Ground', icon: 'ball', sep: 'Departments', section: 'ground', eyebrow: 'Book → play → collect', desc: 'Everything about the sessions on your ground, from the booking to the final over.' },
