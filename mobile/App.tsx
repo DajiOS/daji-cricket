@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { api, loadToken, serverSignOut, setToken, setViewOwner } from './src/api';
 import type { Booking, HoldResponse, User } from './src/types';
@@ -18,7 +18,11 @@ import { AccountsScreen } from './src/AccountsScreen';
 import { AcademyScreen } from './src/AcademyScreen';
 import { MatchesScreen } from './src/MatchesScreen';
 import { DeskScreen } from './src/DeskScreen';
-import { Avatar, Btn, Chip, Loading, s, refreshStyles } from './src/ui';
+import { PayrollScreen } from './src/PayrollScreen';
+import { ComplianceScreen } from './src/ComplianceScreen';
+import { RefundsScreen } from './src/RefundsScreen';
+import { CostsScreen } from './src/CostsScreen';
+import { Avatar, Btn, Chip, Loading, Section, s, refreshStyles } from './src/ui';
 import * as SecureStore from 'expo-secure-store';
 import { Intro } from './src/Intro';
 import { ThemeButton } from './src/ThemeButton';
@@ -30,10 +34,10 @@ import { ADMIN_APP } from './src/variant';
 //   customer     Book, Mine (bookings and academy), Ask AI, Profile
 //   staff        Bookings, Tasks, Books, More, each only if their permissions allow it
 //   coach        (staff with manage_academy / manage_matches) Academy and Matches under More
-//   owner        the same, plus Promo codes, Team and Booking controls under More
-//   super admin  the same as the owner, working inside the owner chosen under More
+//   owner        the same, plus Promo codes, Team, Booking controls, Staff pay and Compliance under More
+//   super admin  the same as the owner, working inside the owner chosen under More, plus Refunds and Software costs
 type Tab = 'book' | 'me' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'accounts' | 'more';
-type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk';
+type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs';
 
 function AppInner({ theme }: { theme: Mode }) {
   void theme; // a new value makes the whole app draw again with the new colours
@@ -114,11 +118,15 @@ function AppInner({ theme }: { theme: Mode }) {
       else if (more === 'team') body = <TeamScreen key={deskKey} />;
       else if (more === 'platform') body = <PlatformScreen />;
       else if (more === 'desk' && boss) body = <DeskScreen key={deskKey} />;
+      else if (more === 'payroll' && boss) body = <PayrollScreen key={deskKey} />;
+      else if (more === 'compliance' && boss) body = <ComplianceScreen />;
+      else if (more === 'refunds' && user.role === 'super_admin') body = <RefundsScreen />;
+      else if (more === 'costs' && user.role === 'super_admin') body = <CostsScreen />;
       else if (more === 'academy' && perm('manage_academy')) body = <AcademyScreen key={deskKey} />;
       else if (more === 'matches' && perm('manage_matches')) body = <MatchesScreen key={deskKey} />;
       else if (more === 'profile') body = <ProfileScreen user={user} onUser={setUser} onSignOut={signOut} />;
       else body = (
-        <View style={[s.screen, s.pad, { paddingTop: 60 }]}>
+        <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>
           <Text style={s.eyebrow}>{user.role === 'super_admin' ? 'Super admin' : user.role === 'owner' ? 'Owner' : 'Team'}</Text>
           <Text style={s.h1}>More</Text>
           <Pressable onPress={() => setMore('profile')} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
@@ -135,8 +143,13 @@ function AppInner({ theme }: { theme: Mode }) {
           {boss && <Btn kind="outline" label="Promo codes" onPress={() => setMore('promo')} />}
           {boss && <Btn kind="outline" label="Team" onPress={() => setMore('team')} />}
           {boss && <Btn kind="outline" label="Booking controls" onPress={() => setMore('platform')} />}
+          {boss && <><Section>Money</Section>
+            <Btn kind="outline" label="Staff pay and attendance" onPress={() => setMore('payroll')} />
+            <Btn kind="outline" label="Compliance" onPress={() => setMore('compliance')} />
+            {user.role === 'super_admin' && <Btn kind="outline" label="Refunds to authorise" onPress={() => setMore('refunds')} />}
+            {user.role === 'super_admin' && <Btn kind="outline" label="Software costs" onPress={() => setMore('costs')} />}</>}
           <Btn kind="ghost" label="Sign out" onPress={signOut} />
-        </View>
+        </ScrollView>
       );
     } else body = <TasksScreen key={deskKey} user={user} />;
   } else if (done) {
