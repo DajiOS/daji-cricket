@@ -18,7 +18,7 @@ import { integrationStatuses, testIntegration } from '../integrations.ts';
 import { addService, deleteService, listServices, updateService } from '../services.ts';
 import { saveAaSettings, viewAaSettings } from '../accounting/aa.ts';
 import { saveYodleeSettings, subscribeYodleeWebhooks, testYodlee, viewYodleeSettings } from '../yodleeSettings.ts';
-import { backupNow, BACKUP_AT, listBackups, nextBackupAt } from '../backup.ts';
+import { backupNow, BACKUP_AT, lastOffsiteCopy, lastRestorePractice, listBackups, nextBackupAt, practiceRestore } from '../backup.ts';
 
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
 
@@ -170,7 +170,12 @@ export function adminRoutes(r: Router): void {
     enabled: c.cfg.backup.enabled, at: BACKUP_AT, keep: c.cfg.backup.keep,
     nextAt: c.cfg.backup.enabled ? nextBackupAt() : null,
     items: listBackups(c.cfg),
+    restorePractice: lastRestorePractice(c.cfg),
+    offsiteCopy: lastOffsiteCopy(c.cfg),
   }), SAO);
+
+  // Restores the newest snapshot into a throw-away folder and checks it. The live data is not touched.
+  r.post('/api/admin/backups/practice-restore', (c) => { const u = U(c); return ok(practiceRestore(c.cfg, undefined, { id: u.id, role: u.role })); }, { ...SAO, rate: 'auth' });
 
   r.post('/api/admin/backups', (c) => {
     const u = U(c);

@@ -1,4 +1,5 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { db } from './db.ts';
@@ -177,3 +178,45 @@ export function runBackupIfDue(cfg: Config, onError: (e: unknown) => void = () =
   } catch (e) { onError(e); return null; }
 }
 export function resetBackupRetry(): void { lastTry = 0; }
+
+// ---- restore practice and the offsite copy record ----
+// A backup is only proven by restoring it. practiceRestore() restores a snapshot into a throw-away folder, checks the database and the files, deletes the
+// folder and records the result in <data>/restore-practice.json, so the desk can show when a restore was last practised. The live data is never touched.
+// deploy/offsite-backup.sh writes <data>/offsite-copy.json each time it copies the backups off the server, for the same reason.
+
+export const RESTORE_PRACTICE_FILE = 'restore-practice.json';
+export const OFFSITE_COPY_FILE = 'offsite-copy.json';
+export interface RestorePractice { at: number; snapshot: string | null; ok: boolean; message: string; integrity?: string; users?: number; bookings?: number; files?: number }
+
+export function practiceRestore(cfg: Config, name?: string, actor: Actor = SYSTEM): RestorePractice {
+  const t = now();
+  const record = (r: RestorePractice): RestorePractice => {
+    try { writeFileSync(join(cfg.dataDir, RESTORE_PRACTICE_FILE), JSON.stringify(r, null, 2)); } catch { /* the result is still returned */ }
+    try { audit(actor, 'backup.restore_practice', 'backup', r.snapshot, { ok: r.ok, message: r.message }); } catch { /* as above */ }
+    return r;
+  };
+  const snap = name ? listBackups(cfg).find((b) => b.name === name) : listBackups(cfg)[0];
+  if (!snap) return record({ at: t, snapshot: name ?? null, ok: false, message: name ? `There is no snapshot called ${name}.` : 'There is no snapshot to restore yet. Take a backup first.' });
+  if (snap.encrypted && !cfg.backup.passphrase) return record({ at: t, snapshot: snap.name, ok: false, message: 'This snapshot is encrypted and BACKUP_PASSPHRASE is not set on this server.' });
+  const out = mkdtempSync(join(tmpdir(), 'daji-restore-'));
+  try {
+    try { decryptSnapshot(join(cfg.backup.dir, snap.name), out, cfg.backup.passphrase); }
+    catch { return record({ at: t, snapshot: snap.name, ok: false, message: 'The snapshot could not be decrypted: BACKUP_PASSPHRASE is not the one it was made with.' }); }
+    const dbFile = join(out, 'daji.db');
+    if (!existsSync(dbFile)) return record({ at: t, snapshot: snap.name, ok: false, message: 'The snapshot has no database in it.' });
+    const c = checkDatabaseFile(dbFile);
+    let files = 0;
+    for (const dir of BACKED_UP_FOLDERS) if (existsSync(join(out, dir))) files += folderSize(join(out, dir)).files;
+    const problems = [c.integrity !== 'ok' ? `the database failed its integrity check (${c.integrity})` : '', files !== snap.files ? `${files} of ${snap.files} files came back` : ''].filter(Boolean);
+    const message = problems.length ? `Restore failed: ${problems.join('; ')}.` : `Restored ${snap.name}: ${c.users} users, ${c.bookings} bookings and ${files} files read back.`;
+    return record({ at: t, snapshot: snap.name, ok: !problems.length, message, integrity: c.integrity, users: c.users, bookings: c.bookings, files });
+  } finally { rmSync(out, { recursive: true, force: true }); }
+}
+
+function readJson<T>(path: string): T | null { try { return JSON.parse(readFileSync(path, 'utf8')) as T; } catch { return null; } }
+export const lastRestorePractice = (cfg: Config): RestorePractice | null => readJson<RestorePractice>(join(cfg.dataDir, RESTORE_PRACTICE_FILE));
+/** The last run of deploy/offsite-backup.sh: when, and how many snapshots it copied. */
+export function lastOffsiteCopy(cfg: Config): { at: number; snapshots: number } | null {
+  const r = readJson<{ at?: unknown; snapshots?: unknown }>(join(cfg.dataDir, OFFSITE_COPY_FILE));
+  return r && typeof r.at === 'number' ? { at: r.at, snapshots: Number(r.snapshots) || 0 } : null;
+}
