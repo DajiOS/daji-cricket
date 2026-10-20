@@ -72,7 +72,7 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
         <div className="grid g3">
           <div className="miniStat"><span>Total</span><b>{inr(b.totalPaise)}</b></div>
           <div className="miniStat"><span>Paid</span><b className="gold">{inr(b.status === 'cancelled' && b.resolution !== 'awaiting' ? Math.max(b.paidPaise - b.refundPaise - b.creditPaise, 0) : b.paidPaise)}</b></div>
-          <div className="miniStat"><span>Balance</span><b style={b.status === 'confirmed' && b.balancePaise > 0 ? { color: '#a8720f' } : undefined}>{inr(b.status === 'cancelled' || b.status === 'expired' ? 0 : b.balancePaise)}</b></div>
+          <div className="miniStat"><span>Balance</span><b style={b.status === 'confirmed' && b.balancePaise > 0 ? { color: 'var(--warn)' } : undefined}>{inr(b.status === 'cancelled' || b.status === 'expired' ? 0 : b.balancePaise)}</b></div>
         </div>
 
         <div>
@@ -188,7 +188,7 @@ function BlockDetail({ d, onClose, onChanged }: { d: Detail; onClose: () => void
           <div className="grid g3">
             <div className="miniStat"><span>Total</span><b>{inr(k.totalPaise)}</b></div>
             <div className="miniStat"><span>Paid</span><b className="gold">{inr(k.cancelled && k.awaitingPaise === 0 ? Math.max(k.paidPaise - k.refundedPaise - k.creditedPaise, 0) : k.paidPaise)}</b></div>
-            <div className="miniStat"><span>Balance</span><b style={k.balancePaise > 0 ? { color: '#a8720f' } : undefined}>{inr(k.balancePaise)}</b></div>
+            <div className="miniStat"><span>Balance</span><b style={k.balancePaise > 0 ? { color: 'var(--warn)' } : undefined}>{inr(k.balancePaise)}</b></div>
           </div>
           <div>
             <div className="eyebrow">Each day</div>

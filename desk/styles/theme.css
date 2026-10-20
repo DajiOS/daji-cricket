@@ -1,20 +1,31 @@
-/* Light (ivory and green, like the website) is the desk's look; dark is chosen with the sun and moon icon at the far right of the top bar and remembered on this device. */
-.theme-toggle { flex: none; position: relative; width: 54px; height: 30px; margin-left: 10px; padding: 3px; display: inline-flex; align-items: center; border-radius: 99px; border: 1px solid var(--line-strong); background: var(--panel-2); cursor: pointer; transition: background .2s, border-color .2s; }
-.theme-toggle:hover { border-color: var(--gold); }
-.theme-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.theme-toggle .tt-knob { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .24s cubic-bezier(.3,.7,.2,1); }
-.theme-toggle[data-mode="dark"] .tt-knob { transform: translateX(24px); color: #1a1405; }
-.theme-toggle svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.theme-toggle .moon { display: none; fill: currentColor; stroke: none; }
-.theme-toggle[data-mode="dark"] .sun { display: none; }
-.theme-toggle[data-mode="dark"] .moon { display: block; }
-@media (prefers-reduced-motion: reduce) { .theme-toggle .tt-knob { transition: none; } }
+/* Colour theme menu (from the starter kit): the dot at the far right of the top bar opens light or dark and the ten palettes. */
+.theme-pick { position: relative; flex: none; margin-left: 6px; }
+.theme-dot { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; padding: 0; cursor: pointer; }
+.theme-dot:hover { border-color: var(--line-strong); }
+.theme-dot span { width: 22px; height: 22px; border-radius: 50%; display: block; box-shadow: 0 0 0 1px var(--line); }
+.theme-menu { position: absolute; right: 0; top: 48px; z-index: 45; width: 290px; max-height: calc(100vh - 80px); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 18px 48px rgba(0,0,0,.18); padding: 10px; display: flex; flex-direction: column; gap: 2px; }
+.theme-menu-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px 8px; }
+.theme-mode { display: flex; gap: 2px; padding: 3px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface2); }
+.theme-mode button { width: 34px; height: 34px; border-radius: 50%; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.theme-mode button[aria-pressed="true"] { background: var(--strong); color: var(--on-strong); }
+.theme-mode svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.theme-row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: 400 14px var(--sans); text-align: left; cursor: pointer; }
+.theme-row:hover { background: var(--surface2); }
+.theme-row[aria-checked="true"] { background: var(--soft); font-weight: 500; }
+.theme-sw { display: flex; border-radius: 9px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); flex: none; }
+.theme-sw i { width: 13px; height: 26px; }
+@media (max-width: 860px) { .theme-menu { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; } }
 
 /* opening animation: played by intro.js (the same film as the website) */
 #intro { position: fixed; inset: 0; z-index: 400; }
 @media (prefers-reduced-motion: reduce) { #intro { display: none; } }
 
 /* The action buttons of a pop-up stay in view at the bottom, so a long form (like Multi-day booking) never hides its Save button. */
-.modal-foot { position: sticky; bottom: 0; background: var(--panel); border-radius: 0 0 18px 18px; z-index: 2; }
+.modal-foot { position: sticky; bottom: 0; background: var(--panel); border-radius: 0 0 22px 22px; z-index: 2; }
 .overlay { padding-bottom: 0; }
 @media (max-width: 760px) { .overlay { padding: 12px 10px 0; } .modal-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom)); flex-wrap: wrap; } .modal-foot .btn { flex: 1 1 auto; } }
+
+/* the side menu stays dark in every theme */
+.side .btn.ghost { color: var(--muted); } .side .btn.ghost:hover { background: rgba(255,255,255,.08); color: #fff; }
+.side a:hover, .flyout a:hover { color: #fff; background: rgba(255,255,255,.07); }
+.side .rail-btn:hover, .side .rail-btn[aria-expanded="true"] { background: rgba(255,255,255,.07); color: #fff; }

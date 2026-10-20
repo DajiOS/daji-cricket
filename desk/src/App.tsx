@@ -159,7 +159,7 @@ function TermsGate({ terms, onDone, onSignOut }: { terms: Terms; onDone: () => v
           <p className="small muted">Please read these terms. You need to accept them once before you can use the desk. Your acceptance is saved with the time and your device address.</p>
           <pre style={{ whiteSpace: 'pre-wrap', font: 'inherit', maxHeight: '45vh', overflow: 'auto', padding: 12, border: '1px solid var(--line, #ddd)', borderRadius: 8 }}>{terms.body}</pre>
           <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /><span>I accept these terms</span></label>
-          {err && <p style={{ color: '#b3261e' }}>{err}</p>}
+          {err && <p style={{ color: 'var(--bad)' }}>{err}</p>}
           <div className="row" style={{ marginTop: 12, justifyContent: 'space-between' }}>
             <button className="btn ghost" onClick={onSignOut}>Sign out</button>
             <button className="btn primary" disabled={!agree || busy} onClick={accept}>Accept and continue</button>

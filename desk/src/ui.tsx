@@ -224,7 +224,7 @@ export function DateInput({ value, onChange, min, max, disabled, className, styl
   const w = style && style.width ? { width: style.width } : undefined;
   return (
     <span className="dx" style={{ position: 'relative', display: w ? 'inline-block' : 'block', ...w }}>
-      <input className={className} style={{ ...style, width: '100%', paddingRight: 34, ...(bad ? { borderColor: '#c0392b' } : null) }} id={id} type="text" inputMode="numeric" autoComplete="off" maxLength={10}
+      <input className={className} style={{ ...style, width: '100%', paddingRight: 34, ...(bad ? { borderColor: 'var(--bad)' } : null) }} id={id} type="text" inputMode="numeric" autoComplete="off" maxLength={10}
         placeholder="dd/mm/yyyy" title={bad || undefined} aria-label={ariaLabel} aria-invalid={bad ? true : undefined} autoFocus={autoFocus} disabled={disabled} value={txt}
         onChange={(e) => type(e.target.value)} onBlur={() => { if (bad || (txt && txt.length < 10)) { setTxt(showDate(value || '')); setBad(''); } }} />
       <button type="button" className="dx-b" aria-label="Open calendar" disabled={disabled} onClick={() => { try { picker.current?.showPicker?.(); } catch { /* no native picker */ } }}

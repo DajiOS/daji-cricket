@@ -4,7 +4,7 @@ import { api, go, inr, inrShort, fmtDate, todayISO, useApi } from '../../lib';
 import { Stat, Chip, ErrorBox, Loading, Empty } from '../../ui';
 import { Grid, Money, Section, Note, monthName, monthAdd } from './kit';
 
-const COLORS = ['#c9a44c', '#6fa0d0', '#5fb07a', '#d98c5f', '#9a8fd1', '#8b8575'];
+const COLORS = ['var(--strong)', 'var(--i-blue)', 'var(--i-green)', 'var(--i-amber)', 'var(--i-violet)', 'var(--muted)'];
 
 function Donut({ parts }: { parts: { name: string; v: number }[] }) {
   const total = parts.reduce((s, p) => s + p.v, 0), R = 42, C = 2 * Math.PI * R; let off = 0;
@@ -30,8 +30,8 @@ function Bars({ labels, values }: { labels: string[]; values: number[] }) {
         {values.map((v, i) => { const h = Math.max(2, (Math.max(v, 0) / max) * (H - T - B)), x = L + slot * i + slot * 0.2, w = slot * 0.6;
           return <g key={i} onMouseEnter={() => setHover(i)}>
             <rect x={L + slot * i} y={T} width={slot} height={H - T - B} fill="transparent" />
-            <rect x={x} y={H - B - h} width={w} height={h} rx="3" fill={hover === i ? '#e6c873' : '#b08a36'} />
-            <text x={x + w / 2} y={H - 8} textAnchor="middle" fontSize="11" fill={hover === i ? '#e6c873' : '#a39b8a'}>{labels[i]}</text>
+            <rect x={x} y={H - B - h} width={w} height={h} rx="3" fill={hover === i ? 'var(--link)' : 'var(--strong)'} />
+            <text x={x + w / 2} y={H - 8} textAnchor="middle" fontSize="11" fill={hover === i ? 'var(--link)' : 'var(--muted)'}>{labels[i]}</text>
             {hover === i && <text x={x + w / 2} y={H - B - h - 6} textAnchor="middle" fontSize="11" fill="#e8e2d3" fontWeight="700">{inrShort(v)}</text>}
           </g>; })}
       </svg>
@@ -88,7 +88,7 @@ export function Overview() {
           <div className="muted small">Played sessions not fully paid</div>
           <div className="bk-big">{inr(owed)}</div>
           <div className="bk-split"><i className="o" style={{ width: `${Math.round((older / scale) * 100)}%` }} /><i className="n" style={{ width: `${Math.round((recent / scale) * 100)}%` }} /></div>
-          <div className="legend" style={{ marginTop: 8 }}><span><i style={{ background: '#d98c5f' }} />Over 30 days <b className="strong">{inr(older)}</b></span><span><i style={{ background: '#c9a44c' }} />0 to 30 days <b className="strong">{inr(recent)}</b></span></div>
+          <div className="legend" style={{ marginTop: 8 }}><span><i style={{ background: 'var(--i-amber)' }} />Over 30 days <b className="strong">{inr(older)}</b></span><span><i style={{ background: 'var(--strong)' }} />0 to 30 days <b className="strong">{inr(recent)}</b></span></div>
           <div className="bk-list" style={{ marginTop: 10 }}><Pair k="Advances held for future sessions" v={inr(o.advancesHeldPaise)} /><Pair k="Account credit you owe customers" v={inr(o.accountCreditOwedPaise)} /></div>
           <Link to="/accounting/reports/cb-sum">Customer balance summary</Link>
         </Section>

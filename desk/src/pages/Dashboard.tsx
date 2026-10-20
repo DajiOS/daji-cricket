@@ -68,10 +68,10 @@ export default function Dashboard({ sub }: { sub: string }) {
         {canBookings && <Stat label="Sessions today" value={today ? today.bookings.length : '…'} foot={today ? (today.bookings.length ? `${today.bookings.filter((b) => b.startAt > Date.now()).length} still to play` : 'A quiet day') : ' '} />}
         {canMoney && <Stat label={`Revenue · ${monthName}`} value={pnl ? inrShort(pnl.revenue.totalPaise) : canReports && !pnlErr ? '…' : thisMonth ? inrShort(thisMonth.collected) : '—'}
           foot={pnl ? 'from sessions played this month' : pnlErr ? 'Sessions played, from payments received' : canReports ? ' ' : 'Your role does not include reports'} />}
-        {canMoney && <Stat label={`Net profit · ${monthName}`} value={pnl ? <span style={pnl.netProfitPaise < 0 ? { color: '#f19a8d' } : undefined}>{inrShort(pnl.netProfitPaise)}</span> : canReports && !pnlErr ? '…' : '—'}
+        {canMoney && <Stat label={`Net profit · ${monthName}`} value={pnl ? <span style={pnl.netProfitPaise < 0 ? { color: 'var(--bad)' } : undefined}>{inrShort(pnl.netProfitPaise)}</span> : canReports && !pnlErr ? '…' : '—'}
           foot={pnl ? (pnl.uncategorised.count ? `${pnl.uncategorised.count} bank transactions still need a category` : 'after expenses') : pnlErr ? 'Accounting is not available here' : ' '} />}
         {canMoney && <Stat label="Booked ahead" value={ahead ? inrShort(ahead.totalPaise) : '…'} foot={ahead ? `${ahead.bookings} upcoming sessions · ${inrShort(ahead.balancePaise)} still to collect` : ' '} />}
-        {canMoney && <Stat label="To collect today" value={today ? <span style={toCollect ? { color: '#e9c06a' } : undefined}>{inr(toCollect)}</span> : '…'} foot="balances on today's sessions" />}
+        {canMoney && <Stat label="To collect today" value={today ? <span style={toCollect ? { color: 'var(--warn)' } : undefined}>{inr(toCollect)}</span> : '…'} foot="balances on today's sessions" />}
       </div>}
 
       {canReports && <div className={canMoney ? 'grid g-2-1' : 'grid'}>
