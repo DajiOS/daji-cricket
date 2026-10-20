@@ -1,20 +1,23 @@
 import React from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
 import { C } from './theme';
 import { API_URL } from './api';
+
+/** Headings use a serif, like the desk. */
+export const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia, serif' });
 
 const build = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   pad: { padding: 18, paddingBottom: 40 },
   eyebrow: { color: C.gold, fontSize: 11, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 8 },
-  h1: { color: C.text, fontSize: 30, fontWeight: '700', marginBottom: 6 },
+  h1: { color: C.text, fontSize: 32, fontWeight: '500', fontFamily: SERIF, marginBottom: 6 },
   h2: { color: C.text, fontSize: 19, fontWeight: '600', marginBottom: 10 },
   text: { color: C.text, fontSize: 15 },
   muted: { color: C.muted, fontSize: 13, lineHeight: 19 },
   err: { color: C.danger, fontSize: 13, marginVertical: 6 },
-  card: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 10, padding: 16, marginBottom: 14 },
+  card: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 14 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, gap: 10 },
-  input: { backgroundColor: C.bg, borderColor: C.line, borderWidth: 1, borderRadius: 8, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
+  input: { backgroundColor: C.bg, borderColor: C.line, borderWidth: 1, borderRadius: 12, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
 });
 /** The shared styles. They are built again (in place) when the theme changes, see refreshStyles. */
 export const s: ReturnType<typeof build> = build();
@@ -24,8 +27,8 @@ export function Btn({ label, onPress, kind = 'primary', disabled, busy, style }:
   const p = kind === 'primary';
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled || busy}
-      style={[{ backgroundColor: p ? C.gold : 'transparent', borderColor: kind === 'ghost' ? 'transparent' : C.gold, borderWidth: 1, borderRadius: 8, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', opacity: disabled ? 0.45 : 1, marginBottom: 10 }, style]}>
-      {busy ? <ActivityIndicator color={p ? C.bg : C.gold} /> : <Text style={{ color: p ? C.bg : C.gold, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', fontSize: 13 }}>{label}</Text>}
+      style={[{ backgroundColor: p ? C.strong : 'transparent', borderColor: kind === 'ghost' ? 'transparent' : p ? C.strong : C.line, borderWidth: 1, borderRadius: 999, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', opacity: disabled ? 0.45 : 1, marginBottom: 10 }, style]}>
+      {busy ? <ActivityIndicator color={p ? C.onStrong : C.gold} /> : <Text style={{ color: p ? C.onStrong : kind === 'ghost' ? C.gold : C.text, fontWeight: '600', fontSize: 15 }}>{label}</Text>}
     </Pressable>
   );
 }
@@ -72,7 +75,7 @@ export function NameFields({ value, onChange, firstLabel = 'First name', lastLab
 
 export function Chip({ label, on, onPress, disabled }: { label: string; on?: boolean; onPress?: () => void; disabled?: boolean }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={{ borderColor: on ? C.gold : C.line, backgroundColor: on ? 'rgba(201,169,107,.14)' : 'transparent', borderWidth: 1, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 13, marginRight: 8, marginBottom: 8, opacity: disabled ? 0.35 : 1 }}>
+    <Pressable onPress={onPress} disabled={disabled} style={{ borderColor: on ? C.gold : C.line, backgroundColor: on ? 'rgba(201,169,107,.14)' : 'transparent', borderWidth: 1, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14, marginRight: 8, marginBottom: 8, opacity: disabled ? 0.35 : 1 }}>
       <Text style={{ color: on ? C.gold : C.text, fontSize: 13 }}>{label}</Text>
     </Pressable>
   );
