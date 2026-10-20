@@ -20,3 +20,12 @@ export async function pickProfilePhoto(): Promise<{ uri: string } | null> {
   if (r.canceled || !r.assets[0]) return null;
   return { uri: r.assets[0].uri };
 }
+
+/** A business card for the card reader: the camera, at a quality that keeps the photo well under the server's 5 MB limit. */
+export async function takeCardPhoto(): Promise<{ uri: string } | null> {
+  const perm = await ImagePicker.requestCameraPermissionsAsync();
+  if (!perm.granted) throw new Error('Allow camera access in your phone settings to scan cards.');
+  const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6, allowsEditing: false });
+  if (r.canceled || !r.assets[0]) return null;
+  return { uri: r.assets[0].uri };
+}

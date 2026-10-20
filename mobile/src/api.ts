@@ -6,7 +6,7 @@ let token: string | null = null;
 /** The super admin works inside one owner's desk at a time; this owner is added to owner-scoped requests. */
 let viewOwner: string | null = null;
 export const setViewOwner = (id: string | null): void => { viewOwner = id; };
-const OWNER_SCOPED = ['/api/tasks', '/api/staff', '/api/accounting', '/api/media'];
+const OWNER_SCOPED = ['/api/tasks', '/api/staff', '/api/accounting', '/api/media', '/api/desk'];
 const scoped = (path: string): string => (viewOwner && OWNER_SCOPED.some((p) => path.startsWith(p)) && !/[?&]ownerId=/.test(path) ? path + (path.includes('?') ? '&' : '?') + 'ownerId=' + encodeURIComponent(viewOwner) : path);
 
 export async function loadToken(): Promise<string | null> { try { token = await SecureStore.getItemAsync(KEY); } catch { token = null; } return token; }
@@ -21,7 +21,8 @@ export async function serverSignOut(): Promise<void> {
   try { await fetch(API_URL + '/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch { /* offline: the token still expires */ }
 }
 
-export class ApiError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } }
+/** details carries the server's extra facts, such as the fields that failed ({ fields: [{ field, message }] }). */
+export class ApiError extends Error { constructor(public status: number, public code: string, message: string, public details?: any) { super(message); } }
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
   let res: Response;
@@ -35,7 +36,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
-  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? 'ERROR', data?.error?.message ?? `Something went wrong (${res.status})`);
+  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? 'ERROR', data?.error?.message ?? `Something went wrong (${res.status})`, data?.error?.details);
   return data as T;
 }
 
@@ -49,7 +50,7 @@ export async function upload<T = any>(path: string, uri: string, headers: Record
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
-  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? 'ERROR', data?.error?.message ?? `Something went wrong (${res.status})`);
+  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? 'ERROR', data?.error?.message ?? `Something went wrong (${res.status})`, data?.error?.details);
   return data as T;
 }
 /** An image address that needs the sign-in header (task photos). Public pictures (profile) use the plain address. */

@@ -22,6 +22,9 @@ import { PayrollScreen } from './src/PayrollScreen';
 import { ComplianceScreen } from './src/ComplianceScreen';
 import { RefundsScreen } from './src/RefundsScreen';
 import { CostsScreen } from './src/CostsScreen';
+import { RemindersScreen } from './src/RemindersScreen';
+import { CardsScreen } from './src/CardsScreen';
+import { SettingsScreen } from './src/SettingsScreen';
 import { Avatar, Btn, Chip, Loading, Section, s, refreshStyles } from './src/ui';
 import * as SecureStore from 'expo-secure-store';
 import { Intro } from './src/Intro';
@@ -34,10 +37,11 @@ import { ADMIN_APP } from './src/variant';
 //   customer     Book, Mine (bookings and academy), Ask AI, Profile
 //   staff        Bookings, Tasks, Books, More, each only if their permissions allow it
 //   coach        (staff with manage_academy / manage_matches) Academy and Matches under More
+//   messages     (staff with send_broadcasts / view_customers) WhatsApp reminders and Business cards under More
 //   owner        the same, plus Promo codes, Team, Booking controls, Staff pay and Compliance under More
 //   super admin  the same as the owner, working inside the owner chosen under More, plus Refunds and Software costs
 type Tab = 'book' | 'me' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'accounts' | 'more';
-type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs';
+type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings';
 
 function AppInner({ theme }: { theme: Mode }) {
   void theme; // a new value makes the whole app draw again with the new colours
@@ -122,6 +126,9 @@ function AppInner({ theme }: { theme: Mode }) {
       else if (more === 'compliance' && boss) body = <ComplianceScreen />;
       else if (more === 'refunds' && user.role === 'super_admin') body = <RefundsScreen />;
       else if (more === 'costs' && user.role === 'super_admin') body = <CostsScreen />;
+      else if (more === 'reminders' && perm('send_broadcasts')) body = <RemindersScreen key={deskKey} />;
+      else if (more === 'cards' && perm('view_customers')) body = <CardsScreen key={deskKey} />;
+      else if (more === 'settings' && boss) body = <SettingsScreen user={user} />;
       else if (more === 'academy' && perm('manage_academy')) body = <AcademyScreen key={deskKey} />;
       else if (more === 'matches' && perm('manage_matches')) body = <MatchesScreen key={deskKey} />;
       else if (more === 'profile') body = <ProfileScreen user={user} onUser={setUser} onSignOut={signOut} />;
@@ -143,6 +150,10 @@ function AppInner({ theme }: { theme: Mode }) {
           {boss && <Btn kind="outline" label="Promo codes" onPress={() => setMore('promo')} />}
           {boss && <Btn kind="outline" label="Team" onPress={() => setMore('team')} />}
           {boss && <Btn kind="outline" label="Booking controls" onPress={() => setMore('platform')} />}
+          {boss && <Btn kind="outline" label="Settings: booking rules, contact and UPI" onPress={() => setMore('settings')} />}
+          {(perm('send_broadcasts') || perm('view_customers')) && <Section>People</Section>}
+          {perm('send_broadcasts') && <Btn kind="outline" label="WhatsApp reminders" onPress={() => setMore('reminders')} />}
+          {perm('view_customers') && <Btn kind="outline" label="Business cards" onPress={() => setMore('cards')} />}
           {boss && <><Section>Money</Section>
             <Btn kind="outline" label="Staff pay and attendance" onPress={() => setMore('payroll')} />
             <Btn kind="outline" label="Compliance" onPress={() => setMore('compliance')} />
