@@ -112,3 +112,33 @@ export function DateField({ label, value, onChange, placeholder }: { label: stri
   React.useEffect(() => { if (isoDate(txt) !== value && !(txt.length > 0 && txt.length < 10)) setTxt(showDate(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   return (<Field label={label} value={txt} placeholder={placeholder ?? 'dd/mm/yyyy'} keyboardType="number-pad" maxLength={10} onChangeText={(v) => { const t = maskDate(v); setTxt(t); onChange(isoDate(t)); }} />);
 }
+
+/** One figure with its label and a line under it, two to a row on the money screens. */
+export const Stat = ({ label, value, foot, tone }: { label: string; value: string; foot?: string; tone?: 'danger' | 'ok' }) => (
+  <View style={[s.card, { flexBasis: '47%', flexGrow: 1, marginBottom: 10, padding: 14 }]}>
+    <Text style={[s.muted, { fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' }]}>{label}</Text>
+    <Text style={[s.text, { fontSize: 21, fontWeight: '700', marginVertical: 4 }, tone ? { color: tone === 'danger' ? C.danger : C.ok } : null]}>{value}</Text>
+    {!!foot && <Text style={[s.muted, { fontSize: 12 }]}>{foot}</Text>}
+  </View>
+);
+export const Stats = ({ children }: { children: React.ReactNode }) => <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 4 }}>{children}</View>;
+
+const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+/** 2026-10 as October 2026. */
+export const monthName = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${FULL_MONTHS[(mo ?? 1) - 1]} ${y}`; };
+/** The month (yyyy-mm) n months after m. */
+export const shiftMonth = (m: string, n: number) => { const [y, mo] = m.split('-').map(Number) as [number, number]; const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+/** Today's date in India, yyyy-mm-dd. */
+export const todayIST = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+
+/** The month shown, with arrows to step back and forward. */
+export function MonthBar({ month, onChange, max }: { month: string; onChange: (m: string) => void; max?: string }) {
+  const next = shiftMonth(month, 1);
+  return (
+    <View style={[s.row, { marginVertical: 8 }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => onChange(shiftMonth(month, -1))} style={{ padding: 10 }}><Text style={[s.text, { color: C.gold, fontSize: 20 }]}>‹</Text></Pressable>
+      <Text style={[s.text, { fontWeight: '600' }]}>{monthName(month)}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Next month" disabled={!!max && next > max} onPress={() => onChange(next)} style={{ padding: 10, opacity: max && next > max ? 0.3 : 1 }}><Text style={[s.text, { color: C.gold, fontSize: 20 }]}>›</Text></Pressable>
+    </View>
+  );
+}
