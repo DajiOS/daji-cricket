@@ -31,7 +31,7 @@ export function publicRoutes(r: Router): void {
       gallery: s.galleryImages,
       academyGallery: s.academyImages,
       razorpayEnabled: s.razorpayEnabled,
-      codesEnabled: otpAvailable(c.cfg.demoMode),
+      codesEnabled: c.cfg.otpSignIn && otpAvailable(c.cfg.demoMode),
       razorpayDemo: !razorpayConfigured(c.cfg) && c.cfg.demoMode,
       razorpayKeyId: razorpayConfigured(c.cfg) ? c.cfg.razorpay.keyId : null,
       holdMinutesOnline: s.holdMinutesOnline,
@@ -118,7 +118,9 @@ export function publicRoutes(r: Router): void {
   }, { rate: 'auth' });
 
   // ---- phone number and one-time code: create an account, or sign in
+  const otpOn = (c: { cfg: { otpSignIn: boolean } }) => { if (!c.cfg.otpSignIn) throw new HttpError(404, 'OTP_OFF', 'Sign in with a code is switched off for now. Use your email or phone number and password.'); };
   r.post('/api/auth/otp/request', async (c) => {
+    otpOn(c);
     const v = new Validator(c.json());
     const phone = v.phone('phone', true);
     v.done();
@@ -126,6 +128,7 @@ export function publicRoutes(r: Router): void {
   }, { rate: 'auth' });
 
   r.post('/api/auth/otp/verify', (c) => {
+    otpOn(c);
     const body = c.json() as any;
     const v = new Validator(body);
     const phone = v.phone('phone', true);

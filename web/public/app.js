@@ -260,7 +260,7 @@ function openAuth({ after, mode = 'in', note } = {}) {
     });
     return form;
   };
-  let upMethod = cfg.codesEnabled === false ? 'email' : 'otp';
+  let upMethod = cfg.codesEnabled ? 'otp' : 'email';
   /** Create an account with an email and a password (a mobile number is optional). */
   const emailSignup = () => {
     const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' });
@@ -288,7 +288,7 @@ function openAuth({ after, mode = 'in', note } = {}) {
     clear(body);
     if (current === 'up') {
       const pick = (m, text) => h('button', { type: 'button', class: 'tab' + (upMethod === m ? ' on' : ''), onclick: () => { upMethod = m; render(); } }, text);
-      body.append(h('div', { class: 'tabs', style: 'margin:0 0 16px' }, ...(cfg.codesEnabled === false ? [] : [pick('otp', 'With my mobile number'), pick('email', 'With my email')])), upMethod === 'otp' ? otpForm(true) : emailSignup());
+      body.append(h('div', { class: 'tabs', style: 'margin:0 0 16px' }, ...(cfg.codesEnabled ? [pick('otp', 'With my mobile number'), pick('email', 'With my email')] : [])), upMethod === 'otp' ? otpForm(true) : emailSignup());
       return;
     }
     if (method === 'otp') {
@@ -318,7 +318,7 @@ function openAuth({ after, mode = 'in', note } = {}) {
   };
   const tabs = h('div', { class: 'tabs', style: 'margin:14px 0 22px' },
     h('button', { class: 'tab' + (current === 'in' ? ' on' : ''), type: 'button', onclick: (e) => { current = 'in'; method = 'pw'; sync(); } }, 'Sign in'),
-    h('button', { class: 'tab' + (current === 'up' ? ' on' : ''), type: 'button', onclick: (e) => { current = 'up'; upMethod = 'otp'; sync(); } }, 'Create account'));
+    h('button', { class: 'tab' + (current === 'up' ? ' on' : ''), type: 'button', onclick: (e) => { current = 'up'; upMethod = cfg.codesEnabled ? 'otp' : 'email'; sync(); } }, 'Create account'));
   const sync = () => { $$('.tab', tabs).forEach((t, i) => t.classList.toggle('on', (i === 0) === (current === 'in'))); render(); };
   render();
   const root = clear($('#login-body'));
