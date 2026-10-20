@@ -9,6 +9,7 @@ import { HttpError } from '../errors.ts';
 import { checkPasswordStrength, createUser, hashPassword, login, revokeAllTokens, revokeToken, signToken, toUser, userByEmail, userByPhone, userRow, type UserRow } from '../auth.ts';
 import { splitName, titleCase } from '../names.ts';
 import { checkOtp, requestOtp } from '../otp.ts';
+import { requestPasswordReset, resetPassword } from '../passwordReset.ts';
 import { otpAvailable } from '../notifications.ts';
 import { audit } from '../audit.ts';
 import { createEnquiry } from '../enquiries.ts';
@@ -115,6 +116,24 @@ export function publicRoutes(r: Router): void {
     const code = v.str('code', { max: 12 });
     v.done();
     return ok(login(c.cfg, who!, password!, code));
+  }, { rate: 'auth' });
+
+  // ---- forgot password: a code sent to the email, then the code and a new password. The answer never says whether the email has an account.
+  r.post('/api/auth/password/forgot', (c) => {
+    const v = new Validator(c.json());
+    const email = v.email('email', true);
+    v.done();
+    return ok(requestPasswordReset(c.cfg, email!));
+  }, { rate: 'auth' });
+
+  r.post('/api/auth/password/reset', (c) => {
+    const v = new Validator(c.json());
+    const email = v.email('email', true);
+    const code = v.str('code', { required: true, min: 4, max: 8 });
+    const password = v.str('password', { required: true, trim: false });
+    v.done();
+    resetPassword(c.cfg, email!, code!, password!);
+    return ok({ reset: true });
   }, { rate: 'auth' });
 
   // ---- phone number and one-time code: create an account, or sign in
