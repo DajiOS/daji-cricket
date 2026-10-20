@@ -598,3 +598,65 @@ test('a booking made today shows up in tomorrow\'s answers (no stale caching)', 
   assert.match(after.body.answer, /1 booking still to come/);
   assert.match(after.body.details[0].text, /Walk In/);
 });
+
+test('Claude mode: it can look up the jobs and the team attendance, for the owner only', async () => {
+  let tool = 'get_jobs';
+  // the first request of a question asks for a tool; the follow-up, which carries the tool result, just answers
+  const f = await useClaude((req) => ({ body: typeof req.body.messages.at(-1).content === 'string' ? toolUse(tool, { from: '2026-10-01', to: '2026-10-31' }) : say('Done.') }), 'claude');
+  assert.equal((await ask('How many jobs are open and how many are overdue?')).status, 200);
+  const jobs = JSON.parse(lastResult(f.seen[1]!).content) as { open: number; overdueJobs: unknown[] };
+  assert.equal(typeof jobs.open, 'number');
+  assert.ok(Array.isArray(jobs.overdueJobs));
+  tool = 'get_team_attendance';
+  assert.equal((await ask('How many staff were absent this month?')).status, 200);
+  assert.equal(typeof (JSON.parse(lastResult(f.seen[3]!).content) as { absent: number }).absent, 'number');
+  // staff without the jobs permission: the tool refuses, whatever the model asks for
+  tool = 'get_jobs'; perms(['manage_bookings']);
+  assert.equal((await ask('How many jobs are open?', sc.staff)).status, 200);
+  assert.equal(lastResult(f.seen[5]!).is_error, true);
+});
+
+test('Claude mode: approvals questions are answered read-only and by the same visibility as the Approvals page', async () => {
+  let tool = 'get_approvals_waiting';
+  const f = await useClaude((req) => ({ body: typeof req.body.messages.at(-1).content === 'string' ? toolUse(tool, tool === 'why_cant_i_sign' ? { text: 'bill' } : { from: '2026-10-01', to: '2026-10-31' }) : say('Done.') }), 'claude');
+  assert.equal((await ask("What's waiting on whom?")).status, 200);
+  const waiting = JSON.parse(lastResult(f.seen[1]!).content) as { waiting: number; items: unknown[] };
+  assert.equal(typeof waiting.waiting, 'number');
+  assert.ok(Array.isArray(waiting.items));
+  tool = 'get_approvals_decided';
+  assert.equal((await ask('How many approvals were decided this month?')).status, 200);
+  assert.equal(typeof (JSON.parse(lastResult(f.seen[3]!).content) as { decisions: object }).decisions, 'object');
+  tool = 'get_approval_rules';
+  assert.equal((await ask('What are the approval rules?')).status, 200);
+  assert.notEqual(lastResult(f.seen[5]!).is_error, true);
+  // staff without the accounting permission: every approvals tool refuses
+  tool = 'get_approvals_waiting'; perms(['manage_bookings']);
+  assert.equal((await ask("What's waiting on whom?", sc.staff)).status, 200);
+  assert.equal(lastResult(f.seen[7]!).is_error, true);
+  tool = 'why_cant_i_sign';
+  assert.equal((await ask("Why can't I sign this bill?", sc.staff)).status, 200);
+  assert.equal(lastResult(f.seen[9]!).is_error, true);
+});
+
+test('without a key: what is waiting on whom, why you cannot sign, and an approvals report', async () => {
+  assert.equal((await ask("What's waiting on whom?")).body.answer, 'Nothing is waiting for a sign-off right now.');
+  perms(['manage_accounting', 'view_revenue']);
+  const v = await h.post('/api/accounting/vendors', { name: 'Acme Turf' }, sc.owner);
+  const b = await h.post('/api/accounting/bills', { vendorId: v.body.id, billNo: 'INV-1', billDate: dayFromNow(-1), dueDate: dayFromNow(5), amountPaise: 500000 }, sc.staff);
+  assert.equal(b.status, 201, JSON.stringify(b.body));
+  assert.equal((await h.post(`/api/accounting/bills/${b.body.id}/submit`, {}, sc.staff)).status, 200);
+  const w = await ask("What's waiting on whom?");
+  assert.equal(w.status, 200);
+  assert.equal(w.body.intent, 'approvals_waiting');
+  assert.match(w.body.answer, /1 item is waiting/);
+  assert.match(w.body.details[0].label, /Acme Turf|INV-1/);
+  const y = await ask("Why can't I sign the Acme bill?", sc.staff);
+  assert.equal(y.body.intent, 'approvals_why');
+  assert.match(y.body.answer, /cannot sign/);
+  // "payments waiting for approval" is still the UPI proofs
+  assert.equal((await ask('payments waiting for approval')).body.intent, 'awaiting');
+  assert.equal((await ask('How many approvals this month?')).body.intent, 'approvals_report');
+  // staff without the accounting permission are refused
+  perms(['manage_bookings']);
+  assert.equal((await ask("What's waiting on whom?", sc.staff)).status, 403);
+});

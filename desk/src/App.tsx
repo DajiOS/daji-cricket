@@ -4,7 +4,8 @@ import { Icon, ToastHost, Loading, Crest } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
 import { HOME, NAV, PAGES, RAIL, BLURBS, railOf, itemFor, navVisible, type NavItem, type RailItem } from './registry';
-import { CommandSearch, openSearch } from './CommandSearch';
+import { CommandSearch, askAssistant } from './CommandSearch';
+import { AskPanel } from './AskPanel';
 import { GroundPicker } from './GroundPicker';
 
 // ---------- session shared by every page ----------
@@ -100,6 +101,7 @@ function Shell({ route }: { route: string }) {
             </div>)}
         </div>
       </nav>
+      <AskPanel />
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <div className="dmain">
         <header className="dtop">
@@ -108,7 +110,7 @@ function Shell({ route }: { route: string }) {
           <GroundPicker />
           <ThemeToggle />
           <a className="dround" href="#/activity" aria-label="What happened" title="What happened"><Icon name="bell" size={18} /></a>
-          <button type="button" className="dconcierge" onClick={openSearch}><Icon name="ai" size={16} /><span>Assistant</span></button>
+          <button type="button" className="dconcierge" onClick={() => askAssistant()}><Icon name="ai" size={16} /><span>Ask AI</span></button>
         </header>
         <main className="main dcontent">
           {bar && (
