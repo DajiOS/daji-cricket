@@ -156,14 +156,15 @@ export const NAV: NavGroup[] = [
     { to: '/settings/website', label: 'Website', icon: 'globe', ...owner },
   ] },
   { section: 'settings', group: 'Connect and share', items: [
-    { to: '/settings/people', label: 'People', icon: 'users', ...owner },
-    { to: '/settings/connections', label: 'Connections', icon: 'key', ...owner },
-    { to: '/settings/services', label: 'Services', icon: 'plug', ...owner },
+    { to: '/settings/people', label: 'People', icon: 'users', superOnly: true },
+    { to: '/settings/connections', label: 'Connections', icon: 'key', superOnly: true },
+    { to: '/settings/services', label: 'Services', icon: 'plug', superOnly: true },
     { to: '/media', label: 'Photos & videos', icon: 'upload', ...owner },
   ] },
   { section: 'settings', group: 'Keep it safe', items: [
     { to: '/compliance', label: 'Compliance', icon: 'audit', ...owner },
-    { to: '/settings/backups', label: 'Backups', icon: 'vault', ...owner },
+    { to: '/settings/golive', label: 'Go-live check', icon: 'check', ...owner },
+    { to: '/settings/backups', label: 'Backups', icon: 'vault', superOnly: true },
     { to: '/platform', label: 'Software owner', icon: 'vault', superOnly: true },
   ] },
 ];
