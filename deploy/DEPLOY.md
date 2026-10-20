@@ -25,7 +25,7 @@ Then hard-refresh the site and the desk (Ctrl+Shift+R). Secrets (WhatsApp, payme
    **Store `FIELD_KEY` and `BACKUP_PASSPHRASE` somewhere safe away from the server** (a password manager). Lose them and encrypted data cannot be recovered.
 3. `docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build`
 4. Create the first super admin: first `read -s -p "Admin password: " P; echo`, then `docker compose -f deploy/docker-compose.yml exec -e ADMIN_EMAIL=you@example.com -e ADMIN_NAME="Your Name" -e ADMIN_PASSWORD="$P" api node --disable-warning=ExperimentalWarning scripts/create-admin.ts`, then `unset P` (the script reads its answers from ADMIN_EMAIL, ADMIN_NAME and ADMIN_PASSWORD)
-5. Check `https://api.dajicricket.com/api/health`. The first request can take a few seconds while Caddy gets the certificate.
+5. Run `sh deploy/check-live.sh`. It calls `https://api.dajicricket.com/api/health` and checks that the server answers, the database is readable and demo mode is off (`DEMO_MODE=off` in `deploy/.env`; the server also prints a large warning at start-up if it is on). The first request can take a few seconds while Caddy gets the certificate.
 6. In the Razorpay dashboard set the webhook to `https://api.dajicricket.com/api/webhooks/razorpay` with the same secret as `RAZORPAY_WEBHOOK_SECRET`.
 
 ## Backups

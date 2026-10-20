@@ -14,6 +14,10 @@ const cfg = loadConfig();
 openDb(cfg.dbPath);
 applyYodleeSettings(cfg);
 for (const w of configWarnings(cfg)) console.warn(`WARNING: ${w}`);
+if (cfg.demoMode && !cfg.isLocal) {
+  const line = '!'.repeat(78);
+  console.warn(`${line}\n!! DEMO MODE IS ON for ${cfg.publicUrl}: demo logins work and payments are fake.\n!! Set DEMO_MODE=off in deploy/.env and restart before taking real bookings.\n${line}`);
+}
 if (cfg.demoMode) {
   const r = seedDemo(cfg);
   if (r.created) console.log('Demo data created (admin@daji.test / Admin@12345 and others). Demo mode is ON.');

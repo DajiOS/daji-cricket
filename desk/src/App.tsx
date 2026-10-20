@@ -3,7 +3,8 @@ import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, 
 import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
-import { HOME, NAV, PAGES, SUBS, SUB_ICONS, subHref, type NavItem } from './registry';
+import { HOME, NAV, PAGES, SUBS, SUB_ICONS, subHref, navVisible, type NavItem } from './registry';
+import { CommandSearch } from './CommandSearch';
 
 // ---------- session shared by every page ----------
 export interface Owner { id: string; name: string; businessName: string | null }
@@ -34,7 +35,7 @@ function Shell({ route }: { route: string }) {
   /** Which section of a page is showing (the first one when the address is just the page). */
   const subOn = (to: string, k: string) => { const first = SUBS[to]![0]![0]; const rest = route === to ? '' : route.startsWith(to + '/') ? route.slice(to.length + 1).split('/')[0]! : null; return rest !== null && (rest === k || (!SUBS[to]!.some(([x]) => x === rest) && k === first) || (rest === '' && k === first)); };
   const isOn = (to: string) => (to === '/' ? route === '/' || route === '' : route === to || route.startsWith(to + '/'));
-  const visible = (i: NavItem) => can(s.me, i.perm) && (!i.ownerOnly || s.me.role !== 'staff') && (!i.superOnly || s.me.role === 'super_admin');
+  const visible = (i: NavItem) => navVisible(s.me, i);
 
   const hit = PAGES.find((p) => route === p.path || route.startsWith(p.path + '/'));
   const Page = hit ? hit.page : HOME;
@@ -52,7 +53,7 @@ function Shell({ route }: { route: string }) {
     <div className={`shell${collapsed ? ' rail' : ''}`}>
       <aside className={`side${open ? ' open' : ''}`} aria-label="Main navigation">
         <a className="brand" href="./" aria-label="Daji Cricket Ground, back to the website">{collapsed ? <Crest size={36} /> : <Logo width={196} />}</a>
-        <button className="rail-toggle side-toggle" onClick={() => setRailSaved(!rail)} aria-label={rail ? 'Open the menu' : 'Fold the menu'} aria-pressed={rail} title={rail ? 'Open the menu' : 'Fold the menu'}><Icon name="menu" />{!collapsed && <span>Fold menu</span>}</button>
+        <button className="rail-toggle side-toggle" onClick={() => setRailSaved(!rail)} aria-label={rail ? 'Open the menu' : 'Fold the menu'} aria-pressed={rail} title={rail ? 'Open the menu' : 'Fold the menu'}><Icon name="menu" />{collapsed ? <span className="rail-label" aria-hidden="true">Menu</span> : <span>Fold menu</span>}</button>
         {collapsed ? (
           <nav className="nav rail-nav" aria-label="Menu">
             {NAV.map((g) => {
@@ -61,12 +62,12 @@ function Shell({ route }: { route: string }) {
               const on = items.some((i) => isOn(i.to));
               const dot = items.some((i) => i.count === 'approvals') && waiting > 0;
               const icon = GROUP_ICONS[g.group] ?? items[0]!.icon;
-              if (items.length === 1 && !SUBS[items[0]!.to]) return <a key={g.group} href={`#${items[0]!.to}`} className={`rail-btn${on ? ' on' : ''}`} title={g.group} aria-label={g.group}><Icon name={icon} /></a>;
+              if (items.length === 1 && !SUBS[items[0]!.to]) return <a key={g.group} href={`#${items[0]!.to}`} className={`rail-btn${on ? ' on' : ''}`} title={g.group} aria-label={g.group}><Icon name={icon} /><span className="rail-label" aria-hidden="true">{RAIL_LABELS[g.group] ?? g.group}</span></a>;
               return (
                 <button key={g.group} className={`rail-btn${on ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.key === g.group} aria-label={g.group} title={g.group}
                   onMouseEnter={(e) => openFly(g.group, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(g.group, e.currentTarget)}
                   onClick={(e) => openFly(g.group, e.currentTarget)}>
-                  <Icon name={icon} />{dot && <span className="rail-dot" aria-hidden="true" />}
+                  <Icon name={icon} /><span className="rail-label" aria-hidden="true">{RAIL_LABELS[g.group] ?? g.group}</span>{dot && <span className="rail-dot" aria-hidden="true" />}
                 </button>);
             })}
           </nav>
@@ -94,7 +95,7 @@ function Shell({ route }: { route: string }) {
         </nav>
         )}
         <div className="side-foot">
-          {collapsed ? <button className="rail-btn" onClick={signOut} title="Sign out" aria-label="Sign out"><Icon name="logout" /></button> : <>
+          {collapsed ? <button className="rail-btn" onClick={signOut} title="Sign out" aria-label="Sign out"><Icon name="logout" /><span className="rail-label" aria-hidden="true">Sign out</span></button> : <>
             <div style={{ color: 'var(--ivory)', fontWeight: 700 }}>{s.me.name}</div>
             <div className="small">{roleLabel(s.me)}</div>
             <button className="btn ghost sm" style={{ marginTop: 10, paddingLeft: 0 }} onClick={signOut}><Icon name="logout" />Sign out</button></>}
@@ -125,6 +126,7 @@ function Shell({ route }: { route: string }) {
             ? <div className="seg hide-sm" role="group" aria-label="Business">{s.owners.map((o) => <button key={o.id} className={o.id === s.ownerId ? 'on' : ''} onClick={() => s.setOwner(o.id)}>{o.businessName || o.name}</button>)}</div>
             : <div className="seg hide-sm" role="group" aria-label="Business"><button className="on">{owner?.businessName || s.me.businessName || 'Daji Cricket Ground'}</button></div>}
           <div className="spacer" />
+          <CommandSearch me={s.me} visible={visible} />
           <a className="btn ghost sm hide-sm" href="./">View website</a>
           <span className="badge b-gold hide-sm">{roleLabel(s.me)}</span>
           <ThemeToggle />
@@ -138,7 +140,9 @@ function Shell({ route }: { route: string }) {
   );
 }
 
-const GROUP_ICONS: Record<string, string> = { Portfolio: 'dashboard', Ground: 'ball', 'Task Management': 'tasks', 'People & Messages': 'users', 'MP13 Academy': 'grad', Finance: 'accounts', Settings: 'settings' };
+/** Short names under the icons of the folded menu (the starter kit's labelled rail). */
+const RAIL_LABELS: Record<string, string> = { Portfolio: 'Home', Views: 'Views', Ground: 'Ground', 'Ground cameras': 'Cameras', 'Task Management': 'Tasks', 'People & Messages': 'People', 'MP13 Academy': 'Academy', Finance: 'Finance', Settings: 'Settings' };
+const GROUP_ICONS: Record<string, string> = { Portfolio: 'dashboard', Views: 'pie', Ground: 'ball', 'Task Management': 'tasks', 'People & Messages': 'users', 'MP13 Academy': 'grad', Finance: 'accounts', Settings: 'settings' };
 interface Terms { version: number; sha256: string; title: string; body: string; accepted: unknown }
 
 /** Team members read and accept the current terms before the desk opens. The server refuses everything else until they do. */
