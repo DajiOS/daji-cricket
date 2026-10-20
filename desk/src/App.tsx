@@ -3,8 +3,9 @@ import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, 
 import { Icon, Logo, ToastHost, Loading, Crest } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
-import { HOME, NAV, PAGES, SUBS, SUB_ICONS, subHref, navVisible, type NavItem } from './registry';
-import { CommandSearch } from './CommandSearch';
+import { HOME, NAV, PAGES, SUBS, SUB_ICONS, PART_TITLES, subHref, navVisible, type NavItem, type NavGroup } from './registry';
+import { CommandSearch, AskBox } from './CommandSearch';
+import { GroundPicker } from './GroundPicker';
 
 // ---------- session shared by every page ----------
 export interface Owner { id: string; name: string; businessName: string | null }
@@ -47,7 +48,9 @@ function Shell({ route }: { route: string }) {
   const signOut = () => { const t = getToken(); const done = () => { setToken(null); location.href = './'; }; if (!t) return done(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + t } }).catch(() => {}).finally(done); };
   const all = NAV.flatMap((g) => g.items);
   const bottom = ['/', '/bookings', '/bills', '/approvals', '/settings'].map((to) => all.find((i) => i.to === to)).filter((i): i is NavItem => !!i && visible(i));
-  const owner = s.owners.find((o) => o.id === s.ownerId);
+  // the caption (Every day, Departments) goes above the first group of each part that this person can see
+  const shownGroups = NAV.filter((g) => g.items.some(visible));
+  const caption = (g: NavGroup) => { const part = g.part ?? 'dept'; const first = shownGroups.find((x) => (x.part ?? 'dept') === part); return first === g ? PART_TITLES[part] : null; };
 
   return (
     <div className={`shell${collapsed ? ' rail' : ''}`}>
@@ -62,13 +65,15 @@ function Shell({ route }: { route: string }) {
               const on = items.some((i) => isOn(i.to));
               const dot = items.some((i) => i.count === 'approvals') && waiting > 0;
               const icon = GROUP_ICONS[g.group] ?? items[0]!.icon;
-              if (items.length === 1 && !SUBS[items[0]!.to]) return <a key={g.group} href={`#${items[0]!.to}`} className={`rail-btn${on ? ' on' : ''}`} title={g.group} aria-label={g.group}><Icon name={icon} /><span className="rail-label" aria-hidden="true">{RAIL_LABELS[g.group] ?? g.group}</span></a>;
+              const cap = caption(g);
+              const head = cap && <div className="rail-part" aria-hidden="true">{cap === PART_TITLES.daily ? 'Daily' : 'Depts'}</div>;
+              if (items.length === 1 && !SUBS[items[0]!.to]) return <Fragment key={g.group}>{head}<a href={`#${items[0]!.to}`} className={`rail-btn${on ? ' on' : ''}`} title={g.group} aria-label={g.group}><Icon name={icon} /><span className="rail-label" aria-hidden="true">{RAIL_LABELS[g.group] ?? g.group}</span></a></Fragment>;
               return (
-                <button key={g.group} className={`rail-btn${on ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.key === g.group} aria-label={g.group} title={g.group}
+                <Fragment key={g.group}>{head}<button className={`rail-btn${on ? ' on' : ''}`} aria-haspopup="true" aria-expanded={fly?.key === g.group} aria-label={g.group} title={g.group}
                   onMouseEnter={(e) => openFly(g.group, e.currentTarget)} onMouseLeave={closeFlySoon} onFocus={(e) => openFly(g.group, e.currentTarget)}
                   onClick={(e) => openFly(g.group, e.currentTarget)}>
                   <Icon name={icon} /><span className="rail-label" aria-hidden="true">{RAIL_LABELS[g.group] ?? g.group}</span>{dot && <span className="rail-dot" aria-hidden="true" />}
-                </button>);
+                </button></Fragment>);
             })}
           </nav>
         ) : (
@@ -80,6 +85,7 @@ function Shell({ route }: { route: string }) {
             const shown = g.group === 'Portfolio' || active || openGroups.includes(g.group);
             return (
               <div key={g.group}>
+                {caption(g) && <div className="nav-part">{caption(g)}</div>}
                 {g.group === 'Portfolio' ? <div className="nav-group">{g.group}</div>
                   : <button className="nav-group nav-toggle" onClick={() => !active && toggleGroup(g.group)} aria-expanded={shown}>{g.group} <span aria-hidden="true">{shown ? '▾' : '▸'}</span></button>}
                 {shown && items.map((i) => (
@@ -122,11 +128,10 @@ function Shell({ route }: { route: string }) {
       <main className="main">
         <header className="top">
           <button className="btn ghost sm menu-btn" onClick={() => setOpen(true)} aria-label="Open menu"><Icon name="menu" /></button>
-          {s.me.role === 'super_admin'
-            ? <div className="seg hide-sm" role="group" aria-label="Business">{s.owners.map((o) => <button key={o.id} className={o.id === s.ownerId ? 'on' : ''} onClick={() => s.setOwner(o.id)}>{o.businessName || o.name}</button>)}</div>
-            : <div className="seg hide-sm" role="group" aria-label="Business"><button className="on">{owner?.businessName || s.me.businessName || 'Daji Cricket Ground'}</button></div>}
+          <GroundPicker />
           <div className="spacer" />
           <CommandSearch me={s.me} visible={visible} />
+          <AskBox className="hide-md" />
           <a className="btn ghost sm hide-sm" href="./">View website</a>
           <span className="badge b-gold hide-sm">{roleLabel(s.me)}</span>
           <ThemeToggle />
