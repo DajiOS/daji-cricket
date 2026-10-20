@@ -110,7 +110,7 @@ Generated from `server/src/routes`. All bodies are JSON unless noted; errors use
 | GET | `/api/grounds` | public |
 | GET | `/api/grounds/:id` | public |
 | GET | `/api/grounds/:id/availability` | public (returns `slots` and, per play format, the sessions with their state) |
-| GET | `/api/health` | public |
+| GET | `/api/health` | public (`{ ok, time, database, demo }`; 503 when the database cannot be read) |
 | GET | `/api/matches` | matches |
 | GET | `/api/matches/:id` | matches |
 | GET | `/api/me` | customer |

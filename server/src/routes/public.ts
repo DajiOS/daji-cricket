@@ -16,10 +16,17 @@ import { createEnquiry } from '../enquiries.ts';
 import { isValidDate, istDate } from '../time.ts';
 import { closedByScope } from '../closures.ts';
 import { now } from '../clock.ts';
-import { run } from '../db.ts';
+import { one, run } from '../db.ts';
 
 export function publicRoutes(r: Router): void {
-  r.get('/api/health', () => ok({ ok: true, time: now() }), { rate: 'none' });
+  // Used by Docker's health check and by deploy/check-live.sh. It reads the database, so "ok" means bookings can be served. `demo` is true while
+  // DEMO_MODE is on (demo accounts and the fake payment gateway), which must never be the case on the real site.
+  r.get('/api/health', (c) => {
+    let database = 'ok';
+    try { one('SELECT 1 AS n'); } catch { database = 'error'; }
+    const healthy = database === 'ok';
+    return ok({ ok: healthy, time: now(), database, demo: c.cfg.demoMode }, healthy ? 200 : 503);
+  }, { rate: 'none' });
 
   r.get('/api/config', (c) => {
     const s = getSettings();
