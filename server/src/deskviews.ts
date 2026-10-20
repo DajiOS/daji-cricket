@@ -129,3 +129,70 @@ export function moneyFlow(u: UserRow, owner: string, monthIn: string | null): { 
   const trend = months.map((x) => flowMonth(owner, x));
   return { current: trend[trend.length - 1]!, trend };
 }
+
+// ---------------------------------------------------------------- activity feed
+// The audit log as a feed: every event with a short title and the one action it most likely needs.
+// Each kind of event shows only to people who can open its page; logins, questions and platform housekeeping stay out.
+
+type Area = 'bookings' | 'books' | 'matches' | 'academy' | 'tasks' | 'people' | 'messages' | 'owner';
+const AREA_OF: Record<string, Area> = {
+  booking: 'bookings', series: 'bookings', payment: 'bookings', refund: 'bookings', credit: 'bookings', autodebit: 'bookings', enquiry: 'bookings', membership: 'bookings',
+  acct: 'books', bill: 'books', gst: 'books', feed: 'books', aa: 'books',
+  match: 'matches', tournament: 'matches', academy: 'academy', task: 'tasks', project: 'tasks', milestone: 'tasks',
+  card: 'people', contacts: 'people', broadcast: 'messages', reminder: 'messages',
+  payroll: 'owner', staff: 'owner', user: 'owner', ground: 'owner', media: 'owner', camera: 'owner', compliance: 'owner', promo: 'owner', legal: 'owner', integration: 'owner',
+};
+function mayseeArea(u: UserRow, a: Area): boolean {
+  switch (a) {
+    case 'bookings': return hasPermission(u, 'manage_bookings');
+    case 'books': return readsBooks(u);
+    case 'matches': return hasPermission(u, 'manage_matches');
+    case 'academy': return hasPermission(u, 'manage_academy');
+    case 'tasks': return manages(u);
+    case 'people': return hasPermission(u, 'view_customers');
+    case 'messages': return hasPermission(u, 'send_broadcasts');
+    case 'owner': return u.role === 'owner' || u.role === 'super_admin';
+  }
+}
+export interface FeedItem { id: number; at: number; area: Area; action: string; entity: string; entityId: string | null; who: string; detail: Record<string, unknown> | null; href: string | null; cta: string }
+
+/** Where an event leads, and what the button on it says. */
+function nextStep(action: string, entity: string, id: string | null, d: Record<string, any> | null): { href: string | null; cta: string } {
+  const bookingId = entity === 'booking' ? id : typeof d?.bookingId === 'string' ? d.bookingId : null;
+  if (action === 'payment.submit') return { href: '/bookings/payments', cta: 'Verify' };
+  if (action === 'booking.confirm' && d?.approval === 'pending') return { href: '/bookings/approvals', cta: 'Approve' };
+  if (action === 'bill.submit') return { href: '/approvals', cta: 'Approve' };
+  if (action === 'bill.approve') return { href: `/bills/${id}`, cta: 'Pay' };
+  if (action === 'bill.reject') return { href: `/bills/${id}`, cta: 'Fix' };
+  if (entity === 'acct_bill') return { href: `/bills/${id}`, cta: 'Open' };
+  if (entity === 'acct_vendor') return { href: '/bills/vendors', cta: 'Open' };
+  if (entity === 'acct_signoff') return { href: '/accounting/close', cta: 'Open' };
+  if (entity === 'acct_transaction' || entity === 'acct_import') return { href: '/transactions', cta: 'Categorise' };
+  if (action.startsWith('refund.') && action !== 'refund.complete') return { href: '/bookings', cta: 'Open' };
+  if (bookingId) return { href: `/bookings/${bookingId}`, cta: 'Open' };
+  const page: Record<string, string> = { membership: '/memberships', membership_plan: '/memberships/plans', match: '/matches', tournament: '/tournaments', task: '/tasks', project: '/tasks', milestone: '/tasks',
+    biz_card: '/cards', contacts: '/contacts', broadcast: '/contacts', reminder: '/reminders', payroll_runs: '/payroll/run', payroll_lines: '/payroll/run', payroll_staff: '/payroll/staff',
+    payroll_attendance: '/payroll/attendance', payroll_adjustments: '/payroll/advances', user: '/team', ground: '/settings', media: '/media', camera: '/cameras', compliance_item: '/compliance/rules', promo: '/promos', enquiry: '/bookings' };
+  const href = page[entity] ?? (entity.startsWith('academy') ? '/academy' : entity.startsWith('acct') || entity.startsWith('gst') ? '/accounting' : null);
+  return { href, cta: 'Open' };
+}
+
+/** The latest events for one business, newest first. `before` is the id of the last event already shown. */
+export function activityFeed(u: UserRow, owner: string, beforeIn: string | null, limitIn: string | null): { items: FeedItem[]; next: number | null } {
+  const limit = Math.min(Math.max(Number(limitIn) || 40, 1), 100);
+  const before = Number(beforeIn) > 0 ? Number(beforeIn) : Number.MAX_SAFE_INTEGER;
+  const areas = new Set((Object.values(AREA_OF) as Area[]).filter((a) => mayseeArea(u, a)));
+  const prefixes = Object.keys(AREA_OF).filter((p) => areas.has(AREA_OF[p]!));
+  if (!prefixes.length) return { items: [], next: null };
+  const money = canSeeRevenue(u);
+  const rows = many<{ id: number; at: number; action: string; entity: string; entity_id: string | null; detail: string | null; actor_role: string | null; name: string | null }>(
+    `SELECT a.id, a.at, a.action, a.entity, a.entity_id, a.detail, a.actor_role, u.name FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
+     WHERE a.owner_id = ? AND a.id < ? AND (${prefixes.map(() => "a.action LIKE ? ESCAPE '\\'").join(' OR ')}) ORDER BY a.id DESC LIMIT ?`,
+    owner, before, ...prefixes.map((p) => p.replace(/_/g, '\\_') + '.%'), limit);
+  const out: FeedItem[] = rows.map((r) => {
+    const raw = r.detail ? (JSON.parse(r.detail) as Record<string, unknown>) : null;
+    // amounts sit in the details, so they show only with "Can see revenue"
+    return { id: r.id, at: r.at, area: AREA_OF[r.action.split('.')[0]!]!, action: r.action, entity: r.entity, entityId: r.entity_id, who: r.name ?? (r.actor_role === 'customer' ? 'A customer' : 'System'), detail: money ? raw : null, ...nextStep(r.action, r.entity, r.entity_id, raw) };
+  });
+  return { items: out, next: out.length >= limit ? out[out.length - 1]!.id : null };
+}

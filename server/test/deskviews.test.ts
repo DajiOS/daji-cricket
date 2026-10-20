@@ -77,3 +77,30 @@ test('the money flow follows a booking from earned to collected, and a paid bill
   assert.equal((await h.get(`/api/desk/money-flow?month=${month}`, staff)).status, 403, 'staff without the books permission');
   assert.equal((await h.get(`/api/desk/money-flow?month=${month}`, owner2)).body.current.earned.totalPaise, 0);
 });
+
+test('the activity feed lists the business\'s events with the next step, and hides what a login cannot open', async () => {
+  const g = (await grounds(h)).find((x) => x.name === 'Cricket Ground')!;
+  const b = await bookAndPay(h, cust, g.id, dayFromNow(1), '07:00');
+  const bill = await billDue(3);
+  assert.equal((await h.post(`/api/accounting/bills/${bill.id}/submit`, {}, owner)).status, 200);
+  const r = await h.get('/api/desk/activity', owner);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const submit = r.body.items.find((i: any) => i.action === 'bill.submit');
+  assert.equal(submit.cta, 'Approve'); assert.equal(submit.href, '/approvals'); assert.equal(submit.area, 'books');
+  const confirm = r.body.items.find((i: any) => i.action === 'booking.confirm');
+  assert.equal(confirm.href, `/bookings/${b.id}`);
+  assert.ok(r.body.items.every((i: any, k: number, a: any[]) => k === 0 || a[k - 1].id > i.id), 'newest first');
+  // paging
+  const one = await h.get('/api/desk/activity?limit=1', owner);
+  assert.equal(one.body.items.length, 1);
+  const two = await h.get(`/api/desk/activity?limit=1&before=${one.body.next}`, owner);
+  assert.ok(two.body.items[0].id < one.body.items[0].id);
+  // the team member sees bookings but not the books, and no amounts
+  const s = await h.get('/api/desk/activity', staff);
+  assert.equal(s.status, 200);
+  assert.ok(s.body.items.some((i: any) => i.area === 'bookings'));
+  assert.ok(!s.body.items.some((i: any) => i.area === 'books' || i.area === 'owner'));
+  assert.ok(s.body.items.every((i: any) => i.detail === null));
+  assert.equal((await h.get('/api/desk/activity', owner2)).body.items.filter((i: any) => i.entityId === b.id || i.entityId === bill.id).length, 0);
+  assert.equal((await h.get('/api/desk/activity', cust)).status, 403);
+});

@@ -26,6 +26,8 @@ const Media = lazy(() => import('./pages/Media'));
 const Cameras = lazy(() => import('./pages/Cameras'));
 const Calendar = lazy(() => import('./pages/Calendar'));
 const MoneyFlow = lazy(() => import('./pages/MoneyFlow'));
+const Pipeline = lazy(() => import('./pages/Pipeline'));
+const Activity = lazy(() => import('./pages/Activity'));
 
 export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
 /** Who may see a menu entry: the same rules the server applies to the page behind it. */
@@ -57,7 +59,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
-  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow },
+  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity },
 ];
 export const HOME = Dashboard;
 
@@ -66,6 +68,8 @@ export const NAV: NavGroup[] = [
   { group: 'Views', items: [
     { to: '/calendar', label: 'Operations calendar', icon: 'calendar' },
     { to: '/money', label: 'Money flow', icon: 'swap', check: seesMoney },
+    { to: '/pipeline', label: 'Pipeline', icon: 'list', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
+    { to: '/activity', label: 'Activity', icon: 'bell' },
   ] },
   { group: 'Ground', items: [
     { to: '/bookings', label: 'Bookings', icon: 'calendar', perm: 'manage_bookings' },
