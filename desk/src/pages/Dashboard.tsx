@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { useSession } from '../App';
 import { PageHead, Stat, Loading, ErrorBox, Empty, Icon } from '../ui';
 import { CollectionChart, Ring } from '../charts';
-import { api, useApi, inr, inrShort, fmtDay, todayISO, can, go } from '../lib';
+import { api, useApi, inr, inrShort, fmtDay, todayISO, can, go, type Me } from '../lib';
 import { Schedule, Attention, type TodayData } from '../parts/dash/Today';
+import { timeRange } from '../parts/dash/common';
+import { AskBox, askAssistant } from '../CommandSearch';
+import { NAV, PART_TITLES, navVisible } from '../registry';
 
 interface Overview {
   range: { from: string; to: string };
@@ -64,6 +67,9 @@ export default function Dashboard({ sub }: { sub: string }) {
         {canBookings && <button className="btn primary" onClick={() => go('/bookings/add')}><Icon name="plus" />Add booking</button>}
       </PageHead>
 
+      <Assistant />
+
+      <div className={canBookings ? 'home-top' : ''}>
       {(canBookings || canMoney) && <div className="grid g4" style={canMoney ? { gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" } : undefined}>
         {canBookings && <Stat label="Sessions today" value={today ? today.bookings.length : '…'} foot={today ? (today.bookings.length ? `${today.bookings.filter((b) => b.startAt > Date.now()).length} still to play` : 'A quiet day') : ' '} />}
         {canMoney && <Stat label={`Revenue · ${monthName}`} value={pnl ? inrShort(pnl.revenue.totalPaise) : canReports && !pnlErr ? '…' : thisMonth ? inrShort(thisMonth.collected) : '—'}
@@ -73,6 +79,8 @@ export default function Dashboard({ sub }: { sub: string }) {
         {canMoney && <Stat label="Booked ahead" value={ahead ? inrShort(ahead.totalPaise) : '…'} foot={ahead ? `${ahead.bookings} upcoming sessions · ${inrShort(ahead.balancePaise)} still to collect` : ' '} />}
         {canMoney && <Stat label="To collect today" value={today ? <span style={toCollect ? { color: 'var(--warn)' } : undefined}>{inr(toCollect)}</span> : '…'} foot="balances on today's sessions" />}
       </div>}
+      {canBookings && <Timeline today={today} />}
+      </div>
 
       {canReports && <div className={canMoney ? 'grid g-2-1' : 'grid'}>
         {canMoney && <div className="card">
@@ -120,11 +128,57 @@ export default function Dashboard({ sub }: { sub: string }) {
         </div>
       </div>}
 
-      <div className="grid g3">
-        {([['/academy', 'MP13 Academy', 'Students, attendance, progress cards and fees.', 'manage_academy'], ['/memberships', 'Memberships', 'Plans, members and renewals.', 'manage_bookings'], ['/bills', 'Bills and payroll', 'Bills to approve, staff attendance and salaries.', 'manage_accounting'], ['/matches', 'Matches', 'Fixtures, scores and teams.', 'manage_matches'], ['/contacts', 'Contacts', 'Customers and enquiries.', 'view_customers'], ['/tasks', 'Tasks', 'What needs doing.', 'manage_tasks']] as const)
-          .filter(([, , , perm]) => can(me, perm)).map(([to, title, text]) => (
-            <a key={to} href={`#${to}`} className="card card-pad biz-card"><div className="eyebrow">Open</div><h2>{title}</h2><div className="muted small" style={{ marginTop: 6 }}>{text}</div></a>))}
-      </div>
+      <AllTools me={me} />
     </div>
+  );
+}
+
+/** The starter kit's assistant box on Home, with a few questions it can answer for this login. */
+function Assistant() {
+  const [ex] = useApi<{ items: string[] }>('/api/staff/ask/examples');
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      <AskBox className="big" placeholder="Ask anything about the ground, the bookings or the books…" />
+      {!!ex?.items.length && <div className="pills">{ex.items.slice(0, 4).map((q) => <button key={q} className="btn sm ghost" onClick={() => askAssistant(q)}>{q}</button>)}</div>}
+    </div>
+  );
+}
+
+/** Today as a timeline beside the tiles: each session in time order, with a line where now is. */
+function Timeline({ today }: { today: TodayData | null }) {
+  const t = Date.now();
+  const rows = (today?.bookings ?? []).filter((b) => b.status !== 'cancelled' && b.status !== 'expired').sort((a, b) => a.startAt - b.startAt);
+  const nowAt = rows.findIndex((b) => b.endAt > t);
+  return (
+    <section className="card tl" aria-label="Today">
+      <div className="card-head"><h3>Today</h3><a className="small" href="#/calendar">Calendar →</a></div>
+      {!today ? <Loading h={200} /> : !rows.length ? <p className="muted card-pad" style={{ margin: 0 }}>No sessions today.</p> : (
+        <ol className="tl-list">
+          {rows.map((b, i) => (
+            <li key={b.id} className={`${b.endAt <= t ? 'past' : b.startAt <= t ? 'live' : ''}`}>
+              {i === nowAt && b.startAt > t && <span className="tl-now" aria-label="Now" />}
+              <a href={`#/bookings/${b.id}`}>
+                <span className="tl-time num">{timeRange(b)}</span>
+                <span className="tl-what"><b>{b.customerName}</b><span className="small muted">{b.groundName}{b.status === 'held' ? ' · held, not paid' : b.balancePaise > 0 && b.status === 'confirmed' ? ` · ${inr(b.balancePaise)} to collect` : ''}</span></span>
+              </a>
+            </li>))}
+          {nowAt < 0 && <li className="tl-end small muted">Nothing more today</li>}
+        </ol>)}
+    </section>
+  );
+}
+
+/** Every page this login can open, by part of the menu, at the foot of Home. */
+function AllTools({ me }: { me: Me }) {
+  const parts = (['daily', 'dept'] as const).map((p) => [p, NAV.filter((g) => (g.part ?? 'dept') === p).flatMap((g) => g.items.filter((i) => navVisible(me, i) && i.to !== '/'))] as const).filter(([, xs]) => xs.length);
+  return (
+    <section className="stack" style={{ gap: 12 }} aria-label="All tools">
+      <h2 style={{ margin: '8px 0 0' }}>All tools</h2>
+      {parts.map(([p, xs]) => (
+        <div key={p}>
+          <div className="eyebrow" style={{ marginBottom: 8 }}>{PART_TITLES[p]}</div>
+          <div className="tools">{xs.map((i) => <a key={i.to} href={`#${i.to}`} className="tool"><span className="tool-ic" aria-hidden="true"><Icon name={i.icon} size={18} /></span>{i.label}</a>)}</div>
+        </div>))}
+    </section>
   );
 }
