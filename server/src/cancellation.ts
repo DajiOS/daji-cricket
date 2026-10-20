@@ -77,6 +77,8 @@ export function cancelBooking(user: UserRow, bookingId: string, input: { reason?
   if (input.waive && !byStaff) throw new HttpError(403, 'FORBIDDEN', 'Only staff can waive the cancellation rule');
   if (input.waive && !hasPermission(user, 'manage_bookings')) throw new HttpError(403, 'FORBIDDEN', 'This needs the "manage_bookings" permission');
   const actor: Actor = { id: user.id, role: user.role };
+  // With money on it, the ground's cancel lets the customer choose (a full refund is always one of the offers), so there is no rule to waive.
+  if (byStaff && b0.paid_paise > 0 && input.waive) throw new HttpError(409, 'WAIVE_NOT_APPLICABLE', 'This booking has been paid, so cancelling it offers the customer a full refund or credit instead. Leave "waive" off and choose what to offer.');
   if (byStaff && b0.paid_paise > 0) return ownerCancel(user, b0.id, input.reason, input.offers);
   return tx(() => {
     const b = accessBooking(user, b0.id);

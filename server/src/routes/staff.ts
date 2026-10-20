@@ -141,7 +141,9 @@ export function staffRoutes(r: Router): void {
 
   r.get('/api/staff/bookings/:id/cancel-preview', (c) => {
     const b = accessBooking(U(c), c.params.id!, 'manage_bookings');
-    return ok(previewCancel(b, { waive: c.query.get('waive') === '1' }));
+    const waive = c.query.get('waive') === '1';
+    if (waive && b.paid_paise > 0) throw new HttpError(409, 'WAIVE_NOT_APPLICABLE', 'This booking has been paid, so cancelling it offers the customer a full refund or credit instead');
+    return ok(previewCancel(b, { waive }));
   }, A);
 
   // Promo codes: owners make their own, the super admin makes ones that work at every ground.

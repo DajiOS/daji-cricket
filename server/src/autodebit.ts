@@ -90,7 +90,10 @@ export function cancelMandate(user: UserRow): MandateView {
 
 export interface ChargeResult { charged: number; failed: number; skipped: number }
 
-/** Charges the balance of confirmed bookings that start soon, for customers with an active mandate. Safe to run every minute. */
+/**
+ * Charges the balance of confirmed online bookings that start soon, for customers with an active mandate. Safe to run every minute.
+ * Bookings made at the desk (walk-in, enquiry, multi-day) are left alone: the customer agreed to pay those at the ground.
+ */
 export async function chargeDue(cfg: Config): Promise<ChargeResult> {
   const res: ChargeResult = { charged: 0, failed: 0, skipped: 0 };
   const s = getSettings();
@@ -101,7 +104,7 @@ export async function chargeDue(cfg: Config): Promise<ChargeResult> {
   const rows = many<BookingRow & { autodebit_attempts: number; m_id: string; rp_customer_id: string; rp_token_id: string; max_amount_paise: number }>(
     `SELECT b.*, m.id AS m_id, m.rp_customer_id, m.rp_token_id, m.max_amount_paise FROM bookings b
        JOIN autodebit_mandates m ON m.customer_id = b.customer_id AND m.status = 'active'
-      WHERE b.status = 'confirmed' AND b.total_paise > b.paid_paise AND b.start_at > ? AND b.start_at <= ? AND b.autodebit_attempts < ?
+      WHERE b.status = 'confirmed' AND b.source = 'online' AND b.total_paise > b.paid_paise AND b.start_at > ? AND b.start_at <= ? AND b.autodebit_attempts < ?
         AND (b.autodebit_last_at IS NULL OR b.autodebit_last_at <= ?)
         AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.booking_id = b.id AND p.status IN ('created','pending','submitted') AND p.purpose = 'balance')
       ORDER BY b.start_at LIMIT 200`, t, t + s.autoDebitHoursBefore * HOUR, MAX_ATTEMPTS, t - RETRY_AFTER_MS);
