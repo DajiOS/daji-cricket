@@ -11,9 +11,10 @@ import { Validator } from '../input.ts';
 import { addDays, istDate } from '../time.ts';
 import { MAX_ATTACHMENT_BYTES, sniff } from './books.ts';
 import { assertCategoryActive, effName } from './catprefs.ts';
+import { ensureRequest, optNote, sendBack, signStep, startRequest, type Subject } from '../approvals.ts';
 
-// Vendor bills: entered by the team, approved by someone with manage_accounting who did not enter them
-// (the owner may approve their own), then paid. Paying can be tied to a bank transaction already imported.
+// Vendor bills: entered by the team, approved through the owner's approval rules for bills (by default one sign-off from
+// someone with manage_accounting who did not enter them; the owner may approve their own), then paid. Paying can be tied to a bank transaction already imported.
 
 registerSchema('bills-1', `
 CREATE TABLE acct_vendors (
@@ -295,37 +296,54 @@ function move(ownerId: string, id: string, from: Status[], msg: string): BillRow
   return cur;
 }
 
+const subject = (b: BillRow): Subject => ({ title: `${b.vendor_name}${b.bill_no ? ' · ' + b.bill_no : ''}`, amountPaise: b.amount_paise, submittedBy: b.created_by });
+
 export function submitBill(ownerId: string, actor: Actor, id: string): BillOut {
-  move(ownerId, id, ['draft', 'rejected'], 'Only a draft or rejected bill can be submitted');
-  const t = now();
-  run("UPDATE acct_bills SET status = 'pending_approval', submitted_at = ?, submitted_by = ?, decided_at = NULL, decided_by = NULL, reject_reason = NULL, updated_at = ?, updated_by = ? WHERE id = ?", t, actor.id, t, actor.id, id);
-  audit(actor, 'bill.submit', 'acct_bill', id, null, ownerId);
-  return toBill(billRow(ownerId, id));
+  return tx(() => {
+    move(ownerId, id, ['draft', 'rejected'], 'Only a draft or rejected bill can be submitted');
+    const t = now();
+    run("UPDATE acct_bills SET status = 'pending_approval', submitted_at = ?, submitted_by = ?, decided_at = NULL, decided_by = NULL, reject_reason = NULL, updated_at = ?, updated_by = ? WHERE id = ?", t, actor.id, t, actor.id, id);
+    audit(actor, 'bill.submit', 'acct_bill', id, null, ownerId);
+    // The owner's approval rules decide the steps; when none applies to this amount the bill is approved on the spot.
+    if (!startRequest(ownerId, 'bill', id, subject(billRow(ownerId, id)))) {
+      run("UPDATE acct_bills SET status = 'approved', decided_at = ?, decided_by = ?, updated_at = ? WHERE id = ?", t, actor.id, t, id);
+      audit(actor, 'bill.approve', 'acct_bill', id, { auto: true, why: 'No approval step applies to this amount' }, ownerId);
+    }
+    return toBill(billRow(ownerId, id));
+  });
 }
 
-function guardApprover(cur: BillRow, actor: Actor): void {
-  if (!isBoss(actor) && cur.created_by && cur.created_by === actor.id) throw forbidden('You entered this bill, so someone else has to approve it');
+/** Sign the step of the bill's approval chain that is waiting. The last step approves the bill for payment. */
+export function approveBill(ownerId: string, actor: Actor, id: string, raw?: unknown): BillOut {
+  const note = optNote(raw);
+  return tx(() => {
+    const cur = move(ownerId, id, ['pending_approval'], 'This bill is not waiting for approval');
+    const req = ensureRequest(ownerId, 'bill', id, subject(cur));
+    const t = now();
+    const s = req ? signStep(req, actor, note) : null;
+    if (!s || s.done) {
+      run("UPDATE acct_bills SET status = 'approved', decided_at = ?, decided_by = ?, reject_reason = NULL, updated_at = ?, updated_by = ? WHERE id = ?", t, actor.id, t, actor.id, id);
+      audit(actor, 'bill.approve', 'acct_bill', id, { selfApproved: cur.created_by === actor.id, ...(s ? { step: s.index + 1, label: s.step.label } : {}), ...(note ? { note } : {}) }, ownerId);
+    }
+    return toBill(billRow(ownerId, id));
+  });
 }
 
-export function approveBill(ownerId: string, actor: Actor, id: string): BillOut {
-  const cur = move(ownerId, id, ['pending_approval'], 'This bill is not waiting for approval');
-  guardApprover(cur, actor);
-  const t = now();
-  run("UPDATE acct_bills SET status = 'approved', decided_at = ?, decided_by = ?, reject_reason = NULL, updated_at = ?, updated_by = ? WHERE id = ?", t, actor.id, t, actor.id, id);
-  audit(actor, 'bill.approve', 'acct_bill', id, { selfApproved: cur.created_by === actor.id }, ownerId);
-  return toBill(billRow(ownerId, id));
-}
-
+/** Send the bill back with a reason: to the person who entered it (the bill is rejected), or one step back, as the rules say. */
 export function rejectBill(ownerId: string, actor: Actor, id: string, raw: unknown): BillOut {
   const v = new Validator(raw);
   const reason = v.str('reason', { required: true, min: 3, max: 500 });
   v.done();
-  const cur = move(ownerId, id, ['pending_approval'], 'This bill is not waiting for approval');
-  guardApprover(cur, actor);
-  const t = now();
-  run("UPDATE acct_bills SET status = 'rejected', decided_at = ?, decided_by = ?, reject_reason = ?, updated_at = ?, updated_by = ? WHERE id = ?", t, actor.id, reason!, t, actor.id, id);
-  audit(actor, 'bill.reject', 'acct_bill', id, { reason }, ownerId);
-  return toBill(billRow(ownerId, id));
+  return tx(() => {
+    const cur = move(ownerId, id, ['pending_approval'], 'This bill is not waiting for approval');
+    const req = ensureRequest(ownerId, 'bill', id, subject(cur));
+    if (req && !sendBack(req, actor, reason!).toStart) return toBill(billRow(ownerId, id));
+    if (!req && !isBoss(actor) && cur.created_by === actor.id) throw forbidden('You entered this bill, so someone else has to approve it');
+    const t = now();
+    run("UPDATE acct_bills SET status = 'rejected', decided_at = ?, decided_by = ?, reject_reason = ?, updated_at = ?, updated_by = ? WHERE id = ?", t, actor.id, reason!, t, actor.id, id);
+    audit(actor, 'bill.reject', 'acct_bill', id, { reason }, ownerId);
+    return toBill(billRow(ownerId, id));
+  });
 }
 
 export function payBill(ownerId: string, actor: Actor, id: string, raw: unknown): BillOut {

@@ -17,7 +17,7 @@ export interface Summary {
   paidCount: number; unmarkedDays: number; presentDays: number; absentDays: number; leaveDays: number; shortfallPaise: number;
   pfPaise: number; pfEmployerPaise: number; esiPaise: number; esiEmployerPaise: number; ptPaise: number; tdsPaise: number;
 }
-export interface Run { month: string; status: 'open' | 'final'; locked: boolean; finalisedAt: number | null; lines: Line[]; summary: Summary }
+export interface Run { month: string; status: 'open' | 'waiting' | 'final'; locked: boolean; finalisedAt: number | null; lines: Line[]; summary: Summary }
 export interface Adjustment { id: string; staffId: string; staffName: string; kind: 'advance' | 'deduction' | 'bonus'; amountPaise: number; givenOn: string; month: string; note: string | null }
 
 export const STATUS_LABEL: Record<AttStatus, string> = { present: 'Present', half: 'Half day', absent: 'Absent', leave: 'Leave' };

@@ -10,7 +10,8 @@ export function RunTab({ month, run, reload, onSlip }: { month: string; run: Run
   const [err, setErr] = useState<string | null>(null);
   const s = run.summary;
   const final = run.status === 'final';
-  async function act(path: string, ok: string) { setErr(null); try { await post(`${PAY}/runs/${month}/${path}`); toast(ok); reload(); } catch (e: any) { setErr(e.message); } }
+  async function act(path: string, ok: string) { setErr(null); try { const r = await post<Run>(`${PAY}/runs/${month}/${path}`); toast(r.status === 'waiting' ? 'Sent for sign-off. It locks when the last step signs.' : ok); reload(); } catch (e: any) { setErr(e.message); } }
+  const waiting = run.status === 'waiting';
   async function undo(l: Line) { try { await del(`${PAY}/runs/${month}/lines/${l.id}/pay`); toast('Payment undone'); reload(); } catch (e: any) { setErr(e.message); } }
   const warn: string[] = [];
   if (!final && s.unmarkedDays > 0) warn.push(`${s.unmarkedDays} day${s.unmarkedDays === 1 ? '' : 's'} have no attendance mark and will not be paid.`);
@@ -27,14 +28,16 @@ export function RunTab({ month, run, reload, onSlip }: { month: string; run: Run
       {(s.pfPaise + s.esiPaise + s.ptPaise + s.tdsPaise + s.pfEmployerPaise + s.esiEmployerPaise) > 0 && <StatutoryDues month={month} />}
       <div className="card">
         <div className="card-head">
-          <div className="row"><h3>{monthName(month)} payroll</h3>{final ? <Chip tone="good">Finalised</Chip> : <Chip tone="warn">Open, worked out live</Chip>}</div>
+          <div className="row"><h3>{monthName(month)} payroll</h3>{final ? <Chip tone="good">Finalised</Chip> : waiting ? <Chip tone="info">Waiting for sign-off</Chip> : <Chip tone="warn">Open, worked out live</Chip>}</div>
           <div className="row">
             {final
               ? <Confirm label="Reopen month" ask="Unlock this month?" onYes={() => act('reopen', 'Month reopened')} />
+              : waiting ? <><a className="btn sm" href="#/approvals">See on Approvals</a><Confirm label="Take it back" ask="Take this month off the Approvals board?" onYes={() => act('withdraw', 'Taken back')} /></>
               : <Confirm label="Finalise and lock month" className="btn sm primary" ask={`Lock ${monthName(month)}?`} onYes={() => act('finalise', 'Month finalised and locked')} />}
           </div>
         </div>
         {final && run.finalisedAt && <div className="card-pad small muted pr-note">Locked on {fmtDateTime(run.finalisedAt)}. Attendance, advances and deductions for this month can no longer change. Pay profile changes will not alter these figures.</div>}
+        {waiting && <div className="card-pad small muted pr-note">Your approval rules for staff pay need a sign-off before the month locks. If the figures change while it waits, the sign-off is refused until it is sent again.</div>}
         {warn.map((w) => <div key={w} className="card-pad small pr-warn">{w}</div>)}
         {err && <div className="card-pad"><ErrorBox msg={err} /></div>}
         <Table rows={run.lines} key={(l) => l.staffId} empty="Nobody is on the payroll for this month yet."

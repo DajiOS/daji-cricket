@@ -3,7 +3,7 @@ import type { Ctx } from '../http.ts';
 import { U, ownerOrFail } from './helpers.ts';
 import { forbidden } from '../errors.ts';
 import {
-  addAdjustment, attendanceSheet, checkMonth, createStaff, finaliseRun, getRun, listAdjustments, listRuns, listStaff, markPaid, parseAttendance,
+  addAdjustment, attendanceSheet, checkMonth, createStaff, requestFinalise, withdrawFinalise, getRun, listAdjustments, listRuns, listStaff, markPaid, parseAttendance,
   payslip, removeAdjustment, statutoryDues, reopenRun, setAttendance, summary, unmarkPaid, updateStaff,
 } from '../accounting/payroll.ts';
 import { istDate } from '../time.ts';
@@ -34,7 +34,8 @@ export function payrollRoutes(r: Router): void {
 
   r.get(`${P}/runs`, (c) => { const g = guard(c); return ok({ items: listRuns(g.owner) }); }, A);
   r.get(`${P}/runs/:month`, (c) => { const g = guard(c); return ok(getRun(g.owner, c.params.month!)); }, A);
-  r.post(`${P}/runs/:month/finalise`, (c) => { const g = guard(c); return ok(finaliseRun(g.owner, g.actor, c.params.month!)); }, A);
+  r.post(`${P}/runs/:month/finalise`, (c) => { const g = guard(c); return ok(requestFinalise(g.owner, g.actor, c.params.month!)); }, A);
+  r.post(`${P}/runs/:month/withdraw`, (c) => { const g = guard(c); return ok(withdrawFinalise(g.owner, g.actor, c.params.month!)); }, A);
   r.post(`${P}/runs/:month/reopen`, (c) => { const g = guard(c); return ok(reopenRun(g.owner, g.actor, c.params.month!)); }, A);
   r.post(`${P}/runs/:month/lines/:id/pay`, (c) => { const g = guard(c); return ok(markPaid(g.owner, g.actor, c.params.month!, c.params.id!, c.json())); }, A);
   r.del(`${P}/runs/:month/lines/:id/pay`, (c) => { const g = guard(c); return ok(unmarkPaid(g.owner, g.actor, c.params.month!, c.params.id!)); }, A);

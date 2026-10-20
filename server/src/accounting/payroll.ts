@@ -8,6 +8,7 @@ import { Validator } from '../input.ts';
 import { addDays, istDate, isValidDate } from '../time.ts';
 import { statutory, STATUTORY_RULES_CHECKED } from './statutory.ts';
 import { postToLedger, removeFromLedger, type LedgerRef } from './autopost.ts';
+import { pendingFor, startRequest, withdrawRequest } from '../approvals.ts';
 
 // Staff pay profiles, monthly attendance, advances and deductions, the monthly payroll run (net pay in paise),
 // month locking, salary payments and payslips. Everything is per owner. A month is "open" (worked out live from
@@ -436,7 +437,7 @@ export function getRun(ownerId: string, month: string) {
   const run_ = runFor(ownerId, month);
   const lines = run_ ? storedLines(run_.id) : computeLines(ownerId, month);
   return {
-    month, status: run_ ? 'final' : 'open', locked: !!run_, finalisedAt: run_?.finalised_at ?? null, finalisedBy: run_?.finalised_by ?? null,
+    month, status: run_ ? 'final' : pendingFor(ownerId, 'payroll', month) ? 'waiting' : 'open', locked: !!run_, finalisedAt: run_?.finalised_at ?? null, finalisedBy: run_?.finalised_by ?? null,
     lines, summary: summarise(lines),
   };
 }
@@ -464,6 +465,42 @@ export function finaliseRun(ownerId: string, actor: Actor, month: string) {
     }
   });
   audit(actor, 'payroll.finalise', 'payroll_runs', null, { month }, ownerId);
+  return getRun(ownerId, month);
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const monthWords = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+
+/** The owner asks to lock a month. With no sign-off step in the pay-run rules (the default) it is finalised at once;
+ * otherwise it waits on the Approvals board and is finalised when the last step signs. */
+export function requestFinalise(ownerId: string, actor: Actor, month: string) {
+  checkMonth(month);
+  if (month > today().slice(0, 7)) throw new HttpError(400, 'FUTURE_MONTH', 'A month cannot be finalised before it has started');
+  if (isLocked(ownerId, month)) throw conflict('MONTH_LOCKED', 'This month is already finalised');
+  if (pendingFor(ownerId, 'payroll', month)) throw conflict('WAITING', 'This month is already waiting for sign-off');
+  const lines = computeLines(ownerId, month);
+  if (!lines.length) throw new HttpError(400, 'NO_STAFF', 'There is nobody on the payroll for this month');
+  const net = summarise(lines).netPaise;
+  const started = tx(() => {
+    const r = startRequest(ownerId, 'payroll', month, { title: `Staff pay · ${monthWords(month)}`, amountPaise: net, submittedBy: actor.id });
+    if (r) audit(actor, 'payroll.submit', 'payroll_runs', month, { month, netPaise: net, headcount: lines.length }, ownerId);
+    return !!r;
+  });
+  return started ? getRun(ownerId, month) : finaliseRun(ownerId, actor, month);
+}
+
+/** The last sign-off locks the month, as long as the figures are still the ones that were sent. */
+export function finaliseApproved(ownerId: string, actor: Actor, month: string, sentNetPaise: number) {
+  const net = summarise(computeLines(ownerId, month)).netPaise;
+  if (net !== sentNetPaise) throw conflict('FIGURES_CHANGED', 'The pay figures changed after this was sent. Send it back so the owner can check and send it again.');
+  return finaliseRun(ownerId, actor, month);
+}
+
+export function withdrawFinalise(ownerId: string, actor: Actor, month: string) {
+  checkMonth(month);
+  if (!pendingFor(ownerId, 'payroll', month)) throw notFound('This month is not waiting for sign-off');
+  withdrawRequest(ownerId, 'payroll', month);
+  audit(actor, 'payroll.withdraw', 'payroll_runs', month, { month }, ownerId);
   return getRun(ownerId, month);
 }
 
