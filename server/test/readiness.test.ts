@@ -74,3 +74,13 @@ test('a closing day before the opening day is flagged', () => {
   const r = readiness(h.cfg, userByEmail('admin@daji.test')!, null);
   assert.equal(item(r, 'closeFrom').state, 'todo');
 });
+
+test('Ask AI and the bank feed are listed as optional: unset is a calm warning that says what still works, never an error', async () => {
+  const admin = await h.login('admin');
+  const r = (await h.get('/api/admin/readiness', admin)).body;
+  assert.equal(item(r, 'askAi').state, 'warn');
+  assert.match(item(r, 'askAi').detail, /built-in reports/);
+  assert.equal(item(r, 'bankFeed').state, 'warn');
+  assert.match(item(r, 'bankFeed').detail, /Bank import/);
+  assert.ok(!JSON.stringify(r).includes('sk-ant'), 'no key is ever shown');
+});

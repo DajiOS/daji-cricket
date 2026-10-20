@@ -108,6 +108,14 @@ export function readiness(cfg: Config, u: UserRow, ownerId: string | null): Read
   add(P, 'email', 'Booking emails (Gmail)', em.status === 'ready' ? (em.lastTest?.ok ? 'done' : 'warn') : 'todo',
     em.status === 'ready' ? (em.lastTest ? `Set. Last test ${em.lastTest.ok ? 'passed' : 'failed'}.` : 'Set, not tested yet.') : `Not set: ${em.missing.join(', ')}.`,
     'Create a Gmail App Password, put it in deploy/.env as GMAIL_APP_PASSWORD, then press Test in Connections.', '/settings/connections');
+  const ai = integ.get('claude')!;
+  add(P, 'askAi', 'Ask AI (free-form questions)', ai.status === 'ready' ? (ai.lastTest?.ok ? 'done' : 'warn') : 'warn',
+    ai.status === 'ready' ? (ai.lastTest ? `Key set. Last test ${ai.lastTest.ok ? 'passed' : 'failed'}.` : 'Key set, not tested yet. Every question sent to Claude costs money.') : 'No key: Ask AI still answers common questions from the built-in reports. Add a key to let it answer anything.',
+    'Put ANTHROPIC_API_KEY in deploy/.env (and AI_MODE=claude), set a monthly spend limit in the Anthropic console, then press Test in Connections.', '/settings/connections');
+  const bank = integ.get('yodlee')!;
+  add(P, 'bankFeed', 'Automatic bank feed (optional)', bank.status === 'ready' ? (bank.lastTest?.ok ? 'done' : 'warn') : 'warn',
+    bank.status === 'ready' ? (bank.lastTest ? `Set. Last test ${bank.lastTest.ok ? 'passed' : 'failed'}.` : 'Set, not tested yet.') : 'Not set up. Bank statements can still be imported from a file in Bank import.',
+    'In Platform, Bank connection, enter the Yodlee details. Until then upload statements in Bank import.', '/bank');
   add(P, 'contact', 'Contact details on the website', s.contactPhone && s.contactEmail ? 'done' : 'todo',
     s.contactPhone && s.contactEmail ? 'A phone number and email are shown.' : 'The phone number or email is missing.', 'Enter them in Settings, Website.', '/settings/website');
 
