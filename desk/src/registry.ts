@@ -161,6 +161,44 @@ export const NAV: NavGroup[] = [
     { to: '/platform', label: 'Software owner', icon: 'vault', superOnly: true },
   ] },
 ];
+/** The slim rail, as in the design: "Every day" pages that open directly, then the departments whose task groups open beside it. */
+export interface RailItem { key: string; label: string; short: string; icon: string; sep?: string; to?: string; section?: string; eyebrow?: string; desc?: string; perm?: string; ownerOnly?: boolean }
+export const RAIL: RailItem[] = [
+  { key: 'home', label: 'Home', short: 'Home', icon: 'dashboard', sep: 'Every day', to: '/' },
+  { key: 'approvals', label: 'Approvals', short: 'Approvals', icon: 'check', to: '/approvals', perm: 'manage_accounting' },
+  { key: 'calendar', label: 'Calendar', short: 'Calendar', icon: 'calendar', to: '/calendar' },
+  { key: 'tasks', label: 'Task boards', short: 'Tasks', icon: 'tasks', to: '/tasks', perm: 'manage_tasks' },
+  { key: 'ground', label: 'Ground', short: 'Ground', icon: 'ball', sep: 'Departments', section: 'ground', eyebrow: 'Book → play → collect', desc: 'Everything about the sessions on your ground, from the booking to the final over.' },
+  { key: 'people', label: 'People', short: 'People', icon: 'users', section: 'people', eyebrow: 'Customers → academy → team', desc: 'The people who play, learn and work here.' },
+  { key: 'money', label: 'Finance', short: 'Finance', icon: 'accounts', section: 'money', eyebrow: 'Purchase → invoice → pay → books', desc: 'One section for the whole money flow, in the order it happens.' },
+  { key: 'settings', label: 'Settings', short: 'Settings', icon: 'settings', section: 'settings', eyebrow: 'Admin', desc: 'Set-up screens most people rarely open, kept out of the daily menu.' },
+];
+/** One line under each job in the rail's panel. */
+export const BLURBS: Record<string, string> = {
+  'Take bookings': 'Every booking, the day view and what is waiting on you.',
+  'Fill the ground': 'Memberships, promo codes, tournaments and matches.',
+  'Keep an eye on it': 'The calendar, what happened, ground health and cameras.',
+  'Talk to customers': 'Contacts, WhatsApp reminders and business cards.',
+  'Run the academy': 'Students, attendance, fees and coaches.',
+  'Look after the team': 'Jobs to do, staff attendance and access.',
+  'Buy & pay': 'Order, receive the bill, approve and pay.',
+  'Check the money': 'Make sure every rupee landed where it should.',
+  'See results': 'How the month is going against plan.',
+  'Close the month': 'A step-by-step close, then lock it.',
+  'Set up the ground': 'Prices, timings, payments and the website.',
+  'Connect and share': 'People, connections, services and photos.',
+  'Keep it safe': 'Compliance, backups and the software owner.',
+};
+/** The rail button an address belongs to: an "Every day" page, or the department of its menu item. */
+export const railOf = (route: string): RailItem | undefined => {
+  const r = route || '/';
+  const direct = RAIL.find((x) => x.to && (x.to === '/' ? r === '/' : r === x.to || r.startsWith(x.to + '/')));
+  if (direct) return direct;
+  const it = itemFor(r, NAV.flatMap((g) => g.items));
+  const sec = it && NAV.find((g) => g.items.includes(it))?.section;
+  return RAIL.find((x) => x.section === sec);
+};
+
 /** The menu item for an address: the longest item address that the address starts with. */
 export const itemFor = (route: string, items: NavItem[]): NavItem | undefined => {
   const r = route || '/';
