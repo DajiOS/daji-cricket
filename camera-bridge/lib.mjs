@@ -48,3 +48,28 @@ export function makeGate({ watchingMs, idleMs }) {
     },
   };
 }
+
+/** Every address to try on the network this PC is on, from its own address and netmask. Networks bigger than 256 addresses are cut to the
+ *  PC's own /24, which is how almost every router at a ground is set up. Leaves out the network and broadcast addresses and the PC itself. */
+export function subnetHosts(ip, netmask) {
+  const n = (s) => s.split('.').reduce((a, o) => ((a << 8) | (Number(o) & 255)) >>> 0, 0);
+  const s = (v) => [24, 16, 8, 0].map((b) => (v >>> b) & 255).join('.');
+  let mask = n(netmask);
+  if (((~mask) >>> 0) > 255) mask = 0xffffff00;
+  const me = n(ip), net = (me & mask) >>> 0, size = ((~mask) >>> 0) + 1;
+  const out = [];
+  for (let i = 1; i < size - 1; i++) { const a = (net + i) >>> 0; if (a !== me) out.push(s(a)); }
+  return out;
+}
+
+/** Ports that give a recorder away: 554 is RTSP (the bridge needs it), 37777 is Dahua's own port, 80 is the web page. */
+export const RECORDER_PORTS = [554, 37777, 80];
+
+/** Reads one scan result: what the device probably is and whether the bridge can use it. */
+export function describeHost(open) {
+  const has = (p) => open.includes(p);
+  if (has(554) && has(37777)) return { likely: 'Dahua recorder or camera (RTSP and Dahua ports open)', usable: true };
+  if (has(554)) return { likely: 'RTSP camera or recorder (not Dahua, or the Dahua port is closed)', usable: true };
+  if (has(37777)) return { likely: 'Dahua device with RTSP switched off: turn RTSP on in its web page (Network, Port)', usable: false };
+  return { likely: 'Something with a web page only (a router, printer or similar)', usable: false };
+}
