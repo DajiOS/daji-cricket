@@ -43,18 +43,24 @@
   <header class="hero" id="top">
     <div style="position:relative">
       <div class="ball3d-wrap" aria-hidden="true"><canvas data-ball3d></canvas></div>
-            <h1 class="display"><span class="ln"><span>Floodlit ground.</span></span> <span class="ln"><span>Reserved for you.</span></span></h1>
+      <p class="eyebrow hero-eyebrow" id="hero-eyebrow" hidden></p>
+      <h1 class="display"><span class="ln"><span>Floodlit ground.</span></span> <span class="ln"><span>Reserved for you.</span></span></h1>
+      <div class="hero-sub">
       <p class="lead">Choose your time, from early morning to late night. Pay the advance online and the wicket is held in your name.</p>
       <div class="cta"><a class="btn primary" href="#book" data-jump="book">Reserve a slot</a><button class="btn outline" type="button" data-enquiry>Send an enquiry</button></div>
       <div class="facts" id="facts"></div>
       <ol class="howto"><li><b>1</b>Pick a day</li><li><b>2</b>Choose ball and match</li><li><b>3</b>Pay the advance</li><li><b>✓</b>Slot is yours</li></ol>
+      </div>
     </div>
 
     <aside class="panel" id="book" aria-label="Booking">
+      <div class="pcol pc-head">
       <div class="eyebrow">Reserve</div>
       <h3 id="p-name">Loading…</h3>
       <div class="sub" id="p-sub"></div>
       <div class="tabs" id="p-tabs"></div>
+      </div>
+      <div class="pcol pc-day">
       <div class="step"><i>1</i>Pick a day</div>
       <div class="datebar">
         <label class="datepick"><input type="date" data-native id="p-date" aria-label="Pick any date, up to a year ahead"></label>
@@ -62,10 +68,14 @@
       </div>
       <div class="step" id="p-step2" hidden><i>2</i>Choose the ball and match length</div>
       <div id="p-formats" class="fmtpick" hidden></div>
+      </div>
+      <div class="pcol pc-time">
       <div class="step" id="p-step3"><i>2</i>Pick your time</div>
       <div id="p-hint" class="hint"></div>
       <div class="slots" id="p-slots"></div>
       <div class="legend"><span><i class="a"></i>Available</span><span><i class="s"></i>Selected</span><span><i class="h"></i>Held</span><span><i class="b"></i>Booked</span></div>
+      </div>
+      <div class="pcol pc-go">
       <div class="sum" id="p-sum"></div>
       <div class="repeat" id="p-repeat-row" hidden><label for="p-repeat">Repeat</label><select id="p-repeat" aria-label="Repeat this booking"><option value="">Does not repeat</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="yearly">Every year</option></select><span id="p-repeat-n" hidden><input id="p-repeat-count" type="number" min="2" value="4" inputmode="numeric" aria-label="Number of bookings"> times</span></div><div class="fe promo-msg" id="p-repeat-msg"></div>
       <label class="check" id="p-credit-row" hidden><input type="checkbox" id="p-credit"><span id="p-credit-text"></span></label>
@@ -73,7 +83,10 @@
       <button class="btn primary block" id="p-hold" type="button" disabled>Choose your slots</button>
       <div class="note" id="p-note"></div>
       <div class="note callnote" id="p-callnote" hidden></div>
+      </div>
     </aside>
+    <div class="hero-decor" aria-hidden="true"></div>
+    <div class="hero-3d" id="hero-3d" aria-hidden="true" hidden></div>
   </header>
 </div>
 
@@ -229,6 +242,7 @@
 <script src="dateinput.js"></script>
 <script src="app.js"></script>
 <script src="ball3d.js" defer></script>
+<script src="scene3d.js" defer></script>
 <script src="luxury.js" defer></script>
 <script src="books.js"></script>
 <script src="club.js"></script>
