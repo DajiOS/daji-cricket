@@ -1553,6 +1553,7 @@ html[data-theme="carbon"]{--d-r:0px;--d-fw:800;--d-ls:0;--d-tt:uppercase;--d-es:
 html[data-theme="champagne"]{--d-r:999px;--d-fw:400;--d-ls:.01em;--d-tt:none;--d-es:normal;--d-h1:clamp(44px,6.8vw,100px)}
 html[data-theme="stadium"]{--d-r:10px;--d-fw:900;--d-ls:0;--d-tt:uppercase;--d-es:normal;--d-h1:clamp(50px,7vw,112px)}
 html[data-theme="willow"]{--d-r:8px;--d-fw:500;--d-ls:-.02em;--d-tt:none;--d-es:italic;--d-h1:clamp(48px,7.4vw,124px)}
+html[data-layout]{--d-pr:min(calc(var(--d-r) + 6px),28px)}
 .hero-decor,.hero-3d{display:none}
 .hero-sub{display:contents}
 html[data-layout]:not([data-embed]):not([data-embed-section]) #view-home{padding-left:0!important;padding-right:0!important;--d-pr:min(calc(var(--d-r) + 6px),28px);--radius-sm:min(var(--d-r),14px);--radius-md:min(var(--d-r),14px);--radius-lg:var(--d-pr)}
@@ -1677,3 +1678,47 @@ html[data-decor="rules"]:not([data-embed]):not([data-embed-section]) #view-home 
 html[data-layout]:not([data-embed]):not([data-embed-section]) .resbar{background:var(--gold)!important;color:var(--on-gold)!important;border-radius:min(var(--d-r,0px),28px);font-weight:700}
 /* phones: sign in sits in the menu; the theme buttons take its place on the bar */
 @media (max-width:900px){nav:not(.open) .links #authlinks{visibility:hidden}}
+
+/* ===== Designer themes on the other public screens: academy, my bookings, sign in, for ground owners =====
+   Same language as the home page of each design: its display face, weight, tracking and capitals, the accent for the
+   emphasised words, solid accent buttons, raised cards with the design's corner radius, and its decoration at the top. */
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform){position:relative;isolation:isolate;--radius-sm:min(var(--d-r),12px);--radius-md:min(var(--d-r),14px);--radius-lg:var(--d-pr)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{content:"";position:absolute;inset:0 0 auto;height:min(900px,100%);z-index:-1;pointer-events:none}
+html[data-decor="arcs"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background:repeating-radial-gradient(circle at 50% 0,transparent 0 139px,var(--line) 139px 140px);-webkit-mask-image:radial-gradient(circle at 50% 0,#000 20%,transparent 60%);mask-image:radial-gradient(circle at 50% 0,#000 20%,transparent 60%)}
+html[data-decor="jali"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg fill='none' stroke='%23e2b866' stroke-opacity='.10'%3E%3Cpath d='M28 2 54 28 28 54 2 28Z'/%3E%3Ccircle cx='28' cy='28' r='9'/%3E%3Cpath d='M28 19v18M19 28h18'/%3E%3C/g%3E%3C/svg%3E"),radial-gradient(ellipse at 50% 0%,#4a1420,transparent 60%)}
+html[data-decor="grid"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:72px 72px;-webkit-mask-image:linear-gradient(180deg,#000,transparent 75%);mask-image:linear-gradient(180deg,#000,transparent 75%)}
+html[data-decor="glass"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background:radial-gradient(900px 600px at 80% 0%,#1f5a5a 0%,transparent 60%),radial-gradient(800px 500px at 0% 60%,#173a4a 0%,transparent 60%)}
+html[data-decor="blue"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background:radial-gradient(1000px 520px at 70% 0%,#1d47b8 0%,transparent 60%)}
+html[data-decor="beams"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background:conic-gradient(from 180deg at 18% 0,transparent 160deg,rgba(236,222,180,.08) 176deg,transparent 192deg),conic-gradient(from 180deg at 82% 0,transparent 160deg,rgba(236,222,180,.08) 176deg,transparent 192deg)}
+html[data-decor="rules"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background:linear-gradient(var(--gold) 0 2px,transparent 2px 4px,var(--text) 4px 6px) top/100% 6px no-repeat}
+html[data-decor="rules"] :is(#view-academy,#view-bookings,#view-login,#view-platform) > .wrap > nav{border-bottom:1px solid var(--text)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) > .wrap > nav{position:relative;z-index:5}
+@media (min-width:901px){ html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) > .wrap > nav{padding-right:120px} }
+
+/* type */
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .display{font-family:var(--font-display);font-weight:var(--d-fw);letter-spacing:var(--d-ls);text-transform:var(--d-tt);line-height:1.02;text-wrap:balance}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .display em,html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .display .gold-text,html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .mp b.gold-text{font-family:inherit;font-style:var(--d-es);font-weight:inherit;letter-spacing:inherit;text-transform:inherit;padding:0;background:none;-webkit-text-fill-color:currentColor;color:var(--gold-bright,var(--gold))}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .hero h1.display{font-size:clamp(42px,5.6vw,88px)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .head h2.display{font-size:clamp(34px,4vw,60px)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .eyebrow{font:700 12.5px/1.4 var(--font-body);letter-spacing:.18em;text-transform:uppercase;color:var(--gold)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .lead{font-size:clamp(16px,1.3vw,19px);line-height:1.55;max-width:46ch}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) :is(.bk h4,.steps3 h4,.coach h4,.box h4.big){font-family:var(--font-display);font-weight:var(--d-fw);letter-spacing:var(--d-ls);text-transform:var(--d-tt)}
+
+/* buttons */
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .btn{border-radius:min(var(--d-r),28px);text-transform:none;letter-spacing:0;font:700 15px var(--font-body);height:52px;padding:0 26px}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .btn.sm{height:40px;padding:0 18px;font-size:14px}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .btn.primary{background:var(--gold);color:var(--on-gold);box-shadow:none}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .btn.primary:hover{background:var(--gold-bright,var(--gold));transform:translateY(-1px);box-shadow:none}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .btn.outline{border-color:var(--line-strong,var(--line));color:var(--text);background:transparent}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .btn.outline:hover{border-color:var(--gold);background:transparent}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .links .btn,html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .links [data-reserve]{text-transform:none}
+
+/* cards */
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) :is(.box,.loginbox,.bk,.steps3 li,.coach,.feat > *){background:var(--bg-raised);border:1px solid var(--line);border-radius:var(--d-pr);box-shadow:0 30px 60px -40px rgba(0,0,0,.5)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .mp{background:var(--bg-raised);border:1px solid var(--line);border-radius:var(--d-pr)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .mp b{font-family:var(--font-display);font-weight:var(--d-fw);letter-spacing:var(--d-ls)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .steps3 li b{background:var(--gold);color:var(--on-gold)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) :is(input,select,textarea){border-radius:min(var(--d-r),12px)}
+html[data-layout]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .tabs > *{border-radius:min(var(--d-r),12px)}
+html[data-decor="stitch"] :is(#view-academy,#view-bookings,#view-login,#view-platform) :is(.box,.loginbox,.bk,.steps3 li,.feat > *){outline:2px dashed color-mix(in srgb,var(--gold) 60%,transparent);outline-offset:-8px}
+html[data-decor="glass"] :is(#view-academy,#view-bookings,#view-login,#view-platform) :is(.box,.loginbox,.bk,.steps3 li,.feat > *,.mp){background:color-mix(in srgb,var(--bg-raised) 72%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
