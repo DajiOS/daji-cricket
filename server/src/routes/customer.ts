@@ -79,7 +79,7 @@ export function customerRoutes(r: Router): void {
     const body = c.json() as any;
     const v = new Validator(body);
     const nm = readName(v, false); const name = nm.name;
-    const phone = v.phone('phone');
+    const phone = v.intlPhone('phone');
     const email = v.email('email');
     const businessName = u.role === 'owner' ? v.str('businessName', { max: 80 }) : undefined;
     const upiId = u.role === 'owner' ? v.str('upiId', { max: 80 }) : undefined;
@@ -123,13 +123,14 @@ export function customerRoutes(r: Router): void {
   r.post('/api/me/password', (c) => {
     const u = U(c);
     const v = new Validator(c.json());
-    const current = v.str('currentPassword', { required: true, trim: false });
+    // An account made with a phone code, or at the desk, has no password yet: it can set one without the current one.
+    const current = v.str('currentPassword', { required: !!u.password_hash, trim: false });
     const next = v.str('newPassword', { required: true, trim: false });
     if (next) { const p = checkPasswordStrength(next); if (p) v.fail('newPassword', p); }
     v.done();
-    if (!verifyPassword(current!, u.password_hash)) throw new HttpError(400, 'VALIDATION_FAILED', 'The current password is not right', { fields: [{ field: 'currentPassword', message: 'Not the password you signed in with' }] });
+    if (u.password_hash && !verifyPassword(current!, u.password_hash)) throw new HttpError(400, 'VALIDATION_FAILED', 'The current password is not right', { fields: [{ field: 'currentPassword', message: 'Not the password you signed in with' }] });
     setPassword(u.id, next!);
-    audit({ id: u.id, role: u.role }, 'auth.password_change', 'user', u.id);
+    audit({ id: u.id, role: u.role }, u.password_hash ? 'auth.password_change' : 'auth.password_set', 'user', u.id);
     const fresh = userRow(u.id)!;
     return ok({ token: signToken(c.cfg, fresh), user: toUser(fresh) });
   }, { auth: 'user', rate: 'auth' });

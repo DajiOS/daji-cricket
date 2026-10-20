@@ -53,6 +53,8 @@ export interface Consent {
 export interface User {
   /** The person's own profile picture, or null (the app then shows their initial). */
   avatarUrl: string | null;
+  /** False for an account made with a phone code or at the desk: it can set a first password without a current one. */
+  hasPassword: boolean;
   id: string;
   role: Role;
   name: string;

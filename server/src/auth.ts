@@ -3,7 +3,7 @@ import type { Consent, Role, StaffPermission, User } from '@daji/shared';
 import { STAFF_PERMISSIONS } from '@daji/shared';
 import { checkCode, mfaEnabled } from './mfa.ts';
 import { many, one, run, registerSchema } from './db.ts';
-import { normalizePhone } from './input.ts';
+import { normalizeIntlPhone } from './input.ts';
 import { splitName, titleCase } from './names.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
@@ -109,7 +109,7 @@ export function toUser(r: UserRow): User {
   return {
     id: r.id, role: r.role, name: r.name, firstName: r.first_name ?? splitName(r.name).first, lastName: r.last_name ?? splitName(r.name).last, email: r.email, phone: r.phone, ownerId: r.owner_id,
     permissions: perms, active: !!r.active, consent, businessName: r.business_name, upiId: r.upi_id, createdAt: r.created_at,
-    avatarUrl: r.avatar_id ? `/api/avatar/${r.avatar_id}` : null,
+    avatarUrl: r.avatar_id ? `/api/avatar/${r.avatar_id}` : null, hasPassword: !!r.password_hash,
   };
 }
 export const userRow = (id: string): UserRow | undefined => one<UserRow>('SELECT * FROM users WHERE id = ?', id);
@@ -150,10 +150,10 @@ export function checkPasswordStrength(pw: string): string | null {
 const DUMMY = hashPassword('not-a-real-password-1');
 
 /** Accounts that can be meant by a sign-in name: an email address, or a mobile number (owners and staff before customers). */
-function candidatesFor(identifier: string): UserRow[] {
+function candidatesFor(identifier: string, countryCode?: string): UserRow[] {
   const id = identifier.trim();
   if (id.includes('@')) { const r = userByEmail(id); return r ? [r] : []; }
-  const phone = normalizePhone(id);
+  const phone = normalizeIntlPhone(id, countryCode);
   return phone ? many<UserRow>("SELECT * FROM users WHERE phone = ? AND password_hash IS NOT NULL ORDER BY (role = 'customer'), created_at", phone) : [];
 }
 
@@ -170,12 +170,12 @@ function lockFail(key: string): void {
   run('INSERT INTO login_attempts(key, fails, first_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET fails = CASE WHEN ? - first_at > ? THEN 1 ELSE fails + 1 END, first_at = CASE WHEN ? - first_at > ? THEN ? ELSE first_at END', key, now(), now(), LOCK_WINDOW_MS, now(), LOCK_WINDOW_MS, now());
 }
 
-/** Sign in with an email address or a mobile number, and the password. */
-export function login(cfg: Config, identifier: string, password: string, code?: string): { token: string; user: User } {
+/** Sign in with an email address or a mobile number, and the password. `countryCode` is for a number written without its +code (default +91). */
+export function login(cfg: Config, identifier: string, password: string, code?: string, countryCode?: string): { token: string; user: User } {
   // The same person can write a number many ways, so the lock is kept on the cleaned-up email or number, not on the raw text.
-  const lockKey = (identifier.includes('@') ? identifier.trim().toLowerCase() : (normalizePhone(identifier) ?? identifier.trim().toLowerCase())).slice(0, 120);
+  const lockKey = (identifier.includes('@') ? identifier.trim().toLowerCase() : (normalizeIntlPhone(identifier, countryCode) ?? identifier.trim().toLowerCase())).slice(0, 120);
   lockCheck(lockKey);
-  const found = candidatesFor(identifier);
+  const found = candidatesFor(identifier, countryCode);
   let r = found[0], ok = false;
   for (const c of found) if (c.password_hash && verifyPassword(password, c.password_hash)) { r = c; ok = true; break; }
   if (!ok && !found.some((c) => c.password_hash)) verifyPassword(password, DUMMY); // same time whether or not the account exists

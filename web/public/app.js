@@ -254,7 +254,7 @@ window.DAJI.fieldErrors = fieldErrors;
 function openModal(content, { wide = false, onClose, photo = false } = {}) {
   const sheet = clear($('#sheet'));
   sheet.classList.toggle('wide', wide); sheet.classList.toggle('photo', photo);
-  sheet.append(h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: () => closeModal() }, '×'), ...[].concat(content));
+  sheet.append(h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: () => closeModal() }, '×'), ...[].concat(content).filter((x) => x != null));
   $('#modal').classList.add('open');
   $('#modal')._onClose = onClose || null;
   const first = $('input,textarea,select,button.primary', sheet); if (first && !matchMedia('(pointer:coarse)').matches) first.focus();
@@ -270,6 +270,23 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#moda
 
 function field(label, input, err) { return h('label', { class: 'field' }, h('span', {}, label), input, err ? h('div', { class: 'fe' }, err) : null); }
 function input(name, type = 'text', attrs = {}) { return h('input', { name, type, autocomplete: attrs.autocomplete, ...attrs }); }
+
+/** Calling codes offered in front of a mobile number. India first: it is the default. */
+const COUNTRY_CODES = [['+91', 'India'], ['+971', 'UAE'], ['+44', 'UK'], ['+1', 'USA / Canada'], ['+61', 'Australia'], ['+64', 'New Zealand'], ['+65', 'Singapore'],
+  ['+966', 'Saudi Arabia'], ['+974', 'Qatar'], ['+968', 'Oman'], ['+965', 'Kuwait'], ['+973', 'Bahrain'], ['+977', 'Nepal'], ['+880', 'Bangladesh'], ['+94', 'Sri Lanka'],
+  ['+60', 'Malaysia'], ['+27', 'South Africa'], ['+254', 'Kenya'], ['+49', 'Germany'], ['+353', 'Ireland']];
+function countrySelect(value = '+91') {
+  return h('select', { name: 'countryCode', 'aria-label': 'Country code', autocomplete: 'tel-country-code', style: 'width:118px;flex:0 0 118px;padding:0 8px' },
+    COUNTRY_CODES.map(([c, n]) => h('option', { value: c, selected: c === value, title: n }, `${c} ${n}`)));
+}
+/** The country code picker and the number side by side. */
+const phoneRow = (cc, phone) => h('div', { style: 'display:flex;gap:8px;align-items:flex-end' }, cc, phone);
+/** Splits a saved number into the country code and the rest, for a form. Indian numbers are saved as 10 digits, others as +E.164. */
+function splitPhone(p) {
+  if (!p || p[0] !== '+') return ['+91', p || ''];
+  const c = COUNTRY_CODES.map((x) => x[0]).sort((a, b) => b.length - a.length).find((x) => p.startsWith(x));
+  return c ? [c, p.slice(c.length)] : ['+91', p];
+}
 
 // ------------------------------------------------------------------ sign in
 
@@ -374,24 +391,25 @@ function openAuth({ after, mode = 'in', note } = {}) {
     return form;
   };
   let upMethod = cfg.codesEnabled ? 'otp' : 'email';
-  /** Create an account with an email and a password (a mobile number is optional). */
+  /** Create an account with an email, a mobile number and a password. Either the email or the number signs in afterwards. */
   const emailSignup = () => {
     const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' });
     const first = input('firstName', 'text', { autocomplete: 'given-name', autocapitalize: 'words', placeholder: 'First name', required: true }), last = input('lastName', 'text', { autocomplete: 'family-name', autocapitalize: 'words', placeholder: 'Last name', required: true });
     capName(first); capName(last);
-    const email = input('email', 'email', { autocomplete: 'email', required: true }), phone = input('phone', 'tel', { autocomplete: 'tel', inputmode: 'numeric', placeholder: 'Optional' }), password = input('password', 'password', { autocomplete: 'new-password', required: true });
+    const email = input('email', 'email', { autocomplete: 'email', required: true }), phone = input('phone', 'tel', { autocomplete: 'tel-national', inputmode: 'tel', required: true, placeholder: '98765 43210', style: 'flex:1 1 auto;min-width:0' }), password = input('password', 'password', { autocomplete: 'new-password', required: true });
+    const cc = countrySelect();
     const cE = h('input', { type: 'checkbox' }), cW = h('input', { type: 'checkbox' }), cS = h('input', { type: 'checkbox' });
-    const fe = { firstName: h('div', { class: 'fe' }), lastName: h('div', { class: 'fe' }), email: h('div', { class: 'fe' }), phone: h('div', { class: 'fe' }), password: h('div', { class: 'fe' }) };
+    const fe = { firstName: h('div', { class: 'fe' }), lastName: h('div', { class: 'fe' }), email: h('div', { class: 'fe' }), phone: h('div', { class: 'fe' }), countryCode: h('div', { class: 'fe' }), password: h('div', { class: 'fe' }) };
     const submit = h('button', { class: 'btn primary block', type: 'submit' }, 'Create account');
     form.append(h('div', { class: 'namesrow' }, h('label', { class: 'field' }, h('span', {}, 'First name'), first, fe.firstName), h('label', { class: 'field' }, h('span', {}, 'Last name'), last, fe.lastName)),
-      h('label', { class: 'field' }, h('span', {}, 'Email'), email, fe.email), h('label', { class: 'field' }, h('span', {}, 'Mobile number (optional)'), phone, fe.phone),
+      h('label', { class: 'field' }, h('span', {}, 'Email'), email, fe.email), h('label', { class: 'field' }, h('span', {}, 'Mobile number'), phoneRow(cc, phone), fe.phone, fe.countryCode),
       h('label', { class: 'field' }, h('span', {}, 'Password'), password, fe.password, h('div', { class: 'hint', style: 'margin-top:6px;font-size:12px' }, 'At least 8 characters with a capital letter, a small letter and a number.')),
       h('p', { class: 'hint', style: 'margin:6px 0 10px' }, 'Optional: ground updates (closed days, rain, new timings). You can change this any time. Booking messages are always sent.'),
       h('label', { class: 'check' }, cE, h('span', {}, 'Email me ground updates')), h('label', { class: 'check' }, cW, h('span', {}, 'WhatsApp me ground updates')), h('label', { class: 'check' }, cS, h('span', {}, 'Text me ground updates')), errBox, submit);
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault(); errBox.textContent = ''; for (const k in fe) fe[k].textContent = ''; submit.disabled = true;
       try {
-        const a = await api('/api/auth/register', { method: 'POST', body: { firstName: first.value.trim(), lastName: last.value.trim(), email: email.value.trim(), ...(phone.value.trim() ? { phone: phone.value.trim() } : {}), password: password.value, consent: { email: cE.checked, whatsapp: cW.checked, sms: cS.checked } }, keepToken: true });
+        const a = await api('/api/auth/register', { method: 'POST', body: { firstName: first.value.trim(), lastName: last.value.trim(), email: email.value.trim(), countryCode: cc.value, phone: phone.value.trim(), password: password.value, consent: { email: cE.checked, whatsapp: cW.checked, sms: cS.checked } }, keepToken: true });
         finishAuth(a, after);
       } catch (e) { const f = fieldErrors(e); for (const k in fe) if (f[k]) fe[k].textContent = f[k]; if (!Object.keys(f).length) errBox.textContent = e.message; submit.disabled = false; }
     });
@@ -415,12 +433,16 @@ function openAuth({ after, mode = 'in', note } = {}) {
     const errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' });
     const form = h('form', { novalidate: true });
     const submit = h('button', { class: 'btn primary block', type: 'submit' }, 'Sign in');
-    const email = input('email', 'text', { autocomplete: 'username', required: true, autocapitalize: 'none', spellcheck: 'false', placeholder: 'Email or 10 digit phone number' });
+    const email = input('email', 'text', { autocomplete: 'username', required: true, autocapitalize: 'none', spellcheck: 'false', placeholder: 'Email or mobile number', style: 'flex:1 1 auto;min-width:0' });
     const password = input('password', 'password', { autocomplete: 'current-password', required: true });
-    form.append(field('Email or phone number', email), field('Password', password), errBox, submit);
+    // The country code picker shows once the person starts typing a number without its own +code.
+    const cc = countrySelect(), isNumber = () => /^[\d\s()-]+$/.test(email.value.trim());
+    const syncCc = () => { cc.hidden = !isNumber(); };
+    email.addEventListener('input', syncCc); syncCc();
+    form.append(field('Email or mobile number', phoneRow(cc, email)), field('Password', password), errBox, submit);
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault(); errBox.textContent = ''; submit.disabled = true;
-      try { const a = await api('/api/auth/login', { method: 'POST', body: { identifier: email.value.trim(), password: password.value }, keepToken: true }); finishAuth(a, after); }
+      try { const a = await api('/api/auth/login', { method: 'POST', body: { identifier: email.value.trim(), password: password.value, ...(isNumber() ? { countryCode: cc.value } : {}) }, keepToken: true }); finishAuth(a, after); }
       catch (e) { errBox.textContent = e.message; submit.disabled = false; }
     });
     const forgotLink = h('div', { style: 'margin-top:14px' }, h('button', { type: 'button', class: 'linkbtn', onclick: () => { method = 'forgot'; render(); } }, 'Forgot password?'));
@@ -511,13 +533,14 @@ function openProfile() {
     file.value = '';
   });
   const sn = (u.name || '').trim().split(/\s+/);
-  const first = h('input', { type: 'text', maxlength: '40', autocomplete: 'given-name', value: u.firstName || sn.slice(0, -1).join(' ') || sn[0] || '' }), last = h('input', { type: 'text', maxlength: '40', autocomplete: 'family-name', value: u.lastName || (sn.length > 1 ? sn[sn.length - 1] : '') }), email = h('input', { type: 'email', value: u.email || '' }), phone = h('input', { type: 'tel', value: u.phone || '' });
+  const first = h('input', { type: 'text', maxlength: '40', autocomplete: 'given-name', value: u.firstName || sn.slice(0, -1).join(' ') || sn[0] || '' }), last = h('input', { type: 'text', maxlength: '40', autocomplete: 'family-name', value: u.lastName || (sn.length > 1 ? sn[sn.length - 1] : '') }), email = h('input', { type: 'email', value: u.email || '' });
+  const [ccNow, phoneNow] = splitPhone(u.phone), cc = countrySelect(ccNow), phone = h('input', { type: 'tel', value: phoneNow, autocomplete: 'tel-national', style: 'flex:1 1 auto;min-width:0' });
   const biz = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.businessName || '' }) : null, upi = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.upiId || '', placeholder: 'name@bank' }) : null;
   const f = (l, el) => { el.style.width = '100%'; return h('label', { class: 'lbl', style: 'display:grid;gap:6px;margin-top:12px' }, l, el); };
   const save = h('button', { class: 'btn primary block', type: 'button', style: 'margin-top:16px', onclick: async () => {
     err.textContent = ''; save.disabled = true;
     try {
-      const body = { firstName: first.value.trim(), lastName: last.value.trim(), phone: phone.value.trim() || undefined, email: email.value.trim() || undefined };
+      const body = { firstName: first.value.trim(), lastName: last.value.trim(), ...(phone.value.trim() ? { countryCode: cc.value, phone: phone.value.trim() } : {}), email: email.value.trim() || undefined };
       if (biz) { body.businessName = biz.value.trim(); body.upiId = upi.value.trim(); }
       const r = await api('/api/me', { method: 'PATCH', body }); state.user = r.user; renderAuth(); toast('Profile saved.'); closeModal();
     } catch (e) { const fe = fieldErrors(e); err.textContent = Object.values(fe)[0] || e.message; save.disabled = false; }
@@ -525,17 +548,17 @@ function openProfile() {
   const cur = h('input', { type: 'password', autocomplete: 'current-password' }), nw = h('input', { type: 'password', autocomplete: 'new-password' }), pwErr = h('div', { class: 'fe' });
   const pwBtn = h('button', { class: 'btn outline block', type: 'button', style: 'margin-top:12px', onclick: async () => {
     pwErr.textContent = ''; pwBtn.disabled = true;
-    try { const r = await api('/api/me/password', { method: 'POST', body: { currentPassword: cur.value, newPassword: nw.value } }); setUser(r); cur.value = nw.value = ''; toast('Password changed.'); }
+    try { const r = await api('/api/me/password', { method: 'POST', body: { ...(u.hasPassword === false ? {} : { currentPassword: cur.value }), newPassword: nw.value } }); setUser(r); cur.value = nw.value = ''; toast(u.hasPassword === false ? 'Password set. You can now sign in with your email or mobile number.' : 'Password changed.'); if (u.hasPassword === false) closeModal(); }
     catch (e) { const fe = fieldErrors(e); pwErr.textContent = Object.values(fe)[0] || e.message; }
     pwBtn.disabled = false;
-  } }, 'Change password');
+  } }, u.hasPassword === false ? 'Set password' : 'Change password');
   openModal([h('div', { class: 'eyebrow' }, roleName(u)), h('h3', {}, 'Your profile'),
     h('div', { class: 'pf-head' }, pic, h('div', { class: 'pf-acts' },
       h('button', { class: 'btn outline sm', type: 'button', onclick: () => file.click() }, 'Choose a picture'),
       h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { closeModal(); signOut(); } }, 'Sign out'),
       u.avatarUrl ? h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { await api('/api/me/avatar', { method: 'DELETE' }); state.user = { ...state.user, avatarUrl: null }; refreshPic(); } catch (e) { err.textContent = e.message; } } }, 'Use my initial') : null, file)),
-    f('First name', first), f('Last name', last), f('Email', email), f('Mobile number', phone), biz ? f('Business name', biz) : null, upi ? f('UPI ID for payments', upi) : null, err, save,
-    h('div', { class: 'eyebrow', style: 'margin:22px 0 4px' }, 'Password'), f('Current password', cur), f('New password', nw), pwErr, pwBtn,
+    f('First name', first), f('Last name', last), f('Email', email), f('Mobile number', phoneRow(cc, phone)), biz ? f('Business name', biz) : null, upi ? f('UPI ID for payments', upi) : null, err, save,
+    h('div', { class: 'eyebrow', style: 'margin:22px 0 4px' }, 'Password'), u.hasPassword === false ? h('p', { class: 'hint', style: 'margin:4px 0 0' }, 'Set a password to sign in with your email or mobile number.') : f('Current password', cur), f('New password', nw), pwErr, pwBtn,
     h('button', { class: 'btn ghost block', type: 'button', style: 'margin-top:18px', onclick: () => { closeModal(); signOut(); } }, 'Sign out')]);
 }
 

@@ -34,6 +34,27 @@ export function Field({ label, ...rest }: { label: string } & TextInputProps) {
   return (<View><Text style={[s.muted, { marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11 }]}>{label}</Text><TextInput placeholderTextColor={C.muted} autoCapitalize="none" style={s.input} {...rest} /></View>);
 }
 
+/** A mobile number with its country code in front (+91 unless changed). Indian numbers are saved as 10 digits, others as +E.164. */
+export function PhoneField({ label = 'Mobile number', code, number, onCode, onNumber }: { label?: string; code: string; number: string; onCode: (v: string) => void; onNumber: (v: string) => void }) {
+  return (
+    <View>
+      <Text style={[s.muted, { marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11 }]}>{label}</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <TextInput accessibilityLabel="Country code" placeholderTextColor={C.muted} keyboardType="phone-pad" maxLength={4} value={code} onChangeText={(v) => onCode(v.startsWith('+') ? v : `+${v.replace(/\D/g, '')}`)} style={[s.input, { width: 72, textAlign: 'center' }]} />
+        <TextInput placeholder="98765 43210" placeholderTextColor={C.muted} keyboardType="phone-pad" autoComplete="tel" value={number} onChangeText={onNumber} style={[s.input, { flex: 1 }]} />
+      </View>
+    </View>
+  );
+}
+// Longest first, so +971 is not read as +9.
+const COMMON_CODES = ['+971', '+966', '+974', '+968', '+965', '+973', '+977', '+880', '+254', '+353', '+44', '+61', '+64', '+65', '+94', '+60', '+27', '+49', '+1'];
+/** Splits a saved number into its country code and the rest. Indian numbers are saved as 10 digits, others as +E.164. */
+export function splitPhone(p: string | null | undefined): { code: string; number: string } {
+  if (!p || !p.startsWith('+')) return { code: '+91', number: p ?? '' };
+  const code = COMMON_CODES.find((c) => p.startsWith(c));
+  return code ? { code, number: p.slice(code.length) } : { code: '+91', number: p };
+}
+
 /** "Asha Rao" is first "Asha", last "Rao"; the last word is the surname. */
 export const splitName = (full: string): { first: string; last: string } => {
   const p = (full || '').trim().split(/\s+/).filter(Boolean);

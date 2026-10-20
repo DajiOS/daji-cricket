@@ -107,6 +107,19 @@ export class Validator {
     if (!p) { this.fail(key, 'Must be a 10-digit Indian mobile number'); return undefined; }
     return p;
   }
+  /**
+   * A mobile number from any country, with the calling code taken from `countryKey` (default +91) unless the number is
+   * written with its own +code. Indian numbers come back as 10 digits, the way they are stored everywhere; others as +E.164.
+   */
+  intlPhone(key: string, required = false, countryKey = 'countryCode'): string | undefined {
+    const v = this.str(key, { required, max: 24 });
+    if (v === undefined) return undefined;
+    const cc = this.src[countryKey];
+    if (cc !== undefined && cc !== null && cc !== '' && (typeof cc !== 'string' || !COUNTRY_CODE_RE.test(cc.trim()))) { this.fail(countryKey, 'Must be a country code like +91'); return undefined; }
+    const p = normalizeIntlPhone(v, typeof cc === 'string' && cc.trim() ? cc : undefined);
+    if (!p) { this.fail(key, 'Must be a valid mobile number for the country code'); return undefined; }
+    return p;
+  }
   strArray(key: string, o: { max?: number; itemMax?: number } = {}): string[] | undefined {
     const v = this.src[key];
     if (v === undefined || v === null) return undefined;
@@ -124,6 +137,30 @@ export function normalizePhone(raw: string): string | null {
   const d = raw.replace(/[\s()-]/g, '');
   const m = /^(?:\+?91|0)?([6-9]\d{9})$/.exec(d);
   return m ? m[1]! : null;
+}
+
+const COUNTRY_CODE_RE = /^\+?[1-9]\d{0,2}$/;
+
+/**
+ * Cleans up a mobile number from any country. `countryCode` (like "+44") is used when the number has no +code of its own;
+ * it defaults to India. Indian numbers come back as their 10 digits, the form used across the app, so they still match bookings
+ * made at the desk; every other number comes back in E.164 form, like +447911123456.
+ */
+export function normalizeIntlPhone(raw: string, countryCode = '+91'): string | null {
+  let d = raw.replace(/[\s().-]/g, '');
+  if (d.startsWith('00')) d = '+' + d.slice(2);
+  if (d.startsWith('+')) {
+    const all = d.slice(1);
+    if (!/^\d+$/.test(all)) return null;
+    if (all.startsWith('91')) return /^91[6-9]\d{9}$/.test(all) ? all.slice(2) : null;
+    return /^[1-9]\d{7,14}$/.test(all) ? `+${all}` : null;
+  }
+  if (!COUNTRY_CODE_RE.test(countryCode.trim())) return null;
+  const cc = countryCode.trim().replace(/^\+/, '');
+  if (cc === '91') return normalizePhone(d);
+  if (!/^\d+$/.test(d)) return null;
+  const full = cc + d.replace(/^0+/, ''); // a leading 0 is the trunk prefix used inside the country, not part of the number
+  return /^[1-9]\d{7,14}$/.test(full) ? `+${full}` : null;
 }
 
 export function pageParams(q: URLSearchParams, dflt = 25): { limit: number; offset: number } {

@@ -11,6 +11,7 @@ import { marketing } from './notifications.ts';
 import { audience, parseContactFilter } from './contacts.ts';
 import { userRow } from './auth.ts';
 import { DAY } from './time.ts';
+import { waNumber } from './whatsapp.ts';
 
 registerSchema('broadcasts-1', `
 CREATE TABLE broadcasts (
@@ -285,7 +286,7 @@ export function manualPlan(ownerId: string, broadcastId: string): ManualPlan {
      FROM broadcast_recipients r JOIN users u ON u.id = r.user_id JOIN notifications n ON n.id = r.notification_id
      WHERE r.broadcast_id = ? AND n.status IN ('queued','sent') ORDER BY u.name, r.user_id`, broadcastId);
   const items: ManualItem[] = rows.map((r) => {
-    const to = b.channel === 'email' ? (r.email ?? '') : `91${(r.phone ?? '').replace(/\D/g, '').slice(-10)}`;
+    const to = b.channel === 'email' ? (r.email ?? '') : (r.phone ? waNumber(r.phone) : '');
     const link = b.channel === 'whatsapp' ? `https://wa.me/${to}?text=${encodeURIComponent(r.body)}`
       : b.channel === 'sms' ? `sms:+${to}?body=${encodeURIComponent(r.body)}` : null;
     return { userId: r.user_id, name: r.name, to, subject: r.subject, text: r.body, link, sent: r.status === 'sent' };

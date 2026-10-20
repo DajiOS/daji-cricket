@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { api, setToken } from './api';
 import type { User } from './types';
-import { Btn, Field, s, NameFields, splitName } from './ui';
+import { Btn, Field, PhoneField, s, NameFields, splitName } from './ui';
 import { C } from './theme';
 
 export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) => void; admin?: boolean; onBack?: () => void; note?: string }) {
   const [mode, setMode] = useState<'in' | 'up'>('in');
-  const [f, setF] = useState({ name: '', phone: '', email: '', password: '', code: '' });
+  const [f, setF] = useState({ name: '', countryCode: '+91', phone: '', email: '', password: '', code: '' });
   const [needCode, setNeedCode] = useState(false);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
@@ -15,7 +15,7 @@ export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) 
   const go = async () => {
     setErr(''); setBusy(true);
     try {
-      const body = mode === 'in' ? { identifier: f.email.trim(), password: f.password, ...(f.code ? { code: f.code.trim() } : {}) } : { firstName: splitName(f.name).first, lastName: splitName(f.name).last, phone: f.phone.trim(), email: f.email.trim(), password: f.password };
+      const body = mode === 'in' ? { identifier: f.email.trim(), password: f.password, ...(f.code ? { code: f.code.trim() } : {}) } : { firstName: splitName(f.name).first, lastName: splitName(f.name).last, countryCode: f.countryCode.trim(), phone: f.phone.trim(), email: f.email.trim(), password: f.password };
       const r = await api<{ token: string; user: User }>(mode === 'in' ? '/api/auth/login' : '/api/auth/register', { method: 'POST', body });
       await setToken(r.token); onUser(r.user);
     } catch (e: any) {
@@ -29,8 +29,9 @@ export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) 
         <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 240, height: 82, marginBottom: 18, marginLeft: -6 }} />
         <Text style={s.h1}>{mode === 'in' ? 'Sign in' : 'Create your account'}</Text>
         <Text style={[s.muted, { marginBottom: 22 }]}>{note ?? (admin ? 'For the ground team and owners.' : 'Book the ground, see what you have played and spent, and follow your child at the academy.')}</Text>
-        {mode === 'up' && (<><NameFields value={f.name} onChange={set('name')} /><Field label="Mobile number" value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" /></>)}
+        {mode === 'up' && (<><NameFields value={f.name} onChange={set('name')} /><PhoneField code={f.countryCode} number={f.phone} onCode={set('countryCode')} onNumber={set('phone')} /></>)}
         <Field label={mode === 'in' ? 'Email or mobile number' : 'Email'} value={f.email} onChangeText={set('email')} keyboardType={mode === 'in' ? 'default' : 'email-address'} autoCapitalize="none" autoComplete={mode === 'in' ? 'username' : 'email'} />
+        {mode === 'in' && <Text style={[s.muted, { marginTop: -6, marginBottom: 12 }]}>Number from outside India? Start it with + and the country code.</Text>}
         <Field label="Password" value={f.password} onChangeText={set('password')} secureTextEntry autoComplete="password" />
         {mode === 'up' && <Text style={[s.muted, { marginBottom: 12 }]}>8 or more characters with a capital letter, a small letter and a number.</Text>}
         {needCode && <Field label="Code" value={f.code} onChangeText={set('code')} keyboardType="number-pad" maxLength={6} />}

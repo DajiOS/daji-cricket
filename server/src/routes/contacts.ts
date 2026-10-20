@@ -9,6 +9,7 @@ import { BROADCAST_TEMPLATES, broadcastDetail, listBroadcasts, manualPlan, markM
 import { toCsv } from '../accounting/csv.ts';
 import { many } from '../db.ts';
 import { istDate } from '../time.ts';
+import { waNumber } from '../whatsapp.ts';
 import { formatPaise } from '@daji/shared';
 import type { BroadcastChannel } from '@daji/shared';
 import type { Ctx } from '../http.ts';
@@ -63,7 +64,7 @@ export function contactRoutes(r: Router): void {
     const yn = (b: boolean) => (b ? 'Yes' : 'No');
     const rows: (string | number)[][] = [['Name', 'Phone (with country code 91)', 'Email', 'Times played', 'Sessions (slots)', 'First played', 'Last played', 'Total paid', 'Grounds', 'OK to email', 'OK to WhatsApp', 'OK to text']];
     for (const p of people) {
-      rows.push([p.name, p.phone ? `91${p.phone}` : '', p.email ?? '', p.timesPlayed, p.slotsPlayed, istDate(p.firstPlayedAt), istDate(p.lastPlayedAt), formatPaise(p.paidPaise, true),
+      rows.push([p.name, p.phone ? waNumber(p.phone) : '', p.email ?? '', p.timesPlayed, p.slotsPlayed, istDate(p.firstPlayedAt), istDate(p.lastPlayedAt), formatPaise(p.paidPaise, true),
         p.groundIds.map((g) => names.get(g) ?? g).join('; '), yn(p.reachable.email), yn(p.reachable.whatsapp), yn(p.reachable.sms)]);
     }
     audit({ id: u.id, role: u.role }, 'contacts.export', 'contacts', null, { rows: people.length, filter: f }, owner);

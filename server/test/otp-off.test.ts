@@ -12,7 +12,7 @@ test('phone code sign-in is off unless OTP_SIGNIN is on, and password sign-up st
   assert.equal(r.status, 404);
   assert.equal(r.body.error?.code ?? r.body.code, 'OTP_OFF');
   assert.equal((await h.post('/api/auth/otp/verify', { phone: '9811122233', code: '123456' })).status, 404);
-  const reg = await h.post('/api/auth/register', { firstName: 'Ravi', lastName: 'Patel', email: 'ravi.otpoff@example.com', password: 'Cricket@123' });
+  const reg = await h.post('/api/auth/register', { firstName: 'Ravi', lastName: 'Patel', email: 'ravi.otpoff@example.com', phone: '9811122299', password: 'Cricket@123' });
   assert.equal(reg.status, 201, JSON.stringify(reg.body));
   assert.ok(reg.body.token);
 });
