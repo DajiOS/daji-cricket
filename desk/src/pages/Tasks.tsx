@@ -64,7 +64,7 @@ export default function Tasks({ sub }: { sub: string }) {
             const items = visible.filter((t) => t.stage === stage);
             const shown = stage === 'done' ? items.slice().sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)).slice(0, 25) : items;
             return (
-              <section key={stage} className={'kcol' + (over === stage ? ' over' : '')} onDragOver={(e) => { e.preventDefault(); setOver(stage); }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null); }} onDrop={(e) => drop(e, stage)}>
+              <section key={stage} className={'kcol s-' + stage + (over === stage ? ' over' : '')} onDragOver={(e) => { e.preventDefault(); setOver(stage); }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null); }} onDrop={(e) => drop(e, stage)}>
                 <header><span>{label}</span><em>{items.length}</em></header>
                 <div className="kbody">
                   {shown.length ? shown.map((t) => (

@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState, type CSSPropert
 const P: Record<string, string> = {
   filter: 'M3 5h18l-7 8.2V20l-4-2v-4.8z',
   dashboard: 'M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z',
+  map: 'M9 4l6 2 6-2v14l-6 2-6-2-6 2V6zM9 4v14M15 6v14',
   warehouse: 'M3 21V9l9-6 9 6v12M7 21v-8h10v8M7 17h10',
   tenants: 'M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 20v-1a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
   lease: 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5',

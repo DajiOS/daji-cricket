@@ -32,6 +32,7 @@ const CloseWizard = lazy(() => import('./pages/CloseWizard'));
 const Compare = lazy(() => import('./pages/Compare'));
 const Health = lazy(() => import('./pages/Health'));
 const Explorer = lazy(() => import('./pages/Explorer'));
+const Spots = lazy(() => import('./pages/Spots'));
 const Hub = lazy(() => import('./pages/Hub'));
 
 export interface NavItem { to: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
@@ -65,7 +66,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
-  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub },
+  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub }, { path: '/grounds', page: Spots },
 ];
 export const HOME = Dashboard;
 
@@ -94,11 +95,15 @@ export const NAV: NavGroup[] = [
     { to: '/tournaments', label: 'Tournaments', icon: 'trophy', perm: 'manage_matches' },
     { to: '/matches', label: 'Matches', icon: 'ball', perm: 'manage_matches' },
   ] },
+  { section: 'ground', group: 'Grounds & nets', items: [
+    { to: '/grounds', label: 'Status board', icon: 'ball', check: (me) => can(me, 'manage_bookings') || can(me, 'manage_tasks') },
+    { to: '/grounds/layout', label: 'Layout', icon: 'map', check: (me) => can(me, 'manage_bookings') || can(me, 'manage_tasks') },
+    { to: '/health', label: 'Ground health', icon: 'pulse' },
+    { to: '/cameras', label: 'Live cameras', icon: 'camera', perm: 'view_cameras' },
+  ] },
   { section: 'ground', group: 'Keep an eye on it', items: [
     { to: '/calendar', label: 'Calendar', icon: 'calendar' },
     { to: '/activity', label: 'What happened', icon: 'bell' },
-    { to: '/health', label: 'Ground health', icon: 'pulse' },
-    { to: '/cameras', label: 'Live cameras', icon: 'camera', perm: 'view_cameras' },
   ] },
 
   { section: 'people', group: 'Talk to customers', items: [
@@ -178,7 +183,8 @@ export const RAIL: RailItem[] = [
 export const BLURBS: Record<string, string> = {
   'Take bookings': 'Every booking, the day view and what is waiting on you.',
   'Fill the ground': 'Memberships, promo codes, tournaments and matches.',
-  'Keep an eye on it': 'The calendar, what happened, ground health and cameras.',
+  'Grounds & nets': 'What is ready, broken or being fixed, and where it sits.',
+  'Keep an eye on it': 'The calendar and what happened on the desk.',
   'Talk to customers': 'Contacts, WhatsApp reminders and business cards.',
   'Run the academy': 'Students, attendance, fees and coaches.',
   'Look after the team': 'Jobs to do, staff attendance and access.',
