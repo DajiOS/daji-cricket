@@ -67,11 +67,68 @@ function syncFestGreet() {
   el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${FEST_ICON[t]}</svg><span></span>`; el.lastChild.textContent = text + ' from Daji Cricket Ground';
   if (!old) hero.insertBefore(el, hero.querySelector('h1'));
 }
+/** The ten designer themes change the whole home page, as in the design concepts: the hero layout, its decoration, the
+ *  headline and the 3D scene (scene3d.js). layout: split (copy left, scene right), split-rev, center (scene above the
+ *  copy), overlay (scene full width behind the copy, booking card floating on the right) or editorial (huge headline over
+ *  copy and scene). g is the scene: spin (ball turning, optionally in gold rings), delivery (ball bowled into the stumps)
+ *  or orbit (camera circling the wicket). The other themes keep the usual home page. */
+const DESIGNS = {
+  noir: { layout: 'split', decor: 'beams', eyebrow: 'Surat · Floodlit until 11 pm', h1: ['Floodlit ground.', '<em>Reserved</em> for you.'],
+    lede: 'Choose your time, from early morning to late night. Pay the advance online and the wicket is held in your name.',
+    g: { mode: 'delivery', parts: 'dust', pc: '#f6e3b0', key: '#fff3d8', rim: '#d6b36a', acc: '#ffd890', grass: ['#163a24', '#1b4529'], exp: 1.05 } },
+  pavilion: { layout: 'center', decor: 'arcs', eyebrow: 'Turf wicket · Changing rooms · Parking', h1: ['Your match,', 'on <em>our</em> turf.'],
+    lede: 'Pick a day, pick a time, pay a small advance. That is the whole booking, and you see what is free before you choose.',
+    g: { mode: 'spin', rings: true, parts: 'dust', pc: '#e9d7a4', key: '#fff6e2', rim: '#dcc289', acc: '#3fa37a', exp: 1.1 } },
+  whites: { layout: 'editorial', decor: 'rules', eyebrow: 'Full-size turf wicket · Surat', h1: ['Play it <em>proper.</em>'],
+    lede: 'A full-size turf wicket, kept the way a Test match deserves. Book your slot in three taps and pay the advance online.',
+    g: { mode: 'orbit', parts: 'none', key: '#ffffff', rim: '#ffe9c8', acc: '#ffffff', grass: ['#5d9a45', '#68a64e'], exp: 1.15, day: true } },
+  pinkball: { layout: 'overlay', decor: 'none', eyebrow: 'Day-night cricket', h1: ['Bowl under', 'the <em>lights.</em>'],
+    lede: 'Evening slots run until 11 pm with the floodlights on. Book tonight before someone else does.',
+    g: { mode: 'delivery', parts: 'stars', pc: '#ffffff', key: '#e6e9ff', rim: '#ff7ab6', acc: '#ff9ccb', grass: ['#13253a', '#162b44'], exp: 1.1, ox: 0.2 } },
+  monsoon: { layout: 'overlay', decor: 'glass', eyebrow: 'Rain or shine', h1: ['Book in', '<em>three</em> taps.'],
+    lede: 'Day, time, pay. Every free slot is shown, so there is nothing to guess.',
+    g: { mode: 'spin', parts: 'rain', pc: '#bfeee4', key: '#e6fff9', rim: '#7fd6c3', acc: '#3c8f9c', exp: 1.05, ox: 0.06, wet: true } },
+  maroon: { layout: 'split-rev', decor: 'jali', eyebrow: 'Daji Cricket Ground · Surat', h1: ['A <em>royal</em> evening', 'of cricket.'],
+    lede: 'Floodlit turf, changing rooms and parking on site. Reserve the ground for your team in under a minute.',
+    g: { mode: 'spin', rings: true, parts: 'dust', pc: '#f0c97a', key: '#fff0dc', rim: '#e4bb6a', acc: '#b0303f', exp: 1.1 } },
+  carbon: { layout: 'split', decor: 'grid', eyebrow: 'T20 nights · Leather and tennis ball', h1: ['Your squad.', '<em>Our</em> wicket.'],
+    lede: 'Book the full ground for a T20 with your team, or a net for practice. Floodlights are switched on for you after 6 pm.',
+    g: { mode: 'delivery', parts: 'dust', pc: '#cfeaff', key: '#eef6ff', rim: '#9fd8ff', acc: '#9fd8ff', grass: ['#14261d', '#182c22'], exp: 1.0 } },
+  champagne: { layout: 'center', decor: 'quiet', eyebrow: 'Book a slot', h1: ['Cricket,', '<em>beautifully</em> simple.'],
+    lede: 'One ground, clear prices and a booking that takes three taps. Pay a small advance and the slot is yours.',
+    g: { mode: 'spin', parts: 'none', key: '#ffffff', rim: '#f2e2c2', acc: '#ffffff', exp: 1.2, day: true } },
+  stadium: { layout: 'overlay', decor: 'blue', eyebrow: 'Matches · Nets · Tournaments', h1: ['Stadium nights', 'for <em>your</em> team.'],
+    lede: 'Hire the floodlit ground for league matches and tournaments. Pick the date, pick the hours, pay the advance.',
+    g: { mode: 'orbit', parts: 'dust', pc: '#ffe08a', key: '#fff7dc', rim: '#ffcb3d', acc: '#4f7dff', grass: ['#1c4a2c', '#21553a'], exp: 1.05, ox: 0.2 } },
+  willow: { layout: 'editorial', decor: 'stitch', eyebrow: 'Leather ball · Tennis ball · Nets', h1: ['Willow, leather', 'and <em>a good wicket.</em>'],
+    lede: 'Full-size turf for matches and practice nets for training. Book any of them in three taps.',
+    g: { mode: 'spin', parts: 'dust', pc: '#f2c690', key: '#fff0dc', rim: '#dca66b', acc: '#9a5a2c', exp: 1.1 } },
+};
+let heroOrig = null;
+function syncDesign() {
+  const root = document.documentElement, t = root.getAttribute('data-theme'), hero = document.querySelector('#view-home header.hero');
+  if (!hero) return;
+  const d = !root.hasAttribute('data-embed') && !root.hasAttribute('data-embed-section') ? DESIGNS[t] : null;
+  const h1 = hero.querySelector('h1'), lead = hero.querySelector('p.lead'), eye = document.getElementById('hero-eyebrow'), box = document.getElementById('hero-3d');
+  if (!heroOrig) heroOrig = { h1: h1.innerHTML, lead: lead.textContent };
+  if (!d) {
+    if (!root.hasAttribute('data-layout')) return;
+    root.removeAttribute('data-layout'); root.removeAttribute('data-decor');
+    h1.innerHTML = heroOrig.h1; lead.textContent = heroOrig.lead; eye.hidden = true; box.hidden = true;
+    if (window.DajiScene) window.DajiScene.unmount(); else window.DajiScenePending = null;
+    return;
+  }
+  root.setAttribute('data-layout', d.layout); root.setAttribute('data-decor', d.decor);
+  eye.textContent = d.eyebrow; eye.hidden = false;
+  h1.innerHTML = d.h1.map((l) => `<span class="ln"><span>${l}</span></span>`).join(' ');
+  lead.textContent = d.lede; box.hidden = false;
+  if (window.DajiScene) window.DajiScene.mount(box, d.g); else window.DajiScenePending = { el: box, p: d.g };
+}
 /** Light pages use the brass logo; the dark ones keep the gold. */
 const LIGHT_LOGO_THEMES = ['ivory', 'whites', 'champagne', 'uttarayan', 'tiranga', 'holi'];
 function swapLogos() { const light = LIGHT_LOGO_THEMES.includes(document.documentElement.getAttribute('data-theme')); for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
 try { matchMedia('(min-width:1021px)').addEventListener('change', swapLogos); } catch { /* older browser: logo stays as loaded */ }
-function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; loadThemeFonts(t); document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); syncFestGreet(); } catch { /* not ready yet */ } if (save) store.set('daji.theme', t); }
+function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; loadThemeFonts(t); document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); syncFestGreet(); syncDesign(); } catch { /* not ready yet */ } if (save) store.set('daji.theme', t); }
 /** "Automatic": today's festival look, or the usual light look. */
 function applyAutoTheme(save) { const f = festivalToday(); applyTheme(f ? f[2] : 'ivory'); if (save) store.set('daji.theme', 'auto'); }
 // light / dark icon at the far right of the top bar: ivory is the light look, obsidian the dark one
