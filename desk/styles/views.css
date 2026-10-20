@@ -125,3 +125,25 @@ kbd { display: inline-block; padding: 1px 7px; border-radius: 6px; border: 1px s
 .feed-ic { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--tint); color: var(--ink-t); }
 .feed-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .feed-more { display: flex; justify-content: center; padding: 14px; }
+
+/* ---- month-end close wizard */
+.wiz { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.wiz-steps { list-style: none; margin: 0; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; display: flex; flex-direction: column; gap: 2px; }
+.wiz-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px 12px; font-size: 13px; color: var(--muted); }
+.wiz-progress .num { color: var(--ink); font-weight: 600; }
+.wiz-progress .meter { flex-basis: 100%; }
+.wiz-step { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.wiz-step:hover { background: var(--soft); }
+.wiz-step.on { background: var(--soft); box-shadow: inset 3px 0 0 var(--link); }
+.wiz-n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; border: 1.5px solid var(--line); color: var(--muted); }
+.wiz-step.s-done .wiz-n { background: var(--i-green); border-color: var(--i-green); color: #fff; }
+.wiz-step.s-todo .wiz-n { border-color: var(--i-amber); color: var(--i-amber); }
+.wiz-step.s-warn .wiz-n { border-color: var(--i-blue); color: var(--i-blue); }
+.wiz-t { flex: 1; min-width: 0; font-size: 14px; }
+.wiz-s { color: var(--muted); white-space: nowrap; }
+.wiz-step.s-todo .wiz-s { color: var(--i-amber); }
+.wiz-step.s-na .wiz-t { color: var(--muted); }
+.wiz-body h2 { margin: 2px 0 8px; }
+.wiz-text { font-size: 15px; color: var(--ink2); margin: 0 0 6px; }
+.wiz-body .f { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+@media (max-width: 860px) { .wiz { grid-template-columns: minmax(0, 1fr); } }
