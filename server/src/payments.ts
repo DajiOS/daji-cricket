@@ -13,6 +13,7 @@ import { MIN, istDate } from './time.ts';
 import { checkCashReceipt } from './taxrules.ts';
 import type { Config } from './config.ts';
 import { getGateway, verifyWebhookSignature, webhookSecretFor } from './gateway.ts';
+import * as credits from './credits.ts';
 
 export interface PaymentRow {
   id: string; booking_id: string; customer_id: string; owner_id: string; method: PayMethod;
@@ -55,6 +56,12 @@ registerSchema('refund-approval-1', `
 ALTER TABLE refunds ADD COLUMN approved_at INTEGER;
 ALTER TABLE refunds ADD COLUMN approved_by TEXT;
 UPDATE refunds SET approved_at = created_at, approved_by = 'before-rule';
+`);
+
+// A refund made by cancelling is part of the booking's refunded figure (bookings.refund_paise); others (late, duplicate, overpaid) are not.
+registerSchema('refund-on-booking-1', `
+ALTER TABLE refunds ADD COLUMN on_booking INTEGER NOT NULL DEFAULT 0;
+UPDATE refunds SET on_booking = 1 WHERE reason = 'free cancellation' OR reason LIKE 'cancelled: %' OR reason LIKE 'cancelled by the ground:%';
 `);
 
 export type CaptureOutcome = 'confirmed' | 'partial' | 'already' | 'extra_refunded' | 'late_reconfirmed' | 'late_refunded' | 'cancelled_refunded' | 'paid_extra';
@@ -130,7 +137,18 @@ function lateForExpired(b: BookingRow, p: PaymentRow, amount: number, actor: Act
   }
   for (const s of starts) run("INSERT INTO booking_slots(ground_id, slot_start, kind, booking_id) VALUES(?,?,'booking',?)", b.ground_id, s, b.id);
   run("UPDATE bookings SET status = 'held', paid_paise = paid_paise + ?, hold_expires_at = ?, needs_review = 1, updated_at = ? WHERE id = ?", amount, t + getSettings().holdMinutesOnline * MIN, t, b.id);
-  audit(actor, 'booking.late_reconfirm', 'booking', b.id, { paymentId: p.id, amountPaise: amount }, b.owner_id);
+  // Credit used on this booking went back to the wallet when the hold expired, and the late payment only covers the rest of the advance.
+  // Take that credit again (as far as it is still there), so the customer's payment is not left short of the advance.
+  const restored = one<{ s: number | null }>("SELECT SUM(amount_paise) s FROM payments WHERE booking_id = ? AND method = 'credit' AND status = 'refunded'", b.id)!.s ?? 0;
+  const short = Math.max(b.advance_paise - bookingOr404(b.id).paid_paise, 0);
+  const reuse = Math.min(restored, short, credits.balance(b.customer_id, b.owner_id));
+  if (reuse > 0) {
+    credits.redeem(b.customer_id, b.owner_id, reuse, b.id);
+    insertPayment(b, { method: 'credit', status: 'captured', purpose: b.advance_paise === b.total_paise ? 'full' : 'advance', amountPaise: reuse, verifiedBy: b.customer_id });
+    run('UPDATE bookings SET paid_paise = paid_paise + ? WHERE id = ?', reuse, b.id);
+    audit(actor, 'credit.redeem', 'booking', b.id, { amountPaise: reuse, reason: 'credit taken again for a late payment' }, b.owner_id);
+  }
+  audit(actor, 'booking.late_reconfirm', 'booking', b.id, { paymentId: p.id, amountPaise: amount, creditPaise: reuse }, b.owner_id);
   const nb = bookingOr404(b.id);
   if (nb.paid_paise >= nb.advance_paise) {
     confirmBooking(b.id, actor, { late: true });
@@ -157,32 +175,45 @@ export function markFailed(paymentId: string, reason: string, actor: Actor): voi
 
 const UTR_RE = /^\d{12}$/;
 
-/** Customer pays by UPI, then submits the 12-digit reference (UTR). Staff must verify before the booking is confirmed. */
+/**
+ * Customer pays by UPI, then submits the 12-digit reference (UTR). Staff must verify before the booking is confirmed.
+ * A customer who paid but came back after the hold ran out can still send it: staff verify it as usual, and the booking is
+ * re-confirmed if the slot is still free, or the money is refunded (applyCaptured → lateForExpired).
+ */
 export function submitUpiReference(user: UserRow, bookingId: string, input: { utr: string; note?: string }): Payment {
   const b = accessBooking(user, bookingId);
   if (user.role !== 'customer') throw new HttpError(403, 'FORBIDDEN', 'Only the customer submits a UPI reference');
-  if (b.status !== 'held') throw new HttpError(409, 'BAD_STATE', `This booking is ${b.status}, so a payment reference cannot be added`);
+  const late = b.status === 'expired' && b.pay_method === 'upi';
+  if (b.status !== 'held' && !late) throw new HttpError(409, 'BAD_STATE', `This booking is ${b.status}, so a payment reference cannot be added`);
   if (b.pay_method !== 'upi') throw new HttpError(409, 'WRONG_METHOD', 'This booking is being paid through Razorpay, not UPI');
   if (!UTR_RE.test(input.utr)) throw new HttpError(400, 'VALIDATION_FAILED', 'The UPI reference must be 12 digits', { fields: [{ field: 'utr', message: 'Must be the 12-digit UPI reference (UTR)' }] });
   return tx(() => {
     const t = now();
-    let p = one<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'created' ORDER BY created_at DESC LIMIT 1", b.id);
-    const due = amountDue(b);
+    // after expiry the waiting payment was marked failed; it still holds the amount the customer was asked to send
+    let p = late
+      ? one<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'failed' AND reference IS NULL ORDER BY created_at DESC LIMIT 1", b.id)
+      : one<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'created' ORDER BY created_at DESC LIMIT 1", b.id);
+    if (late && one("SELECT 1 FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'submitted'", b.id)) throw new HttpError(409, 'ALREADY_SUBMITTED', 'A payment reference for this booking is already waiting to be checked');
+    // after expiry paid_paise is back to 0 and any credit used went back to the wallet, so ask for what the customer was told to send
+    const due = late ? (one<{ a: number }>("SELECT amount_paise a FROM payments WHERE booking_id = ? AND method = 'upi' ORDER BY created_at DESC, rowid DESC LIMIT 1", b.id)?.a ?? amountDue(b)) : amountDue(b);
     if (!p) {
       if (due <= 0) throw new HttpError(409, 'NOTHING_DUE', 'Nothing is due on this booking');
       const id = insertPayment(b, { method: 'upi', status: 'created', purpose: b.advance_paise === b.total_paise ? 'full' : 'advance', amountPaise: due });
       p = paymentOr404(id);
     }
     try {
-      run("UPDATE payments SET status = 'submitted', reference = ?, proof_note = ?, submitted_at = ?, updated_at = ? WHERE id = ?", input.utr, input.note ?? null, t, t, p.id);
+      run("UPDATE payments SET status = 'submitted', reference = ?, proof_note = ?, submitted_at = ?, reject_reason = NULL, updated_at = ? WHERE id = ?", input.utr, input.note ?? null, t, t, p.id);
     } catch (e) {
       if (String((e as Error).message).includes('UNIQUE')) throw new HttpError(409, 'UTR_ALREADY_USED', 'This UPI reference has already been submitted');
       throw e;
     }
-    logEvent(p.id, user.id, 'submitted', { utr: input.utr });
-    const deadline = t + getSettings().verifyMinutesUpi * MIN;
-    run('UPDATE bookings SET hold_expires_at = MAX(COALESCE(hold_expires_at, 0), ?), updated_at = ? WHERE id = ?', deadline, t, b.id);
-    audit({ id: user.id, role: user.role }, 'payment.submit', 'payment', p.id, { bookingId: b.id }, b.owner_id);
+    logEvent(p.id, user.id, 'submitted', { utr: input.utr, ...(late ? { afterExpiry: true } : {}) });
+    if (late) run('UPDATE bookings SET needs_review = 1, updated_at = ? WHERE id = ?', t, b.id); // staff see that money may have arrived for a released booking
+    else {
+      const deadline = t + getSettings().verifyMinutesUpi * MIN;
+      run('UPDATE bookings SET hold_expires_at = MAX(COALESCE(hold_expires_at, 0), ?), updated_at = ? WHERE id = ?', deadline, t, b.id);
+    }
+    audit({ id: user.id, role: user.role }, 'payment.submit', 'payment', p.id, { bookingId: b.id, late }, b.owner_id);
     notify(b.customer_id, 'payment_pending', { ref: b.ref }, b.id);
     return toPayment(paymentOr404(p.id));
   });
@@ -328,14 +359,14 @@ function processWebhookEvent(ev: any, type: string): string {
 
 // ---------------------------------------------------------------- refunds
 
-export function refundPayment(p: PaymentRow, amountPaise: number, reason: string, actor: Actor): string {
+export function refundPayment(p: PaymentRow, amountPaise: number, reason: string, actor: Actor, opts: { onBooking?: boolean } = {}): string {
   if (p.method === 'credit') throw new Error('credit payments are returned to the wallet, not refunded');
   const refundable = p.amount_paise - p.refunded_paise;
   if (!Number.isInteger(amountPaise) || amountPaise <= 0 || amountPaise > refundable) throw new HttpError(409, 'REFUND_TOO_LARGE', `At most ${refundable} paise can still be refunded on this payment`);
   const mode = p.method === 'razorpay' && p.rp_payment_id ? 'gateway' : 'manual';
   const id = newId('rfd');
   tx(() => {
-    run("INSERT INTO refunds(id, payment_id, booking_id, owner_id, amount_paise, status, mode, reason, created_at) VALUES(?,?,?,?,?,'pending',?,?,?)", id, p.id, p.booking_id, p.owner_id, amountPaise, mode, reason, now());
+    run("INSERT INTO refunds(id, payment_id, booking_id, owner_id, amount_paise, status, mode, reason, created_at, on_booking) VALUES(?,?,?,?,?,'pending',?,?,?,?)", id, p.id, p.booking_id, p.owner_id, amountPaise, mode, reason, now(), opts.onBooking ? 1 : 0);
     const total = p.refunded_paise + amountPaise;
     run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', total, total >= p.amount_paise ? 'refunded' : 'partially_refunded', now(), p.id);
     logEvent(p.id, actor.id, 'refund.requested', { refundId: id, amountPaise, mode, reason });
@@ -410,10 +441,10 @@ export function approveRefund(admin: UserRow, refundId: string): RefundRow {
   return toRefund(one<any>('SELECT * FROM refunds WHERE id = ?', refundId));
 }
 
-/** The super admin declines: nothing is paid, and the payment goes back to showing the money as not refunded. */
+/** The super admin declines: nothing is paid, and the payment and the booking go back to showing the money as not refunded (the ground keeps it). */
 export function declineRefund(admin: UserRow, refundId: string, reason: string): RefundRow {
   if (admin.role !== 'super_admin') throw new HttpError(403, 'FORBIDDEN', 'Only the super admin can decline a refund');
-  const r = one<{ id: string; status: string; approved_at: number | null; owner_id: string; amount_paise: number; payment_id: string }>('SELECT id, status, approved_at, owner_id, amount_paise, payment_id FROM refunds WHERE id = ?', refundId);
+  const r = one<{ id: string; status: string; approved_at: number | null; owner_id: string; amount_paise: number; payment_id: string; booking_id: string; on_booking: number }>('SELECT id, status, approved_at, owner_id, amount_paise, payment_id, booking_id, on_booking FROM refunds WHERE id = ?', refundId);
   if (!r) throw notFound('Refund not found');
   if (r.approved_at || r.status !== 'pending') throw new HttpError(409, 'BAD_STATE', 'Only a refund waiting for authorisation can be declined');
   tx(() => {
@@ -421,6 +452,7 @@ export function declineRefund(admin: UserRow, refundId: string, reason: string):
     const p = one<{ amount_paise: number; refunded_paise: number }>('SELECT amount_paise, refunded_paise FROM payments WHERE id = ?', r.payment_id)!;
     const left = Math.max(p.refunded_paise - r.amount_paise, 0);
     run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', left, left === 0 ? 'captured' : left >= p.amount_paise ? 'refunded' : 'partially_refunded', now(), r.payment_id);
+    if (r.on_booking) run('UPDATE bookings SET refund_paise = MAX(refund_paise - ?, 0), updated_at = ? WHERE id = ?', r.amount_paise, now(), r.booking_id);
     logEvent(r.payment_id, admin.id, 'refund.declined', { refundId, reason });
     audit({ id: admin.id, role: admin.role }, 'refund.decline', 'refund', refundId, { reason }, r.owner_id);
   });

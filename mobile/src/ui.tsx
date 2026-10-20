@@ -1,20 +1,23 @@
 import React from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
 import { C } from './theme';
 import { API_URL } from './api';
+
+/** Headings use a serif, like the desk. */
+export const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia, serif' });
 
 const build = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   pad: { padding: 18, paddingBottom: 40 },
   eyebrow: { color: C.gold, fontSize: 11, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 8 },
-  h1: { color: C.text, fontSize: 30, fontWeight: '700', marginBottom: 6 },
+  h1: { color: C.text, fontSize: 32, fontWeight: '500', fontFamily: SERIF, marginBottom: 6 },
   h2: { color: C.text, fontSize: 19, fontWeight: '600', marginBottom: 10 },
   text: { color: C.text, fontSize: 15 },
   muted: { color: C.muted, fontSize: 13, lineHeight: 19 },
   err: { color: C.danger, fontSize: 13, marginVertical: 6 },
-  card: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 10, padding: 16, marginBottom: 14 },
+  card: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 14 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, gap: 10 },
-  input: { backgroundColor: C.bg, borderColor: C.line, borderWidth: 1, borderRadius: 8, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
+  input: { backgroundColor: C.bg, borderColor: C.line, borderWidth: 1, borderRadius: 12, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
 });
 /** The shared styles. They are built again (in place) when the theme changes, see refreshStyles. */
 export const s: ReturnType<typeof build> = build();
@@ -24,8 +27,8 @@ export function Btn({ label, onPress, kind = 'primary', disabled, busy, style }:
   const p = kind === 'primary';
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled || busy}
-      style={[{ backgroundColor: p ? C.gold : 'transparent', borderColor: kind === 'ghost' ? 'transparent' : C.gold, borderWidth: 1, borderRadius: 8, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', opacity: disabled ? 0.45 : 1, marginBottom: 10 }, style]}>
-      {busy ? <ActivityIndicator color={p ? C.bg : C.gold} /> : <Text style={{ color: p ? C.bg : C.gold, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', fontSize: 13 }}>{label}</Text>}
+      style={[{ backgroundColor: p ? C.strong : 'transparent', borderColor: kind === 'ghost' ? 'transparent' : p ? C.strong : C.line, borderWidth: 1, borderRadius: 999, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', opacity: disabled ? 0.45 : 1, marginBottom: 10 }, style]}>
+      {busy ? <ActivityIndicator color={p ? C.onStrong : C.gold} /> : <Text style={{ color: p ? C.onStrong : kind === 'ghost' ? C.gold : C.text, fontWeight: '600', fontSize: 15 }}>{label}</Text>}
     </Pressable>
   );
 }
@@ -72,7 +75,7 @@ export function NameFields({ value, onChange, firstLabel = 'First name', lastLab
 
 export function Chip({ label, on, onPress, disabled }: { label: string; on?: boolean; onPress?: () => void; disabled?: boolean }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={{ borderColor: on ? C.gold : C.line, backgroundColor: on ? 'rgba(201,169,107,.14)' : 'transparent', borderWidth: 1, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 13, marginRight: 8, marginBottom: 8, opacity: disabled ? 0.35 : 1 }}>
+    <Pressable onPress={onPress} disabled={disabled} style={{ borderColor: on ? C.gold : C.line, backgroundColor: on ? 'rgba(201,169,107,.14)' : 'transparent', borderWidth: 1, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14, marginRight: 8, marginBottom: 8, opacity: disabled ? 0.35 : 1 }}>
       <Text style={{ color: on ? C.gold : C.text, fontSize: 13 }}>{label}</Text>
     </Pressable>
   );
@@ -108,4 +111,34 @@ export function DateField({ label, value, onChange, placeholder }: { label: stri
   const [txt, setTxt] = React.useState(showDate(value));
   React.useEffect(() => { if (isoDate(txt) !== value && !(txt.length > 0 && txt.length < 10)) setTxt(showDate(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   return (<Field label={label} value={txt} placeholder={placeholder ?? 'dd/mm/yyyy'} keyboardType="number-pad" maxLength={10} onChangeText={(v) => { const t = maskDate(v); setTxt(t); onChange(isoDate(t)); }} />);
+}
+
+/** One figure with its label and a line under it, two to a row on the money screens. */
+export const Stat = ({ label, value, foot, tone }: { label: string; value: string; foot?: string; tone?: 'danger' | 'ok' }) => (
+  <View style={[s.card, { flexBasis: '47%', flexGrow: 1, marginBottom: 10, padding: 14 }]}>
+    <Text style={[s.muted, { fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' }]}>{label}</Text>
+    <Text style={[s.text, { fontSize: 21, fontWeight: '700', marginVertical: 4 }, tone ? { color: tone === 'danger' ? C.danger : C.ok } : null]}>{value}</Text>
+    {!!foot && <Text style={[s.muted, { fontSize: 12 }]}>{foot}</Text>}
+  </View>
+);
+export const Stats = ({ children }: { children: React.ReactNode }) => <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 4 }}>{children}</View>;
+
+const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+/** 2026-10 as October 2026. */
+export const monthName = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${FULL_MONTHS[(mo ?? 1) - 1]} ${y}`; };
+/** The month (yyyy-mm) n months after m. */
+export const shiftMonth = (m: string, n: number) => { const [y, mo] = m.split('-').map(Number) as [number, number]; const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+/** Today's date in India, yyyy-mm-dd. */
+export const todayIST = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+
+/** The month shown, with arrows to step back and forward. */
+export function MonthBar({ month, onChange, max }: { month: string; onChange: (m: string) => void; max?: string }) {
+  const next = shiftMonth(month, 1);
+  return (
+    <View style={[s.row, { marginVertical: 8 }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => onChange(shiftMonth(month, -1))} style={{ padding: 10 }}><Text style={[s.text, { color: C.gold, fontSize: 20 }]}>‹</Text></Pressable>
+      <Text style={[s.text, { fontWeight: '600' }]}>{monthName(month)}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Next month" disabled={!!max && next > max} onPress={() => onChange(next)} style={{ padding: 10, opacity: max && next > max ? 0.3 : 1 }}><Text style={[s.text, { color: C.gold, fontSize: 20 }]}>›</Text></Pressable>
+    </View>
+  );
 }

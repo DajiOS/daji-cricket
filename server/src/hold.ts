@@ -435,7 +435,7 @@ export function parseBlock(body: unknown): BlockInput {
     if (method && amountPaise !== undefined) payment = { method, amountPaise, reference }; // 0 is allowed: booked with nothing received yet
   }
   if (fromDate && toDate && toDate < fromDate) v.fail('toDate', 'Cannot be before the first day');
-  if (startTime && endTime && endTime <= startTime) v.fail('endTime', 'Must be after the start time');
+  if (startTime && endTime && endTime === startTime) v.fail('endTime', 'Must be different from the start time'); // an earlier end, like 02:00 after 18:00, is the next morning
   v.done();
   return { groundId: groundId!, fromDate: fromDate!, toDate: toDate!, startTime: startTime!, endTime: endTime!, totalPaise: totalPaise!, customer: customer!, payment: payment!, notes };
 }

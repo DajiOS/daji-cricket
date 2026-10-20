@@ -77,6 +77,8 @@ export function cancelBooking(user: UserRow, bookingId: string, input: { reason?
   if (input.waive && !byStaff) throw new HttpError(403, 'FORBIDDEN', 'Only staff can waive the cancellation rule');
   if (input.waive && !hasPermission(user, 'manage_bookings')) throw new HttpError(403, 'FORBIDDEN', 'This needs the "manage_bookings" permission');
   const actor: Actor = { id: user.id, role: user.role };
+  // With money on it, the ground's cancel lets the customer choose (a full refund is always one of the offers), so there is no rule to waive.
+  if (byStaff && b0.paid_paise > 0 && input.waive) throw new HttpError(409, 'WAIVE_NOT_APPLICABLE', 'This booking has been paid, so cancelling it offers the customer a full refund or credit instead. Leave "waive" off and choose what to offer.');
   if (byStaff && b0.paid_paise > 0) return ownerCancel(user, b0.id, input.reason, input.offers);
   return tx(() => {
     const b = accessBooking(user, b0.id);
@@ -100,7 +102,7 @@ export function cancelBooking(user: UserRow, bookingId: string, input: { reason?
         if (p.method === 'credit' || (p.status !== 'captured' && p.status !== 'partially_refunded')) continue;
         const refundable = p.amount_paise - p.refunded_paise;
         const take = Math.min(refundable, toRefund);
-        if (take > 0) { refundPayment(p, take, input.reason ? `cancelled: ${input.reason}` : 'free cancellation', actor); toRefund -= take; refundTotal += take; }
+        if (take > 0) { refundPayment(p, take, input.reason ? `cancelled: ${input.reason}` : 'free cancellation', actor, { onBooking: true }); toRefund -= take; refundTotal += take; }
       }
       for (const p of pays) if (p.method === 'credit' && p.status === 'captured') run("UPDATE payments SET status = 'refunded', refunded_paise = amount_paise, updated_at = ? WHERE id = ?", t, p.id);
       if (out.creditPaise > 0) credits.issueCredit({ customerId: b.customer_id, ownerId: b.owner_id, amountPaise: out.creditPaise, source: 'restore', bookingId: b.id, note: `Booking ${b.ref} cancelled`, by: user.id, silent: true });
@@ -176,7 +178,7 @@ export function resolveOwnerCancel(user: UserRow, bookingId: string, choice: 're
         if (toRefund <= 0) break;
         if (p.method === 'credit' || (p.status !== 'captured' && p.status !== 'partially_refunded')) continue;
         const take = Math.min(p.amount_paise - p.refunded_paise, toRefund);
-        if (take > 0) { refundPayment(p, take, `cancelled by the ground: ${b.cancel_reason ?? ''}`.slice(0, 200), actor); toRefund -= take; refund += take; }
+        if (take > 0) { refundPayment(p, take, `cancelled by the ground: ${b.cancel_reason ?? ''}`.slice(0, 200), actor, { onBooking: true }); toRefund -= take; refund += take; }
       }
     }
     const credit = choice === 'refund' || choice === 'half' ? creditPaid : paid;
