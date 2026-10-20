@@ -5,7 +5,7 @@
 .coach-top { display: flex; gap: 14px; align-items: flex-end; }
 .coach-ph { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid var(--line-strong); flex: none; }
 .coach-ph.none { display: grid; place-items: center; background: var(--panel-3); color: var(--gold); font: 600 24px var(--serif); }
-.msg-preview { white-space: pre-wrap; margin: 0; padding: 12px 14px; background: #101010; border: 1px solid var(--line); border-radius: var(--radius-sm); font: 13px/1.55 var(--sans); color: var(--text); }
+.msg-preview { white-space: pre-wrap; margin: 0; padding: 12px 14px; background: var(--surface2); border: 1px solid var(--line); border-radius: var(--radius-sm); font: 13px/1.55 var(--sans); color: var(--text); }
 
 /* scoring */
 .scorer-title { font: 600 22px var(--serif); color: var(--ivory); }
@@ -13,8 +13,8 @@
 .sc-total span { font-size: 24px; color: var(--muted); }
 .balls { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
 .balls i { font-style: normal; min-width: 28px; height: 28px; padding: 0 6px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line-strong); font: 700 12px var(--sans); color: var(--muted); }
-.balls i.f { border-color: var(--gold-lo); color: var(--gold-hi); background: rgba(201, 164, 76, .1); }
-.balls i.w { border-color: var(--bad); color: var(--bad); background: rgba(224, 106, 90, .1); }
+.balls i.f { border-color: var(--gold-lo); color: var(--gold-hi); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.balls i.w { border-color: var(--bad); color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .runs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
 .runs .btn { height: 52px; font-size: 20px; justify-content: center; }
 

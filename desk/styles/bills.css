@@ -1,6 +1,6 @@
 .bills-search { width: 260px; max-width: 100%; }
-.bills-bad { color: #f19a8d; }
-.bills-kv > div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid #1d1b17; font-size: 13.5px; }
+.bills-bad { color: var(--bad); }
+.bills-kv > div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--line2); font-size: 13.5px; }
 .bills-kv > div:last-child { border-bottom: 0; }
 .bills-kv span { color: var(--faint); }
 .bills-kv b { color: var(--ivory); font-weight: 600; text-align: right; word-break: break-word; }

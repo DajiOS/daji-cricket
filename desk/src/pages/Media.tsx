@@ -83,7 +83,7 @@ export default function Media() {
           {jobs.map((j) => (
             <div key={j.key}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{j.name}</span><span>{j.state === 'fail' ? j.msg : j.state === 'done' ? 'Done' : j.pct + '%'}</span></div>
-              <div style={{ height: 6, borderRadius: 4, background: 'rgba(127,127,127,.25)', overflow: 'hidden' }}><div style={{ width: j.pct + '%', height: '100%', background: j.state === 'fail' ? '#c0392b' : '#14573e' }} /></div>
+              <div style={{ height: 6, borderRadius: 4, background: 'rgba(127,127,127,.25)', overflow: 'hidden' }}><div style={{ width: j.pct + '%', height: '100%', background: j.state === 'fail' ? 'var(--bad)' : 'var(--strong)' }} /></div>
             </div>
           ))}
         </div>}
@@ -95,7 +95,7 @@ export default function Media() {
               <a href={API + (it.web || it.url)} target="_blank" rel="noreferrer" style={{ display: 'block', position: 'relative' }} title="Open the original">
                 {it.thumb ? <img src={API + it.thumb} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
                   : it.kind === 'image' ? <img src={API + it.url} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
-                  : <div style={{ width: '100%', aspectRatio: '16/10', borderRadius: 10, background: '#0f3d2e', display: 'grid', placeItems: 'center', color: '#f3ead2' }}>Video</div>}
+                  : <div style={{ width: '100%', aspectRatio: '16/10', borderRadius: 10, background: 'var(--deep)', display: 'grid', placeItems: 'center', color: '#f3ead2' }}>Video</div>}
                 {it.kind === 'video' && <span style={{ position: 'absolute', left: '50%', top: '50%', width: 44, height: 44, margin: '-22px 0 0 -22px', borderRadius: '50%', background: 'rgba(15,61,46,.75)', color: '#f6f2e9', display: 'grid', placeItems: 'center', fontSize: 18 }}>▶</span>}
               </a>
               <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.name}>{it.name}</div>

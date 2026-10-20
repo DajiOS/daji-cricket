@@ -8,10 +8,10 @@
 
 /* attendance grid */
 .pr-grid { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; }
-.pr-grid th, .pr-grid td { padding: 0; border-bottom: 1px solid #1d1b17; text-align: center; }
-.pr-grid thead th { background: #121518; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--line); }
+.pr-grid th, .pr-grid td { padding: 0; border-bottom: 1px solid var(--line2); text-align: center; }
+.pr-grid thead th { background: var(--surface2); position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--line); }
 .pr-grid .pr-name { position: sticky; left: 0; z-index: 3; background: var(--panel); text-align: left; padding: 8px 14px; min-width: 140px; max-width: 180px; border-right: 1px solid var(--line); white-space: nowrap; }
-.pr-grid thead .pr-name { background: #121518; color: var(--faint); font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; }
+.pr-grid thead .pr-name { background: var(--surface2); color: var(--faint); font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; }
 .pr-day button { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 100%; padding: 6px 0; background: transparent; border: 0; color: var(--muted); cursor: pointer; font: 600 12px var(--sans); }
 .pr-day button:disabled { cursor: default; }
 .pr-day button:not(:disabled):hover { color: var(--gold-hi); }
@@ -21,11 +21,11 @@
 .pr-mark { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--ivory); font: 700 11px var(--sans); cursor: pointer; padding: 0; }
 .pr-mark:disabled { opacity: .35; cursor: default; }
 .pr-mark:not(:disabled):hover { border-color: var(--gold); }
-.pr-mark.present, .pr-mini.present { background: rgba(95,176,122,.18); border-color: rgba(95,176,122,.5); color: var(--good); }
-.pr-mark.half, .pr-mini.half { background: rgba(216,166,64,.16); border-color: rgba(216,166,64,.5); color: var(--warn); }
-.pr-mark.absent, .pr-mini.absent { background: rgba(224,106,90,.16); border-color: rgba(224,106,90,.5); color: var(--bad); }
-.pr-mark.leave, .pr-mini.leave { background: rgba(111,160,208,.16); border-color: rgba(111,160,208,.5); color: var(--info); }
-.pr-tot { min-width: 30px; padding: 0 6px !important; color: var(--muted); font-variant-numeric: tabular-nums; border-left: 1px solid #1d1b17; }
+.pr-mark.present, .pr-mini.present { background: color-mix(in srgb, var(--good) 18%, transparent); border-color: color-mix(in srgb, var(--good) 50%, transparent); color: var(--good); }
+.pr-mark.half, .pr-mini.half { background: color-mix(in srgb, var(--warn) 16%, transparent); border-color: color-mix(in srgb, var(--warn) 50%, transparent); color: var(--warn); }
+.pr-mark.absent, .pr-mini.absent { background: color-mix(in srgb, var(--bad) 16%, transparent); border-color: color-mix(in srgb, var(--bad) 50%, transparent); color: var(--bad); }
+.pr-mark.leave, .pr-mini.leave { background: color-mix(in srgb, var(--info) 16%, transparent); border-color: color-mix(in srgb, var(--info) 50%, transparent); color: var(--info); }
+.pr-tot { min-width: 30px; padding: 0 6px !important; color: var(--muted); font-variant-numeric: tabular-nums; border-left: 1px solid var(--line2); }
 .pr-tot:first-of-type { border-left: 1px solid var(--line); }
 
 /* payslip */
