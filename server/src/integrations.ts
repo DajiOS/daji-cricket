@@ -1,5 +1,6 @@
 import type { Config } from './config.ts';
 import { many, run, registerSchema } from './db.ts';
+import { HttpError, notFound } from './errors.ts';
 import { now } from './clock.ts';
 import { audit } from './audit.ts';
 import type { UserRow } from './auth.ts';
@@ -22,9 +23,41 @@ export interface Integration {
   /** Set when the service is not built into the platform yet. */
   notBuilt?: string;
 }
-export interface IntegrationStatus { id: string; name: string; what: string; setup: string; status: 'ready' | 'partial' | 'missing' | 'not_built'; missing: string[]; canTest: boolean; lastTest: { ok: boolean; message: string; at: number } | null; note: string | null }
+export interface IntegrationStatus { id: string; name: string; what: string; setup: string; status: 'ready' | 'partial' | 'missing' | 'not_built'; missing: string[]; canTest: boolean; lastTest: { ok: boolean; message: string; at: number } | null; note: string | null;
+  /** The owner's own record of the account: who signed up, with what, account names, what is pending. Never keys or passwords. */
+  notes: string; notesUpdatedAt: number | null }
 
 registerSchema('integrations-1', `CREATE TABLE integration_tests (integration_id TEXT PRIMARY KEY, ok INTEGER NOT NULL, message TEXT NOT NULL, at INTEGER NOT NULL);`);
+registerSchema('integrations-2', `CREATE TABLE integration_notes (integration_id TEXT PRIMARY KEY, notes TEXT NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT);`);
+
+/** What was known about each account when the notes were added; shown until the owner saves their own. */
+const FIRST_NOTES: Record<string, string> = {
+  razorpay: 'Signed up with Google. Account name: Sqinch.',
+  email: 'Sending address: dajicricket@gmail.com.',
+  whatsapp: 'Business portfolio: Daji Cricket. WhatsApp account: Daji Cricket. Number: +91 75671 56000. System user: daji-website. Phone number ID: 1360655880469676.\nBusiness verification submitted, not approved yet. Templates daji_otp and daji_enquiry_alert pending approval.',
+};
+const NOTES_MAX = 2000;
+/** Keys, tokens and passwords are refused: the notes are for account names and status, and anyone with desk access reads them. */
+const SECRET_LIKE: [RegExp, string][] = [
+  [/\b(password|passwd|pwd|passcode|secret|api[ _-]?key|auth[ _-]?key|token|app[ _-]?password|private[ _-]?key)\s*[:=-]\s*\S/i, 'a password, key or token after a label'],
+  [/-----BEGIN [A-Z ]*KEY-----/, 'a private key'],
+  [/\b(rzp_(live|test)_[A-Za-z0-9]{6,}|sk-[A-Za-z0-9_-]{16,}|EAA[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{12,}|AIza[A-Za-z0-9_-]{20,})/, 'an API key or access token'],
+  [/\b(?=[A-Za-z0-9_\-]*[A-Za-z])(?=[A-Za-z0-9_\-]*\d)[A-Za-z0-9_\-]{24,}\b/, 'a long code that looks like a key or token'],
+  [/\b[a-z]{4} [a-z]{4} [a-z]{4} [a-z]{4}\b/, 'what looks like a Google app password'],
+];
+export function saveIntegrationNotes(cfg: Config, u: UserRow, id: string, body: unknown): IntegrationStatus {
+  if (!REGISTRY.some((x) => x.id === id)) throw notFound('No such service');
+  const notes = (body && typeof body === 'object' ? (body as Record<string, unknown>).notes : undefined);
+  const bad = (message: string) => new HttpError(400, 'VALIDATION_FAILED', message, { fields: [{ field: 'notes', message }] });
+  if (typeof notes !== 'string') throw bad('Send the notes as text');
+  const text = notes.replace(/\r\n/g, '\n').trim();
+  if (text.length > NOTES_MAX) throw bad(`Keep the notes under ${NOTES_MAX} characters`);
+  const hit = SECRET_LIKE.find(([re]) => re.test(text));
+  if (hit) throw bad(`This looks like ${hit[1]}. Keys and passwords never go in the notes: they stay in the server settings only.`);
+  run('INSERT INTO integration_notes(integration_id, notes, updated_at, updated_by) VALUES (?,?,?,?) ON CONFLICT(integration_id) DO UPDATE SET notes = excluded.notes, updated_at = excluded.updated_at, updated_by = excluded.updated_by', id, text, now(), u.id);
+  audit({ id: u.id, role: u.role }, 'integration.notes', 'integration', id, { length: text.length });
+  return integrationStatuses(cfg).find((x) => x.id === id)!;
+}
 
 const REGISTRY: Integration[] = [];
 export function registerIntegration(i: Integration): void { const at = REGISTRY.findIndex((x) => x.id === i.id); if (at >= 0) REGISTRY[at] = i; else REGISTRY.push(i); }
@@ -106,11 +139,13 @@ registerIntegration({
 
 export function integrationStatuses(cfg: Config): IntegrationStatus[] {
   const tests = new Map(many<{ integration_id: string; ok: number; message: string; at: number }>('SELECT * FROM integration_tests').map((t) => [t.integration_id, t]));
+  const notes = new Map(many<{ integration_id: string; notes: string; updated_at: number }>('SELECT * FROM integration_notes').map((n) => [n.integration_id, n]));
   return REGISTRY.map((i) => {
     const have = i.have(cfg), missing = i.env.filter((k) => !have[k]);
     const status: IntegrationStatus['status'] = i.notBuilt ? 'not_built' : !i.env.length ? 'ready' : missing.length === 0 ? 'ready' : missing.length === i.env.length ? 'missing' : 'partial';
     const t = tests.get(i.id);
-    return { id: i.id, name: i.name, what: i.what, setup: i.setup, status, missing, canTest: !!i.test && !i.notBuilt && missing.length === 0, lastTest: t ? { ok: !!t.ok, message: t.message, at: t.at } : null, note: i.notBuilt ?? null };
+    return { id: i.id, name: i.name, what: i.what, setup: i.setup, status, missing, canTest: !!i.test && !i.notBuilt && missing.length === 0, lastTest: t ? { ok: !!t.ok, message: t.message, at: t.at } : null, note: i.notBuilt ?? null,
+      notes: notes.get(i.id)?.notes ?? FIRST_NOTES[i.id] ?? '', notesUpdatedAt: notes.get(i.id)?.updated_at ?? null };
   });
 }
 

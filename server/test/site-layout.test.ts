@@ -40,3 +40,8 @@ test('every design in every pack is complete: listed, drawn, both halves coloure
     for (const ext of ['mp4', 'webm']) assert.ok(readFileSync(join(loops, `${d}.${ext}`)).length > 10_000, `${d}.${ext} film`);
   }
 });
+
+test('on festival days the background film stays behind the page instead of joining it and covering the hero', () => {
+  assert.ok(css.includes('html[data-fest] #view-home header.hero > :not(.fest-layer,.hero-loopbox){position:relative;z-index:1}'));
+  assert.ok(!css.includes('header.hero > :not(.fest-layer){'), 'the old rule pulled the film into the page');
+});
