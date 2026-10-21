@@ -1796,3 +1796,21 @@ html[data-fest] #view-home header.hero > .hero-3d[hidden],html[data-fest] #view-
 }
 /* readable over any decoration */
 html[data-fest] #view-home .hero p.lead{text-shadow:0 1px 0 color-mix(in srgb,var(--bg) 70%,transparent)}
+
+/* The photo and video viewer: as large as the screen allows, the picture at its own shape, full resolution. */
+.modal.media{padding:max(10px,env(safe-area-inset-top,0px)) max(10px,env(safe-area-inset-right,0px)) max(10px,env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px));background:rgba(4,8,6,.92)}
+.sheet.media{width:min(1800px,100%);max-height:none;padding:46px 0 0;background:none;border:0;box-shadow:none;overflow:visible;display:flex;flex-direction:column;align-items:center;gap:10px}
+.sheet.media .x{top:0;right:0;color:#f6f2e9;background:rgba(255,255,255,.1);border-radius:50%}
+.sheet.media .x:hover{background:rgba(255,255,255,.2);color:#fff}
+.sheet.media .lightbox{width:100%;display:flex;justify-content:center}
+.sheet.media .lightbox img{max-width:100%;max-height:calc(100vh - 80px);max-height:calc(100dvh - 80px);width:auto;height:auto;border-radius:8px}
+.sheet.media .lightbox video{display:block;flex:none;align-self:center;--vh:calc(100vh - 150px);width:min(100%,calc(var(--vh) * var(--ar,1.7778)));height:auto;aspect-ratio:var(--ar,1.7778);max-height:none;border-radius:8px;background:#000;object-fit:contain}
+@supports (height:100dvh){.sheet.media .lightbox video{--vh:calc(100dvh - 150px)}}
+/* the theme buttons float above everything; while a window is open they would sit on top of it */
+body:has(.modal.open) :is(.theme-toggle,.theme-pick){visibility:hidden}
+.vq{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;color:#f6f2e9;font-size:13px}
+.vq button{padding:6px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.28);color:#f6f2e9;background:transparent;font:inherit;cursor:pointer}
+.vq button[aria-pressed="true"]{background:#f6f2e9;color:#0f1a14;border-color:#f6f2e9;font-weight:600}
+.vq .vq-fs{margin-left:6px}
+.vq-size{opacity:.6;margin-left:4px;font-variant-numeric:tabular-nums}
+@media (max-width:560px){.sheet.media{padding-top:44px}.sheet.media .lightbox video{--vh:calc(100dvh - 170px)}}

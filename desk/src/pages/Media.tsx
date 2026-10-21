@@ -3,10 +3,14 @@ import { PageHead, Stat, Loading, ErrorBox, useToast } from '../ui';
 import { useApi, del, patch, post, getToken } from '../lib';
 import { errText } from '../parts/admin/common';
 
-interface Item { thumb?: string | null; web?: string | null; id: string; name: string; kind: 'image' | 'video'; bytes: number; tag: string; url: string; createdAt: number }
+interface Item { thumb?: string | null; web?: string | null; hd?: string | null; poster?: string | null; info?: { width: number; height: number; codec: string; seconds: number } | null; id: string; name: string; kind: 'image' | 'video'; bytes: number; tag: string; url: string; createdAt: number }
 interface Lib { items: Item[]; freeBytes: number | null; libraryBytes: number }
 const API = ((window as any).DAJI_API || '').replace(/\/$/, '');
 const TAGS: [string, string][] = [['hero', 'Top banner'], ['gallery', 'Gallery'], ['academy', 'Academy'], ['other', 'Other']];
+/** "3840 × 2160 (4K)" from the file's real size. */
+const resLabel = (i: { width: number; height: number }) => { const s = Math.min(i.width, i.height); return `${i.width} × ${i.height}${s >= 2000 ? ' (4K)' : s >= 1400 ? ' (2.7K)' : s >= 1080 ? ' (Full HD)' : s >= 720 ? ' (HD)' : ''}`; };
+/** The full-resolution file to open; an HEVC original that many browsers cannot play opens as its 1080p copy. */
+const fullUrl = (it: Item) => (it.kind === 'video' && it.info?.codec === 'hevc' && it.hd ? it.hd : it.url);
 const size = (b: number) => (b >= 1073741824 ? (b / 1073741824).toFixed(2) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
 
 interface BulkRes { results: { id: string; ok: boolean; error?: string }[] }
@@ -46,7 +50,7 @@ export default function Media() {
   }
   const [drag, setDrag] = useState(false);
   // while previews and light copies are still being made, look again every 20 seconds
-  const busy = !!lib && lib.items.some((i) => !i.thumb || (i.kind === 'video' && !i.web));
+  const busy = !!lib && lib.items.some((i) => !i.thumb || (i.kind === 'video' && (!i.web || !i.hd)));
   useEffect(() => { if (!busy) return; const t = setInterval(reload, 20000); return () => clearInterval(t); }, [busy]);
 
   const patchJob = (key: string, p: Partial<Job>) => setJobs((j) => j.map((x) => (x.key === key ? { ...x, ...p } : x)));
@@ -149,7 +153,7 @@ export default function Media() {
         <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))' }}>
           {shown.map((it) => (
             <div key={it.id} className="card" style={{ padding: 10, display: 'grid', gap: 8, minWidth: 0, outline: picked.has(it.id) ? '2px solid var(--strong)' : undefined }}>
-              <a href={API + (it.web || it.url)} target="_blank" rel="noreferrer" style={{ display: 'block', position: 'relative' }} title="Open the original">
+              <a href={API + fullUrl(it)} target="_blank" rel="noreferrer" style={{ display: 'block', position: 'relative' }} title="Open at full resolution">
                 <input type="checkbox" checked={picked.has(it.id)} onChange={() => toggle(it.id)} onClick={(e) => e.stopPropagation()} aria-label={`Select ${it.name}`} style={{ position: 'absolute', left: 8, top: 8, width: 20, height: 20, zIndex: 2 }} />
                 {it.thumb ? <img src={API + it.thumb} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
                   : it.kind === 'image' ? <img src={API + it.url} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
@@ -157,7 +161,8 @@ export default function Media() {
                 {it.kind === 'video' && <span style={{ position: 'absolute', left: '50%', top: '50%', width: 44, height: 44, margin: '-22px 0 0 -22px', borderRadius: '50%', background: 'rgba(15,61,46,.75)', color: '#f6f2e9', display: 'grid', placeItems: 'center', fontSize: 18 }}>▶</span>}
               </a>
               <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.name}>{it.name}</div>
-              <div className="hint">{it.kind === 'video' ? 'Video' : 'Photo'} · {size(it.bytes)}{it.kind === 'video' && !it.web ? ' · preparing a light copy…' : ''}</div>
+              <div className="hint">{it.kind === 'video' ? 'Video' : 'Photo'} · {size(it.bytes)}{it.info ? ` · ${resLabel(it.info)}` : ''}{it.kind === 'video' && (!it.web || !it.hd) ? ' · preparing the HD and light copies…' : ''}</div>
+              {it.info && Math.min(it.info.width, it.info.height) < (it.kind === 'video' ? 1080 : 1200) && <div className="hint" style={{ color: 'var(--warn, #b7791f)' }}>Low resolution. For a sharp picture, upload the original file from the drone or camera, not one sent through WhatsApp.</div>}
               <select className="inp" value={it.tag} onChange={(e) => void retag(it, e.target.value)}>{TAGS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
               <div style={{ display: 'flex', gap: 8 }}><button className="btn ghost" onClick={() => void copy(it)}>Copy link</button><button className="btn ghost" onClick={() => void remove(it)}>Remove</button></div>
             </div>

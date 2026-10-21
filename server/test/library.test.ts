@@ -1,6 +1,13 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { startHarness, type Harness } from './helpers.ts';
+import { libraryIdle } from '../src/library.ts';
+
+const hasFfmpeg = () => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } };
 
 let h: Harness, owner: string, cust: string;
 before(async () => { h = await startHarness(); });
@@ -39,6 +46,30 @@ test('only owners upload, and only photo and video types are kept', async () => 
   assert.equal((await up(owner, Buffer.from('<svg/>'), 'name=x.svg')).status, 415);
   assert.equal((await up(owner, Buffer.alloc(0))).status, 400);
   assert.equal((await fetch(h.url + '/media/lib_nothing.mp4')).status, 404);
+});
+
+test('a 4K video keeps its original, and gets a 1080p HD copy, a light copy, a sharp poster and its real size', { skip: !hasFfmpeg() }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vid-'));
+  const file = join(dir, 'drone.mp4');
+  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=3840x2160:rate=10:duration=2', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file]);
+  const orig = readFileSync(file);
+  const j = await (await up(owner, orig, 'name=drone.mp4&tag=gallery')).json() as any;
+  for (let i = 0; i < 600 && !libraryIdle(); i++) await new Promise((r) => setTimeout(r, 100));
+  const it = (await h.get('/api/library', owner)).body.items[0];
+  assert.deepEqual(it.info, { width: 3840, height: 2160, codec: 'h264', seconds: 2 });
+  assert.equal(it.url, j.url);
+  assert.deepEqual(Buffer.from(await (await fetch(h.url + it.url)).arrayBuffer()), orig, 'the original is served untouched');
+  assert.ok(it.hd && it.web && it.poster && it.thumb);
+  const hd = await fetch(h.url + it.hd, { headers: { range: 'bytes=0-99' } });
+  assert.equal(hd.status, 206); assert.equal(hd.headers.get('content-type'), 'video/mp4');
+  const save = async (u: string) => { const f = join(dir, u.split('/').pop()!); writeFileSync(f, Buffer.from(await (await fetch(h.url + u)).arrayBuffer())); return f; };
+  const hdFile = await save(it.hd), posterFile = await save(it.poster);
+  const dims = (f: string) => execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', f]).toString().trim();
+  assert.equal(dims(hdFile), '1920,1080');
+  assert.equal(dims(posterFile), '1920,1080');
+  assert.equal((await fetch(h.url + it.poster)).headers.get('content-type'), 'image/jpeg');
+  assert.equal((await h.del('/api/library/' + it.id, owner)).status, 200);
+  assert.equal((await fetch(h.url + it.hd)).status, 404);
 });
 
 test('bulk: several files are relabelled and removed at once, each with its own result, and the stored files go too', async () => {
