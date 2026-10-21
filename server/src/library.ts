@@ -129,6 +129,27 @@ export function removeFile(dataDir: string, id: string): void {
   try { unlinkSync(webPath(dataDir, r.id)); } catch { /* none */ }
 }
 
+export const MAX_BULK = 200;
+export interface BulkResult { id: string; ok: boolean; error?: string }
+
+/** Ids from a bulk request: a non-empty list of strings, no duplicates, at most MAX_BULK. */
+export function bulkIds(raw: unknown): string[] {
+  const ids = (raw as { ids?: unknown } | null)?.ids;
+  if (!Array.isArray(ids) || !ids.length || ids.some((i) => typeof i !== 'string' || !i)) throw new HttpError(400, 'BAD_IDS', 'Choose at least one file');
+  if (ids.length > MAX_BULK) throw new HttpError(400, 'TOO_MANY', `Choose at most ${MAX_BULK} files at a time`);
+  return [...new Set(ids as string[])];
+}
+
+/** Each file succeeds or fails on its own, so one missing file never stops the rest. */
+function eachOf(ids: string[], act: (id: string) => void): BulkResult[] {
+  return ids.map((id) => { try { act(id); return { id, ok: true }; } catch (e) { return { id, ok: false, error: e instanceof Error ? e.message : 'Failed' }; } });
+}
+export const removeMany = (dataDir: string, ids: string[]): BulkResult[] => eachOf(ids, (id) => removeFile(dataDir, id));
+export function setTagMany(ids: string[], tag: string): BulkResult[] {
+  if (!(TAGS as readonly string[]).includes(tag)) throw new HttpError(400, 'BAD_TAG', 'Unknown label');
+  return eachOf(ids, (id) => { setTag(id, tag); });
+}
+
 export function diskInfo(dataDir: string): { freeBytes: number | null; libraryBytes: number } {
   let freeBytes: number | null = null;
   try { mkdirSync(dir(dataDir), { recursive: true }); const f = statfsSync(dir(dataDir)); freeBytes = f.bavail * f.bsize; } catch { /* not supported */ }

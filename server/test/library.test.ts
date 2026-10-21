@@ -40,3 +40,33 @@ test('only owners upload, and only photo and video types are kept', async () => 
   assert.equal((await up(owner, Buffer.alloc(0))).status, 400);
   assert.equal((await fetch(h.url + '/media/lib_nothing.mp4')).status, 404);
 });
+
+test('bulk: several files are relabelled and removed at once, each with its own result, and the stored files go too', async () => {
+  const ids: string[] = [];
+  for (const n of ['a', 'b', 'c']) ids.push(((await (await up(owner, VIDEO, `name=${n}.mp4&tag=gallery`)).json()) as any).id);
+  const list = (await h.get('/api/library', owner)).body.items as any[];
+  const urlOf = (id: string) => list.find((i) => i.id === id).url as string;
+  assert.equal((await fetch(h.url + urlOf(ids[0]!))).status, 200);
+  // relabel two of them
+  const t = await h.post('/api/library/bulk-tag', { ids: [ids[0], ids[1], 'lib_missing'], tag: 'academy' }, owner);
+  assert.equal(t.status, 200, JSON.stringify(t.body));
+  assert.deepEqual(t.body.results.map((r: any) => r.ok), [true, true, false]);
+  assert.equal(((await h.get('/api/library?tag=academy', owner)).body.items as any[]).length, 2);
+  assert.equal((await h.post('/api/library/bulk-tag', { ids, tag: 'nope' }, owner)).status, 400);
+  // remove two, plus a duplicate and one that does not exist
+  const d = await h.post('/api/library/bulk-remove', { ids: [ids[0], ids[1], ids[1], 'lib_missing'] }, owner);
+  assert.equal(d.status, 200, JSON.stringify(d.body));
+  assert.deepEqual(d.body.results.map((r: any) => [r.id, r.ok]), [[ids[0], true], [ids[1], true], ['lib_missing', false]]);
+  assert.equal((await fetch(h.url + urlOf(ids[0]!))).status, 404);
+  assert.equal((await fetch(h.url + urlOf(ids[1]!))).status, 404);
+  assert.equal((await fetch(h.url + urlOf(ids[2]!))).status, 200);
+  assert.equal(((await h.get('/api/library', owner)).body.items as any[]).length, 1);
+});
+
+test('bulk: needs an owner, a non-empty list and at most 200 files', async () => {
+  assert.equal((await h.post('/api/library/bulk-remove', { ids: ['x'] }, cust)).status, 403);
+  assert.equal((await h.post('/api/library/bulk-remove', { ids: ['x'] })).status, 401);
+  assert.equal((await h.post('/api/library/bulk-remove', { ids: [] }, owner)).status, 400);
+  assert.equal((await h.post('/api/library/bulk-remove', {}, owner)).status, 400);
+  assert.equal((await h.post('/api/library/bulk-remove', { ids: Array.from({ length: 201 }, (_, i) => `lib_${i}`) }, owner)).status, 400);
+});
