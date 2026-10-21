@@ -9,13 +9,20 @@ const Rules = lazy(() => import('../parts/approvals/Rules'));
 
 // Approvals, as in the design: everything waiting on a decision on one stage board (Submitted, Review, Approval, Final sign-off, Done),
 // filtered by kind, with the selected item's facts, its sign-off chain and the decision. The old bills table is still at /approvals/bills.
-// Bills and staff pay follow the owner's approval rules (built at /approvals/rules): the server sends each chain's steps, who may sign and its trail.
-type Kind = 'bill' | 'pay' | 'book' | 'upi';
+// Bills, staff pay, refunds, discounts, fee waivers and expenses follow the owner's approval rules (built at /approvals/rules):
+// the server sends each chain's steps, who may sign and its trail.
+type Kind = 'bill' | 'pay' | 'book' | 'upi' | 'refund' | 'discount' | 'waiver' | 'expense';
+// The kinds that only ever come from the rules, with the right that lets a team member see them.
+const RULED: Partial<Record<Kind, string>> = { refund: 'record_payments', discount: 'manage_bookings', waiver: 'manage_academy', expense: 'manage_accounting' };
 const K: Record<Kind, { name: string; ink: string; tint: string; href: string }> = {
   bill: { name: 'Bills', ink: '#B86E12', tint: 'var(--t-amber)', href: '/bills' },
   pay: { name: 'Staff pay', ink: 'var(--i-violet)', tint: 'var(--t-violet)', href: '/payroll' },
   book: { name: 'Booking approvals', ink: 'var(--i-green)', tint: 'var(--t-green)', href: '/bookings/approvals' },
   upi: { name: 'UPI payments', ink: '#0B5F67', tint: 'var(--t-teal)', href: '/bookings/payments' },
+  refund: { name: 'Refunds', ink: 'var(--i-red)', tint: 'var(--t-red)', href: '/bookings/payments' },
+  discount: { name: 'Discounts', ink: 'var(--i-blue)', tint: 'var(--t-blue)', href: '/bookings' },
+  waiver: { name: 'Fee waivers', ink: 'var(--i-teal)', tint: 'var(--t-teal)', href: '/academy/fees' },
+  expense: { name: 'Expenses', ink: 'var(--i-amber)', tint: 'var(--t-amber)', href: '/transactions' },
 };
 const ST: [string, string, string, string][] = [
   ['Submitted', 'New in', 'var(--i-blue)', 'var(--t-blue)'], ['Review', 'First check', '#0B5F67', 'var(--t-teal)'],
@@ -27,23 +34,34 @@ const CHAIN: Record<Kind, string[]> = {
   pay: ['Sent by the owner', 'Signed off', 'Month locked'],
   book: ['Customer pays the deposit', 'You approve the booking', 'Session played'],
   upi: ['Customer sends the UPI payment', 'Checked against the bank', 'Booking confirmed'],
+  refund: ['Refund started', 'Signed at the ground', 'Super admin authorises'],
+  discount: ['Asked for', 'Signed off', 'Discount given'],
+  waiver: ['Asked for', 'Signed off', 'Fee waived'],
+  expense: ['Entered', 'Signed off', 'Recorded in the books'],
 };
+// The first and last links of a ruled chain, around the owner's steps.
+const ENDS: Partial<Record<Kind, [string, string]>> = { pay: ['Sent by', 'Month locked'], refund: ['Started by', 'Super admin authorises'], discount: ['Asked for by', 'Discount given'], waiver: ['Asked for by', 'Fee waived'], expense: ['Entered by', 'Recorded in the books'] };
 const RULE: Record<Kind, string> = {
   bill: 'A bill is approved by someone other than the person who entered it. The owner can approve any bill.',
   pay: 'The month locks when the last step signs.',
   book: 'The deposit is holding the slot until you approve it.',
   upi: 'Approve only once the money shows in the bank. Rejecting tells the customer it was not received.',
+  refund: 'The super admin authorises it after the last step here.',
+  discount: 'The booking owes less once the last step signs.',
+  waiver: 'The fee drops once the last step signs.',
+  expense: 'It is added to the books once the last step signs.',
 };
+const KIND_OF: Record<string, Kind> = { payroll: 'pay', refund: 'refund', discount: 'discount', waiver: 'waiver', expense: 'expense' };
 interface Pay { id: string; bookingId: string; amountPaise: number; reference: string | null; submittedAt: number | null; createdAt: number }
 export interface Req {
-  id: string; kind: 'bill' | 'payroll'; entityId: string; title: string; amountPaise: number; status: string; round: number; submittedByName: string | null; submittedAt: number; atStep: number;
+  id: string; kind: 'bill' | 'payroll' | 'refund' | 'discount' | 'waiver' | 'expense'; entityId: string; title: string; amountPaise: number; status: string; round: number; submittedByName: string | null; submittedAt: number; atStep: number;
   steps: { label: string; who: string; overPaise: number | null; state: 'done' | 'now' | 'later'; signedByName: string | null; signedAt: number | null; note: string | null }[];
   rule: string; canSign: boolean; whyNot: string | null; trail: { id: number; at: number; action: string; actorName: string | null; detail: any }[];
 }
 type Item = { key: string; id: string; k: Kind; stage: number; step: number; title: string; who: string; amount: number | null; since: number | null; bill?: Bill; req?: Req };
 // Where a chain sits on the five columns: a one-step chain waits in Approval; a longer one starts in Review and its last step is Approval.
 const stageOf = (r: Req) => (r.steps.length > 1 && r.atStep < r.steps.length - 1 ? 1 : 2);
-const ACT: Record<string, string> = { submit: 'Sent in', signoff: 'Signed', approve: 'Approved', sendback: 'Sent back a step', reject: 'Sent back', withdraw: 'Taken back', create: 'Entered', finalise: 'Month locked', pay: 'Paid' };
+const ACT: Record<string, string> = { cleared: 'Cleared for the super admin', decline: 'Declined by the super admin', submit: 'Sent in', signoff: 'Signed', approve: 'Approved', sendback: 'Sent back a step', reject: 'Sent back', withdraw: 'Taken back', create: 'Entered', finalise: 'Month locked', pay: 'Paid' };
 const age = (t: number | null) => {
   if (!t) return '—';
   const h = Math.floor((Date.now() - t) / 3600000);
@@ -61,6 +79,7 @@ function Board() {
   const me = s.me;
   const boss = me.role === 'owner' || me.role === 'super_admin';
   const acct = can(me, 'manage_accounting'), books = can(me, 'manage_bookings'), upiOk = can(me, 'verify_payments') || can(me, 'record_payments');
+  const ruled = acct || (Object.values(RULED) as string[]).some((p) => can(me, p));
   const [filter, setFilter] = useState<Kind | 'all'>('all');
   const [sel, setSel] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -74,8 +93,8 @@ function Board() {
   const [paid] = useApi<{ items: Bill[] }>(acct ? '/api/accounting/bills?status=paid' : null, dep);
   const [bks] = useApi<{ items: Booking[] }>(books ? '/api/staff/bookings?approval=pending&limit=100' : null, dep);
   const [pays] = useApi<{ items: Pay[] }>(upiOk ? '/api/staff/payments?status=submitted&limit=50' : null, dep);
-  const [reqs] = useApi<{ items: Req[] }>(acct ? '/api/accounting/approvals/requests' : null, dep);
-  const loaded = (!acct || (draft && pend && appr && paid && reqs)) && (!books || bks) && (!upiOk || pays);
+  const [reqs] = useApi<{ items: Req[] }>(ruled ? '/api/accounting/approvals/requests' : null, dep);
+  const loaded = (!acct || (draft && pend && appr && paid)) && (!ruled || reqs) && (!books || bks) && (!upiOk || pays);
   const chain = new Map((reqs?.items ?? []).map((r) => [`${r.kind}:${r.entityId}`, r]));
 
   const week = Date.now() - 7 * 86400000;
@@ -86,16 +105,21 @@ function Board() {
   const all: Item[] = [
     ...(draft?.items ?? []).map((b) => bill(b, 0, 0)), ...(pend?.items ?? []).map((b) => bill(b, 2, 1)), ...(appr?.items ?? []).map((b) => bill(b, 3, 2)),
     ...(paid?.items ?? []).filter((b) => (Date.parse(b.paidDate ?? '') || 0) >= week).map((b) => bill(b, 4, 3)),
-    ...(reqs?.items ?? []).filter((r) => r.kind === 'payroll').map((r): Item => ({ key: 'p' + r.id, id: r.entityId, k: 'pay', stage: stageOf(r), step: 1 + r.atStep, title: r.title, who: r.submittedByName ?? '', amount: r.amountPaise, since: r.submittedAt, req: r })),
+    ...(reqs?.items ?? []).filter((r) => r.kind !== 'bill').map((r): Item => ({ key: 'p' + r.id, id: r.entityId, k: KIND_OF[r.kind]!, stage: stageOf(r), step: 1 + r.atStep, title: r.title, who: r.submittedByName ?? '', amount: r.amountPaise, since: r.submittedAt, req: r })),
     ...(bks?.items ?? []).map((b): Item => ({ key: 'k' + b.id, id: b.id, k: 'book', stage: 2, step: 1, title: `${b.customerName} · ${fmtDay(b.date)}`, who: `${b.groundName} · ${timeRange(b)}`, amount: b.paidPaise, since: b.createdAt })),
     ...(pays?.items ?? []).map((p): Item => ({ key: 'u' + p.id, id: p.id, k: 'upi', stage: 1, step: 1, title: `UPI ${inr(p.amountPaise)}${p.reference ? ' · ' + p.reference : ''}`, who: '', amount: p.amountPaise, since: p.submittedAt ?? p.createdAt })),
   ];
+  // A kind that only comes from the rules gets a tab once it has something in it.
   const kinds = (Object.keys(K) as Kind[]).filter((k) => all.some((x) => x.k === k) || (k === 'bill' && acct) || (k === 'pay' && boss) || (k === 'book' && books) || (k === 'upi' && upiOk));
   const vis = all.filter((x) => filter === 'all' || x.k === filter);
   const open = all.filter((x) => x.stage < 4);
   const cur = all.find((x) => x.key === sel) ?? vis.find((x) => x.stage < 4) ?? vis[0];
   const canDecide = (x: Item) => (x.req ? x.req.canSign : x.k === 'bill' ? x.stage === 2 && acct && (boss || x.bill?.createdBy !== me.id) : x.k === 'pay' ? false : x.k === 'book' ? books : upiOk);
-  const chainOf = (x: Item): string[] => x.req ? [x.k === 'pay' ? `Sent by ${x.req.submittedByName ?? 'the owner'}` : `Entered by ${x.who || 'the team'}`, ...x.req.steps.map((st) => st.label), x.k === 'pay' ? 'Month locked' : 'Paid'] : CHAIN[x.k];
+  const chainOf = (x: Item): string[] => {
+    if (!x.req) return CHAIN[x.k];
+    const [by, end] = ENDS[x.k] ?? ['Entered by', 'Paid'];
+    return [`${by} ${x.req.submittedByName ?? (x.k === 'pay' ? 'the owner' : x.k === 'refund' ? 'the system' : 'the team')}`, ...x.req.steps.map((st) => st.label), end];
+  };
   const chainSub = (x: Item, i: number, done: boolean, now: boolean): string => {
     const st = x.req && i >= 1 ? x.req.steps[i - 1] : undefined;
     if (!st) return done ? 'Done' : now ? 'Waiting now' : 'Not yet';
@@ -109,7 +133,7 @@ function Board() {
     setBusy(true); setMsg(null);
     try {
       if (x.k === 'bill') await post(`/api/accounting/bills/${x.id}/${yes ? 'approve' : 'reject'}`, yes ? (note.trim() ? { note: note.trim() } : {}) : { reason: note.trim() });
-      else if (x.k === 'pay') await post(`/api/accounting/approvals/requests/${x.req!.id}/${yes ? 'approve' : 'send-back'}`, note.trim() ? { note: note.trim() } : {});
+      else if (x.req) await post(`/api/accounting/approvals/requests/${x.req!.id}/${yes ? 'approve' : 'send-back'}`, note.trim() ? { note: note.trim() } : {});
       else if (x.k === 'book') await post(`/api/staff/bookings/${encodeURIComponent(x.id)}/approve`, {});
       else await post(`/api/staff/payments/${encodeURIComponent(x.id)}/verify`, yes ? { approve: true } : { approve: false, reason: note.trim() });
       const last = !x.req || x.req.atStep >= x.req.steps.length - 1;
@@ -147,7 +171,7 @@ function Board() {
                     </button>))}
                 </div>))}
             </div>
-            {!all.length && <p className="muted" style={{ margin: '10px 2px' }}>Nothing is waiting for a decision. New bills, bookings to approve and UPI payments to check show here.</p>}
+            {!all.length && <p className="muted" style={{ margin: '10px 2px' }}>Nothing is waiting for a decision. New bills, bookings to approve, UPI payments to check, and refunds, discounts, fee waivers and expenses held by your rules show here.</p>}
           </div>
           {cur && (
             <aside aria-label="Selected approval" className="dcard dap-panel">

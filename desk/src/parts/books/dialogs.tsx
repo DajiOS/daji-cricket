@@ -7,12 +7,16 @@ import { FormModal, CatSelect, type Account, type Category, Money, monthName } f
 const bad = (m: string): never => { throw new Error(m); };
 
 export function AddTxnDialog({ accounts, cats, onClose, done }: { accounts: Account[]; cats: Category[]; onClose: () => void; done: () => void }) {
+  const toast = useToast();
   const f = useForm({ accountId: accounts[0]?.id ?? '', dir: 'out', date: todayISO(), amount: '', description: '', categoryId: '' });
   if (!accounts.length) return <FormModal title="Add a transaction" onClose={onClose} onSubmit={async () => {}} label="OK"><p className="muted">Add a bank or cash account first (Accounting, Setup, or the bank feed panel on Bank import).</p></FormModal>;
   return (
     <FormModal title="Add a transaction" lede="For cash spent at the ground or money the bank statement will not show." onClose={onClose} onSubmit={async () => {
       const p = toPaise(f.v.amount); if (!p || p <= 0) bad('Enter the amount in rupees, like 2500 or 2500.50.');
-      await post('/api/accounting/transactions', { accountId: f.v.accountId, date: f.v.date, amountPaise: f.v.dir === 'out' ? -p! : p, description: f.v.description.trim(), categoryId: f.v.categoryId || undefined }); done();
+      const r = await post('/api/accounting/transactions', { accountId: f.v.accountId, date: f.v.date, amountPaise: f.v.dir === 'out' ? -p! : p, description: f.v.description.trim(), categoryId: f.v.categoryId || undefined });
+      // Under the owner's expense rules a large money-out entry waits on the Approvals board and is recorded when it is signed.
+      if (r?.waiting) toast('Sent for sign-off. It is added to the books once it is approved.');
+      done();
     }}>
       <div className="form-grid">
         <Field label="Account"><select className="inp" {...f.bind('accountId')}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>

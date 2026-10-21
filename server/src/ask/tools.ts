@@ -9,7 +9,7 @@ import { summarize } from '../contacts.ts';
 import { balanceSheet, profitAndLoss, type BalanceSheet } from '../accounting/statements.ts';
 import { futureSchedule, pastSchedule } from '../accounting/schedule.ts';
 import { listAccounts } from '../accounting/store.ts';
-import { listOpen, getFlow, describe, APPROVAL_KINDS, KIND_INFO } from '../approvals.ts';
+import { listOpen, getFlow, describe, looksAfterAny, APPROVAL_KINDS, KIND_INFO } from '../approvals.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
 // can never disagree with a report. They are read-only, scoped to one owner and checked against the asker's permissions.
@@ -27,7 +27,7 @@ export function can(ctx: Ctx, area: Area): boolean {
   if (area === 'bookings') return hasPermission(u, 'manage_bookings') || hasPermission(u, 'view_reports');
   if (area === 'tasks') return hasPermission(u, 'manage_tasks');
   if (area === 'team') return u.role !== 'staff';
-  if (area === 'approvals') return hasPermission(u, 'manage_accounting');
+  if (area === 'approvals') return looksAfterAny(u);
   return hasPermission(u, 'view_customers');
 }
 export function need(ctx: Ctx, area: Area): void {
@@ -305,10 +305,16 @@ export function whyCantISign(ctx: Ctx, a: { text: string }) {
   return { matches: hit.map((r) => ({ title: r.title, amountPaise: r.amountPaise, canSign: r.canSign, reason: r.whyNot, waitingOn: r.steps.find((s) => s.state === 'now')?.who ?? null, rule: r.rule })) };
 }
 
+// The audit actions that count as approval decisions: bills and pay runs as before, and the same steps for refunds (plus the
+// ground clearing one and the super admin authorising or declining it), discounts, fee waivers and expenses.
+const DECIDED = ['bill.signoff', 'bill.sendback', 'bill.approve', 'bill.reject', 'payroll.signoff', 'payroll.approve', 'payroll.sendback', 'payroll.submit', 'payroll.withdraw',
+  'refund.signoff', 'refund.sendback', 'refund.cleared', 'refund.reject', 'refund.approve', 'refund.decline',
+  ...(['discount', 'waiver', 'expense'] as const).flatMap((k) => ['submit', 'signoff', 'sendback', 'approve', 'reject', 'withdraw'].map((a) => `${k}.${a}`))];
+
 /** A count of approvals decided in a period, from the audit trail. */
 export function approvalsDecided(ctx: Ctx, a: Range) {
   need(ctx, 'approvals');
   checkRange(a);
-  const rows = many<{ action: string; n: number }>("SELECT action, COUNT(*) n FROM audit_log WHERE owner_id = ? AND at >= ? AND at < ? AND action IN ('bill.signoff','bill.sendback','bill.approve','bill.reject','payroll.signoff','payroll.approve','payroll.sendback','payroll.submit','payroll.withdraw') GROUP BY action", ctx.ownerId, istMidnight(a.from), istMidnight(addDays(a.to, 1)));
+  const rows = many<{ action: string; n: number }>(`SELECT action, COUNT(*) n FROM audit_log WHERE owner_id = ? AND at >= ? AND at < ? AND action IN (${DECIDED.map(() => '?').join(',')}) GROUP BY action`, ctx.ownerId, istMidnight(a.from), istMidnight(addDays(a.to, 1)), ...DECIDED);
   return { from: a.from, to: a.to, decisions: Object.fromEntries(rows.map((r) => [r.action, r.n])) };
 }

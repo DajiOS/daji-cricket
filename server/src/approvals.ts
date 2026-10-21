@@ -46,13 +46,18 @@ CREATE INDEX ix_approval_requests_owner ON approval_requests(owner_id, status, k
 CREATE INDEX ix_approval_requests_entity ON approval_requests(kind, entity_id);
 `);
 
-export const APPROVAL_KINDS = ['bill', 'payroll'] as const;
+export const APPROVAL_KINDS = ['bill', 'payroll', 'refund', 'discount', 'waiver', 'expense'] as const;
 export type ApprovalKind = typeof APPROVAL_KINDS[number];
 
-/** What each kind is called, the right that looks after it, and the audit entity its trail is written against. */
-export const KIND_INFO: Record<ApprovalKind, { name: string; one: string; perm: StaffPermission; area: string; entity: string; selfNo: string }> = {
-  bill: { name: 'Bills', one: 'bill', perm: 'manage_accounting', area: 'Anyone who can manage the books', entity: 'acct_bill', selfNo: 'You entered this bill, so someone else has to approve it' },
-  payroll: { name: 'Staff pay', one: 'pay run', perm: 'manage_accounting', area: 'Anyone who can manage the books', entity: 'payroll_runs', selfNo: 'You sent this pay run, so someone else has to approve it' },
+/** What each kind is called, the right that looks after it, the audit entity its trail is written against, and what
+ * happens when no step applies. */
+export const KIND_INFO: Record<ApprovalKind, { name: string; one: string; perm: StaffPermission; area: string; can: string; entity: string; selfNo: string; none: string }> = {
+  bill: { name: 'Bills', one: 'bill', perm: 'manage_accounting', area: 'Anyone who can manage the books', can: 'manage the books', entity: 'acct_bill', selfNo: 'You entered this bill, so someone else has to approve it', none: 'Approved as soon as it is sent, with no sign-off.' },
+  payroll: { name: 'Staff pay', one: 'pay run', perm: 'manage_accounting', area: 'Anyone who can manage the books', can: 'manage the books', entity: 'payroll_runs', selfNo: 'You sent this pay run, so someone else has to approve it', none: 'The owner locks the month with no extra sign-off.' },
+  refund: { name: 'Refunds', one: 'refund', perm: 'record_payments', area: 'Anyone who can record payments', can: 'record payments', entity: 'refund', selfNo: 'You started this refund, so someone else has to approve it', none: 'Goes straight to the super admin to authorise, with no sign-off at the ground.' },
+  discount: { name: 'Discounts', one: 'discount', perm: 'manage_bookings', area: 'Anyone who can manage bookings', can: 'manage bookings', entity: 'money_ask', selfNo: 'You asked for this discount, so someone else has to approve it', none: 'Given as soon as it is asked for, with no sign-off.' },
+  waiver: { name: 'Fee waivers', one: 'fee waiver', perm: 'manage_academy', area: 'Anyone who runs the academy', can: 'run the academy', entity: 'money_ask', selfNo: 'You asked for this waiver, so someone else has to approve it', none: 'Given as soon as it is asked for, with no sign-off.' },
+  expense: { name: 'Expenses', one: 'expense', perm: 'manage_accounting', area: 'Anyone who can manage the books', can: 'manage the books', entity: 'money_ask', selfNo: 'You entered this expense, so someone else has to approve it', none: 'Recorded in the books as soon as it is entered, with no sign-off.' },
 };
 
 export type Who = { type: 'owner' } | { type: 'anyone' } | { type: 'role'; value: string } | { type: 'person'; value: string };
@@ -61,7 +66,7 @@ export interface Flow { steps: FlowStep[]; notSelf: boolean; distinct: boolean; 
 interface Snap extends FlowStep { signedBy: string | null; signedAt: number | null; note: string | null }
 
 /** Out of the box each kind behaves the way it always has: a bill needs one sign-off from someone else who manages the books,
- * and a pay run is locked by the owner with no extra sign-off. */
+ * and everything else (a pay run, a refund, a discount, a fee waiver, an expense) goes ahead with no extra sign-off. */
 export function defaultFlow(kind: ApprovalKind): Flow {
   if (kind === 'bill') return { steps: [{ id: 'approve', label: 'Approve the bill', who: { type: 'anyone' }, overPaise: null }], notSelf: true, distinct: false, sendBack: 'start' };
   return { steps: [], notSelf: false, distinct: false, sendBack: 'start' };
@@ -111,7 +116,7 @@ export function validateFlow(ownerId: string, kind: ApprovalKind, raw: unknown):
       else if (w.type === 'role' && typeof w.value === 'string' && w.value in ROLE_PRESETS) who = { type: 'role', value: w.value };
       else if (w.type === 'person' && typeof w.value === 'string') {
         if (people.has(w.value)) who = { type: 'person', value: w.value };
-        else v.fail(`${f}.who`, `That person is not on the team or cannot ${KIND_INFO[kind].perm === 'manage_accounting' ? 'manage the books' : 'do this'}`);
+        else v.fail(`${f}.who`, `That person is not on the team or cannot ${KIND_INFO[kind].can}`);
       } else v.fail(`${f}.who`, 'Pick who signs this step');
       let over: number | null = null;
       if (o.overPaise !== undefined && o.overPaise !== null) {
@@ -152,7 +157,7 @@ const rupees = (p: number) => '₹' + (p / 100).toLocaleString('en-IN', { maximu
 
 /** The whole flow as one or two sentences, for the builder's summary and the audit log. */
 export function describe(kind: ApprovalKind, f: Flow): string {
-  if (!f.steps.length) return kind === 'payroll' ? 'The owner locks the month with no extra sign-off.' : 'Approved as soon as it is sent, with no sign-off.';
+  if (!f.steps.length) return KIND_INFO[kind].none;
   const steps = f.steps.map((s, i) => `${i + 1}. ${s.label} (${whoWords(kind, s.who)}${s.overPaise ? `, only for ${rupees(s.overPaise)} or more` : ''})`).join('; ');
   const extra = [f.notSelf ? 'the person who sent it in cannot sign it' : '', f.distinct ? 'each step needs a different person' : ''].filter(Boolean).join(' and ');
   return `${steps}.${extra ? ` ${extra[0]!.toUpperCase()}${extra.slice(1)}.` : ''} Sent back goes ${f.sendBack === 'previous' ? 'back one step' : 'to the person who sent it in'}.`;
@@ -289,6 +294,9 @@ export function requestOut(r: ReqRow, viewer: UserRow) {
     canSign: why === null, whyNot: why, trail,
   };
 }
+
+/** Whether this person looks after any kind of approval (so may open the board). */
+export const looksAfterAny = (u: UserRow): boolean => isBoss(u) || APPROVAL_KINDS.some((k) => perms(u).includes(KIND_INFO[k].perm));
 
 /** The chains waiting now, for the board: everything for the owner, and for a team member the ones in an area they look after. */
 export function listOpen(ownerId: string, viewer: UserRow) {
