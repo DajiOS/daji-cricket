@@ -28,6 +28,24 @@ test('an owner sees which services are connected and can test them, but never th
   assert.equal((await h.get('/api/admin/integrations', staff)).status, 403);
 });
 
+test('each service keeps the owner\'s account notes, starting from what is known, and refuses keys and passwords', async () => {
+  const items = (await h.get('/api/admin/integrations', owner)).body.items as { id: string; notes: string }[];
+  assert.equal(items.find((i) => i.id === 'razorpay')!.notes, 'Signed up with Google. Account name: Sqinch.');
+  assert.match(items.find((i) => i.id === 'whatsapp')!.notes, /Phone number ID: 1360655880469676/);
+  assert.equal(items.find((i) => i.id === 'email')!.notes, 'Sending address: dajicricket@gmail.com.');
+  const ok = await h.put('/api/admin/integrations/razorpay/notes', { notes: 'Signed up with Google (sqinchmoney). Account name: Sqinch. KYC pending.' }, owner);
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.match(ok.body.notes, /KYC pending/);
+  assert.match((await h.get('/api/admin/integrations', owner)).body.items.find((i: { id: string }) => i.id === 'razorpay').notes, /KYC pending/);
+  for (const bad of ['Key secret: abcd1234', 'password = Hunter2!', 'key rzp_live_AbCdEf123456', 'token EAAG' + 'x'.repeat(30), 'app password abcd efgh ijkl mnop', 'xY7' + 'q'.repeat(30) + '9', '-----BEGIN PRIVATE KEY-----']) {
+    const r = await h.put('/api/admin/integrations/razorpay/notes', { notes: bad }, owner);
+    assert.equal(r.status, 400, bad);
+    assert.equal(r.body.error.details.fields[0].field, 'notes');
+  }
+  assert.equal((await h.put('/api/admin/integrations/nope/notes', { notes: 'x' }, owner)).status, 404);
+  assert.equal((await h.put('/api/admin/integrations/razorpay/notes', { notes: 'x' }, staff)).status, 403);
+});
+
 test('staff with no permissions cannot read refunds, payment history or grounds', async () => {
   const mk = await h.post('/api/staff/team', { name: 'No Perms', email: 'noperms@x.test', password: 'NoPerm@12345', permissions: [] }, owner);
   assert.equal(mk.status, 201, JSON.stringify(mk.body));
