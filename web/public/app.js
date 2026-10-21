@@ -308,9 +308,10 @@ window.DAJI.fieldErrors = fieldErrors;
 
 // ------------------------------------------------------------------ dialogs
 
-function openModal(content, { wide = false, onClose, photo = false } = {}) {
+function openModal(content, { wide = false, onClose, photo = false, media = false } = {}) {
   const sheet = clear($('#sheet'));
-  sheet.classList.toggle('wide', wide); sheet.classList.toggle('photo', photo);
+  sheet.classList.toggle('wide', wide); sheet.classList.toggle('photo', photo); sheet.classList.toggle('media', media);
+  $('#modal').classList.toggle('media', media);
   sheet.append(h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: () => closeModal() }, '×'), ...[].concat(content).filter((x) => x != null));
   $('#modal').classList.add('open');
   $('#modal')._onClose = onClose || null;
@@ -658,7 +659,56 @@ function fillGallery() {
   const grid = clear($('#gal-grid'));
   if (!urls.length) { grid.append(h('div', { class: 'none' }, ig ? 'New photos are on our Instagram page.' : 'Photos are on the way.')); return; }
   const feature = (urls.length + 3) % 4 === 0; // one big tile only when the grid then fills every row
-  urls.forEach((u, i) => grid.append(h('button', { type: 'button', class: feature && i === 0 ? 'feature' : null, 'aria-label': `Open photo ${i + 1}`, onclick: () => openModal([h('div', { class: 'lightbox' }, h('img', { src: u, alt: 'Daji Cricket Ground photo' }))], { photo: true }) }, h('img', { src: u, alt: '', loading: 'lazy' }))));
+  urls.forEach((u, i) => grid.append(h('button', { type: 'button', class: feature && i === 0 ? 'feature' : null, 'aria-label': `Open photo ${i + 1}`, onclick: () => openModal([h('div', { class: 'lightbox' }, h('img', { src: u, alt: 'Daji Cricket Ground photo' }))], { photo: true, media: true }) }, h('img', { src: u, alt: '', loading: 'lazy' }))));
+}
+
+// The video viewer: near full screen, the clip at its own shape, and the sharpest copy the connection can carry. The original file
+// (up to 4K from the drone) plays on a fast connection, the 1080p HD copy on an average one or when the browser cannot play the
+// original (HEVC), and the light 720p copy only on a slow connection. The visitor can switch between them.
+function videoChoices(it) {
+  const info = it.info || {}, out = [];
+  const h264 = !info.codec || info.codec === 'h264' || info.codec === 'vp9' || info.codec === 'av1';
+  const hevc = info.codec === 'hevc' && (() => { try { return !!document.createElement('video').canPlayType('video/mp4; codecs="hvc1.1.6.L153.B0"'); } catch { return false; } })();
+  const tall = info.height || 0, label = tall >= 2000 ? 'Original 4K' : tall >= 1400 ? 'Original 2.7K' : 'Original';
+  if (h264 || hevc) out.push({ key: 'orig', label, url: it.url });
+  if (it.hd && tall !== 0 && tall <= 1080 && out.length) { /* the original is already 1080p or less: the HD copy adds nothing */ } else if (it.hd) out.push({ key: 'hd', label: 'HD 1080p', url: it.hd });
+  if (it.web) out.push({ key: 'web', label: 'Light 720p', url: it.web });
+  if (!out.length) out.push({ key: 'orig', label, url: it.url });
+  return out;
+}
+function startChoice(list) {
+  const c = navigator.connection || {}, has = (k) => list.find((x) => x.key === k);
+  let pick = null;
+  try { pick = localStorage.getItem('daji.vq'); } catch { /* no storage */ }
+  if (pick && has(pick)) return has(pick);
+  if (c.saveData || /(^|-)2g|3g/.test(c.effectiveType || '')) return has('web') || has('hd') || list[0];
+  if (typeof c.downlink === 'number' && c.downlink < 8) return has('hd') || list[0];
+  return list[0];
+}
+function openVideo(it) {
+  const src = (u) => API + u, list = videoChoices(it);
+  let cur = startChoice(list);
+  const info = it.info || {};
+  const v = h('video', { controls: '', autoplay: '', playsinline: '', preload: 'auto', 'aria-label': it.name || 'Video of the ground' });
+  if (info.width && info.height) v.style.setProperty('--ar', String(info.width / info.height));
+  if (it.poster || it.thumb) v.poster = src(it.poster || it.thumb);
+  const bar = h('div', { class: 'vq', role: 'group', 'aria-label': 'Video quality' });
+  const set = (choice, keepTime) => {
+    const t = keepTime ? v.currentTime : 0, playing = keepTime && !v.paused;
+    cur = choice; v.src = src(choice.url);
+    if (t) v.addEventListener('loadedmetadata', () => { v.currentTime = t; if (playing) v.play().catch(() => {}); }, { once: true });
+    for (const b of bar.querySelectorAll('button[data-q]')) b.setAttribute('aria-pressed', String(b.dataset.q === choice.key));
+  };
+  // a file this browser cannot play falls back to the next copy down
+  v.addEventListener('error', () => { const i = list.indexOf(cur); if (i >= 0 && i < list.length - 1) set(list[i + 1], true); });
+  if (list.length > 1) for (const c of list) bar.append(h('button', { type: 'button', 'data-q': c.key, 'aria-pressed': 'false', onclick: () => { try { localStorage.setItem('daji.vq', c.key); } catch { /* no storage */ } set(c, true); } }, c.label));
+  const box = h('div', { class: 'lightbox lb-video' }, v);
+  const fs = h('button', { type: 'button', class: 'vq-fs', onclick: () => { const el = v.requestFullscreen ? v : box; (el.requestFullscreen || el.webkitRequestFullscreen || v.webkitEnterFullscreen || (() => {})).call(el); } }, 'Full screen');
+  bar.append(fs);
+  if (info.width) bar.append(h('span', { class: 'vq-size' }, `${info.width} × ${info.height}`));
+  openModal([box, bar], { photo: true, media: true, onClose: () => { v.pause(); v.removeAttribute('src'); v.load(); } });
+  set(cur, false);
+  v.play && v.play().catch(() => {});
 }
 
 // Photos and videos uploaded in the admin desk (Photos and videos): the "top banner" ones play at the top of the home page,
@@ -674,8 +724,10 @@ async function fillLibrary() {
     const box = h('div', { id: 'hero-media', class: 'hero-media' });
     if (hero.kind === 'video') {
       const v = h('video', { muted: '', loop: '', playsinline: '', autoplay: '', preload: 'auto', 'aria-label': 'The ground' });
-      if (hero.thumb) v.poster = src({ url: hero.thumb });
-      v.muted = true; v.defaultMuted = true; v.setAttribute('playsinline', ''); v.src = src({ url: hero.web || hero.url });
+      if (hero.poster || hero.thumb) v.poster = src({ url: hero.poster || hero.thumb });
+      // the banner is wide on a computer, so it gets the HD copy there; a phone gets the light copy
+      const wide = matchMedia('(min-width: 900px)').matches && !(navigator.connection && navigator.connection.saveData);
+      v.muted = true; v.defaultMuted = true; v.setAttribute('playsinline', ''); v.src = src({ url: (wide && hero.hd) || hero.web || hero.url });
       box.append(v); v.play && v.play().catch(() => {});
     } else box.append(h('img', { src: src(hero), alt: 'The ground', loading: 'eager' }));
     lead.parentNode.insertBefore(box, lead);
@@ -685,9 +737,7 @@ async function fillLibrary() {
   if (grid && pics.length) {
     const none = grid.querySelector('.none'); if (none) none.remove();
     for (const it of pics) {
-      const open = () => openModal([h('div', { class: 'lightbox' }, it.kind === 'video'
-        ? h('video', { src: src({ url: it.web || it.url }), controls: '', autoplay: '', playsinline: '', preload: 'auto' })
-        : h('img', { src: src(it), alt: 'Daji Cricket Ground photo' }))], { photo: true });
+      const open = () => (it.kind === 'video' ? openVideo(it) : openModal([h('div', { class: 'lightbox' }, h('img', { src: src(it), alt: 'Daji Cricket Ground photo' }))], { photo: true, media: true }));
       const thumb = it.thumb
         ? h('img', { src: src({ url: it.thumb }), alt: '', loading: 'lazy' })
         : it.kind === 'video' ? h('div', { class: 'vid-fallback' }) : h('img', { src: src(it), alt: '', loading: 'lazy' });
