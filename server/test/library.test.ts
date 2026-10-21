@@ -31,7 +31,7 @@ test('an owner uploads a video, the public can play it with Range, and it can be
   assert.equal(part.status, 206); assert.equal(part.headers.get('content-range'), `bytes 10-19/${VIDEO.length}`);
   assert.deepEqual(Buffer.from(await part.arrayBuffer()), VIDEO.subarray(10, 20));
   assert.equal((await fetch(h.url + j.url, { headers: { range: 'bytes=999999999-' } })).status, 416);
-  // the website shows a video once its HD copy has been made (or could not be made)
+  // the website lists a video at once and plays the original
   for (let i = 0; i < 600 && !libraryIdle(); i++) await new Promise((r) => setTimeout(r, 100));
   const pub = await (await fetch(h.url + '/api/library/public?tag=hero')).json() as any;
   assert.equal(pub.items.length, 1);
@@ -72,6 +72,19 @@ test('a 4K video keeps its original, and gets a 1080p HD copy, a light copy, a s
   assert.equal((await fetch(h.url + it.poster)).headers.get('content-type'), 'image/jpeg');
   assert.equal((await h.del('/api/library/' + it.id, owner)).status, 200);
   assert.equal((await fetch(h.url + it.hd)).status, 404);
+});
+
+test('a portrait 4K clip gets a real 1080 x 1920 HD copy and a 720 x 1280 light copy, not ones shrunk by its height', { skip: !hasFfmpeg() }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vid-'));
+  const file = join(dir, 'reel.mp4');
+  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=2160x3840:rate=10:duration=1', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file]);
+  await up(owner, readFileSync(file), 'name=reel.mp4&tag=gallery');
+  for (let i = 0; i < 900 && !libraryIdle(); i++) await new Promise((r) => setTimeout(r, 100));
+  const it = (await h.get('/api/library', owner)).body.items.find((x: any) => x.name === 'reel.mp4');
+  const dims = async (u: string) => { const f = join(dir, u.split('/').pop()!); writeFileSync(f, Buffer.from(await (await fetch(h.url + u)).arrayBuffer())); return execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', f]).toString().trim(); };
+  assert.equal(await dims(it.hd), '1080,1920');
+  assert.equal(await dims(it.web), '720,1280');
+  assert.equal((await h.del('/api/library/' + it.id, owner)).status, 200);
 });
 
 test('bulk: several files are relabelled and removed at once, each with its own result, and the stored files go too', async () => {

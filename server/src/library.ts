@@ -71,8 +71,13 @@ export interface LibItem {
 let dataRoot = '';
 export const setLibraryRoot = (dataDir: string): void => { dataRoot = dataDir; };
 const thumbPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.thumb.jpg`);
-const webPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.web.mp4`);
-const hdPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.hd2.mp4`);
+const webPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.web2.mp4`);
+const hdPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.hd3.mp4`);
+// copies from before the short side was measured: right for a landscape clip, far too small for a portrait one (a 2160 x 3840 clip came out 608 x 1080)
+const prevWebPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.web.mp4`);
+const prevHdPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.hd2.mp4`);
+/** Scales the short side down to n pixels (never up), so a portrait clip gets a real 1080p copy (1080 x 1920), not 608 x 1080. */
+const shortSide = (n: number) => `scale='if(gte(iw,ih),-2,min(${n},iw))':'if(gte(iw,ih),min(${n},ih),-2)'`;
 /** The first HD copies were made at up to 10 Mbit/s, which buffers on ordinary connections; they are remade at 6. */
 const oldHdPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.hd.mp4`);
 const posterPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.poster.jpg`);
@@ -84,7 +89,7 @@ function readInfo(id: string): MediaInfo | null {
 }
 const toOut = (r: Row): LibItem => ({
   id: r.id, name: r.name, mime: r.mime, kind: r.mime.startsWith('video/') ? 'video' : 'image', bytes: r.bytes, tag: r.tag, url: `/media/${r.id}.${r.ext}`,
-  thumb: made(thumbPath, r, 'thumb.jpg'), poster: made(posterPath, r, 'poster.jpg'), hd: made(hdPath, r, 'hd2.mp4'), web: made(webPath, r, 'web.mp4'),
+  thumb: made(thumbPath, r, 'thumb.jpg'), poster: made(posterPath, r, 'poster.jpg'), hd: made(hdPath, r, 'hd3.mp4'), web: made(webPath, r, 'web2.mp4'),
   info: readInfo(r.id), createdAt: r.created_at,
 });
 const dir = (dataDir: string) => join(dataDir, 'library');
@@ -92,9 +97,6 @@ const dir = (dataDir: string) => join(dataDir, 'library');
 // Small preview pictures (the first frame of a video, or a shrunken photo) so the website and the desk never have to load a huge original
 // just to draw a tile. Made one at a time in the background with ffmpeg; when ffmpeg is not installed the original is used instead.
 const queue: Array<() => Promise<void>> = [];
-/** Videos whose HD copy is still being made: the website leaves them out until it is ready, so nobody gets the 4K original that
- *  buffers. The desk shows them with "preparing". */
-const preparing = new Set<string>();
 const slow: Array<() => Promise<void>> = [];
 let working = false;
 // quick preview pictures always go first; the slow video copies wait until none are left
@@ -158,7 +160,6 @@ export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boo
     const vf = ['-vf', "scale='min(1920,iw)':-2", '-frames:v', '1', '-q:v', '3', out];
     if (!((await ffmpeg(['-ss', '1', '-i', src, ...vf])) || (await ffmpeg(['-i', src, ...vf])))) { try { unlinkSync(out); } catch { /* none made */ } }
   });
-  if (isVideo && !existsSync(hdPath(dataDir, id))) preparing.add(id);
   if (isVideo) slow.push(async () => {
     const src = pathOf(dataDir, id, ext);
     if (!existsSync(src)) return;
@@ -166,7 +167,7 @@ export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boo
     const web = webPath(dataDir, id);
     if (isVideo && !existsSync(web)) {
       const tmp = web + '.part.mp4';
-      const done = await ffmpeg(['-i', src, '-vf', 'scale=-2:720', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27', '-maxrate', '3M', '-bufsize', '6M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-threads', '1', tmp]);
+      const done = await ffmpeg(['-i', src, '-vf', shortSide(720), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27', '-maxrate', '3M', '-bufsize', '6M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-threads', '1', tmp]);
       try { if (done) renameSync(tmp, web); else unlinkSync(tmp); } catch { /* nothing to clean */ }
     }
   });
@@ -175,11 +176,10 @@ export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boo
     // streams on an ordinary connection. It is what the website plays first; the untouched original (often 4K at 50 to 100 Mbit/s) only
     // when the visitor asks for it.
     const src = pathOf(dataDir, id, ext), hd = hdPath(dataDir, id);
-    if (!existsSync(src) || existsSync(hd)) { preparing.delete(id); return; }
+    if (!existsSync(src) || existsSync(hd)) return;
     const tmp = hd + '.part.mp4';
-    const done = await ffmpeg(['-i', src, '-vf', "scale=-2:'min(1080,ih)'", '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-maxrate', '6M', '-bufsize', '12M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-threads', '1', tmp]);
+    const done = await ffmpeg(['-i', src, '-vf', shortSide(1080), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-maxrate', '6M', '-bufsize', '12M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-threads', '1', tmp]);
     try { if (done) renameSync(tmp, hd); else unlinkSync(tmp); } catch { /* nothing to clean */ }
-    preparing.delete(id); // shown on the website now, with its copy or (if ffmpeg failed) the original
   });
   void drain();
 }
@@ -189,6 +189,15 @@ export function backfillThumbs(dataDir: string): void {
   for (const r of many<Row>('SELECT * FROM media_lib')) {
     const v = r.mime.startsWith('video/');
     try { unlinkSync(oldHdPath(dataDir, r.id)); } catch { /* none */ }
+    if (v) {
+      // a landscape clip keeps its earlier copies under the new names; a portrait one has them made again at the right size
+      const info = readInfo(r.id), wide = !!info && info.width >= info.height;
+      for (const [prev, next] of [[prevHdPath, hdPath], [prevWebPath, webPath]] as const) {
+        const from = prev(dataDir, r.id);
+        if (!existsSync(from)) continue;
+        try { if (wide && !existsSync(next(dataDir, r.id))) renameSync(from, next(dataDir, r.id)); else unlinkSync(from); } catch { /* left for the next start */ }
+      }
+    }
     const missing = [thumbPath, infoPath, ...(v ? [webPath, hdPath, posterPath] : [])].some((p) => !existsSync(p(dataDir, r.id)));
     if (missing) makeThumb(dataDir, r.id, r.ext, v);
   }
@@ -222,7 +231,8 @@ export async function saveUpload(dataDir: string, req: IncomingMessage, actorId:
 export const listLibrary = (tag?: string): LibItem[] =>
   many<Row>(tag ? 'SELECT * FROM media_lib WHERE tag = ? ORDER BY created_at DESC' : 'SELECT * FROM media_lib ORDER BY created_at DESC', ...(tag ? [tag] : [])).map(toOut);
 /** What the website shows: everything except videos whose HD copy is still being made. */
-export const listPublicLibrary = (tag?: string): LibItem[] => listLibrary(tag).filter((i) => !preparing.has(i.id));
+/** What the website shows. A video is listed straight away: the website plays the original, so it need not wait for its copies. */
+export const listPublicLibrary = (tag?: string): LibItem[] => listLibrary(tag);
 
 export function setTag(id: string, tag: string): LibItem {
   if (!(TAGS as readonly string[]).includes(tag)) throw new HttpError(400, 'BAD_TAG', 'Unknown label');
@@ -237,7 +247,7 @@ export function removeFile(dataDir: string, id: string): void {
   run('DELETE FROM media_lib WHERE id = ?', id);
   try { unlinkSync(pathOf(dataDir, r.id, r.ext)); } catch { /* already gone */ }
   try { unlinkSync(thumbPath(dataDir, r.id)); } catch { /* none */ }
-  for (const p of [webPath, hdPath, oldHdPath, posterPath, infoPath]) { try { unlinkSync(p(dataDir, r.id)); } catch { /* none */ } }
+  for (const p of [webPath, hdPath, prevWebPath, prevHdPath, oldHdPath, posterPath, infoPath]) { try { unlinkSync(p(dataDir, r.id)); } catch { /* none */ } }
 }
 
 export const MAX_BULK = 200;
@@ -273,7 +283,7 @@ export function serveLibraryFile(dataDir: string, req: IncomingMessage, res: Ser
   const m = /^\/media\/(lib_[A-Za-z0-9_-]+)\.([a-z0-9.]+)$/.exec(pathname);
   if (!m) return false;
   const r = one<Row>('SELECT * FROM media_lib WHERE id = ?', m[1]!);
-  const copies: Record<string, [(d: string, id: string) => string, string]> = { 'thumb.jpg': [thumbPath, 'image/jpeg'], 'poster.jpg': [posterPath, 'image/jpeg'], 'web.mp4': [webPath, 'video/mp4'], 'hd2.mp4': [hdPath, 'video/mp4'] };
+  const copies: Record<string, [(d: string, id: string) => string, string]> = { 'thumb.jpg': [thumbPath, 'image/jpeg'], 'poster.jpg': [posterPath, 'image/jpeg'], 'web2.mp4': [webPath, 'video/mp4'], 'hd3.mp4': [hdPath, 'video/mp4'] };
   const copy = copies[m[2]!];
   const file = r && copy ? copy[0](dataDir, r.id) : r && r.ext === m[2] ? pathOf(dataDir, r.id, r.ext) : '';
   if (!r || !existsSync(file)) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Not found'); return true; }

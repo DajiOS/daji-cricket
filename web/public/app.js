@@ -884,30 +884,26 @@ function fillGallery() {
   urls.forEach((u, i) => grid.append(h('button', { type: 'button', class: feature && i === 0 ? 'feature' : null, 'aria-label': `Open photo ${i + 1}`, onclick: () => openModal([h('div', { class: 'lightbox' }, h('img', { src: u, alt: 'Daji Cricket Ground photo' }))], { photo: true, media: true }) }, h('img', { src: u, alt: '', loading: 'lazy' }))));
 }
 
-// The video viewer: near full screen, the clip at its own shape, and the sharpest copy the connection can carry. The original file
-// (up to 4K from the drone) plays on a fast connection, the 1080p HD copy on an average one or when the browser cannot play the
-// original (HEVC), and the light 720p copy only on a slow connection. The visitor can switch between them.
+// The video viewer: near full screen, the clip at its own shape. The original file (up to 4K from the drone) always plays first, and
+// nothing ever switches it to a smaller copy on its own; the visitor can pick the 1080p HD or light 720p copy by hand. The one exception
+// is a file this browser cannot play at all (HEVC in some browsers), which falls to the HD copy.
 function videoChoices(it) {
   const info = it.info || {}, out = [];
   const h264 = !info.codec || info.codec === 'h264' || info.codec === 'vp9' || info.codec === 'av1';
   const hevc = info.codec === 'hevc' && (() => { try { return !!document.createElement('video').canPlayType('video/mp4; codecs="hvc1.1.6.L153.B0"'); } catch { return false; } })();
-  const tall = info.height || 0, label = tall >= 2000 ? 'Original 4K' : tall >= 1400 ? 'Original 2.7K' : 'Original';
-  // sharpest first; the HD copy is what plays unless the visitor asks for the original
+  // measured on the short side, so a portrait 2160 x 3840 clip is 4K too
+  const short = Math.min(info.width || 0, info.height || 0), label = short >= 2000 ? 'Original 4K' : short >= 1400 ? 'Original 2.7K' : 'Original';
   if (h264 || hevc) out.push({ key: 'orig', label, url: it.url });
-  if (it.hd && tall !== 0 && tall <= 1080 && out.length) { /* the original is already 1080p or less: the HD copy adds nothing */ } else if (it.hd) out.push({ key: 'hd', label: 'HD 1080p', url: it.hd });
+  if (it.hd && short !== 0 && short <= 1080 && out.length) { /* the original is already 1080p or less: the HD copy adds nothing */ } else if (it.hd) out.push({ key: 'hd', label: 'HD 1080p', url: it.hd });
   if (it.web) out.push({ key: 'web', label: 'Light 720p', url: it.web });
   if (!out.length) out.push({ key: 'orig', label, url: it.url });
   return out;
 }
-/** HD 1080p to start with: a 4K original runs at 50 to 100 Mbit/s and stalls on most connections, so it plays only when the visitor
- *  picks it (remembered for this visit). Slow or data-saving connections start on the light 720p copy. */
+/** The original, unless the visitor picked another copy earlier in this visit. */
 function startChoice(list) {
-  const c = navigator.connection || {}, has = (k) => list.find((x) => x.key === k);
   let pick = null;
-  try { pick = sessionStorage.getItem('daji.vq') || localStorage.getItem('daji.vq'); } catch { /* no storage */ }
-  if (pick && has(pick)) return has(pick);
-  if (c.saveData || /(^|-)2g|3g/.test(c.effectiveType || '') || (typeof c.downlink === 'number' && c.downlink < 4)) return has('web') || has('hd') || list[list.length - 1];
-  return has('hd') || has('web') || list[0];
+  try { localStorage.removeItem('daji.vq'); pick = sessionStorage.getItem('daji.vq'); } catch { /* no storage */ }
+  return list.find((x) => x.key === pick) || list[0];
 }
 function openVideo(it) {
   const src = mediaUrl, list = videoChoices(it);
@@ -917,32 +913,20 @@ function openVideo(it) {
   if (info.width && info.height) v.style.setProperty('--ar', String(info.width / info.height));
   if (it.poster || it.thumb) v.poster = src(it.poster || it.thumb);
   const bar = h('div', { class: 'vq', role: 'group', 'aria-label': 'Video quality' });
-  const note = h('span', { class: 'vq-size', 'aria-live': 'polite' });
   const set = (choice, keepTime) => {
     const t = keepTime ? v.currentTime : 0, playing = keepTime && !v.paused;
-    cur = choice; stalls = []; v.src = src(choice.url);
+    cur = choice; v.src = src(choice.url);
     if (t) v.addEventListener('loadedmetadata', () => { v.currentTime = t; if (playing) v.play().catch(() => {}); }, { once: true });
     for (const b of bar.querySelectorAll('button[data-q]')) b.setAttribute('aria-pressed', String(b.dataset.q === choice.key));
   };
   // a file this browser cannot play falls back to the next copy down
   v.addEventListener('error', () => { const i = list.indexOf(cur); if (i >= 0 && i < list.length - 1) set(list[i + 1], true); });
-  // buffering: after a long stall, or a third short one within half a minute, step down a copy and say so
-  let stalls = [], stallTimer = 0;
-  const stepDown = () => { const i = list.indexOf(cur); if (i < 0 || i >= list.length - 1) return; const next = list[i + 1]; note.textContent = `Switched to ${next.label} to stop the buffering`; set(next, true); };
-  v.addEventListener('waiting', () => {
-    if (!v.currentTime) return; // the first load is not a stall
-    const t = Date.now(); stalls = stalls.filter((x) => t - x < 30000).concat(t);
-    if (stalls.length >= 3) return stepDown();
-    clearTimeout(stallTimer); stallTimer = setTimeout(() => { if (v.readyState < 3 && !v.paused) stepDown(); }, 3500);
-  });
-  v.addEventListener('playing', () => clearTimeout(stallTimer));
-  if (list.length > 1) for (const c of list) bar.append(h('button', { type: 'button', 'data-q': c.key, 'aria-pressed': 'false', onclick: () => { try { if (c.key === 'orig') sessionStorage.setItem('daji.vq', c.key); else { localStorage.setItem('daji.vq', c.key); sessionStorage.removeItem('daji.vq'); } } catch { /* no storage */ } note.textContent = ''; set(c, true); } }, c.label));
+  if (list.length > 1) for (const c of list) bar.append(h('button', { type: 'button', 'data-q': c.key, 'aria-pressed': 'false', onclick: () => { try { sessionStorage.setItem('daji.vq', c.key); } catch { /* no storage */ } set(c, true); } }, c.label));
   const box = h('div', { class: 'lightbox lb-video' }, v);
   const fs = h('button', { type: 'button', class: 'vq-fs', onclick: () => { const el = v.requestFullscreen ? v : box; (el.requestFullscreen || el.webkitRequestFullscreen || v.webkitEnterFullscreen || (() => {})).call(el); } }, 'Full screen');
   bar.append(fs);
   if (info.width) bar.append(h('span', { class: 'vq-size' }, `${info.width} × ${info.height}`));
-  bar.append(note);
-  openModal([box, bar], { photo: true, media: true, onClose: () => { clearTimeout(stallTimer); v.pause(); v.removeAttribute('src'); v.load(); } });
+  openModal([box, bar], { photo: true, media: true, onClose: () => { v.pause(); v.removeAttribute('src'); v.load(); } });
   set(cur, false);
   v.play && v.play().catch(() => {});
 }
