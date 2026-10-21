@@ -13,6 +13,8 @@ export interface Config {
   /** Sites allowed to put the web app in an iframe (CSP frame-ancestors). Empty = only itself. */
   frameAncestors: string[];
   isLocal: boolean;
+  /** A CDN address that serves the photos, videos and background films (deploy/CDN.md), e.g. https://d1abcd.cloudfront.net. Empty = this server serves them. */
+  mediaCdn: string;
   demoMode: boolean;
   /** Phone number and WhatsApp code sign-up and sign-in. Off until the WhatsApp OTP template is approved in Meta (Facebook Developer); set OTP_SIGNIN=on to switch it back on. */
   otpSignIn: boolean;
@@ -138,6 +140,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     apiUrl,
     frameAncestors,
     isLocal,
+    mediaCdn: env.MEDIA_CDN?.trim() ? parseOrigin('MEDIA_CDN', env.MEDIA_CDN.trim()) : '',
     demoMode: truthy(env.DEMO_MODE, isLocal),
     otpSignIn: truthy(env.OTP_SIGNIN, false),
     jwtSecret: secret || DEV_SECRET,

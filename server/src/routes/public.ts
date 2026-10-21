@@ -75,6 +75,7 @@ export function publicRoutes(r: Router): void {
       fullPaymentWithinHours: s.fullPaymentWithinHours,
       demoMode: c.cfg.demoMode,
       publicUrl: c.cfg.publicUrl,
+      mediaBase: c.cfg.mediaCdn || null,
     };
     return ok(cfg);
   });

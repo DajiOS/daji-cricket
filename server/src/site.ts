@@ -22,7 +22,10 @@ export function serveWeb(cfg: Config, url: URL, ifNoneMatch?: string): Reply {
     const hashed = /\.[0-9A-Za-z_-]{8,}\.(js|css)$/.test(file);
     const st = statSync(file);
     const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
-    const headers: Record<string, string> = { 'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache', ETag: etag };
+    // the background films change only when they are drawn again, so browsers and the CDN may keep them for a week
+    const film = file.startsWith(join(root, 'assets', 'loops') + sep);
+    const headers: Record<string, string> = { 'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : film ? 'public, max-age=604800' : 'no-cache', ETag: etag };
+    if (film) headers['Cross-Origin-Resource-Policy'] = 'cross-origin';
     // The Wix custom element loads its script from here, so /embed/* is readable from any site. It is public code with no credentials.
     if (file.startsWith(join(root, 'embed') + sep)) {
       headers['Access-Control-Allow-Origin'] = '*';

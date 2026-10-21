@@ -32,3 +32,14 @@ test('the health check answers 503 when the database cannot be read', async () =
   assert.equal(r.body.ok, false);
   assert.equal(r.body.database, 'error');
 });
+
+test('MEDIA_CDN is optional; when set, the site may play videos from it', async () => {
+  const { sitePolicy } = await import('../src/http.ts');
+  const plain = loadConfig({ PUBLIC_URL: 'http://localhost:4000' });
+  assert.equal(plain.mediaCdn, '');
+  assert.match(sitePolicy(plain), /media-src 'self';/);
+  const cdn = loadConfig({ PUBLIC_URL: 'http://localhost:4000', MEDIA_CDN: ' https://d1abcd.cloudfront.net/ ' });
+  assert.equal(cdn.mediaCdn, 'https://d1abcd.cloudfront.net');
+  assert.match(sitePolicy(cdn), /media-src 'self' https:\/\/d1abcd\.cloudfront\.net;/);
+  assert.throws(() => loadConfig({ PUBLIC_URL: 'http://localhost:4000', MEDIA_CDN: 'cloudfront' }), /MEDIA_CDN/);
+});

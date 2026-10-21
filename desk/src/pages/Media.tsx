@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { PageHead, Stat, Loading, ErrorBox, useToast } from '../ui';
 import { useApi, del, patch, post, getToken } from '../lib';
 import { errText } from '../parts/admin/common';
@@ -12,6 +12,52 @@ const resLabel = (i: { width: number; height: number }) => { const s = Math.min(
 /** The full-resolution file to open; an HEVC original that many browsers cannot play opens as its 1080p copy. */
 const fullUrl = (it: Item) => (it.kind === 'video' && it.info?.codec === 'hevc' && it.hd ? it.hd : it.url);
 const size = (b: number) => (b >= 1073741824 ? (b / 1073741824).toFixed(2) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+
+/** A photo or video opened inside the desk: full screen over the page, with the previous and next file, Esc or the back button to
+ *  close, and the arrow keys to move. Videos start on the HD copy (it plays smoothly); the original is one tap away. */
+function Viewer({ items, at, onMove, onClose }: { items: Item[]; at: number; onMove: (i: number) => void; onClose: () => void }) {
+  const it = items[at]!;
+  const [orig, setOrig] = useState(false);
+  useEffect(() => setOrig(false), [it.id]);
+  const close = useRef(onClose); close.current = onClose;
+  useEffect(() => {
+    // the back button closes the viewer instead of leaving the page
+    history.pushState({ ...(history.state || {}), deskViewer: 1 }, '');
+    const pop = () => close.current();
+    window.addEventListener('popstate', pop);
+    return () => { window.removeEventListener('popstate', pop); if (history.state && history.state.deskViewer) history.back(); };
+  }, []);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft' && at > 0) onMove(at - 1);
+      else if (e.key === 'ArrowRight' && at < items.length - 1) onMove(at + 1);
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [at, items.length, onClose, onMove]);
+  const playable = it.kind === 'video' ? (orig ? fullUrl(it) : it.hd || it.web || fullUrl(it)) : it.url;
+  const nav: CSSProperties = { position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', border: 0, background: 'rgba(255,255,255,.14)', color: '#fff', fontSize: 26, cursor: 'pointer' };
+  return (
+    <div role="dialog" aria-modal="true" aria-label={it.name} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(8,10,12,.94)', display: 'grid', gridTemplateRows: 'auto 1fr', color: '#f3efe6' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', flexWrap: 'wrap' }}>
+        <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }} title={it.name}>{it.name}</strong>
+        <span style={{ opacity: .7, fontSize: 13 }}>{at + 1} of {items.length} · {size(it.bytes)}{it.info ? ` · ${resLabel(it.info)}` : ''}</span>
+        {it.kind === 'video' && (it.hd || it.web) && <button className="btn sm ghost" style={{ color: 'inherit' }} onClick={() => setOrig((o) => !o)}>{orig ? 'Play the HD copy' : 'Play the original'}</button>}
+        <a className="btn sm ghost" style={{ color: 'inherit' }} href={API + it.url} download={it.name}>Download</a>
+        <button className="btn sm ghost" style={{ color: 'inherit', fontSize: 20, lineHeight: 1 }} onClick={onClose} aria-label="Close">×</button>
+      </div>
+      <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ position: 'relative', minHeight: 0, display: 'grid', placeItems: 'center', padding: '0 64px 20px' }}>
+        {it.kind === 'video'
+          ? <video key={playable} src={API + playable} poster={it.poster ? API + it.poster : it.thumb ? API + it.thumb : undefined} controls autoPlay playsInline style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 8, background: '#000' }} />
+          : <img key={it.id} src={API + it.url} alt={it.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }} />}
+        {at > 0 && <button style={{ ...nav, left: 10 }} onClick={() => onMove(at - 1)} aria-label="Previous">‹</button>}
+        {at < items.length - 1 && <button style={{ ...nav, right: 10 }} onClick={() => onMove(at + 1)} aria-label="Next">›</button>}
+      </div>
+    </div>
+  );
+}
 
 interface BulkRes { results: { id: string; ok: boolean; error?: string }[] }
 type TypeFilter = 'all' | 'image' | 'video';
@@ -27,6 +73,7 @@ export default function Media() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [working, setWorking] = useState(false);
+  const [viewing, setViewing] = useState<string | null>(null);
   const shown = useMemo(() => (lib?.items ?? []).filter((i) => type === 'all' || i.kind === type), [lib, type]);
   // a file that was removed elsewhere can no longer be selected
   useEffect(() => { if (lib) setPicked((p) => { const ids = new Set(lib.items.map((i) => i.id)); const n = new Set([...p].filter((x) => ids.has(x))); return n.size === p.size ? p : n; }); }, [lib]);
@@ -177,7 +224,7 @@ export default function Media() {
         <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))' }}>
           {shown.map((it) => (
             <div key={it.id} className="card" style={{ padding: 10, display: 'grid', gap: 8, minWidth: 0, outline: picked.has(it.id) ? '2px solid var(--strong)' : undefined }}>
-              <a href={API + fullUrl(it)} target="_blank" rel="noreferrer" style={{ display: 'block', position: 'relative' }} title="Open at full resolution">
+              <a href={API + fullUrl(it)} onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); setViewing(it.id); }} style={{ display: 'block', position: 'relative' }} title="Open">
                 <input type="checkbox" checked={picked.has(it.id)} onChange={() => toggle(it.id)} onClick={(e) => e.stopPropagation()} aria-label={`Select ${it.name}`} style={{ position: 'absolute', left: 8, top: 8, width: 20, height: 20, zIndex: 2 }} />
                 {it.thumb ? <img src={API + it.thumb} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
                   : it.kind === 'image' ? <img src={API + it.url} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
@@ -192,6 +239,9 @@ export default function Media() {
             </div>
           ))}
         </div>
+      )}
+      {viewing && shown.some((i) => i.id === viewing) && (
+        <Viewer items={shown} at={shown.findIndex((i) => i.id === viewing)} onMove={(i) => setViewing(shown[i]!.id)} onClose={() => setViewing(null)} />
       )}
     </div>
   );

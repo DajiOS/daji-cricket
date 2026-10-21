@@ -130,7 +130,7 @@ function syncLoop() {
     const v = box.querySelector('video'); v.muted = true;
     if (window.IntersectionObserver) { loopSeen = loopSeen || new IntersectionObserver((es) => { for (const e of es) { const x = e.target.querySelector('video'); if (e.isIntersecting) x.play().catch(() => {}); else x.pause(); } }); loopSeen.observe(box); }
   }
-  const v = box.querySelector('video'), [webm, mp4] = v.querySelectorAll('source'), want = 'assets/loops/' + name;
+  const v = box.querySelector('video'), [webm, mp4] = v.querySelectorAll('source'), want = mediaUrl('/assets/loops/' + name);
   if (v.dataset.loop !== name) { v.dataset.loop = name; webm.src = want + '.webm'; mp4.src = want + '.mp4'; v.load(); v.play().catch(() => { /* autoplay refused: the page simply stays still */ }); }
 }
 function syncDesign() {
@@ -518,16 +518,22 @@ function openModal(content, { wide = false, onClose, photo = false, media = fals
   sheet.append(h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: () => closeModal() }, '×'), ...[].concat(content).filter((x) => x != null));
   $('#modal').classList.add('open');
   $('#modal')._onClose = onClose || null;
+  // a photo or video opens inside the page; the phone's back button closes it again instead of leaving the site
+  if (media && !(history.state && history.state.dajiViewer)) { try { history.pushState({ ...(history.state || {}), dajiViewer: 1 }, ''); $('#modal')._viewer = true; } catch { /* no history */ } }
   const first = $('input,textarea,select,button.primary', sheet); if (first && !matchMedia('(pointer:coarse)').matches) first.focus();
 }
-function closeModal() {
+function closeModal(fromBack) {
   const m = $('#modal');
+  if (!fromBack && m._viewer && history.state && history.state.dajiViewer) { history.back(); return; } // popstate below closes it
+  if (!m.classList.contains('open')) return;
+  m._viewer = false;
   m.classList.remove('open');
   const f = m._onClose; m._onClose = null;
   if (f) f();
 }
 $('#modal').addEventListener('mousedown', (e) => { if (e.target.id === 'modal') closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#modal').classList.contains('open')) closeModal(); });
+window.addEventListener('popstate', () => { if ($('#modal')._viewer && $('#modal').classList.contains('open')) closeModal(true); });
 
 function field(label, input, err) { return h('label', { class: 'field' }, h('span', {}, label), input, err ? h('div', { class: 'fe' }, err) : null); }
 function input(name, type = 'text', attrs = {}) { return h('input', { name, type, autocomplete: attrs.autocomplete, ...attrs }); }
@@ -833,12 +839,25 @@ async function loadCredit() {
 // ------------------------------------------------------------------ the page's static content
 
 /** An uploaded photo is a path on the server; on Wix the server is another address, so put it in front. */
-const photoSrc = (u) => (u.startsWith('/api/media/') ? API + u : u);
+/** Photos, videos and the background films load from the media CDN once one is set up (MEDIA_CDN, deploy/CDN.md), else from this
+ *  server. If the CDN cannot deliver a file, the page asks this server for it instead (see the error listener below). */
+const mediaBase = () => (state.config && state.config.mediaBase) || '';
+const mediaUrl = (u) => (mediaBase() && /^\/(media|api\/media|assets)\//.test(u) ? mediaBase() + u : API + u);
+const photoSrc = (u) => (u.startsWith('/api/media/') ? mediaUrl(u) : u);
+document.addEventListener('error', (e) => {
+  const el = e.target, base = mediaBase(); if (!base || !el || !el.getAttribute) return;
+  const a = el.tagName === 'VIDEO' ? 'poster' : 'src', u = el.getAttribute(el.tagName === 'VIDEO' && el.getAttribute('src') ? 'src' : a);
+  if (!u || !u.startsWith(base + '/')) return;
+  const back = API + u.slice(base.length);
+  if (el.tagName === 'SOURCE') { el.src = back; el.parentNode && el.parentNode.load && el.parentNode.load(); }
+  else if (el.tagName === 'VIDEO') { const t = el.currentTime; el.src = back; el.addEventListener('loadedmetadata', () => { if (t) el.currentTime = t; el.play().catch(() => {}); }, { once: true }); }
+  else el.src = back;
+}, true);
 function fillAcademyPhotos() {
   const box = $('#ac-gal'); if (!box) return; clear(box);
   const secG = $('#ac-galsec');
   const list = (state.config.academyGallery || []).filter((u) => /^(https:\/\/|\/api\/media\/)/.test(u)).slice(0, 12);
-  for (const u of list) box.append(h('img', { src: photoSrc(u), alt: 'Academy photo', loading: 'lazy' }));
+  for (const u of list) box.append(h('img', { src: photoSrc(u), alt: 'Academy photo', loading: 'lazy', style: 'cursor:zoom-in', onclick: () => openModal([h('div', { class: 'lightbox' }, h('img', { src: photoSrc(u), alt: 'Academy photo' }))], { photo: true, media: true }) }));
   box.hidden = !list.length; if (secG) secG.hidden = !list.length;
 }
 function fillCoaches() {
@@ -891,7 +910,7 @@ function startChoice(list) {
   return has('hd') || has('web') || list[0];
 }
 function openVideo(it) {
-  const src = (u) => API + u, list = videoChoices(it);
+  const src = mediaUrl, list = videoChoices(it);
   let cur = startChoice(list);
   const info = it.info || {};
   const v = h('video', { controls: '', autoplay: '', playsinline: '', preload: 'auto', 'aria-label': it.name || 'Video of the ground' });
@@ -934,7 +953,7 @@ async function fillLibrary() {
   let items = [];
   try { const r = await fetch(API + '/api/library/public'); if (r.ok) items = (await r.json()).items || []; } catch { return; }
   if (!items.length) return;
-  const src = (it) => API + it.url;
+  const src = (it) => mediaUrl(it.url);
   const hero = items.filter((i) => i.tag === 'hero').reverse()[0];
   const lead = $('#top .lead');
   if (hero && lead && !$('#hero-media')) {
