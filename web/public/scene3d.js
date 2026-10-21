@@ -12,7 +12,8 @@
 
   function load() {
     if (window.THREE) return Promise.resolve();
-    if (!loading) loading = new Promise(function (ok, no) { var s = document.createElement('script'); s.src = SRC; s.async = true; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+    // one copy of three.js for the page: the opening animation (intro3d.js) may already be fetching it
+    if (!loading) loading = window.DajiThreeLoading || (window.DajiThreeLoading = new Promise(function (ok, no) { var s = document.createElement('script'); s.src = SRC; s.async = true; s.onload = ok; s.onerror = no; document.head.appendChild(s); }));
     return loading;
   }
   function cv(w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
@@ -213,6 +214,7 @@
     host = null;
   }
   document.addEventListener('visibilitychange', kick);
-  window.DajiScene = { mount: mount, unmount: unmount };
+  // the ball and pitch maps are shared with the opening animation (intro3d.js), so both draw the same ball
+  window.DajiScene = { mount: mount, unmount: unmount, textures: function () { return { ball: ballTex(), pitch: pitchTex() }; } };
   if (window.DajiScenePending) { var q = window.DajiScenePending; window.DajiScenePending = null; mount(q.el, q.p); }
 })();
