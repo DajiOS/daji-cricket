@@ -37,6 +37,14 @@ export const PACKS: PackDef[] = [
       { from: 17, name: 'Evening', designs: ['dusk', 'scoreboard'] },
       { from: 20, name: 'Night', designs: ['aurora', 'ember'] },
     ] },
+  { id: '2027-q2', name: 'Summer season', from: '2027-04-01',
+    note: 'Ten new designs for April to June: kulfi mornings, summer camp nets, neem shade, the heatwave, ice gola, khus-cool afternoons, powerplay league nights, pre-monsoon skies, fireflies and jamun nights.',
+    bands: [
+      { from: 6, name: 'Morning', designs: ['kulfi', 'camp', 'neem'] },
+      { from: 11, name: 'Afternoon', designs: ['heatwave', 'gola', 'khus'] },
+      { from: 17, name: 'Evening', designs: ['powerplay', 'thunder'] },
+      { from: 20, name: 'Night', designs: ['firefly', 'jamun'] },
+    ] },
 ];
 
 /** Every designer theme in any pack, live or archived. */

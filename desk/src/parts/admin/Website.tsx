@@ -15,6 +15,8 @@ export const DESIGN_NAMES: Record<string, string> = {
   maroon: 'Royal Maroon', carbon: 'Carbon T20', champagne: 'Champagne Minimal', stadium: 'Stadium Royal Blue', willow: 'Willow & Leather',
   mist: 'Winter Mist', scorebook: 'Scorebook', sunrise: 'Sunrise Nets', azure: 'Azure Day', terracotta: 'Stepwell Terracotta',
   mango: 'Mango Grove', dusk: 'Golden Hour', scoreboard: 'Scoreboard', aurora: 'Winter Night', ember: 'Ember Night',
+  kulfi: 'Kulfi Cream', camp: 'Summer Camp', neem: 'Neem Shade', heatwave: 'Heatwave', gola: 'Ice Gola',
+  khus: 'Khus Cool', powerplay: 'Powerplay', thunder: 'Pre-monsoon Sky', firefly: 'Firefly Night', jamun: 'Jamun Night',
   ivory: 'Plain light', obsidian: 'Plain dark',
 };
 /** Page colour and accent of each design, for the little swatches. */
@@ -23,6 +25,8 @@ const SWATCH: Record<string, [string, string]> = {
   maroon: ['#260a10', '#e4bb6a'], carbon: ['#0c0e11', '#9fd8ff'], champagne: ['#ffffff', '#9a7a3e'], stadium: ['#06184a', '#ffcb3d'], willow: ['#1c120b', '#dca66b'],
   mist: ['#eef2f4', '#2f6f8f'], scorebook: ['#f6f1e4', '#2446a8'], sunrise: ['#fff4ec', '#d44d33'], azure: ['#f3f8fd', '#0a6fd6'], terracotta: ['#f5e9dc', '#b14e2b'],
   mango: ['#0f2117', '#ffbf3c'], dusk: ['#1a1022', '#ffa84a'], scoreboard: ['#0a0a0a', '#ffb000'], aurora: ['#070b1a', '#6ef0c8'], ember: ['#0e0806', '#ff6a2b'],
+  kulfi: ['#fbf6ea', '#2f8f6b'], camp: ['#f2f9ff', '#d45816'], neem: ['#eef3e6', '#3c6b2f'], heatwave: ['#fbefd9', '#d2381c'], gola: ['#f4fbfd', '#e0245e'],
+  khus: ['#0c1a15', '#9fe3b8'], powerplay: ['#0d0a1f', '#c6ff3d'], thunder: ['#0e1820', '#ffd23f'], firefly: ['#06110c', '#e4ff6e'], jamun: ['#150a1f', '#c9a7ff'],
 };
 const nameOf = (d: string) => DESIGN_NAMES[d] || d.charAt(0).toUpperCase() + d.slice(1);
 const hourText = (h: number) => (h === 0 ? 'midnight' : h === 12 ? 'noon' : h < 12 ? `${h} am` : `${h - 12} pm`);

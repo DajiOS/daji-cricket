@@ -19,10 +19,13 @@ const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', '
   ['noir', 'Floodlight Noir', '#07090a', '#d6b36a'], ['pavilion', 'Emerald Pavilion', '#0b2a20', '#dcc289'], ['whites', 'Test Whites', '#fbfbf8', '#b3261e'], ['pinkball', 'Pink Ball Night', '#0b0c22', '#ff7ab6'], ['monsoon', 'Monsoon Glass', '#0d1a1e', '#7fd6c3'], ['maroon', 'Royal Maroon', '#260a10', '#e4bb6a'], ['carbon', 'Carbon T20', '#0c0e11', '#9fd8ff'], ['champagne', 'Champagne Minimal', '#ffffff', '#9a7a3e'], ['stadium', 'Stadium Royal Blue', '#06184a', '#ffcb3d'], ['willow', 'Willow & Leather', '#1c120b', '#dca66b'],
   // designer themes, Jan to Mar 2027 pack
   ['mist', 'Winter Mist', '#eef2f4', '#2f6f8f'], ['scorebook', 'Scorebook', '#f6f1e4', '#2446a8'], ['sunrise', 'Sunrise Nets', '#fff4ec', '#d44d33'], ['azure', 'Azure Day', '#f3f8fd', '#0a6fd6'], ['terracotta', 'Stepwell Terracotta', '#f5e9dc', '#b14e2b'], ['mango', 'Mango Grove', '#0f2117', '#ffbf3c'], ['dusk', 'Golden Hour', '#1a1022', '#ffa84a'], ['scoreboard', 'Scoreboard', '#0a0a0a', '#ffb000'], ['aurora', 'Winter Night', '#070b1a', '#6ef0c8'], ['ember', 'Ember Night', '#0e0806', '#ff6a2b'],
+  // designer themes, Apr to Jun 2027 pack
+  ['kulfi', 'Kulfi Cream', '#fbf6ea', '#2f8f6b'], ['camp', 'Summer Camp', '#f2f9ff', '#d45816'], ['neem', 'Neem Shade', '#eef3e6', '#3c6b2f'], ['heatwave', 'Heatwave', '#fbefd9', '#d2381c'], ['gola', 'Ice Gola', '#f4fbfd', '#e0245e'], ['khus', 'Khus Cool', '#0c1a15', '#9fe3b8'], ['powerplay', 'Powerplay', '#0d0a1f', '#c6ff3d'], ['thunder', 'Pre-monsoon Sky', '#0e1820', '#ffd23f'], ['firefly', 'Firefly Night', '#06110c', '#e4ff6e'], ['jamun', 'Jamun Night', '#150a1f', '#c9a7ff'],
   // festival looks
   ['uttarayan', 'Uttarayan', '#eef6fc', '#d9461a'], ['tiranga', 'Tiranga (Republic and Independence Day)', '#fffdf8', '#c45800'], ['holi', 'Holi', '#fff8fc', '#c41f6f'], ['ganesh', 'Ganesh Chaturthi', '#2b0d06', '#ffa21a'], ['navratri', 'Navratri', '#1a0626', '#ffb703'], ['diwali', 'Diwali', '#0d0820', '#ffb547'], ['christmas', 'Christmas and New Year', '#0c1f17', '#d9b25e']];
 const DESIGNER_THEMES = ['noir', 'pavilion', 'whites', 'pinkball', 'monsoon', 'maroon', 'carbon', 'champagne', 'stadium', 'willow',
-  'mist', 'scorebook', 'sunrise', 'azure', 'terracotta', 'mango', 'dusk', 'scoreboard', 'aurora', 'ember'];
+  'mist', 'scorebook', 'sunrise', 'azure', 'terracotta', 'mango', 'dusk', 'scoreboard', 'aurora', 'ember',
+  'kulfi', 'camp', 'neem', 'heatwave', 'gola', 'khus', 'powerplay', 'thunder', 'firefly', 'jamun'];
 const FESTIVAL_THEMES = ['uttarayan', 'tiranga', 'holi', 'ganesh', 'navratri', 'diwali', 'christmas'];
 const FEST_ICON = {
   uttarayan: '<path d="M12 2 20 11 12 20 4 11Z" fill="#e8501f"/><path d="M12 2v18M4 11h16" stroke="#fff" stroke-width="1.2"/><path d="M12 20c-1 2 1 2 0 4" stroke="#0a8ac8" stroke-width="1.4" fill="none"/>',
@@ -40,6 +43,7 @@ const THEME_FONTS = {
   carbon: 'Barlow+Condensed:ital,wght@0,400;0,600;0,800;1,800&family=Barlow:wght@400;500;600', champagne: 'Italiana&family=Jost:wght@300;400;500;600', stadium: 'Big+Shoulders+Display:wght@400;700;900&family=Figtree:wght@400;500;600;700',
   willow: 'Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,400&family=Karla:wght@400;500;600', uttarayan: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700', tiranga: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700',
   holi: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700', ganesh: 'Yatra+One&family=Mulish:wght@400;500;600;700', navratri: 'Yatra+One&family=Mulish:wght@400;500;600;700', diwali: 'Yatra+One&family=Mulish:wght@400;500;600;700', christmas: 'Manrope:wght@400;500;600;700',
+  kulfi: 'Gilda+Display&family=Albert+Sans:wght@400;500;600;700', camp: 'Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700', neem: 'Lora:ital,wght@0,500;0,600;1,500&family=Source+Sans+3:wght@400;500;600;700', heatwave: 'Space+Grotesk:wght@500;700&family=DM+Sans:wght@400;500;600;700', gola: 'Shrikhand&family=Poppins:wght@400;500;600;700', khus: 'Marcellus&family=Mukta:wght@400;500;600;700', powerplay: 'Bebas+Neue&family=Lexend:wght@400;500;600;700', thunder: 'Oswald:wght@500;600;700&family=Public+Sans:wght@400;500;600;700', firefly: 'Comfortaa:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700', jamun: 'Playfair+Display:ital,wght@0,500;0,700;1,500&family=Lato:wght@400;700',
   mist: 'Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700', scorebook: 'Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=IBM+Plex+Sans:wght@400;500;600;700', sunrise: 'Young+Serif&family=Plus+Jakarta+Sans:wght@400;500;600;700', azure: 'Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700', terracotta: 'Rozha+One&family=Hind:wght@400;500;600;700', mango: 'Gloock&family=Nunito+Sans:wght@400;600;700', dusk: 'Libre+Caslon+Display&family=Work+Sans:wght@400;500;600;700', scoreboard: 'Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Rubik:wght@400;500;600;700', aurora: 'Red+Hat+Display:ital,wght@0,500;0,700;0,900;1,700&family=Red+Hat+Text:wght@400;500;600;700', ember: 'Anton&family=Archivo:wght@400;500;600;700',
 };
 function loadThemeFonts(t) { const f = THEME_FONTS[t]; if (!f || document.getElementById('tf-' + t)) return; const l = document.createElement('link'); l.id = 'tf-' + t; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + f + '&display=swap'; document.head.appendChild(l); }
@@ -109,6 +113,37 @@ const DESIGNS = {
   ember: { layout: 'center', decor: 'embers', eyebrow: 'Late slots until 11 pm', h1: ['After dark,', 'the game <em>glows.</em>'],
     lede: 'Night matches when the city has gone quiet. Book the ground, pay a small advance and the evening is yours.',
     g: { mode: 'spin', rings: true, parts: 'dust', pc: '#ffb27a', key: '#ffe1c8', rim: '#ff6a2b', acc: '#ffb000', exp: 1.08 } },
+  // Apr to Jun 2027 pack: summer mornings before the heat, shaded afternoons, league evenings, pre-monsoon skies and warm nights
+  kulfi: { layout: 'center', decor: 'swirl', eyebrow: 'Summer mornings · Surat', h1: ['Cool start,', '<em>hot</em> innings.'],
+    lede: 'Play while the morning is still cool. Book an early slot and finish before the sun gets high.',
+    g: { mode: 'orbit', parts: 'dust', pc: '#ffffff', key: '#ffffff', rim: '#f6e6c4', acc: '#2f8f6b', grass: ['#76a85a', '#80b263'], exp: 1.15, day: true } },
+  camp: { layout: 'split', decor: 'bunting', eyebrow: 'Summer holidays · MP13 Academy', h1: ['School’s out.', '<em>Nets</em> are open.'],
+    lede: 'Holiday coaching and morning nets for young players. Pick the days, pay the advance and send them in whites.',
+    g: { mode: 'delivery', parts: 'dust', pc: '#ffd9b8', key: '#fff6ea', rim: '#ffb07a', acc: '#ff6a1a', grass: ['#6fa64e', '#79b157'], exp: 1.12, day: true } },
+  neem: { layout: 'editorial', decor: 'leaves', eyebrow: 'Shade by the boundary', h1: ['Under the neem,', '<em>between</em> overs.'],
+    lede: 'Shaded seats, cold water and a turf wicket that holds up in the heat. Book the ground for your side.',
+    g: { mode: 'spin', parts: 'none', key: '#fbfff2', rim: '#cfe0b8', acc: '#3c6b2f', exp: 1.14, day: true } },
+  heatwave: { layout: 'overlay', decor: 'haze', eyebrow: '42° outside · Plan your slot', h1: ['Too hot at noon?', 'Book <em>the evening.</em>'],
+    lede: 'Afternoons are for the brave. Pick a morning or a floodlit evening slot and play when the heat lets up.',
+    g: { mode: 'orbit', parts: 'dust', pc: '#ffe2b0', key: '#fff3dc', rim: '#ffb26b', acc: '#d2381c', grass: ['#8aa04a', '#94aa52'], exp: 1.16, ox: 0.2, day: true } },
+  gola: { layout: 'split-rev', decor: 'ice', eyebrow: 'Ice gola after the match', h1: ['Chill out,', '<em>then</em> bat again.'],
+    lede: 'Weekend matches with a cold break between innings. Reserve the ground for your team in under a minute.',
+    g: { mode: 'spin', rings: true, parts: 'dust', pc: '#ffffff', key: '#ffffff', rim: '#bfe9f4', acc: '#e0245e', grass: ['#6aa257', '#74ad60'], exp: 1.14, day: true } },
+  khus: { layout: 'split', decor: 'screen', eyebrow: 'Shaded afternoons', h1: ['Cool shade,', '<em>long</em> spells.'],
+    lede: 'Changing rooms with cool air, a shaded pavilion and drinking water on the boundary. Book your afternoon match.',
+    g: { mode: 'spin', parts: 'dust', pc: '#cfffe0', key: '#e9fff1', rim: '#9fe3b8', acc: '#e8c36a', grass: ['#1f4430', '#244b36'], exp: 1.06 } },
+  powerplay: { layout: 'editorial', decor: 'neon', eyebrow: 'League season · Evenings', h1: ['Six overs.', '<em>No fielders</em> out.'],
+    lede: 'League nights and friendly T20s under the lights. Every free slot is on the page, so book and go.',
+    g: { mode: 'delivery', parts: 'dust', pc: '#e8ff9a', key: '#f6ffe0', rim: '#c6ff3d', acc: '#8a5cff', grass: ['#14301f', '#183825'], exp: 1.04 } },
+  thunder: { layout: 'overlay', decor: 'clouds', eyebrow: 'Pre-monsoon evenings', h1: ['Clouds rolling in.', 'Play <em>before the rain.</em>'],
+    lede: 'June evenings bring the first clouds and a cool breeze. Book a slot, and if the rain comes, move it in a tap.',
+    g: { mode: 'orbit', parts: 'rain', pc: '#d8e6f0', key: '#e6eef5', rim: '#ffd23f', acc: '#6fa8dc', grass: ['#18352a', '#1c3c30'], exp: 1.02, ox: 0.2 } },
+  firefly: { layout: 'center', decor: 'fireflies', eyebrow: 'Warm nights until 11 pm', h1: ['Warm nights,', '<em>bright</em> lights.'],
+    lede: 'When the day cools down the floodlights come on. Book a late slot and play the last overs of the day.',
+    g: { mode: 'spin', parts: 'stars', pc: '#e4ff6e', key: '#f2ffd0', rim: '#e4ff6e', acc: '#7fd6a0', grass: ['#0f2a1b', '#123120'], exp: 1.04 } },
+  jamun: { layout: 'split-rev', decor: 'berries', eyebrow: 'June nights · Floodlit', h1: ['Night match,', '<em>full</em> house.'],
+    lede: 'Bring your team for a night game under the lights. Pay a small advance and the ground is held in your name.',
+    g: { mode: 'delivery', parts: 'stars', pc: '#e2d0ff', key: '#efe6ff', rim: '#c9a7ff', acc: '#ff8fc8', grass: ['#16251d', '#1a2b22'], exp: 1.06 } },
 };
 let heroOrig = null;
 /** The background film behind the hero (assets/loops, drawn in code by tools/loops): one for each designer theme and festival look,
