@@ -1,0 +1,16 @@
+/* Forms that never fail silently: required marks, fields marked in red, the message by the button, a spinner while sending. */
+label.f .req { color: var(--bad); font-weight: 600; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+label.f.bad .inp, label.f.bad input, label.f.bad select, label.f.bad textarea { border-color: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 14%, transparent); }
+label.f.bad > span { color: var(--bad); }
+.ferr { font-size: 12.5px; color: var(--bad); margin-top: 5px; font-weight: 500; }
+.modal-foot { flex-wrap: wrap; align-items: center; }
+.modal-foot .err { flex: 1 1 100%; order: -1; margin: 0; }
+.btn[aria-busy="true"] { opacity: .85; cursor: progress; }
+.btn[aria-busy="true"]::before { content: ''; width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.req-note { font-size: 12px; color: var(--faint); }
+.req-note b { color: var(--bad); }
+/* an input marked `required` gets the same mark by its label, so marking a field needs no extra markup */
+label.f:has(> .inp:required, > input:required, > select:required, > textarea:required) > span::after,
+label.field:has(> input:required) > span::after { content: ' *'; color: var(--bad); font-weight: 600; }

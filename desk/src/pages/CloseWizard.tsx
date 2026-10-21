@@ -32,6 +32,9 @@ export default function CloseWizard({ sub }: { sub: string }) {
   const writer = can(me, 'manage_accounting');
 
   async function signOff() {
+    if (!writer) return setFail('Signing off needs the "manage_accounting" permission. Ask the owner.');
+    if (!d?.over) return setFail(`${name(month)} has not ended yet. It can be signed off from the 1st of next month.`);
+    if (blocked) return setFail('Finish the steps marked as blocking first. They are in the list on the left.');
     setBusy(true); setFail(null);
     try {
       if (memo.trim()) await put(`/api/accounting/memos/${month}`, { body: memo.trim() });
@@ -72,7 +75,7 @@ export default function CloseWizard({ sub }: { sub: string }) {
                   <ErrorBox msg={fail} />
                   {!writer && <p className="small muted">Signing off needs the "manage_accounting" permission. Ask the owner.</p>}
                   <div className="row" style={{ marginTop: 14 }}>
-                    <button className="btn primary" disabled={busy || !writer || blocked || !d.over} onClick={signOff}><Icon name="lock" />Sign off {name(month)}</button>
+                    <button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={signOff}><Icon name="lock" />Sign off {name(month)}</button>
                   </div>
                 </>
               ) : (

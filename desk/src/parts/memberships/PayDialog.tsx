@@ -40,22 +40,22 @@ export default function PayDialog({ plans, member, onClose, onDone }: { plans: P
 
   return (
     <Modal title={member ? `Renew ${member.name}` : 'Sell a membership'} onClose={onClose}
-      foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !plan} onClick={submit}>{busy ? 'Saving…' : member ? 'Record renewal' : 'Record sale'}</button></>}>
+      foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={submit}>{busy ? 'Saving…' : member ? 'Record renewal' : 'Record sale'}</button></>}>
       {!choices.length ? <div className="muted">Add an active plan first (Plans tab).</div> : (
         <div className="form-grid">
           {member ? (
             <div className="full small muted">{formatPhone(member.phone)} · now {member.planName}, ends {fmtDate(member.endDate)}</div>
           ) : (<>
             <NameField value={name} onChange={setName} autoFocus />
-            <Field label="Mobile number"><input className="inp" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" /></Field>
+            <Field label="Mobile number" required><input className="inp" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" /></Field>
           </>)}
-          <Field label="Plan" full={!!member}>
+          <Field label="Plan" full={!!member} required>
             <select className="inp" value={planId} onChange={(e) => { setPlanId(e.target.value); setAmount(null); }}>
               {choices.map((p) => <option key={p.id} value={p.id}>{p.name} · {inr(p.pricePaise)} · {p.durationDays} days{p.active ? '' : ' (off)'}</option>)}
             </select>
           </Field>
           {!member && <Field label="Starts on"><DateInput className="inp" value={start} onChange={(e) => setStart(e.target.value)} /></Field>}
-          <Field label="Amount received (₹)" hint={plan && amountText !== rupees(plan.pricePaise) ? `Plan price is ${inr(plan.pricePaise)}` : undefined}>
+          <Field label="Amount received (₹)" required hint={plan && amountText !== rupees(plan.pricePaise) ? `Plan price is ${inr(plan.pricePaise)}` : undefined}>
             <input className="inp" inputMode="decimal" value={amountText} onChange={(e) => setAmount(e.target.value)} />
           </Field>
           <Field label="Paid by">

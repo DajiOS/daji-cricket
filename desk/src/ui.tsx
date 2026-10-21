@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { fieldSentence } from './formtext';
 
 // ---------- icons (1.6px line, gold via currentColor) ----------
 const P: Record<string, string> = {
@@ -112,10 +113,83 @@ export const Empty = ({ children }: { children: ReactNode }) => (
   <div className="empty"><div className="crest"><Crest size={40} /></div>{children}</div>
 );
 export const Loading = ({ h = 220 }: { h?: number }) => <div className="shimmer" style={{ height: h }} aria-label="Loading" />;
-export const ErrorBox = ({ msg }: { msg: string | null }) => (msg ? <div className="err" role="alert">{msg}</div> : null);
+/** The reason something could not be done. It scrolls itself into view, so a message is never left below the screen. */
+export function ErrorBox({ msg }: { msg: string | null }) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (msg) box.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }, [msg]);
+  return msg ? <div ref={box} className="err" role="alert">{msg}</div> : null;
+}
 
-export function Field({ label, hint, children, full }: { label: string; hint?: string; children: ReactNode; full?: boolean }) {
-  return <label className={`f${full ? ' full' : ''}`}><span>{label}</span>{children}{hint && <div className="hint">{hint}</div>}</label>;
+/**
+ * A labelled form field. `required` puts a mark by the label; `error` shows the problem under the field and outlines it in red.
+ * `name` is the key the server uses for it ("phone"), so useSubmit can point at it when the server turns it down.
+ */
+export function Field({ label, hint, children, full, required, error, name }: { label: string; hint?: string; children: ReactNode; full?: boolean; required?: boolean; error?: string | null; name?: string }) {
+  return (
+    <label className={`f${full ? ' full' : ''}${error ? ' bad' : ''}`} data-field={name}>
+      <span>{label}{required && <b className="req" title="Required"> *<i className="sr"> (required)</i></b>}</span>
+      {children}
+      {error ? <div className="ferr" role="alert">{error}</div> : hint && <div className="hint">{hint}</div>}
+    </label>
+  );
+}
+
+/** Scrolls to the field named `name` (inside `root`, or the open dialog, or the page) and puts the cursor in it. */
+export function showField(name: string, root?: HTMLElement | null) {
+  requestAnimationFrame(() => {
+    const scope: ParentNode = root || [...document.querySelectorAll('.modal')].pop() || document;
+    const el = scope.querySelector<HTMLElement>(`[data-field="${CSS.escape(name)}"]`);
+    if (!el) return;
+    el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    el.querySelector<HTMLElement>('input:not([type=hidden]),select,textarea,button')?.focus({ preventScroll: true });
+  });
+}
+
+/**
+ * Everything a form needs so it never fails silently: a busy flag for the button, one plain message for by the button,
+ * and the fields to mark. `check` stops before sending when something is missing; `run` sends and turns any server
+ * refusal into the message, marking the fields the server named.
+ *
+ *   const f = useSubmit();
+ *   const save = () => f.check([[!!phone.trim(), 'phone', 'Enter the mobile number.']]) && f.run(async () => { await post(...); onDone(); });
+ *   <Field label="Mobile" name="phone" required error={f.bad.phone}>...</Field>
+ *   <FormError f={f} /> <Submit f={f} onClick={save}>Save</Submit>
+ */
+export function useSubmit(root?: { current: HTMLElement | null }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [bad, setBad] = useState<Record<string, string>>({});
+  const fail = (msg: string, field?: string) => { setErr(msg); setBad(field ? { [field]: msg } : {}); if (field) showField(field, root?.current); };
+  const clear = () => { setErr(null); setBad({}); };
+  /** Each check is [ok, field, message]. Marks every failing field and says the first problem. Returns true when all pass. */
+  const check = (checks: [unknown, string | null, string][]) => {
+    const no = checks.filter(([ok]) => !ok);
+    if (!no.length) { clear(); return true; }
+    const marks: Record<string, string> = {};
+    for (const [, f, m] of no) if (f && !marks[f]) marks[f] = m;
+    setBad(marks); setErr(no.length > 1 ? `${no[0]![2]} ${no.length - 1} more ${no.length === 2 ? 'thing needs' : 'things need'} filling in, marked in red.` : no[0]![2]);
+    const first = no.find(([, f]) => f)?.[1]; if (first) showField(first, root?.current);
+    return false;
+  };
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true); clear();
+    try { await fn(); }
+    catch (e) {
+      const fields = (e as { fields?: { field: string; message: string }[] }).fields || [];
+      const marks: Record<string, string> = {};
+      for (const x of fields) { const k = x.field.split('.').pop()!; marks[k] ??= fieldSentence(x); marks[x.field] ??= fieldSentence(x); }
+      setBad(marks); setErr((e as Error)?.message || 'Something went wrong. Nothing was saved.');
+      if (fields[0]) showField(fields[0].field.split('.').pop()!, root?.current);
+    } finally { setBusy(false); }
+  };
+  return { busy, err, bad, fail, clear, check, run };
+}
+export type SubmitState = ReturnType<typeof useSubmit>;
+/** The message for by the submit button: why the form did not go through. */
+export const FormError = ({ f }: { f: SubmitState }) => <ErrorBox msg={f.err} />;
+/** The submit button: never greyed out for a missing field (pressing it says what is missing), and shows a spinner while sending. */
+export function Submit({ f, onClick, children, busyText, className = 'btn primary' }: { f: SubmitState; onClick: () => void; children: ReactNode; busyText?: string; className?: string }) {
+  return <button type="button" className={className} disabled={f.busy} aria-busy={f.busy || undefined} onClick={onClick}>{f.busy ? (busyText || 'Saving…') : children}</button>;
 }
 
 /** "Asha Rao" becomes first "Asha", last "Rao"; the last word is the surname. */
@@ -125,20 +199,20 @@ export function splitName(full: string): { first: string; last: string } {
 }
 export const joinName = (first: string, last: string) => `${first.trim()} ${last.trim()}`.trim();
 
-/** First name and last name as two fields, for any form that asks for a person. */
-export function NameFields({ first, last, onFirst, onLast, firstLabel = 'First name', lastLabel = 'Last name', autoFocus }: { first: string; last: string; onFirst: (v: string) => void; onLast: (v: string) => void; firstLabel?: string; lastLabel?: string; autoFocus?: boolean }) {
+/** First name and last name as two fields, for any form that asks for a person. `required` marks the first name as needed; `error` is shown under it. */
+export function NameFields({ first, last, onFirst, onLast, firstLabel = 'First name', lastLabel = 'Last name', autoFocus, required, error }: { first: string; last: string; onFirst: (v: string) => void; onLast: (v: string) => void; firstLabel?: string; lastLabel?: string; autoFocus?: boolean; required?: boolean; error?: string | null }) {
   return (<>
-    <Field label={firstLabel}><input className="inp" maxLength={40} autoComplete="given-name" autoFocus={autoFocus} value={first} onChange={(e) => onFirst(e.target.value)} /></Field>
-    <Field label={lastLabel}><input className="inp" maxLength={40} autoComplete="family-name" value={last} onChange={(e) => onLast(e.target.value)} /></Field>
+    <Field label={firstLabel} name="firstName" required={required} error={error}><input className="inp" maxLength={40} autoComplete="given-name" autoFocus={autoFocus} value={first} onChange={(e) => onFirst(e.target.value)} /></Field>
+    <Field label={lastLabel} name="lastName"><input className="inp" maxLength={40} autoComplete="family-name" value={last} onChange={(e) => onLast(e.target.value)} /></Field>
   </>);
 }
 
 /** Drop-in for a single "Name" field: shows First name and Last name, and reports the full name. */
-export function NameField({ value, onChange, autoFocus, firstLabel = 'First name', lastLabel = 'Last name' }: { value: string; onChange: (full: string) => void; autoFocus?: boolean; firstLabel?: string; lastLabel?: string }) {
+export function NameField({ value, onChange, autoFocus, firstLabel = 'First name', lastLabel = 'Last name', required, error }: { value: string; onChange: (full: string) => void; autoFocus?: boolean; firstLabel?: string; lastLabel?: string; required?: boolean; error?: string | null }) {
   const [p, setP] = useState(() => splitName(value));
   useEffect(() => { if (joinName(p.first, p.last) !== (value || '').trim()) setP(splitName(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k: 'first' | 'last') => (v: string) => { const n = { ...p, [k]: v }; setP(n); onChange(joinName(n.first, n.last)); };
-  return <NameFields first={p.first} last={p.last} onFirst={set('first')} onLast={set('last')} autoFocus={autoFocus} firstLabel={firstLabel} lastLabel={lastLabel} />;
+  return <NameFields first={p.first} last={p.last} onFirst={set('first')} onLast={set('last')} autoFocus={autoFocus} firstLabel={firstLabel} lastLabel={lastLabel} required={required} error={error} />;
 }
 
 export function Modal({ title, onClose, children, foot, wide }: { title: string; onClose: () => void; children: ReactNode; foot?: ReactNode; wide?: boolean }) {

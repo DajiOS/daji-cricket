@@ -1,4 +1,3 @@
-import { ApiError } from '../../lib';
 import { Chip, type Tone } from '../../ui';
 
 export interface Plan { id: string; name: string; pricePaise: number; durationDays: number; perks: string; active: boolean; members: number }
@@ -18,12 +17,8 @@ export const needsRef = (m: string) => m === 'upi' || m === 'bank_transfer';
 const TONE: Record<MStatus, [Tone, string]> = { active: ['good', 'Active'], expiring: ['warn', 'Expiring'], expired: ['bad', 'Expired'] };
 export const StatusChip = ({ s }: { s: MStatus }) => <Chip tone={TONE[s][0]}>{TONE[s][1]}</Chip>;
 
-/** Server message plus the per-field problems, so "Some fields are not valid" says which. */
+/** The server's reason in plain words. Field problems already say which field (see formtext.ts). */
 export function errText(e: unknown): string {
-  if (e instanceof ApiError) {
-    const f = (e.details as { fields?: { field: string; message: string }[] } | undefined)?.fields;
-    return f?.length ? f.map((x) => `${x.field}: ${x.message}`).join('. ') : e.message;
-  }
   return e instanceof Error ? e.message : 'Something went wrong.';
 }
 

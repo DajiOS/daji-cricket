@@ -39,7 +39,7 @@ export default function TaskDialog({ task, projects, team, manager, defaultProje
     <Modal title={isNew ? 'New task' : 'Task'} onClose={onClose} wide
       foot={editable ? <>{!isNew && <button className="btn ghost danger" onClick={cancel}>Cancel task</button>}<button className="btn primary" disabled={busy} onClick={save}>{isNew ? 'Add task' : 'Save changes'}</button></> : undefined}>
       <div className="form-grid">
-        <Field label="Title" full><input className="inp" maxLength={120} placeholder="What needs doing? e.g. Roll the pitch" disabled={!editable} value={f.title} onChange={set('title')} /></Field>
+        <Field label="Title" full required><input className="inp" maxLength={120} placeholder="What needs doing? e.g. Roll the pitch" disabled={!editable} value={f.title} onChange={set('title')} /></Field>
         <Field label="Details" full><textarea className="inp" rows={3} maxLength={1000} placeholder="Details (optional)" disabled={!editable} value={f.details} onChange={set('details')} /></Field>
         <Field label="Assigned to"><Select disabled={!editable} value={f.who} onChange={(v) => setF((x) => ({ ...x, who: v }))} options={[['', 'Anyone on the team'], ...team.map((m) => [m.id, m.name] as [string, string])]} /></Field>
         <Field label="Priority"><Select disabled={!editable} value={f.pri} onChange={(v) => setF((x) => ({ ...x, pri: v as Task['priority'] }))} options={Object.entries(PRI)} /></Field>

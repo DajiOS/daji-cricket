@@ -58,7 +58,7 @@ export function SoftwareCosts() {
         ]} />
       </Panel>
 
-      <Panel title="Invoices" actions={<button className="btn sm primary" disabled={!services.length} onClick={() => setInvDlg({})}>Add an invoice</button>}>
+      <Panel title="Invoices" actions={<button className="btn sm primary" onClick={() => (services.length ? setInvDlg({}) : toast('Add the service first (above), then add its invoices.'))}>Add an invoice</button>}>
         <Table rows={inv.items} empty="No invoices yet." onRow={(r) => setInvDlg(r)} cols={[
           { head: 'Date', cell: (r) => fmtDate(r.invoiceDate) },
           { head: 'Service', cell: (r) => <><div className="strong">{r.serviceName}</div><div className="muted small">{r.invoiceNo ? `No. ${r.invoiceNo} · ` : ''}{r.source === 'auto' ? 'fetched automatically' : r.source === 'recurring' ? 'fixed fee' : 'entered by hand'}</div></> },
@@ -107,6 +107,7 @@ function ServiceDialog({ svc, onClose, done }: { svc: any; onClose: () => void; 
   const f = useForm({ name: svc.name ?? '', vendor: svc.vendor ?? '', category: svc.category ?? 'tools', cycle: svc.cycle ?? 'monthly', currency: svc.currency ?? 'INR', expected: svc.expectedMinor ? String(svc.expectedMinor / 100) : '', gst: String(svc.gstPercent ?? 0), source: svc.source ?? 'manual', sourceRef: svc.sourceRef ?? '', nextDue: svc.nextDue ?? '', active: svc.active ?? true, notes: svc.notes ?? '' });
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const save = async () => {
+    if (!f.v.name.trim()) { setErr('Enter the name of the service.'); return; }
     const exp = f.v.expected.trim() ? toMinor(f.v.expected) : 0; if (exp === null) { setErr('Enter the usual amount in numbers.'); return; }
     const body = { name: f.v.name.trim(), vendor: f.v.vendor.trim() || (svc.id ? '' : undefined), category: f.v.category, cycle: f.v.cycle, currency: f.v.currency, expectedMinor: exp, gstPercent: Number(f.v.gst) || 0, source: f.v.source, sourceRef: f.v.sourceRef.trim() || (svc.id ? '' : undefined), nextDue: f.v.nextDue || (svc.id ? '' : undefined), active: f.v.active, notes: f.v.notes.trim() || (svc.id ? '' : undefined) };
     setBusy(true); setErr('');
@@ -114,10 +115,10 @@ function ServiceDialog({ svc, onClose, done }: { svc: any; onClose: () => void; 
   };
   const remove = async () => { setBusy(true); try { await del('/api/admin/billing/services/' + svc.id); done(); } catch (e) { setErr(errText(e)); } finally { setBusy(false); } };
   return (
-    <Modal title={svc.id ? 'Change service' : 'Add a service'} onClose={onClose} wide foot={<>{svc.id && <button className="btn ghost" disabled={busy} onClick={remove}>{svc.invoices ? 'Switch off' : 'Delete'}</button>}<button className="btn primary" disabled={busy || !f.v.name.trim()} onClick={save}>Save</button></>}>
+    <Modal title={svc.id ? 'Change service' : 'Add a service'} onClose={onClose} wide foot={<>{svc.id && <button className="btn ghost" disabled={busy} onClick={remove}>{svc.invoices ? 'Switch off' : 'Delete'}</button>}<button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
       {err && <ErrorBox msg={err} />}
       <div className="form-grid">
-        <Field label="Name"><input className="inp" {...f.bind('name')} /></Field>
+        <Field label="Name" required><input className="inp" {...f.bind('name')} /></Field>
         <Field label="Company"><input className="inp" placeholder="Amazon Web Services" {...f.bind('vendor')} /></Field>
         <Field label="Kind"><select className="inp" {...f.bind('category')}>{Object.entries(CATS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
         <Field label="Billed"><select className="inp" {...f.bind('cycle')}>{Object.entries(CYCLES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
@@ -141,6 +142,7 @@ function InvoiceDialog({ invoice, services, rate, onClose, done }: { invoice: an
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const pick = useRef<HTMLInputElement>(null); const toast = useToast();
   const svc = services.find((x) => x.id === f.v.serviceId);
   const save = async () => {
+    if (!f.v.serviceId) { setErr('Choose the service this invoice is for. If the list is empty, add the service first.'); return; }
     const amt = toMinor(f.v.amount); if (amt === null) { setErr('Enter the amount in numbers, before GST.'); return; }
     const gst = f.v.gst.trim() ? toMinor(f.v.gst) : undefined; if (gst === null) { setErr('Enter the GST in numbers.'); return; }
     setBusy(true); setErr('');
@@ -150,7 +152,7 @@ function InvoiceDialog({ invoice, services, rate, onClose, done }: { invoice: an
   const attach = async (file: File) => { try { await sendFile(`/api/admin/billing/invoices/${invoice.id}/file?filename=${encodeURIComponent(file.name)}`, file); toast('File attached'); done(); } catch (e) { setErr(errText(e)); } };
   const remove = async () => { setBusy(true); try { await del('/api/admin/billing/invoices/' + invoice.id); done(); } catch (e) { setErr(errText(e)); } finally { setBusy(false); } };
   return (
-    <Modal title={editing ? 'Change invoice' : 'Add an invoice'} onClose={onClose} wide foot={<>{editing && <button className="btn ghost" disabled={busy} onClick={remove}>Delete</button>}<button className="btn primary" disabled={busy || !f.v.serviceId} onClick={save}>Save</button></>}>
+    <Modal title={editing ? 'Change invoice' : 'Add an invoice'} onClose={onClose} wide foot={<>{editing && <button className="btn ghost" disabled={busy} onClick={remove}>Delete</button>}<button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
       {err && <ErrorBox msg={err} />}
       {invoice.source === 'auto' && <p className="hint" style={{ marginTop: 0 }}>This invoice was fetched automatically and may be refreshed until you mark it paid.</p>}
       <div className="form-grid">

@@ -1,9 +1,20 @@
 // API client, formatting and small shared helpers for the admin desk.
 // Talks to the same server as the website. Sign-in is the bearer token the website stored in this browser (localStorage "daji.token").
 import { useEffect, useState, useCallback } from 'react';
+import { problemsSentence, type FieldProblem } from './formtext';
 
+const fieldsOf = (details: unknown): FieldProblem[] => {
+  const f = (details as { fields?: FieldProblem[] } | undefined)?.fields;
+  return Array.isArray(f) ? f.filter((x) => x && typeof x.field === 'string') : [];
+};
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string, public details?: unknown) { super(message); }
+  /** The fields the server turned down, each with its own message ("customer.phone" -> "Required"). */
+  fields: FieldProblem[];
+  constructor(public status: number, public code: string, message: string, public details?: unknown) {
+    // "Some fields are not valid" says nothing; say which field and what to do about it
+    super(fieldsOf(details).length && (!message || /^some fields are not valid/i.test(message)) ? problemsSentence(fieldsOf(details)) : message);
+    this.fields = fieldsOf(details);
+  }
 }
 
 const store = {
@@ -44,10 +55,15 @@ export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise
   if (!res.ok) {
     const e = (data && data.error) || {};
     if (res.status === 401 && t) onUnauthorized();
-    throw new ApiError(res.status, e.code || 'ERROR', e.message || `Something went wrong (${res.status}).`, e.details);
+    throw new ApiError(res.status, e.code || 'ERROR', e.message || serverTrouble(res.status), e.details);
   }
   return data as T;
 }
+/** What to say when the server gives no reason of its own. */
+const serverTrouble = (status: number) => status === 429 ? 'Too many tries in a short time. Wait a minute and try again.'
+  : status >= 500 ? 'The server had a problem and nothing was saved. Try again in a minute; if it keeps happening, tell the software owner.'
+  : status === 413 ? 'That file is too big to send.' : `Something went wrong (${status}). Nothing was saved.`;
+
 export const post = <T = any>(path: string, body: unknown = {}) => api<T>(path, { method: 'POST', body });
 export const put = <T = any>(path: string, body: unknown = {}) => api<T>(path, { method: 'PUT', body });
 export const patch = <T = any>(path: string, body: unknown = {}) => api<T>(path, { method: 'PATCH', body });

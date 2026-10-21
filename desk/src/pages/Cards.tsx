@@ -41,6 +41,7 @@ function Editor({ card, draft, photo, dup, onClose, onSaved }: { card?: Card; dr
   const [preview] = useState(() => (photo ? URL.createObjectURL(photo) : null));
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const save = async () => {
+    if (!v.name.trim()) { toast('Enter the person’s name before saving.'); return; }
     setBusy(true);
     try {
       const body = { name: v.name, title: v.title, company: v.company, phones: lines(v.phones), emails: lines(v.emails), website: v.website, address: v.address, notes: v.notes };
@@ -53,7 +54,7 @@ function Editor({ card, draft, photo, dup, onClose, onSaved }: { card?: Card; dr
     } catch (e) { toast(e instanceof ApiError ? e.message : errMsg(e)); } finally { setBusy(false); }
   };
   return (
-    <Modal title={card ? 'Edit contact' : 'New contact'} onClose={onClose} wide foot={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !v.name.trim()} onClick={save}>{busy ? 'Saving…' : 'Save contact'}</button></>}>
+    <Modal title={card ? 'Edit contact' : 'New contact'} onClose={onClose} wide foot={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={save}>{busy ? 'Saving…' : 'Save contact'}</button></>}>
       {dup && dup.length > 0 && <div className="note warn" style={{ marginBottom: 12 }}>Already saved with the same phone or email: {dup.map((d) => d.name + (d.company ? ` (${d.company})` : '')).join(', ')}. Saving adds another entry.</div>}
       {photo && <div className="note" style={{ marginBottom: 12 }}>Check the details below against the card before saving. Card readers can mistake digits.</div>}
       <div className="form-grid">
@@ -98,7 +99,7 @@ export default function Cards({ sub }: { sub: string }) {
       <PageHead eyebrow="Ground" title="Business cards" lede="Photograph a card, check what was read, and save it. Download a contact to put it in your phone's address book.">
         <button className="btn" onClick={() => download('/api/staff/cards/export.vcf', 'daji-contacts.vcf').catch((e) => toast(errMsg(e)))}>Download all (.vcf)</button>
         <button className="btn" onClick={() => setEdit({})}>Type in a contact</button>
-        <button className="btn primary" disabled={scanning || status?.ocr === false} onClick={() => file.current?.click()}>{scanning ? 'Reading card…' : 'Scan a card'}</button>
+        <button className="btn primary" disabled={scanning} aria-busy={scanning || undefined} onClick={() => (status?.ocr === false ? toast('Reading cards from a photo is not switched on for this server. Use Type in a contact instead.') : file.current?.click())}>{scanning ? 'Reading card…' : 'Scan a card'}</button>
         <input ref={file} type="file" accept="image/png,image/jpeg,image/webp,image/*" capture="environment" hidden onChange={(e) => pick(e.target.files?.[0])} />
       </PageHead>
       {status?.ocr === false && <div className="note warn">Reading cards from photos is not switched on yet (the server needs ANTHROPIC_API_KEY). You can still type contacts in.</div>}

@@ -50,7 +50,7 @@ function VendorForm({ vendor, onClose, onSaved }: { vendor?: Vendor; onClose: ()
     <Modal title={vendor ? 'Edit vendor' : 'Add vendor'} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={save}>Save vendor</button></>}>
       <div className="stack"><ErrorBox msg={err} />
         <div className="form-grid">
-          <Field label="Name" full><input className="inp" value={v.name} onChange={set('name')} autoFocus /></Field>
+          <Field label="Name" full required><input className="inp" value={v.name} onChange={set('name')} autoFocus /></Field>
           <Field label="Phone"><input className="inp" inputMode="tel" value={v.phone} onChange={set('phone')} placeholder="98765 43210" /></Field>
           <Field label="UPI id"><input className="inp" value={v.upiId} onChange={set('upiId')} placeholder="name@bank" /></Field>
           <Field label="GSTIN (optional)"><input className="inp" value={v.gstin} onChange={set('gstin')} placeholder="24ABCDE1234F1Z5" maxLength={15} /></Field>

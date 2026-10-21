@@ -75,7 +75,7 @@ function Packs({ cal, reload }: { cal: PackCalendar; reload: () => void }) {
             {delay !== null && <div className="row" style={{ marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
               <span className="small">Start it on</span>
               <DateInput className="inp" style={{ width: 180 }} aria-label="New start day" min={next.from} max={next.to} value={delay} onChange={(e) => setDelay(e.target.value)} />
-              <button className="btn sm primary" disabled={busy || !delay} onClick={() => act(next.id, { startsOn: delay }, `${next.name} now starts on ${fmtDay(delay)}.`)}>Save</button>
+              <button className="btn sm primary" disabled={busy} onClick={() => !delay ? toast('Choose the day it should start on.') : act(next.id, { startsOn: delay }, `${next.name} now starts on ${fmtDay(delay)}.`)}>Save</button>
               {next.delayed && <button className="btn sm ghost" disabled={busy} onClick={() => act(next.id, { startsOn: null }, `${next.name} starts on ${fmtDay(next.from)} again.`)}>Start on {fmtDay(next.from)}</button>}
             </div>}
           </> : <div className="hint">No pack for next quarter yet. New packs are built and put here about a month before their quarter starts, and go live by themselves.</div>}

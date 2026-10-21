@@ -26,11 +26,11 @@ function AddMember({ presets, onClose, onDone }: { presets: TeamData['presets'];
   return (
     <Modal title="Add to team" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={add}>{busy ? 'Adding…' : 'Add to team'}</button></>}>
       <div className="form-grid">
-        <NameField value={f.name} onChange={(n) => setF((s) => ({ ...s, name: n }))} />
-        <Field label="Email"><input className="inp" type="email" value={f.email} onChange={set('email')} /></Field>
+        <NameField value={f.name} onChange={(n) => setF((s) => ({ ...s, name: n }))} required />
+        <Field label="Email" required><input className="inp" type="email" value={f.email} onChange={set('email')} /></Field>
         <Field label="Mobile number"><input className="inp" type="tel" placeholder="10 digit mobile number" value={f.phone} onChange={set('phone')} /></Field>
         <Field label="Role"><select className="inp" value={f.preset} onChange={set('preset')}>{Object.entries(presets).map(([k, p]) => <option key={k} value={k}>{p.title}</option>)}</select></Field>
-        <Field label="First password"><input className="inp" autoComplete="off" value={f.password} onChange={set('password')} /></Field>
+        <Field label="First password" required hint="At least 8 characters with a capital letter, a small letter and a number."><input className="inp" autoComplete="off" value={f.password} onChange={set('password')} /></Field>
       </div>
       <div className="hint" style={{ marginTop: 10 }}>They can sign in with their email or mobile number.</div>
       <div style={{ marginTop: 10 }}><ErrorBox msg={err} /></div>

@@ -1,8 +1,8 @@
 // A booking taken at the desk (walk-in or phone): pick the ground, day and session, add the customer and the money received.
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Field, ErrorBox, Loading, NameField, splitName, DateInput } from '../../ui';
+import { Modal, Field, ErrorBox, Loading, NameField, splitName, DateInput, useSubmit, FormError, Submit } from '../../ui';
 import { api, post, useApi, inr, toPaise, todayISO } from '../../lib';
-import { HAND_METHODS, errText, useCustomerMatch, MatchNote } from './common';
+import { HAND_METHODS, useCustomerMatch, MatchNote } from './common';
 
 interface Ground { id: string; name: string; maxSlots: number; active: boolean }
 interface SlotView { start: number; time: string; pricePaise: number; state: string }
@@ -29,8 +29,7 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
   const [reference, setReference] = useState('');
   const [players, setPlayers] = useState('');
   const [notes, setNotes] = useState('');
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const f = useSubmit();
 
   useEffect(() => { if (!groundId && grounds.length) setGroundId(grounds[0]!.id); }, [grounds.length]); // eslint-disable-line
   const ground = grounds.find((g) => g.id === groundId);
@@ -72,25 +71,32 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
   useEffect(() => { if (!touched) setAmount(picked ? String(picked.total / 100) : ''); }, [picked, touched]);
 
   const maxHours = (g: { slots: SlotView[] }, start: number) => { let n = 0; while (start + n < g.slots.length && g.slots[start + n]!.state === 'available' && n < (ground?.maxSlots || 6)) n++; return n; };
-  const submit = async () => {
-    if (!picked) return setErr('Choose a session or the hours first.');
+  const name = splitName(cust.name);
+  const submit = () => {
     const paise = toPaise(amount);
-    if (paise === null || paise < 0) return setErr('Enter the amount received now, in rupees. Type 0 if nothing has been received yet.');
-    if (paise > picked.total) return setErr(`That is more than the booking total of ${inr(picked.total)}.`);
-    setBusy(true); setErr(null);
-    try {
+    const ok = f.check([
+      [picked, 'session', 'Choose a session or the hours first.'],
+      [name.first.trim(), 'firstName', 'Enter the customer’s first name.'],
+      [cust.phone.replace(/\D/g, '').length >= 10, 'phone', cust.phone.trim()
+        ? 'The mobile number looks too short. Enter all 10 digits.'
+        : 'Enter the customer’s mobile number. Every booking needs one: it finds the customer next time and sends them the receipt and reminders.'],
+      [paise !== null && paise >= 0, 'amount', 'Enter the amount received now, in rupees. Type 0 if nothing has been received yet.'],
+      [!picked || paise === null || paise <= picked.total, 'amount', `That is more than the booking total of ${inr(picked?.total ?? 0)}.`],
+    ]);
+    if (!ok || !picked) return;
+    void f.run(async () => {
       const r = await post<{ booking: { id: string } }>('/api/staff/bookings', {
-        groundId, date, ...picked.body, customer: { firstName: splitName(cust.name).first, lastName: splitName(cust.name).last, phone: cust.phone.trim(), ...(cust.email.trim() ? { email: cust.email.trim() } : {}) },
-        payment: { method, amountPaise: paise, ...(reference.trim() ? { reference: reference.trim() } : {}) },
+        groundId, date, ...picked.body, customer: { firstName: name.first, lastName: name.last, phone: cust.phone.trim(), ...(cust.email.trim() ? { email: cust.email.trim() } : {}) },
+        payment: { method, amountPaise: paise!, ...(reference.trim() ? { reference: reference.trim() } : {}) },
         ...(players ? { players: Number(players) } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}),
       });
       onDone(r.booking.id);
-    } catch (e) { setErr(errText(e)); setBusy(false); }
+    });
   };
 
   return (
     <Modal title="New booking" onClose={onClose} wide
-      foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !picked} onClick={submit}>Create booking</button></>}>
+      foot={<><FormError f={f} /><button className="btn ghost" onClick={onClose}>Cancel</button><Submit f={f} onClick={submit} busyText="Creating booking…">Create booking</Submit></>}>
       {!gl ? <Loading h={160} /> : (
         <div className="stack" style={{ gap: 18 }}>
           <div className="form-grid">
@@ -98,8 +104,8 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
             <Field label="Date"><DateInput className="inp" value={date} min={todayISO()} onChange={(e) => setDate(e.target.value)} /></Field>
           </div>
 
-          <div>
-            <div className="eyebrow">Session</div>
+          <div data-field="session" className={f.bad.session ? 'pick-bad' : undefined}>
+            <div className="eyebrow">Session <b className="req" title="Required">*</b></div>
             {avErr ? <ErrorBox msg={avErr} /> : !av ? <Loading h={60} /> : av.closed ? <div className="muted">The ground is closed on this day.</div> : (
               <div className="stack" style={{ gap: 12 }}>
                 {fixedChoices.length > 0 && <div className="picks">{fixedChoices.map((c) => (
@@ -125,13 +131,14 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
                 {!fixedChoices.length && !hourly.some((g) => g.slots.length) && <div className="muted">Nothing is on sale on this day.</div>}
               </div>)}
             {picked && <div className="picked">{picked.label} · total <b className="gold">{inr(picked.total)}</b></div>}
+            {f.bad.session && !picked && <div className="ferr">{f.bad.session}</div>}
           </div>
 
           <div>
             <div className="eyebrow">Customer</div>
             <div className="form-grid">
-              <NameField value={cust.name} onChange={(n) => setCust((c) => ({ ...c, name: n }))} />
-              <Field label="Mobile" hint="An existing customer is found by this number."><input className="inp" inputMode="tel" value={cust.phone} onChange={(e) => setCust({ ...cust, phone: e.target.value })} /></Field>
+              <NameField value={cust.name} onChange={(n) => setCust((c) => ({ ...c, name: n }))} required error={f.bad.firstName} />
+              <Field label="Mobile" name="phone" required error={f.bad.phone} hint="An existing customer is found by this number."><input className="inp" inputMode="tel" autoComplete="off" value={cust.phone} onChange={(e) => setCust({ ...cust, phone: e.target.value })} /></Field>
               <Field label="Email (optional)"><input className="inp" type="email" value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} /></Field>
               <MatchNote m={match} />
               <Field label="Players (optional)"><input className="inp" inputMode="numeric" value={players} onChange={(e) => setPlayers(e.target.value.replace(/\D/g, ''))} /></Field>
@@ -143,11 +150,11 @@ export function NewBooking({ onClose, onDone }: { onClose: () => void; onDone: (
             <div className="eyebrow">Money received now</div>
             <div className="form-grid">
               <Field label="Method"><select className="inp" value={method} onChange={(e) => setMethod(e.target.value)}>{HAND_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
-              <Field label="Amount (₹)" hint="Type 0 if nothing is received yet, or at least the advance. The rest is collected later."><input className="inp" inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setTouched(true); }} /></Field>
+              <Field label="Amount (₹)" name="amount" required error={f.bad.amount} hint="Type 0 if nothing is received yet, or at least the advance. The rest is collected later."><input className="inp" inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setTouched(true); }} /></Field>
               <Field label={method === 'upi' ? 'UPI reference (UTR)' : 'Reference (optional)'}><input className="inp" maxLength={60} value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
             </div>
           </div>
-          <ErrorBox msg={err} />
+          <div className="req-note"><b>*</b> Required</div>
         </div>)}
     </Modal>
   );

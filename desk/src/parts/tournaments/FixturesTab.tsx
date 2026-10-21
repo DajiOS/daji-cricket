@@ -81,6 +81,7 @@ function GenerateForm({ d, onClose, onSaved }: { d: Detail; onClose: () => void;
   const [busy, setBusy] = useState(false);
   const n = d.teams.length, games = (n * (n - 1) / 2) * (v.double ? 2 : 1);
   async function go_() {
+    if (n < 2) return setErr('Add at least two teams first. Fixtures need two teams to play.');
     setBusy(true); setErr(null);
     try {
       const r = await post(`${API}/${d.tournament.id}/fixtures/generate`, { startDate: v.startDate || undefined, time: v.time, daysBetweenRounds: Number(v.gap), groundId: v.groundId || undefined, doubleRound: v.double, replace: has });
@@ -88,7 +89,7 @@ function GenerateForm({ d, onClose, onSaved }: { d: Detail; onClose: () => void;
     } catch (e: any) { setErr(e.message); setBusy(false); }
   }
   return (
-    <Modal title="Generate round robin" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || n < 2} onClick={go_}>{busy ? 'Generating…' : `Create ${games} fixtures`}</button></>}>
+    <Modal title="Generate round robin" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={go_}>{busy ? 'Generating…' : `Create ${games} fixtures`}</button></>}>
       <ErrorBox msg={err} />
       {n < 2 && <div className="err">Add at least two teams first.</div>}
       {has && <div className="hint" style={{ marginBottom: 12 }}>This replaces the {d.fixtures.length} fixtures already here. It is only allowed while none has a result.</div>}
@@ -114,8 +115,8 @@ export function FixturesTab({ d, reload }: { d: Detail; reload: () => void }) {
     <div className="card">
       <div className="card-head"><h3>Fixtures ({d.fixtures.length})</h3>
         <span className="row">
-          <button className="btn sm" disabled={d.teams.length < 2} onClick={() => setModal({ k: 'gen' })}>Generate round robin</button>
-          <button className="btn primary sm" disabled={d.teams.length < 2} onClick={() => setModal({ k: 'add' })}>Add fixture</button>
+          <button className="btn sm" onClick={() => (d.teams.length < 2 ? toast('Add at least two teams first (Teams tab).') : setModal({ k: 'gen' }))}>Generate round robin</button>
+          <button className="btn primary sm" onClick={() => (d.teams.length < 2 ? toast('Add at least two teams first (Teams tab).') : setModal({ k: 'add' }))}>Add fixture</button>
         </span></div>
       <div className="card-pad" style={{ paddingBottom: err ? undefined : 0 }}><ErrorBox msg={err} /></div>
       <Table rows={d.fixtures} empty={d.teams.length < 2 ? 'Add at least two teams, then create fixtures.' : 'No fixtures yet. Generate a round robin or add them one by one.'}

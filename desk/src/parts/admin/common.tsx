@@ -1,15 +1,10 @@
 // Small pieces shared by the Settings, Team, Platform and Promos pages.
 import { useState, type ReactNode } from 'react';
-import { ApiError, go } from '../../lib';
+import { go } from '../../lib';
 import { Tabs } from '../../ui';
 
-/** One readable line out of an API error: field messages when the server sent them, otherwise its message. */
+/** One readable line out of an API error. Field problems already come as plain sentences (see formtext.ts). */
 export function errText(e: unknown): string {
-  if (e instanceof ApiError) {
-    const f = (e.details as any)?.fields;
-    if (Array.isArray(f) && f.length) return f.map((x: any) => (x.field && x.field !== '(body)' ? `${x.field}: ${x.message}` : x.message)).join('  ·  ');
-    return e.message;
-  }
   return e instanceof Error ? e.message : String(e);
 }
 

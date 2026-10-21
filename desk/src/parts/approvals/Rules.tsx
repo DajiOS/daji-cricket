@@ -65,7 +65,7 @@ export default function Rules() {
     }
     setBusy(true);
     try { await put(`/api/accounting/approvals/flows/${kind}`, { ...draft, steps }); toast('Saved. New submissions follow these rules.'); reload(); }
-    catch (e: any) { setMsg(e?.details?.fields?.[0]?.message ?? e.message); }
+    catch (e: any) { setMsg(e.message); }
     setBusy(false);
   }
   async function reset() {

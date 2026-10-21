@@ -27,7 +27,7 @@ export default function Spots({ sub }: { sub: string }) {
   const items = d?.items ?? [];
   const cur = items.find((x) => x.id === sel) ?? null;
   const patch = async (id: string, body: object) => { try { await api(`/api/desk/spots/${id}`, { method: 'PATCH', body }); reload(); } catch (e: any) { toast(e.message); } };
-  const add = async () => { if (!name.trim()) return; try { const r = await post<Spot>('/api/desk/spots', { name: name.trim(), kind }); setName(''); setSel(r.id); reload(); } catch (e: any) { toast(e.message); } };
+  const add = async () => { if (!name.trim()) { toast('Type a name for the spot first.'); return; } try { const r = await post<Spot>('/api/desk/spots', { name: name.trim(), kind }); setName(''); setSel(r.id); reload(); } catch (e: any) { toast(e.message); } };
   const remove = async (x: Spot) => { try { await api(`/api/desk/spots/${x.id}`, { method: 'DELETE' }); setSel(null); reload(); toast(`${x.name} removed`); } catch (e: any) { toast(e.message); } };
 
   return (

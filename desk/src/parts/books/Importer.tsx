@@ -38,7 +38,9 @@ export function Importer() {
     finally { if (mine === seq.current) setBusy(false); }
   };
   const commit = async () => {
-    if (!cur) return; setBusy(true);
+    if (!cur) return;
+    if (preview?.reviewRequired && !sure) { toast('Tick “I have checked the rows above” first.'); return; }
+    setBusy(true);
     try {
       const r = await sendFile(url(cur, preview?.reviewRequired ? '&confirm=1' : ''), cur, hdr(pass));
       setDone(`Imported ${r.rowsNew} transactions. ${r.autoMatched} UPI or bank payments were matched to bookings automatically.`);
@@ -77,7 +79,7 @@ export function Importer() {
             <Field label="This PDF is password protected">
               <div className="row" style={{ flexWrap: 'nowrap' }}>
                 <input className="inp" type="password" autoComplete="off" autoFocus placeholder="PDF password" value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && read(cur ?? undefined, { pass })} />
-                <button className="btn primary" disabled={!pass || busy} onClick={() => read(cur ?? undefined, { pass })}>Open</button>
+                <button className="btn primary" disabled={busy} onClick={() => (pass ? read(cur ?? undefined, { pass }) : setErr({ msg: 'Type the PDF password first. Banks often use your date of birth or customer ID.' }))}>Open</button>
               </div>
             </Field>
           </div>)}
@@ -102,7 +104,7 @@ export function Importer() {
               {r.rowsTotal > r.preview.length && <div className="muted small">Showing the first {r.preview.length} rows. All rows are imported.</div>}
               {r.skipped.length > 0 && <div className="muted small">Not read: {r.skipped.slice(0, 5).map((s: any) => `line ${s.line} (${s.reason})`).join(', ')}{r.skipped.length > 5 ? '…' : ''}</div>}
               {r.reviewRequired && <label className="check"><input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />I have checked the rows above against my statement</label>}
-              {r.rowsNew ? <div><button className="btn primary" disabled={busy || (r.reviewRequired && !sure)} onClick={commit}>Import {r.rowsNew} new transaction{r.rowsNew === 1 ? '' : 's'}</button></div> : <div className="muted">Nothing new to import.</div>}
+              {r.rowsNew ? <div><button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={commit}>Import {r.rowsNew} new transaction{r.rowsNew === 1 ? '' : 's'}</button></div> : <div className="muted">Nothing new to import.</div>}
             </div>)}
         </div>
       </Section>

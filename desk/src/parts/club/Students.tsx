@@ -56,7 +56,7 @@ function StudentDialog({ s, onClose, onSaved }: { s: Student | null; onClose: ()
   return (
     <Modal title={s ? 'Edit student' : 'Add a student'} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={save}>Save</button></>}>
       <div className="form-grid">
-        <NameField value={f.name} onChange={(n) => setF((x) => ({ ...x, name: n }))} />
+        <NameField value={f.name} onChange={(n) => setF((x) => ({ ...x, name: n }))} required />
         <Field label="Date of birth"><DateInput className="inp" value={f.bornOn} onChange={set('bornOn')} /></Field>
         <Field label="Batch"><input className="inp" value={f.batch} onChange={set('batch')} placeholder="U-14 weekday" /></Field>
         <NameField value={f.guardianName} onChange={(n) => setF((x) => ({ ...x, guardianName: n }))} firstLabel="Parent first name" lastLabel="Parent last name" />
