@@ -500,6 +500,8 @@ export interface GlobalSettings {
   cashRefundPercent: number;
   creditExpiryDays: number;
   noShowGraceMinutes: number;
+  /** On a festival day the festival look applies to every visitor, even one who picked a theme. */
+  festivalForEveryone: boolean;
 }
 
 export interface AuditEntry {
