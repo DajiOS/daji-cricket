@@ -20,8 +20,6 @@ const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', '
   // festival looks
   ['uttarayan', 'Uttarayan', '#eef6fc', '#d9461a'], ['tiranga', 'Tiranga (Republic and Independence Day)', '#fffdf8', '#c45800'], ['holi', 'Holi', '#fff8fc', '#c41f6f'], ['ganesh', 'Ganesh Chaturthi', '#2b0d06', '#ffa21a'], ['navratri', 'Navratri', '#1a0626', '#ffb703'], ['diwali', 'Diwali', '#0d0820', '#ffb547'], ['christmas', 'Christmas and New Year', '#0c1f17', '#d9b25e']];
 const DESIGNER_THEMES = ['noir', 'pavilion', 'whites', 'pinkball', 'monsoon', 'maroon', 'carbon', 'champagne', 'stadium', 'willow'];
-/** The designer themes in this quarter's pack (the server names them); a visitor's own pick from an older pack stays listed. */
-const packDesigns = () => { const ds = ((fest.site && fest.site.pack && fest.site.pack.designs) || DESIGNER_THEMES).filter((d) => THEMES.some((x) => x[0] === d)), mine = pickedTheme(); return mine && DESIGNER_THEMES.concat(ds).includes(mine) && !ds.includes(mine) ? ds.concat(mine) : ds; };
 const FESTIVAL_THEMES = ['uttarayan', 'tiranga', 'holi', 'ganesh', 'navratri', 'diwali', 'christmas'];
 const FEST_ICON = {
   uttarayan: '<path d="M12 2 20 11 12 20 4 11Z" fill="#e8501f"/><path d="M12 2v18M4 11h16" stroke="#fff" stroke-width="1.2"/><path d="M12 20c-1 2 1 2 0 4" stroke="#0a8ac8" stroke-width="1.4" fill="none"/>',
@@ -96,58 +94,56 @@ function syncDesign() {
   eye.textContent = d.eyebrow; eye.hidden = false;
   h1.innerHTML = d.h1.map((l) => `<span class="ln"><span>${l}</span></span>`).join(' ');
   lead.textContent = d.lede; box.hidden = false;
-  if (window.DajiScene) window.DajiScene.mount(box, d.g); else window.DajiScenePending = { el: box, p: d.g };
+  // the 3D scene follows the day or night version: daylight on the grass by day, floodlights and stars by night
+  const day = root.getAttribute('data-tone') === 'light', g = day === !!d.g.day ? d.g : day
+    ? { ...d.g, day: true, exp: Math.max(d.g.exp || 1, 1.12), parts: d.g.parts === 'stars' || d.g.parts === 'rain' ? d.g.parts === 'rain' ? 'rain' : 'none' : d.g.parts, grass: ['#5d9a45', '#68a64e'] }
+    : { ...d.g, day: false, exp: 1.05, parts: d.g.parts === 'none' ? 'dust' : d.g.parts, pc: '#fff3d8', grass: ['#163a24', '#1b4529'] };
+  if (window.DajiScene) window.DajiScene.mount(box, g); else window.DajiScenePending = { el: box, p: g };
 }
+// Day and night. Every designer theme has a day version and a night version (site.css): the website uses the day one from 6 am to
+// 6 pm India time and the night one after that. The sun / moon switch at the top right flips it for this visitor until the next
+// change-over. data-mode is day or night; data-tone is what is on screen, light or dark (a festival look has its own colours).
+const HOUR_MS = 3600000;
+const istParts = () => { const d = new Date(Date.now() + 5.5 * HOUR_MS); return { h: d.getUTCHours(), midnight: Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - 5.5 * HOUR_MS }; };
+const autoMode = () => { const { h } = istParts(); return h >= 6 && h < 18 ? 'day' : 'night'; };
+/** The next 6 am or 6 pm, India time. */
+const nextFlip = () => { const { h, midnight } = istParts(); return midnight + (h < 6 ? 6 : h < 18 ? 18 : 30) * HOUR_MS; };
+function currentMode() { try { const s = JSON.parse(store.get('daji.mode') || 'null'); if (s && s.until > Date.now() && (s.m === 'day' || s.m === 'night')) return s.m; } catch { /* none saved */ } return autoMode(); }
+const isDesign = (t) => DESIGNER_THEMES.includes(t);
+const PLAIN_DARK = THEMES.filter((t) => { const h = t[2].slice(1); return (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000 < 110; }).map((t) => t[0]);
+const toneOf = (t, m) => (isDesign(t) ? (m === 'day' ? 'light' : 'dark') : PLAIN_DARK.includes(t) ? 'dark' : 'light');
 /** Light pages use the brass logo; the dark ones keep the gold. */
-const LIGHT_LOGO_THEMES = ['ivory', 'whites', 'champagne', 'uttarayan', 'tiranga', 'holi'];
-function swapLogos() { const light = LIGHT_LOGO_THEMES.includes(document.documentElement.getAttribute('data-theme')); for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
+function swapLogos() { const light = document.documentElement.getAttribute('data-tone') === 'light'; for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
 try { matchMedia('(min-width:1021px)').addEventListener('change', swapLogos); } catch { /* older browser: logo stays as loaded */ }
-// A festival look is never saved as the visitor's own choice: it comes and goes with the festival.
-function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; loadThemeFonts(t); document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); syncDesign(); syncFest(); } catch { /* not ready yet */ } if (save && !FESTIVAL_THEMES.includes(t)) store.set('daji.theme', t); }
-/** The look this visitor picked on the theme button, or null when they left it to the ground. */
-const pickedTheme = () => { const s = store.get('daji.theme'); return s && s !== 'auto' && !FESTIVAL_THEMES.includes(s) && THEMES.some((x) => x[0] === s) ? s : null; };
-/** The visitor's own look: their pick, else the ground's design (it rotates through the day unless the owner fixed one; the
- *  last one the server named is kept so the page opens in it), else Light. */
+/** Puts a look on the page in the current day or night version. The plain looks are Light by day and Dark by night. */
+function applyTheme(t) {
+  if (!THEMES.some((x) => x[0] === t)) return;
+  const m = currentMode(), root = document.documentElement;
+  if (t === 'ivory' || t === 'obsidian') t = m === 'day' ? 'ivory' : 'obsidian';
+  loadThemeFonts(t); root.setAttribute('data-theme', t); root.setAttribute('data-mode', m); root.setAttribute('data-tone', toneOf(t, m)); swapLogos();
+  try { syncThemeIcon(); syncDesign(); syncFest(); } catch { /* not ready yet */ }
+}
+/** Visitors no longer pick a design (the ground chooses, see ownTheme); a pick saved before then is cleared. */
+store.set('daji.theme', null);
+const pickedTheme = () => null;
+/** The ground's design: rotating through the day unless the owner fixed one (the last one the server named is kept so the page
+ *  opens in it), else Light. */
 let packTry = null; // a design pack tried with ?pack= (from the desk) stands in for the saved ground design on this page only
-const ownTheme = () => { const site = packTry || store.get('daji.site'); return pickedTheme() || (site && THEMES.some((x) => x[0] === site) && !FESTIVAL_THEMES.includes(site) ? site : 'ivory'); };
-// light / dark icon at the far right of the top bar: ivory is the light look, obsidian the dark one
-const DARK_THEMES = THEMES.filter((t) => { const h = t[2].slice(1); return (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000 < 110; }).map((t) => t[0]);
-const isDarkTheme = () => DARK_THEMES.includes(document.documentElement.getAttribute('data-theme'));
-function syncThemeIcon() { const b = document.getElementById('theme-toggle'); if (!b) return; const d = isDarkTheme(); b.setAttribute('aria-label', d ? 'Switch to light theme' : 'Switch to dark theme'); b.dataset.mode = d ? 'dark' : 'light'; }
-document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#theme-toggle')) { applyTheme(isDarkTheme() ? 'ivory' : 'obsidian', true); syncThemeIcon(); } });
-// the theme button left of the light / dark switch: Light, Dark and the designer themes, plus today's festival look on a festival day
-function themeMenu() {
-  let m = document.getElementById('theme-menu');
-  if (!m) {
-    m = document.createElement('div'); m.id = 'theme-menu'; m.className = 'theme-menu'; m.hidden = true; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Colour theme');
-    const item = (id, label, sub) => { const x = THEMES.find((t) => t[0] === id); return `<button type="button" role="menuitemradio" data-pick="${id}"><span class="sw" style="--sw-in:${x ? x[2] : 'conic-gradient(#ff9933,#f0479a,#ffb547,#138808,#ff9933)'};--sw:${x ? x[3] : '#d9b25e'}"></span><span>${label}${sub ? `<small>${sub}</small>` : ''}</span></button>`; };
-    const name = (id) => THEMES.find((t) => t[0] === id)[1];
-    m.innerHTML = '<h6>Built in</h6>' + item('site', 'Automatic', fest.site && !fest.site.rotating ? 'The ground’s own design' : 'A new design through the day') + item('ivory', 'Light') + item('obsidian', 'Dark')
-      + `<h6>Designer themes${fest.site && fest.site.pack ? ` · ${String(fest.site.pack.name).replace(/[<>&"]/g, '')}` : ''}</h6>` + packDesigns().map((id) => item(id, name(id))).join('')
-      + '<div id="theme-menu-fest"></div><p>Saved on this device only. On festival days the website dresses up by itself.</p>';
-    m.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; if (b.dataset.pick === 'festival' && fest.today) applyTheme(fest.today.look); else if (b.dataset.pick === 'site') { store.set('daji.theme', null); applyTheme(fest.today && fest.forEveryone ? fest.today.look : ownTheme()); } else applyTheme(b.dataset.pick, true); markThemeMenu(); });
-    document.body.appendChild(m);
-  }
-  return m;
-}
-function markThemeMenu() {
-  const m = document.getElementById('theme-menu'); if (!m) return;
-  const f = fest.today, slot = m.querySelector('#theme-menu-fest'), t = document.documentElement.getAttribute('data-theme');
-  if (slot) slot.innerHTML = f ? `<h6>Today</h6><button type="button" role="menuitemradio" data-pick="festival"><span class="sw" style="--sw-in:${(THEMES.find((x) => x[0] === f.look) || [])[2] || '#fff'};--sw:${f.dayLook.colour || (THEMES.find((x) => x[0] === f.look) || [])[3] || '#d9b25e'}"></span><span></span></button>` : '';
-  if (f && slot) { const sp = slot.querySelector('button span:last-child'); sp.textContent = f.name; const sm = document.createElement('small'); sm.textContent = f.of > 1 ? `Day ${f.day} of ${f.of}: ${f.dayLook.title}` : 'The festival look'; sp.appendChild(sm); }
-  const cur = f && t === f.look ? 'festival' : !pickedTheme() ? 'site' : t;
-  for (const b of m.querySelectorAll('[data-pick]')) b.setAttribute('aria-checked', String(b.dataset.pick === cur));
-}
-function closeThemeMenu() { const m = document.getElementById('theme-menu'), b = document.getElementById('theme-pick'); if (m && !m.hidden) { m.hidden = true; if (b) b.setAttribute('aria-expanded', 'false'); } }
+let themeTry = null; // a design opened with ?theme= (from the desk), for this page only
+const ownTheme = () => { const site = themeTry || packTry || store.get('daji.site'); return site && THEMES.some((x) => x[0] === site) && !FESTIVAL_THEMES.includes(site) ? site : 'ivory'; };
+const isDarkTheme = () => document.documentElement.getAttribute('data-tone') === 'dark';
+function syncThemeIcon() { const b = document.getElementById('theme-toggle'); if (!b) return; const d = isDarkTheme(); b.setAttribute('aria-label', d ? 'Switch to the day version' : 'Switch to the night version'); b.dataset.mode = d ? 'dark' : 'light'; }
 document.addEventListener('click', (e) => {
-  const b = e.target.closest && e.target.closest('#theme-pick');
-  if (b) { const m = themeMenu(), open = m.hidden; m.hidden = !open; b.setAttribute('aria-expanded', String(open)); if (open) { markThemeMenu(); (m.querySelector('[aria-checked="true"]') || m.querySelector('button')).focus(); } return; }
-  if (!(e.target.closest && e.target.closest('#theme-menu'))) closeThemeMenu();
+  if (!(e.target.closest && e.target.closest('#theme-toggle'))) return;
+  store.set('daji.mode', JSON.stringify({ m: currentMode() === 'day' ? 'night' : 'day', until: nextFlip() }));
+  applyTheme(document.documentElement.getAttribute('data-theme'));
 });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = document.getElementById('theme-menu'); if (m && !m.hidden) { closeThemeMenu(); const b = document.getElementById('theme-pick'); if (b) b.focus(); } } });
+// at 6 am and 6 pm the page changes over by itself, if it is still open
+(function flipLater() { setTimeout(() => { applyTheme(document.documentElement.getAttribute('data-theme')); flipLater(); }, Math.min(nextFlip() - Date.now() + 1000, 2 ** 31 - 1)); })();
 try {
-  const q = new URLSearchParams(location.search).get('theme'), saved = store.get('daji.theme');
-  if (window.parent === window) { if (q) applyTheme(q, true); else applyTheme(ownTheme()); }
+  const q = new URLSearchParams(location.search).get('theme');
+  if (q && THEMES.some((x) => x[0] === q)) themeTry = q;
+  if (window.parent === window) applyTheme(ownTheme());
 } catch { /* keep the default */ }
 swapLogos();
 // ------------------------------------------------------------------ festival days
@@ -193,9 +189,9 @@ async function loadFestival(next) {
   if (f && (pretend || fest.forEveryone || !picked)) applyTheme(f.look);
   else if ((was && cur === was.look) || (first && !picked && cur !== ownTheme())) applyTheme(ownTheme());
   else syncFest();
-  festBanner(); festTimers(); markThemeMenu();
+  festBanner(); festTimers();
 }
-function festOff() { festBanner(); festTimers(); const t = document.documentElement.getAttribute('data-theme'); if (FESTIVAL_THEMES.includes(t)) applyTheme(ownTheme()); else syncFest(); markThemeMenu(); }
+function festOff() { festBanner(); festTimers(); const t = document.documentElement.getAttribute('data-theme'); if (FESTIVAL_THEMES.includes(t)) applyTheme(ownTheme()); else syncFest(); }
 
 /** The day's look on the home page: decoration, greeting, headline, colour, countdown and the offer on the booking card. */
 function syncFest() {
