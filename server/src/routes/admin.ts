@@ -89,8 +89,10 @@ export function adminRoutes(r: Router): void {
   r.put('/api/admin/billing/settings', (c) => ok(saveBillingSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);
   r.post('/api/admin/billing/fetch', async (c) => ok({ results: await fetchAutoInvoices(c.cfg, { id: U(c).id, role: U(c).role }) }), { ...SA, rate: 'auth' });
   r.post('/api/admin/yodlee/test', async (c) => { const res = await testYodlee(c.cfg); audit({ id: U(c).id, role: U(c).role }, 'yodlee.test', 'yodlee', null, { ok: res.ok }); return ok(res); }, { ...SA, rate: 'auth' });
-  r.get('/api/admin/integrations', (c) => ok({ items: integrationStatuses(c.cfg) }), SAO);
-  r.post('/api/admin/integrations/:id/test', async (c) => ok(await testIntegration(c.cfg, U(c), c.params.id!)), SAO);
+  // the ground owner sees which services are set up and can test them (a test signs in or reads, it never sends or charges); keys
+  // themselves are never shown
+  r.get('/api/admin/integrations', (c) => ok({ items: integrationStatuses(c.cfg) }), A);
+  r.post('/api/admin/integrations/:id/test', async (c) => ok(await testIntegration(c.cfg, U(c), c.params.id!)), A);
 
   // The notebook of outside services and the accounts they were opened with (never keys or passwords).
   r.get('/api/admin/services', () => ok({ items: listServices() }), SAO);

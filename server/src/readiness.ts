@@ -23,6 +23,9 @@ const HOUR = 3600_000;
 interface GroundLite { id: string; name: string; owner_id: string; open_time: string; close_time: string; rates: string; price_paise: number; images: string }
 interface UserLite { role: string; email: string | null; active: number }
 
+/** Desk screens only the software owner (super admin) can open. */
+const SOFTWARE_OWNER_SCREENS = ['/settings/backups', '/settings/people', '/settings/services', '/platform'];
+
 export function readiness(cfg: Config, u: UserRow, ownerId: string | null): Readiness {
   const items: ReadyItem[] = [];
   const add = (group: string, id: string, label: string, state: ReadyState, detail: string, fix: string | null = null, link: string | null = null) => items.push({ id, group, label, state, detail, fix, link });
@@ -107,7 +110,7 @@ export function readiness(cfg: Config, u: UserRow, ownerId: string | null): Read
   const em = integ.get('email')!;
   add(P, 'email', 'Booking emails (Gmail)', em.status === 'ready' ? (em.lastTest?.ok ? 'done' : 'warn') : 'todo',
     em.status === 'ready' ? (em.lastTest ? `Set. Last test ${em.lastTest.ok ? 'passed' : 'failed'}.` : 'Set, not tested yet.') : `Not set: ${em.missing.join(', ')}.`,
-    'Create a Gmail App Password, put it in deploy/.env as GMAIL_APP_PASSWORD, then press Test in Connections.', '/settings/connections');
+    'Create a Gmail App Password, put it in deploy/.env as GMAIL_APP_PASSWORD, then press Test next to Email in Connections.', '/settings/connections');
   const ai = integ.get('claude')!;
   add(P, 'askAi', 'Ask AI (free-form questions)', ai.status === 'ready' ? (ai.lastTest?.ok ? 'done' : 'warn') : 'warn',
     ai.status === 'ready' ? (ai.lastTest ? `Key set. Last test ${ai.lastTest.ok ? 'passed' : 'failed'}.` : 'Key set, not tested yet. Every question sent to Claude costs money.') : 'No key: Ask AI still answers common questions from the built-in reports. Add a key to let it answer anything.',
@@ -115,7 +118,7 @@ export function readiness(cfg: Config, u: UserRow, ownerId: string | null): Read
   const bank = integ.get('yodlee')!;
   add(P, 'bankFeed', 'Automatic bank feed (optional)', bank.status === 'ready' ? (bank.lastTest?.ok ? 'done' : 'warn') : 'warn',
     bank.status === 'ready' ? (bank.lastTest ? `Set. Last test ${bank.lastTest.ok ? 'passed' : 'failed'}.` : 'Set, not tested yet.') : 'Not set up. Bank statements can still be imported from a file in Bank import.',
-    'In Platform, Bank connection, enter the Yodlee details. Until then upload statements in Bank import.', '/bank');
+    'The software owner enters the Yodlee details in Platform, Bank connection. Until then upload statements in Bank import.', '/bank');
   add(P, 'contact', 'Contact details on the website', s.contactPhone && s.contactEmail ? 'done' : 'todo',
     s.contactPhone && s.contactEmail ? 'A phone number and email are shown.' : 'The phone number or email is missing.', 'Enter them in Settings, Website.', '/settings/website');
 
@@ -149,6 +152,12 @@ export function readiness(cfg: Config, u: UserRow, ownerId: string | null): Read
   add(Y, 'media', 'Only photos, videos, music and logos you own', 'you', 'docs/MEDIA-INVENTORY.md lists every file to check.', null, '/media');
   add(Y, 'payTest', 'A real test booking, payment and refund', 'you', 'Book, pay, cancel and sign in on the live site with test keys first, then once with live keys.', null, null);
   add(Y, 'phones', 'Phone app on the owner\'s and staff phones', 'you', 'Build the app and install it on each phone; sign in once so alerts reach it.', null, null);
+
+  // screens only the software owner can open: the ground owner is told who does it instead of being sent to a page they cannot see
+  if (u.role !== 'super_admin') for (const it of items) if (it.link && SOFTWARE_OWNER_SCREENS.some((p) => it.link === p || it.link!.startsWith(p + '/'))) {
+    it.link = null;
+    if (it.state !== 'done') it.fix = `${it.fix ?? ''} Your software owner does this.`.trim();
+  }
 
   const counted = items.filter((i) => i.state !== 'you');
   const days = open ? Math.round((Date.parse(`${open}T00:00:00+05:30`) - Date.parse(`${today}T00:00:00+05:30`)) / (24 * HOUR)) : null;
