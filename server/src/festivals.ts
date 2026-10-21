@@ -83,7 +83,7 @@ export function defaultFestivals(): Omit<Festival, 'id'>[] {
       ? day('Anant Chaturdashi', 'Ganpati Bappa Morya, come back soon next year', 'पुढच्या वर्षी लवकर या', 'Bappa, come back', 'soon next year.', 'Visarjan day. The ground stays open; evening slots are lit until 11 pm.')
       : day(`Ganeshotsav, day ${i + 1}`, 'Ganpati Bappa Morya!', 'गणपति बाप्पा मोरया', 'Ganeshotsav', `day ${i + 1}.`, 'Play between the aartis. Book a slot in three taps and pay the advance online.'));
   const navratri: DayLook[] = NAVRATRI.map(([goddess, colour, hex], i) =>
-    day(`Day ${i + 1}: ${goddess}`, `Happy Navratri. Today's colour is ${colour.toLowerCase()}`, 'નવરાત્રીની શુભેચ્છા', `Navratri night ${i + 1}.`, `${goddess}.`, `Today's colour is ${colour.toLowerCase()}. Play in the evening, garba after. Floodlit slots until 11 pm.`, hex));
+    day(goddess, `Happy Navratri. Today's colour is ${colour.toLowerCase()}`, 'નવરાત્રીની શુભેચ્છા', `Navratri night ${i + 1}.`, `${goddess}.`, `Today's colour is ${colour.toLowerCase()}. Play in the evening, garba after. Floodlit slots until 11 pm.`, hex));
   navratri.push(day('Dussehra', 'Happy Dussehra. Good wins over evil', 'વિજયાદશમીની શુભેચ્છા', 'Happy', 'Dussehra.', 'Vijayadashami: a good day to start something new. Book your team’s next match.', '#e0a526'));
   const xmas: DayLook[] = [
     day('Christmas Eve', 'Merry Christmas', '', 'Christmas Eve', 'at the ground.', 'Evening slots under the lights until 11 pm. Bring the family.'),

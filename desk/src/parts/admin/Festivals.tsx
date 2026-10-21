@@ -52,8 +52,7 @@ function Editor({ start, looks, onClose, onSaved }: { start: Draft; looks: strin
   const [f, setF] = useState<Draft>(start);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const fixed = f.repeat !== '' || (!f.starts.length && !start.id && f.repeat === '' && false);
-  const [mode, setMode] = useState<'fixed' | 'moving'>(fixed ? 'fixed' : 'moving');
+  const [mode, setMode] = useState<'fixed' | 'moving'>(f.repeat ? 'fixed' : 'moving');
   const [mm, dd] = (f.repeat || '01-01').split('-') as [string, string];
   const setDay = (i: number, d: DayLook) => setF({ ...f, days: f.days.map((x, j) => (j === i ? d : x)) });
   async function save() {
