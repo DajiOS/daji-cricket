@@ -102,8 +102,11 @@ function swapLogos() { const light = LIGHT_LOGO_THEMES.includes(document.documen
 try { matchMedia('(min-width:1021px)').addEventListener('change', swapLogos); } catch { /* older browser: logo stays as loaded */ }
 // A festival look is never saved as the visitor's own choice: it comes and goes with the festival.
 function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; loadThemeFonts(t); document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); syncDesign(); syncFest(); } catch { /* not ready yet */ } if (save && !FESTIVAL_THEMES.includes(t)) store.set('daji.theme', t); }
-/** The visitor's own look: what they picked in this browser, or Light. */
-const ownTheme = () => { const s = store.get('daji.theme'); return s && s !== 'auto' && !FESTIVAL_THEMES.includes(s) && THEMES.some((x) => x[0] === s) ? s : 'ivory'; };
+/** The look this visitor picked on the theme button, or null when they left it to the ground. */
+const pickedTheme = () => { const s = store.get('daji.theme'); return s && s !== 'auto' && !FESTIVAL_THEMES.includes(s) && THEMES.some((x) => x[0] === s) ? s : null; };
+/** The visitor's own look: their pick, else the ground's design (it rotates through the day unless the owner fixed one; the
+ *  last one the server named is kept so the page opens in it), else Light. */
+const ownTheme = () => { const site = store.get('daji.site'); return pickedTheme() || (site && THEMES.some((x) => x[0] === site) && !FESTIVAL_THEMES.includes(site) ? site : 'ivory'); };
 // light / dark icon at the far right of the top bar: ivory is the light look, obsidian the dark one
 const DARK_THEMES = THEMES.filter((t) => { const h = t[2].slice(1); return (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000 < 110; }).map((t) => t[0]);
 const isDarkTheme = () => DARK_THEMES.includes(document.documentElement.getAttribute('data-theme'));
@@ -116,10 +119,10 @@ function themeMenu() {
     m = document.createElement('div'); m.id = 'theme-menu'; m.className = 'theme-menu'; m.hidden = true; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Colour theme');
     const item = (id, label, sub) => { const x = THEMES.find((t) => t[0] === id); return `<button type="button" role="menuitemradio" data-pick="${id}"><span class="sw" style="--sw-in:${x ? x[2] : 'conic-gradient(#ff9933,#f0479a,#ffb547,#138808,#ff9933)'};--sw:${x ? x[3] : '#d9b25e'}"></span><span>${label}${sub ? `<small>${sub}</small>` : ''}</span></button>`; };
     const name = (id) => THEMES.find((t) => t[0] === id)[1];
-    m.innerHTML = '<h6>Built in</h6>' + item('ivory', 'Light') + item('obsidian', 'Dark')
+    m.innerHTML = '<h6>Built in</h6>' + item('site', 'Automatic', fest.site && !fest.site.rotating ? 'The ground’s own design' : 'A new design through the day') + item('ivory', 'Light') + item('obsidian', 'Dark')
       + '<h6>Designer themes</h6>' + DESIGNER_THEMES.map((id) => item(id, name(id))).join('')
       + '<div id="theme-menu-fest"></div><p>Saved on this device only. On festival days the website dresses up by itself.</p>';
-    m.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; if (b.dataset.pick === 'festival' && fest.today) applyTheme(fest.today.look); else applyTheme(b.dataset.pick, true); markThemeMenu(); });
+    m.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; if (b.dataset.pick === 'festival' && fest.today) applyTheme(fest.today.look); else if (b.dataset.pick === 'site') { store.set('daji.theme', null); applyTheme(fest.today && fest.forEveryone ? fest.today.look : ownTheme()); } else applyTheme(b.dataset.pick, true); markThemeMenu(); });
     document.body.appendChild(m);
   }
   return m;
@@ -129,7 +132,7 @@ function markThemeMenu() {
   const f = fest.today, slot = m.querySelector('#theme-menu-fest'), t = document.documentElement.getAttribute('data-theme');
   if (slot) slot.innerHTML = f ? `<h6>Today</h6><button type="button" role="menuitemradio" data-pick="festival"><span class="sw" style="--sw-in:${(THEMES.find((x) => x[0] === f.look) || [])[2] || '#fff'};--sw:${f.dayLook.colour || (THEMES.find((x) => x[0] === f.look) || [])[3] || '#d9b25e'}"></span><span></span></button>` : '';
   if (f && slot) { const sp = slot.querySelector('button span:last-child'); sp.textContent = f.name; const sm = document.createElement('small'); sm.textContent = f.of > 1 ? `Day ${f.day} of ${f.of}: ${f.dayLook.title}` : 'The festival look'; sp.appendChild(sm); }
-  const cur = f && t === f.look ? 'festival' : t;
+  const cur = f && t === f.look ? 'festival' : !pickedTheme() ? 'site' : t;
   for (const b of m.querySelectorAll('[data-pick]')) b.setAttribute('aria-checked', String(b.dataset.pick === cur));
 }
 function closeThemeMenu() { const m = document.getElementById('theme-menu'), b = document.getElementById('theme-pick'); if (m && !m.hidden) { m.hidden = true; if (b) b.setAttribute('aria-expanded', 'false'); } }
@@ -150,7 +153,7 @@ swapLogos();
 // theme, as the owner chose), with the day's greeting, headline, colour, offer and decoration (festive.js). When the
 // festival is over it goes back to the visitor's own look. New Year's Eve counts down to midnight India time.
 // ?festival=<id>&day=<n> previews one festival day, ?fdate=YYYY-MM-DD shows a date, and ?fat=HH:MM:SS sets the time.
-const fest = { today: null, forEveryone: true, skew: 0, params: null, orig: null, timer: 0, midnight: 0, celebrated: false };
+const fest = { site: null, loaded: false, today: null, forEveryone: true, skew: 0, params: null, orig: null, timer: 0, midnight: 0, celebrated: false };
 const IST_MS = 5.5 * 3600000;
 const istMidnightMs = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d) - IST_MS; };
 const nextDay = (iso) => new Date(Date.UTC(...iso.split('-').map((x, i) => Number(x) - (i === 1 ? 1 : 0))) + 86400000).toISOString().slice(0, 10);
@@ -177,11 +180,13 @@ async function loadFestival(next) {
     if (p.at !== undefined) { const [hh, mm, ss] = String(p.at || (f.dayLook.countdown ? '20:00:00' : '12:00:00')).split(':').map(Number); fest.skew = istMidnightMs(f.date) + ((hh || 0) * 3600 + (mm || 0) * 60 + (ss || 0)) * 1000 - Date.now(); p.at = undefined; }
     if (p.id && p.day > f.of) { fest.today = null; festOff(); return; }
   } else if (!pretend) fest.skew = (r.time || Date.now()) - Date.now();
-  const was = fest.today;
-  fest.today = f; fest.celebrated = false;
-  const saved = store.get('daji.theme'), picked = !!saved && saved !== 'auto' && !FESTIVAL_THEMES.includes(saved);
+  const was = fest.today, first = !fest.loaded;
+  fest.today = f; fest.celebrated = false; fest.loaded = true;
+  // the ground's design for this visit (it is not changed under a visitor who is already reading the page)
+  if (first && r.site && THEMES.some((x) => x[0] === r.site.design)) { fest.site = r.site; store.set('daji.site', r.site.design); }
+  const picked = !!pickedTheme(), cur = document.documentElement.getAttribute('data-theme');
   if (f && (pretend || fest.forEveryone || !picked)) applyTheme(f.look);
-  else if (was && document.documentElement.getAttribute('data-theme') === was.look) applyTheme(ownTheme());
+  else if ((was && cur === was.look) || (first && !picked && cur !== ownTheme())) applyTheme(ownTheme());
   else syncFest();
   festBanner(); festTimers(); markThemeMenu();
 }

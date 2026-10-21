@@ -3,6 +3,7 @@ import { many, one, run } from './db.ts';
 import { now } from './clock.ts';
 import { HttpError } from './errors.ts';
 import { normalizePhone } from './input.ts';
+import { SITE_DESIGN_CHOICES } from './design.ts';
 
 export const DEFAULT_SETTINGS: GlobalSettings = {
   razorpayEnabled: true,
@@ -45,6 +46,8 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   noShowGraceMinutes: 30,
   /** On a festival day the website wears the festival look for every visitor, even one who picked a theme. Off: a visitor's own pick wins. */
   festivalForEveryone: true,
+  /** The website's design for visitors who have not picked one: 'rotate' changes it through the day (design.ts), or one fixed design. */
+  siteDesign: 'rotate',
 };
 
 export function getSettings(): GlobalSettings {
@@ -81,6 +84,8 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
     if (!(k in DEFAULT_SETTINGS)) { fields.push({ field: k, message: 'Unknown setting' }); continue; }
     if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone') {
       if (typeof v !== 'boolean') fields.push({ field: k, message: 'Must be true or false' }); else next[k] = v;
+    } else if (k === 'siteDesign') {
+      if (typeof v !== 'string' || !(SITE_DESIGN_CHOICES as readonly string[]).includes(v)) fields.push({ field: k, message: `One of ${SITE_DESIGN_CHOICES.join(', ')}` }); else next[k] = v;
     } else if (k === 'bookingsOpenFrom' || k === 'bookingsCloseFrom') {
       if (typeof v !== 'string' || (v !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(v))) fields.push({ field: k, message: 'Must be a date like 2026-11-14, or empty' }); else next[k] = v;
     } else if (k === 'upiId') {
