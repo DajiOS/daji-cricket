@@ -1,13 +1,17 @@
 import { Router, ok, created } from '../http.ts';
 import type { Reply } from '../http.ts';
 import { U } from './helpers.ts';
-import { bulkIds, diskInfo, listLibrary, removeFile, removeMany, saveUpload, setTag, setTagMany } from '../library.ts';
+import { bulkIds, diskInfo, listLibrary, putChunk, removeFile, removeMany, saveUpload, setTag, setTagMany, startUpload, uploadStatus } from '../library.ts';
 
 const ADMIN: ('owner' | 'super_admin')[] = ['owner', 'super_admin'];
 
 export function libraryRoutes(r: Router): void {
   // The file is the request body itself, streamed to disk, so there is no size limit beyond the server's free space.
   r.post('/api/library', async (c): Promise<Reply> => created(await saveUpload(c.cfg.dataDir, c.req, U(c).id, c.query.get('name') ?? 'file', c.query.get('tag') ?? 'gallery')), { auth: ADMIN, stream: true, rate: 'none' });
+  // Resumable: start (or find again) an upload, send it in pieces of up to 64 MB, and ask how far it has got after a lost connection.
+  r.post('/api/library/uploads', (c) => created(startUpload(c.cfg.dataDir, U(c).id, c.json())), { auth: ADMIN });
+  r.get('/api/library/uploads/:id', (c) => ok(uploadStatus(c.params.id!, U(c).id)), { auth: ADMIN });
+  r.put('/api/library/uploads/:id', async (c): Promise<Reply> => ok(await putChunk(c.cfg.dataDir, c.req, c.params.id!, U(c).id, Number(c.query.get('offset') ?? -1))), { auth: ADMIN, stream: true, rate: 'none' });
   r.get('/api/library', (c) => ok({ items: listLibrary(c.query.get('tag') ?? undefined), ...diskInfo(c.cfg.dataDir) }), { auth: ADMIN });
   r.patch('/api/library/:id', (c) => ok(setTag(c.params.id!, String((c.json() as { tag?: string }).tag ?? ''))), { auth: ADMIN });
   r.del('/api/library/:id', (c) => { removeFile(c.cfg.dataDir, c.params.id!); return ok({ removed: true }); }, { auth: ADMIN });
