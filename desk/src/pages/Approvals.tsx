@@ -46,7 +46,7 @@ const RULE: Record<Kind, string> = {
   pay: 'The month locks when the last step signs.',
   book: 'The deposit is holding the slot until you approve it.',
   upi: 'Approve only once the money shows in the bank. Rejecting tells the customer it was not received.',
-  refund: 'The super admin authorises it after the last step here.',
+  refund: 'The super admin authorises it after the last step here. Sending it back keeps it waiting from the first step.',
   discount: 'The booking owes less once the last step signs.',
   waiver: 'The fee drops once the last step signs.',
   expense: 'It is added to the books once the last step signs.',

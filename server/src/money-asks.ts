@@ -5,7 +5,7 @@ import { conflict, forbidden, HttpError, notFound } from './errors.ts';
 import { newId } from './ids.ts';
 import { Validator } from './input.ts';
 import type { UserRow } from './auth.ts';
-import { KIND_INFO, getFlow, sendBack, signStep, startRequest, stepsFor, withdrawRequest, type ReqRow } from './approvals.ts';
+import { KIND_INFO, getFlow, looksAfter, sendBack, signStep, startRequest, stepsFor, withdrawRequest, type ReqRow } from './approvals.ts';
 import { addTransaction, checkTransaction } from './accounting/store.ts';
 
 // Money the ground gives up or pays out on a team member's word: a discount off what a booking still owes, a waiver of
@@ -66,9 +66,11 @@ function submit(ownerId: string, actor: Actor, a: { kind: AskKind; targetId: str
     run(`INSERT INTO money_asks(id, owner_id, kind, target_id, title, amount_paise, reason, payload, status, asked_by, asked_at) VALUES(?,?,?,?,?,?,?,?,'waiting',?,?)`,
       id, ownerId, a.kind, a.targetId, a.title, a.amountPaise, a.reason, a.payload === undefined ? null : JSON.stringify(a.payload), actor.id, t);
     audit(actor, `${a.kind}.submit`, 'money_ask', id, { amountPaise: a.amountPaise, reason: a.reason, targetId: a.targetId }, ownerId);
-    if (!startRequest(ownerId, a.kind, id, { title: a.title, amountPaise: a.amountPaise, submittedBy: actor.id })) {
+    // The owner can sign every step, so what the owner asks for is carried out straight away.
+    const boss = isBoss(actor);
+    if (boss || !startRequest(ownerId, a.kind, id, { title: a.title, amountPaise: a.amountPaise, submittedBy: actor.id })) {
       carryOut(askRow(ownerId, id)!, actor);
-      audit(actor, `${a.kind}.approve`, 'money_ask', id, { auto: true, why: 'No approval step applies to this amount' }, ownerId);
+      audit(actor, `${a.kind}.approve`, 'money_ask', id, { auto: true, why: boss ? 'Asked for by the owner' : 'No approval step applies to this amount' }, ownerId);
     }
     return askOut(askRow(ownerId, id)!);
   });
@@ -124,8 +126,10 @@ export function askWaiver(ownerId: string, actor: Actor, feeId: string, raw: unk
   return submit(ownerId, actor, { kind: 'waiver', targetId: f.id, title: `Fee waiver · ${f.name} · ${f.month}`, amountPaise, reason });
 }
 
-/** Whether a hand-entered money-out transaction of this size has to wait for sign-off under the owner's expense rules. */
-export function expenseNeedsSignoff(ownerId: string, body: unknown): boolean {
+/** Whether a hand-entered money-out transaction of this size has to wait for sign-off under the owner's expense rules.
+ * The owner's own entries never wait. */
+export function expenseNeedsSignoff(ownerId: string, actor: Actor, body: unknown): boolean {
+  if (isBoss(actor)) return false;
   const amount = (body as { amountPaise?: unknown } | null)?.amountPaise;
   if (typeof amount !== 'number' || !Number.isInteger(amount) || amount >= 0) return false;
   return stepsFor(getFlow(ownerId, 'expense').flow, -amount).length > 0;
@@ -185,11 +189,10 @@ export function withdrawAsk(ownerId: string, actor: Actor, id: string) {
 
 /** Recent asks: the owner sees all of them, a team member the ones they asked for or look after. */
 export function listAsks(ownerId: string, viewer: UserRow, f: { status?: string | null; targetId?: string | null } = {}) {
-  const mine = viewer.role === 'staff' ? JSON.parse(viewer.permissions || '[]') as string[] : [];
   const where = ['owner_id = ?'], p: string[] = [ownerId];
   if (f.status) { where.push('status = ?'); p.push(f.status); }
   if (f.targetId) { where.push('target_id = ?'); p.push(f.targetId); }
   return many<AskRow>(`SELECT * FROM money_asks WHERE ${where.join(' AND ')} ORDER BY asked_at DESC LIMIT 100`, ...p)
-    .filter((a) => isBoss(viewer) || a.asked_by === viewer.id || mine.includes(KIND_INFO[a.kind].perm))
+    .filter((a) => isBoss(viewer) || a.asked_by === viewer.id || looksAfter(viewer, a.kind))
     .map(askOut);
 }

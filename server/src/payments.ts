@@ -372,11 +372,25 @@ export function refundPayment(p: PaymentRow, amountPaise: number, reason: string
     run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', total, total >= p.amount_paise ? 'refunded' : 'partially_refunded', now(), p.id);
     logEvent(p.id, actor.id, 'refund.requested', { refundId: id, amountPaise, mode, reason });
     audit(actor, 'payment.refund', 'payment', p.id, { refundId: id, amountPaise, mode, reason }, p.owner_id);
-    // The owner's approval rules for refunds come before the super admin's authorisation. With no step (the default) nothing changes.
+    // The owner's approval rules for refunds come before the super admin's authorisation. A refund the owner (or the super
+    // admin) starts needs no sign-off at the ground.
+    if (actor.role === 'owner' || actor.role === 'super_admin') return;
     const ref = one<{ ref: string; name: string | null }>('SELECT b.ref, u.name FROM bookings b LEFT JOIN users u ON u.id = b.customer_id WHERE b.id = ?', p.booking_id);
     startRequest(p.owner_id, 'refund', id, { title: `Refund · ${ref?.name ?? 'customer'}${ref ? ' · ' + ref.ref : ''}`, amountPaise, submittedBy: actor.id });
   });
   return id;
+}
+
+/** A team member who records payments asks for money back on a payment (part or all of what is left). It waits for the
+ * owner or the general manager under the refund rules, then for the super admin, like every refund. */
+export function requestRefund(staff: UserRow, paymentId: string, input: { amountPaise: number; reason: string }): RefundRow {
+  const p = paymentOr404(paymentId);
+  accessBooking(staff, p.booking_id);
+  requirePermission(staff, 'record_payments');
+  if (p.method === 'credit') throw new HttpError(409, 'CREDIT_PAYMENT', 'This was paid with account credit. Adjust the customer\'s credit instead.');
+  if (p.status !== 'captured' && p.status !== 'partially_refunded') throw new HttpError(409, 'BAD_STATE', 'Only money that was received can be refunded');
+  const id = refundPayment(p, input.amountPaise, `requested by the team: ${input.reason}`.slice(0, 200), { id: staff.id, role: staff.role });
+  return toRefund(one<any>('SELECT * FROM refunds WHERE id = ?', id));
 }
 
 /** Sign the step of a refund's approval chain that is waiting. The last step clears it for the super admin to authorise. */
@@ -387,9 +401,11 @@ export function signRefund(ownerId: string, actor: Actor, req: ReqRow, note: str
   });
 }
 
-/** Send a refund back: one step back, or, when it goes back to the start, the refund is declined and the ground keeps the money. */
+/** Send a refund back: one step back, or back to the first step. Either way it keeps waiting and is never declined here;
+ * only the super admin declines a refund. */
 export function sendBackRefund(ownerId: string, actor: Actor, req: ReqRow, note: string): void {
-  tx(() => { if (sendBack(req, actor, note).toStart) undoRefund(req.entity_id, actor, note, ownerId, 'ground'); });
+  void ownerId;
+  tx(() => { sendBack(req, actor, note, { keepWaiting: true }); });
 }
 
 function finishRefund(refundId: string, actor: Actor, rpRefundId: string | null, reference: string | null): void {

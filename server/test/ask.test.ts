@@ -629,7 +629,7 @@ test('Claude mode: approvals questions are answered read-only and by the same vi
   tool = 'get_approval_rules';
   assert.equal((await ask('What are the approval rules?')).status, 200);
   assert.notEqual(lastResult(f.seen[5]!).is_error, true);
-  // staff who look after no kind of approval (bookings people now look after discounts): every approvals tool refuses
+  // staff who look after no kind of approval: every approvals tool refuses
   tool = 'get_approvals_waiting'; perms(['view_customers']);
   assert.equal((await ask("What's waiting on whom?", sc.staff)).status, 200);
   assert.equal(lastResult(f.seen[7]!).is_error, true);
@@ -639,7 +639,10 @@ test('Claude mode: approvals questions are answered read-only and by the same vi
 });
 
 test('without a key: what is waiting on whom, why you cannot sign, and an approvals report', async () => {
-  assert.equal((await ask("What's waiting on whom?")).body.answer, 'Nothing is waiting for a sign-off right now.');
+  // the scenario's cancelled booking left one refund waiting for the owner or the general manager
+  const start = await ask("What's waiting on whom?");
+  assert.match(start.body.answer, /1 item is waiting/);
+  assert.match(start.body.details[0].label, /Refund/);
   perms(['manage_accounting', 'view_revenue']);
   const v = await h.post('/api/accounting/vendors', { name: 'Acme Turf' }, sc.owner);
   const b = await h.post('/api/accounting/bills', { vendorId: v.body.id, billNo: 'INV-1', billDate: dayFromNow(-1), dueDate: dayFromNow(5), amountPaise: 500000 }, sc.staff);
@@ -648,17 +651,17 @@ test('without a key: what is waiting on whom, why you cannot sign, and an approv
   const w = await ask("What's waiting on whom?");
   assert.equal(w.status, 200);
   assert.equal(w.body.intent, 'approvals_waiting');
-  assert.match(w.body.answer, /1 item is waiting/);
-  assert.match(w.body.details[0].label, /Acme Turf|INV-1/);
+  assert.match(w.body.answer, /2 items are waiting/);
+  assert.ok(w.body.details.some((d: any) => /Acme Turf|INV-1/.test(d.label)));
   const y = await ask("Why can't I sign the Acme bill?", sc.staff);
   assert.equal(y.body.intent, 'approvals_why');
   assert.match(y.body.answer, /cannot sign/);
   // "payments waiting for approval" is still the UPI proofs
   assert.equal((await ask('payments waiting for approval')).body.intent, 'awaiting');
   assert.equal((await ask('How many approvals this month?')).body.intent, 'approvals_report');
-  // staff who look after no kind of approval are refused; a bookings person sees only discounts, so not this bill
+  // staff who look after no kind of approval are refused (refunds and discounts are for the owner and the general manager only)
   perms(['view_customers']);
   assert.equal((await ask("What's waiting on whom?", sc.staff)).status, 403);
-  perms(['manage_bookings']);
-  assert.equal((await ask("What's waiting on whom?", sc.staff)).body.answer, 'Nothing is waiting for a sign-off right now.');
+  perms(['manage_bookings', 'record_payments']);
+  assert.equal((await ask("What's waiting on whom?", sc.staff)).status, 403);
 });

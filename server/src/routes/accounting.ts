@@ -192,7 +192,7 @@ export function accountingRoutes(r: Router): void {
     canWrite(c);
     const owner = ownerOrFail(c, 'add a transaction'), body = c.json();
     // Money going out waits for sign-off when the owner's expense rules have a step for this amount; otherwise it is recorded as always.
-    if (expenseNeedsSignoff(owner, body)) return ok(askExpense(owner, actor(c), body), 202);
+    if (expenseNeedsSignoff(owner, actor(c), body)) return ok(askExpense(owner, actor(c), body), 202);
     return created(addTransaction(owner, actor(c), body));
   }, A);
   r.patch('/api/accounting/transactions/:id', (c) => { canWrite(c); return ok(updateTransaction(ownerOrFail(c, 'change a transaction'), c.params.id!, actor(c), c.json())); }, A);

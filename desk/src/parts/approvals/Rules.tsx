@@ -14,8 +14,8 @@ interface Data { kinds: KindData[]; people: { id: string; name: string; permissi
 const ABOUT: Record<string, string> = {
   bill: 'Vendor bills, from the moment someone sends one for approval until it can be paid.',
   payroll: 'The monthly staff pay run, before the month is locked and salaries can be paid.',
-  refund: 'Money going back to a customer after a cancellation or a double payment. These steps come before the super admin authorises it.',
-  discount: 'Money taken off what a booking still owes, asked for from the booking.',
+  refund: 'Money going back to a customer: after a cancellation, a double payment, or when the front desk asks for one. Only the owner and the general manager sign; then the super admin authorises it.',
+  discount: 'Money taken off what a booking still owes, asked for from the booking. Only the owner and the general manager sign.',
   waiver: 'All or part of an academy fee that a student no longer has to pay.',
   expense: 'Money out entered by hand in the books, such as cash spent at the ground. Bank imports are not held.',
 };

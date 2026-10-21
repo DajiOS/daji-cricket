@@ -360,6 +360,14 @@ test('a walk-in for an existing phone number reuses that customer', async () => 
 
 // ------------------------------------------------------------------ refunds
 
+/** Refunds wait for the owner or the general manager before the super admin can authorise them (the standard refund rule). */
+async function clearAtGround(refundId: string) {
+  const owner = await h.login('owner1');
+  const item = (await h.get('/api/accounting/approvals/requests', owner)).body.items.find((x: any) => x.kind === 'refund' && x.entityId === refundId);
+  assert.ok(item, 'the refund is waiting on the Approvals board');
+  assert.equal((await h.post(`/api/accounting/approvals/requests/${item.id}/approve`, {}, owner)).status, 200);
+}
+
 test('gateway refunds are queued and the sweep hands them to the gateway', async () => {
   const b = await bookAndPay(h, cust, g.id, dayFromNow(3), '19:00', 1);
   const c = await h.post(`/api/bookings/${b.id}/cancel`, { reason: 'rain' }, cust);
@@ -373,6 +381,8 @@ test('gateway refunds are queued and the sweep hands them to the gateway', async
   const adm = await h.login('admin');
   assert.equal((await h.post(`/api/admin/refunds/${q.body.items[0].id}/approve`, {}, staff)).status, 403);
   assert.equal((await h.get('/api/admin/refunds', adm)).body.items.length, 1);
+  assert.equal((await h.post(`/api/admin/refunds/${q.body.items[0].id}/approve`, {}, adm)).status, 409, 'not before the ground signs');
+  await clearAtGround(q.body.items[0].id);
   assert.equal((await h.post(`/api/admin/refunds/${q.body.items[0].id}/approve`, {}, adm)).status, 200);
   const out = await runSweeps(h.cfg);
   assert.equal(out.refundsProcessed, 1);
@@ -395,6 +405,7 @@ test('manual refunds (UPI money) stay open until staff record the transfer refer
   assert.equal((await h.get('/api/staff/refunds?status=pending', staff)).body.items.length, 1, 'the sweep never touches manual refunds');
 
   assert.equal((await h.post(`/api/staff/refunds/${open[0].id}/complete`, { reference: 'UTR998877665544' }, staff)).status, 409, 'not before the super admin authorises it');
+  await clearAtGround(open[0].id);
   assert.equal((await h.post(`/api/admin/refunds/${open[0].id}/approve`, {}, await h.login('admin'))).status, 200);
   assert.equal((await h.post(`/api/staff/refunds/${open[0].id}/complete`, {}, staff)).status, 400, 'a reference is required');
   const done = await h.post(`/api/staff/refunds/${open[0].id}/complete`, { reference: 'UTR998877665544' }, staff);
