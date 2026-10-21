@@ -31,6 +31,8 @@ test('an owner uploads a video, the public can play it with Range, and it can be
   assert.equal(part.status, 206); assert.equal(part.headers.get('content-range'), `bytes 10-19/${VIDEO.length}`);
   assert.deepEqual(Buffer.from(await part.arrayBuffer()), VIDEO.subarray(10, 20));
   assert.equal((await fetch(h.url + j.url, { headers: { range: 'bytes=999999999-' } })).status, 416);
+  // the website shows a video once its HD copy has been made (or could not be made)
+  for (let i = 0; i < 600 && !libraryIdle(); i++) await new Promise((r) => setTimeout(r, 100));
   const pub = await (await fetch(h.url + '/api/library/public?tag=hero')).json() as any;
   assert.equal(pub.items.length, 1);
   const list = await h.get('/api/library', owner); assert.equal(list.status, 200); assert.equal(list.body.items.length, 1); assert.equal(list.body.libraryBytes, VIDEO.length);

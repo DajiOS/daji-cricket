@@ -1,7 +1,7 @@
 import { Router, ok, created } from '../http.ts';
 import type { Reply } from '../http.ts';
 import { U } from './helpers.ts';
-import { bulkIds, diskInfo, listLibrary, putChunk, removeFile, removeMany, saveUpload, setTag, setTagMany, startUpload, uploadStatus } from '../library.ts';
+import { bulkIds, diskInfo, listLibrary, listPublicLibrary, putChunk, removeFile, removeMany, saveUpload, setTag, setTagMany, startUpload, uploadStatus } from '../library.ts';
 
 const ADMIN: ('owner' | 'super_admin')[] = ['owner', 'super_admin'];
 
@@ -19,5 +19,5 @@ export function libraryRoutes(r: Router): void {
   r.post('/api/library/bulk-remove', (c) => ok({ results: removeMany(c.cfg.dataDir, bulkIds(c.json())) }), { auth: ADMIN });
   r.post('/api/library/bulk-tag', (c) => ok({ results: setTagMany(bulkIds(c.json()), String((c.json() as { tag?: string }).tag ?? '')) }), { auth: ADMIN });
   // Public: what the website shows (for example the hero video and the gallery), newest first.
-  r.get('/api/library/public', (c) => ok({ items: listLibrary(c.query.get('tag') ?? undefined) }), { rate: 'none' });
+  r.get('/api/library/public', (c) => ok({ items: listPublicLibrary(c.query.get('tag') ?? undefined) }), { rate: 'none' });
 }

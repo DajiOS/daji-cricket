@@ -92,6 +92,9 @@ const dir = (dataDir: string) => join(dataDir, 'library');
 // Small preview pictures (the first frame of a video, or a shrunken photo) so the website and the desk never have to load a huge original
 // just to draw a tile. Made one at a time in the background with ffmpeg; when ffmpeg is not installed the original is used instead.
 const queue: Array<() => Promise<void>> = [];
+/** Videos whose HD copy is still being made: the website leaves them out until it is ready, so nobody gets the 4K original that
+ *  buffers. The desk shows them with "preparing". */
+const preparing = new Set<string>();
 const slow: Array<() => Promise<void>> = [];
 let working = false;
 // quick preview pictures always go first; the slow video copies wait until none are left
@@ -119,11 +122,20 @@ function probe(file: string): Promise<MediaInfo | null> {
 }
 /** True when no preview or copy is being made (tests wait on it). */
 export const libraryIdle = (): boolean => !working && !queue.length && !slow.length;
+// ffmpeg runs at the lowest priority (nice 19) so the website stays quick while a copy is made on a small server; plain ffmpeg
+// where nice is missing
+let niceOk = true;
 function ffmpeg(args: string[]): Promise<boolean> {
-  return new Promise((resolve) => {
-    try { const p = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...args], { stdio: 'ignore' }); p.on('error', () => resolve(false)); p.on('close', (c) => resolve(c === 0)); }
-    catch { resolve(false); }
+  const argv = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', ...args];
+  // null: the program could not be started at all
+  const run = (cmd: string, a: string[]): Promise<boolean | null> => new Promise((resolve) => {
+    try { const p = spawn(cmd, a, { stdio: 'ignore' }); p.on('error', () => resolve(null)); p.on('close', (c) => resolve(c === 0)); }
+    catch { resolve(null); }
   });
+  return (async () => {
+    if (niceOk) { const r = await run('nice', ['-n', '19', ...argv]); if (r !== null) return r; niceOk = false; }
+    return (await run(argv[0]!, argv.slice(1))) ?? false;
+  })();
 }
 export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boolean): void {
   queue.push(async () => {
@@ -146,6 +158,7 @@ export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boo
     const vf = ['-vf', "scale='min(1920,iw)':-2", '-frames:v', '1', '-q:v', '3', out];
     if (!((await ffmpeg(['-ss', '1', '-i', src, ...vf])) || (await ffmpeg(['-i', src, ...vf])))) { try { unlinkSync(out); } catch { /* none made */ } }
   });
+  if (isVideo && !existsSync(hdPath(dataDir, id))) preparing.add(id);
   if (isVideo) slow.push(async () => {
     const src = pathOf(dataDir, id, ext);
     if (!existsSync(src)) return;
@@ -153,7 +166,7 @@ export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boo
     const web = webPath(dataDir, id);
     if (isVideo && !existsSync(web)) {
       const tmp = web + '.part.mp4';
-      const done = await ffmpeg(['-i', src, '-vf', 'scale=-2:720', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27', '-maxrate', '3M', '-bufsize', '6M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-threads', '2', tmp]);
+      const done = await ffmpeg(['-i', src, '-vf', 'scale=-2:720', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27', '-maxrate', '3M', '-bufsize', '6M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-threads', '1', tmp]);
       try { if (done) renameSync(tmp, web); else unlinkSync(tmp); } catch { /* nothing to clean */ }
     }
   });
@@ -162,10 +175,11 @@ export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boo
     // streams on an ordinary connection. It is what the website plays first; the untouched original (often 4K at 50 to 100 Mbit/s) only
     // when the visitor asks for it.
     const src = pathOf(dataDir, id, ext), hd = hdPath(dataDir, id);
-    if (!existsSync(src) || existsSync(hd)) return;
+    if (!existsSync(src) || existsSync(hd)) { preparing.delete(id); return; }
     const tmp = hd + '.part.mp4';
-    const done = await ffmpeg(['-i', src, '-vf', "scale=-2:'min(1080,ih)'", '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-maxrate', '6M', '-bufsize', '12M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-threads', '2', tmp]);
+    const done = await ffmpeg(['-i', src, '-vf', "scale=-2:'min(1080,ih)'", '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-maxrate', '6M', '-bufsize', '12M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-threads', '1', tmp]);
     try { if (done) renameSync(tmp, hd); else unlinkSync(tmp); } catch { /* nothing to clean */ }
+    preparing.delete(id); // shown on the website now, with its copy or (if ffmpeg failed) the original
   });
   void drain();
 }
@@ -207,6 +221,8 @@ export async function saveUpload(dataDir: string, req: IncomingMessage, actorId:
 
 export const listLibrary = (tag?: string): LibItem[] =>
   many<Row>(tag ? 'SELECT * FROM media_lib WHERE tag = ? ORDER BY created_at DESC' : 'SELECT * FROM media_lib ORDER BY created_at DESC', ...(tag ? [tag] : [])).map(toOut);
+/** What the website shows: everything except videos whose HD copy is still being made. */
+export const listPublicLibrary = (tag?: string): LibItem[] => listLibrary(tag).filter((i) => !preparing.has(i.id));
 
 export function setTag(id: string, tag: string): LibItem {
   if (!(TAGS as readonly string[]).includes(tag)) throw new HttpError(400, 'BAD_TAG', 'Unknown label');
