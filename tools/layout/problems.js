@@ -16,7 +16,15 @@ window.__layoutProblems = () => {
     while (a && a !== document.body) { const s = getComputedStyle(a); if (/auto|scroll/.test(s.overflowX)) { scroller = true; break; } if (s.overflowX !== 'visible') break; a = a.parentElement; }
     if (scroller) continue;
     const box = a && a !== document.body ? a.getBoundingClientRect() : { left: 0, right: vw };
+    const bb = a && a !== document.body ? a.getBoundingClientRect() : { top: -1e9, bottom: 1e9 };
+    if (r.bottom > bb.bottom + 3 || r.top < bb.top - 3) out.push(`cut off at the top or bottom: ${el.tagName.toLowerCase()} "${el.textContent.trim().slice(0, 30)}"`);
     if (r.right > box.right + 2 || r.left < box.left - 2) out.push(`cut off: ${el.tagName.toLowerCase()} "${el.textContent.trim().slice(0, 30)}" (${Math.round(r.left)}-${Math.round(r.right)} in ${Math.round(box.left)}-${Math.round(box.right)})`);
+  }
+  // decorations (films, festival layers, drawn backgrounds) must sit behind the page, out of its flow, never on top of text
+  for (const el of document.querySelectorAll('#view-home .hero-loopbox, #view-home .fest-layer, #view-home .hero-decor')) {
+    const st = getComputedStyle(el); if (st.display === 'none') continue;
+    if (!/absolute|fixed/.test(st.position)) out.push(`decoration ${el.className} is in the page flow (position ${st.position}) and covers what follows`);
+    if (st.pointerEvents !== 'none') out.push(`decoration ${el.className} catches taps`);
   }
   return out;
 };
