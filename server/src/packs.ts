@@ -9,8 +9,8 @@ import type { UserRow } from './auth.ts';
 // Design packs: the website's designer themes come in a new set every quarter. Each pack is built in code (its colours,
 // layouts, 3D scenes and background films live in the website) and switches on by itself on the first day of its quarter;
 // the pack before it is then archived, its designs still there for anyone who picked one and for the owner's fixed choice.
-// On the Website settings page the owner sees the live pack and the next one with their dates, and can:
-//   approve  - mark the next pack as looked at and fine (it goes live on its date either way, unless delayed),
+// No approval is needed: a pack goes live on its date by itself. On the Website settings page the owner sees the live pack and the
+// next one with their dates, and can, if they want to:
 //   delay    - push a pack's start to a later day in its quarter (the pack before it stays on until then),
 //   switch   - put any pack on now; the schedule takes over again when the next pack's day comes.
 // A reminder shows from 30 days before the quarter ends when the next quarter's pack is not built yet.
@@ -36,6 +36,14 @@ export const PACKS: PackDef[] = [
       { from: 11, name: 'Afternoon', designs: ['azure', 'terracotta', 'mango'] },
       { from: 17, name: 'Evening', designs: ['dusk', 'scoreboard'] },
       { from: 20, name: 'Night', designs: ['aurora', 'ember'] },
+    ] },
+  { id: '2027-q2', name: 'Summer season', from: '2027-04-01',
+    note: 'Ten new designs for April to June: kulfi mornings, summer camp nets, neem shade, the heatwave, ice gola, khus-cool afternoons, powerplay league nights, pre-monsoon skies, fireflies and jamun nights.',
+    bands: [
+      { from: 6, name: 'Morning', designs: ['kulfi', 'camp', 'neem'] },
+      { from: 11, name: 'Afternoon', designs: ['heatwave', 'gola', 'khus'] },
+      { from: 17, name: 'Evening', designs: ['powerplay', 'thunder'] },
+      { from: 20, name: 'Night', designs: ['firefly', 'jamun'] },
     ] },
 ];
 
@@ -137,8 +145,6 @@ export function packCalendar(ms: number = now()): PackCalendar {
   let reminder: string | null = null;
   if (!PACKS.some((p) => p.from === following) && today >= addDays(following, -30))
     reminder = `The ${quarterLabel(following)} pack is not built yet. This quarter’s designs carry on until it is.`;
-  else if (next && !next.approved && today >= addDays(next.startsOn, -14))
-    reminder = `Have a look at the ${next.name} pack before ${next.startsOn}. It goes live by itself that day.`;
   return { live: liveOut, next, packs: packs.reverse(), reminder };
 }
 
@@ -154,7 +160,7 @@ function save(id: string, u: UserRow, set: Partial<Row>): void {
     id, v.approved_at, v.approved_by, v.starts_on, v.pinned_at, now(), u.id);
 }
 
-/** The owner's decisions on a pack: { approve: true|false }, { startsOn: 'YYYY-MM-DD' | null }, { switchOn: true|false }. */
+/** The owner's choices on a pack: { approve: true|false } (kept for older desks; nothing waits on it), { startsOn: 'YYYY-MM-DD' | null }, { switchOn: true|false }. */
 export function updatePack(u: UserRow, id: string, body: unknown): PackCalendar {
   const p = packOr404(id), b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>, today = istDate(now());
   if ('approve' in b) {

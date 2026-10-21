@@ -1,18 +1,21 @@
 // Connections, the notebook of services, accounts and owner requests.
 import { useState } from 'react';
-import { useApi, post, patch, del, fmtDateTime, formatPhone } from '../../lib';
+import { useApi, post, put, patch, del, fmtDateTime, formatPhone } from '../../lib';
 import { Loading, ErrorBox, Chip, Table, Modal, Field, Empty, useToast, type Tone } from '../../ui';
 import { Panel, errText } from './common';
+import { useSession } from '../../App';
 
 const CONN: Record<string, [Tone, string]> = { ready: ['good', 'Ready'], partial: ['warn', 'Partly set up'], missing: ['mute', 'Not connected'], not_built: ['mute', 'Not built yet'] };
 const SERVICE_STATUS: Record<string, [Tone, string]> = { not_started: ['mute', 'Not started'], account_created: ['info', 'Account created'], connected: ['info', 'Connected'], live: ['good', 'Live'], problem: ['bad', 'Needs attention'] };
 
 export function Connections() {
+  const { me } = useSession();
   const [data, error, reload] = useApi<{ items: any[] }>('/api/admin/integrations');
   const [testing, setTesting] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, { ok: boolean; message: string }>>({});
-  if (error) return <ErrorBox msg={error} />;
-  if (!data) return <Loading />;
+  // never a blank card: while loading, a line saying so; on a failure, the server's own message and code
+  if (error) return <Panel title="Connections"><ErrorBox msg={`Could not load the services: ${error} (signed in as ${me.role})`} /><button className="btn sm" style={{ marginTop: 10 }} onClick={reload}>Try again</button></Panel>;
+  if (!data) return <Panel title="Connections"><Loading /></Panel>;
   async function test(id: string) {
     setTesting(id);
     try { const t = await post<{ ok: boolean; message: string }>(`/api/admin/integrations/${encodeURIComponent(id)}/test`, {}); setResults((r) => ({ ...r, [id]: t })); reload(); }
@@ -21,7 +24,8 @@ export function Connections() {
   }
   return (
     <Panel title="Connections" note="What the server needs for each service. Only the names of missing settings are shown, never their values. New services appear here as they are added.">
-      {data.items.map((c) => {
+      {!data.items?.length && <div className="err" role="alert">The server answered but listed no services ({Array.isArray(data.items) ? 'an empty list' : 'no list'}; signed in as {me.role}). It said: <code style={{ wordBreak: 'break-all' }}>{JSON.stringify(data).slice(0, 300)}</code></div>}
+      {(data.items || []).map((c) => {
         const res = results[c.id];
         return (
           <div className="ad-line" key={c.id} style={{ alignItems: 'flex-start' }}>
@@ -30,12 +34,42 @@ export function Connections() {
               {c.status !== 'ready' && <div className="hint">{c.note || (c.missing.length ? `Missing: ${c.missing.join(', ')}. ` : '') + c.setup}</div>}
               {res ? <div className={res.ok ? 'ok-text' : 'err-text'} style={{ marginTop: 4 }}>{res.ok ? 'Passed: ' : 'Failed: '}{res.message}</div>
                 : c.lastTest && <div className="hint">Last test {fmtDateTime(c.lastTest.at)}: {c.lastTest.message}</div>}
+              <AccountNotes id={c.id} notes={c.notes || ''} onSaved={reload} />
             </div>
             <div className="acts"><Chip tone={(CONN[c.status] || ['mute', c.status])[0]}>{(CONN[c.status] || ['mute', c.status])[1]}</Chip>{c.canTest && <button className="btn sm" disabled={testing === c.id} onClick={() => test(c.id)}>{testing === c.id ? 'Testing…' : 'Test'}</button>}</div>
           </div>
         );
       })}
     </Panel>
+  );
+}
+
+/** The owner's own record of a service's account: who signed up and with what, account names, what is still pending. Never keys. */
+function AccountNotes({ id, notes, onSaved }: { id: string; notes: string; onSaved: () => void }) {
+  const toast = useToast();
+  const [edit, setEdit] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true); setErr(null);
+    try { await put(`/api/admin/integrations/${encodeURIComponent(id)}/notes`, { notes: edit }); toast('Notes saved'); setEdit(null); onSaved(); } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+  if (edit === null) return (
+    <div style={{ marginTop: 8 }}>
+      <div className="small" style={{ fontWeight: 600 }}>Account and notes</div>
+      {notes ? <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{notes}</div> : <div className="hint" style={{ marginTop: 0 }}>Nothing written yet.</div>}
+      <button className="btn sm ghost" style={{ marginTop: 6 }} onClick={() => { setEdit(notes); setErr(null); }}>{notes ? 'Edit notes' : 'Add notes'}</button>
+    </div>
+  );
+  return (
+    <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+      <label className="small" style={{ fontWeight: 600 }} htmlFor={`notes-${id}`}>Account and notes</label>
+      <textarea id={`notes-${id}`} className="inp" rows={4} maxLength={2000} value={edit} onChange={(e) => setEdit(e.target.value)} placeholder="Who signed up and with which login, account names, numbers, what is still pending" />
+      <div className="hint" style={{ marginTop: 0 }}>Never put keys or passwords here. They stay in the server settings only, and anything that looks like one is refused.</div>
+      {err && <ErrorBox msg={err} />}
+      <div className="row" style={{ gap: 8 }}><button className="btn sm primary" disabled={busy} onClick={save}>Save</button><button className="btn sm ghost" disabled={busy} onClick={() => setEdit(null)}>Cancel</button></div>
+    </div>
   );
 }
 

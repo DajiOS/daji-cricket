@@ -115,6 +115,52 @@
     aurora: (c, t, W, H) => { for (let k = 0; k < 3; k++) { c.beginPath(); for (let x = 0; x <= W; x += 10) { const y = H * (0.18 + k * 0.08) + Math.sin(TAU * (x / W * 1.5 + t + k * 0.3)) * 40; if (x === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.lineTo(W, 0); c.lineTo(0, 0); c.closePath(); const g = c.createLinearGradient(0, 0, 0, H * 0.5); g.addColorStop(0, rgba(k === 1 ? '#a98bff' : '#6ef0c8', 0)); g.addColorStop(1, rgba(k === 1 ? '#a98bff' : '#6ef0c8', 0.22)); c.fillStyle = g; c.fill(); }
       motes(c, t, W, H, { n: 90, min: 0.6, max: 1.6, cols: ['#ffffff'], twinkle: true, seed: 59, alpha: 0.8 }); },
     ember: (c, t, W, H) => { glow(c, W / 2, H + 80, 420, '#ff6a2b', 0.35 + 0.05 * Math.sin(TAU * t * 3)); falling(c, t, W, H, { n: 80, min: 1, max: 3, up: true, sway: 24, seed: 61 }, (x, y, s) => glow(c, x, y, s * 2.4, y > H * 0.5 ? '#ffb000' : '#ff6a2b', 0.9 * (y / H))); },
+    // ---- Summer season (Apr to Jun 2027)
+    kulfi: (c, t, W, H) => { // soft rings of cream and pistachio turning slowly, a few cool drops
+      for (let k = 0; k < 5; k++) { const a = TAU * (t + k / 5), x = W / 2 + Math.cos(a) * W * 0.22, y = H * 0.45 + Math.sin(a) * H * 0.12; glow(c, x, y, 190, k % 2 ? '#bfe8cf' : '#ffe6b8', 0.22); }
+      falling(c, t, W, H, { n: 26, min: 2, max: 4, sway: 6, seed: 101 }, (x, y, s) => glow(c, x, y, s * 2, '#e9fff4', 0.6));
+    },
+    camp: (c, t, W, H) => { // bunting swaying on two strings and a ball looping over the nets
+      const cols = ['#ff8a45', '#5aa9f0', '#ffd23c', '#50d39a', '#ff5c93'];
+      for (const [y0, ph] of [[H * 0.04, 0]]) { c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 1.2; c.beginPath(); for (let x = 0; x <= W; x += 12) { const y = y0 + Math.sin(TAU * (x / W + t + ph)) * 10 + 20 * Math.sin(Math.PI * x / W); if (x === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke();
+        for (let i = 0; i < 12; i++) { const x = (i + 0.5) * W / 12, y = y0 + Math.sin(TAU * (x / W + t + ph)) * 10 + 20 * Math.sin(Math.PI * x / W), sw = Math.sin(TAU * (t * 2 + i * 0.3)) * 0.15; c.save(); c.translate(x, y); c.rotate(sw); c.fillStyle = rgba(cols[i % 5], 0.75); c.beginPath(); c.moveTo(-14, 0); c.lineTo(14, 0); c.lineTo(0, 30); c.closePath(); c.fill(); c.restore(); } }
+      const u = wrap(t * 2, 1), bx = -40 + u * (W + 80), by = H * 0.85 - Math.sin(Math.PI * u) * H * 0.4; glow(c, bx, by, 14, '#ffffff', 0.9); glow(c, bx, by, 40, '#ff8a45', 0.25);
+    },
+    neem: (c, t, W, H) => { // leaves drifting down through dappled light
+      const r = rng(103); for (let i = 0; i < 14; i++) { const x = r() * W, y = r() * H, ph = r(); glow(c, x + Math.sin(TAU * (t + ph)) * 16, y, 60 + r() * 60, '#d9f0b0', 0.08 + 0.06 * Math.sin(TAU * (t * 2 + ph))); }
+      falling(c, t, W, H, { n: 34, min: 5, max: 10, sway: 40, seed: 107 }, (x, y, s, rot, i) => petal(c, x, y, s * 1.4, rot, i % 3 ? '#8cc46e' : '#c9e39a'));
+    },
+    heatwave: (c, t, W, H) => { // a big sun, and heat shimmer rising off the pitch
+      glow(c, W * 0.78, H * 0.2, 200, '#ffb26b', 0.45 + 0.05 * Math.sin(TAU * t * 2)); glow(c, W * 0.78, H * 0.2, 70, '#fff0c8', 0.9);
+      for (let k = 0; k < 14; k++) { const y = wrap(H - (t + k / 14) * H * 1.1, H * 1.1); c.beginPath(); for (let x = 0; x <= W; x += 10) { const yy = y + Math.sin(TAU * (x / 160 + t * 3 + k * 0.4)) * 4; if (x === 0) c.moveTo(x, yy); else c.lineTo(x, yy); } c.strokeStyle = rgba('#ffcf9a', 0.18 * (y / H)); c.lineWidth = 2; c.stroke(); }
+    },
+    gola: (c, t, W, H) => { // crushed ice glinting, and syrup colours swirling through it
+      for (const [col, ph] of [['#78d2eb', 0], ['#ff5c93', 0.33], ['#ffd65a', 0.66]]) { const a = TAU * (t + ph); glow(c, W / 2 + Math.cos(a) * W * 0.28, H / 2 + Math.sin(a * 2) * H * 0.18, 220, col, 0.2); }
+      const r = rng(109); for (let i = 0; i < 70; i++) { const x = r() * W, y0 = r() * H, laps = 1 + Math.floor(r() * 2), y = wrap(y0 - laps * t * (H + 40), H + 40) - 20, tw = 0.5 + 0.5 * Math.sin(TAU * (t * 3 + r())), s = 2 + r() * 3; c.strokeStyle = rgba('#ffffff', 0.7 * tw); c.lineWidth = 1.2; c.beginPath(); c.moveTo(x - s, y); c.lineTo(x + s, y); c.moveTo(x, y - s); c.lineTo(x, y + s); c.stroke(); }
+    },
+    khus: (c, t, W, H) => { // a woven screen with a cool breeze of light passing through it
+      const sh = wrap(t, 1) * (W + 500) - 250;
+      for (let x = 0; x < W; x += 10) { const d = Math.abs(x - sh), a = Math.max(0, 1 - d / 240) * 0.45 + 0.05; c.fillStyle = rgba('#9fe3b8', a); c.fillRect(x, 0, 2, H); }
+      for (let y = 0; y < H; y += 7) { c.fillStyle = rgba('#e8c36a', 0.05); c.fillRect(0, y, W, 1); }
+      motes(c, t, W, H, { n: 40, min: 1, max: 2.4, dx: 1, sway: 10, cols: ['#d8ffe8'], seed: 113, alpha: 0.6 });
+    },
+    powerplay: (c, t, W, H) => { // the fielding circle pulsing and neon streaks racing to the boundary
+      for (let k = 0; k < 3; k++) { const u = wrap(t * 2 + k / 3, 1); c.strokeStyle = rgba('#c6ff3d', 0.5 * (1 - u)); c.lineWidth = 2; c.beginPath(); c.ellipse(W / 2, H * 0.6, 80 + u * W * 0.45, 30 + u * H * 0.22, 0, 0, TAU); c.stroke(); }
+      const r = rng(127); for (let i = 0; i < 16; i++) { const y = r() * H, ph = r(), laps = 1 + Math.floor(r() * 3), x = wrap(ph * W + laps * t * (W + 300), W + 300) - 150, col = i % 2 ? '#c6ff3d' : '#8a5cff'; const g = c.createLinearGradient(x - 140, y + 40, x, y); g.addColorStop(0, rgba(col, 0)); g.addColorStop(1, rgba(col, 0.75)); c.strokeStyle = g; c.lineWidth = 2; c.beginPath(); c.moveTo(x - 140, y + 40); c.lineTo(x, y); c.stroke(); }
+    },
+    thunder: (c, t, W, H) => { // heavy clouds drifting, a flash of lightning, the first drops
+      for (let k = 0; k < 8; k++) { const x = wrap(k / 8 + t, 1) * (W + 500) - 250, y = H * (0.08 + (k % 3) * 0.08); glow(c, x, y, 220, '#9fb6c8', 0.16); }
+      const f = Math.max(0, Math.sin(TAU * (t * 2 - 0.1)) ** 24); if (f > 0.02) { c.strokeStyle = rgba('#fff6c8', f); c.lineWidth = 2.5; c.beginPath(); let x = W * 0.62, y = H * 0.12; c.moveTo(x, y); for (const [dx, dy] of [[-20, 50], [24, 30], [-30, 60], [18, 40], [-16, 50]]) { x += dx; y += dy; c.lineTo(x, y); } c.stroke(); glow(c, W * 0.6, H * 0.2, 260, '#fff6c8', 0.18 * f); }
+      const r = rng(131); c.strokeStyle = rgba('#cfe2f0', 0.35); c.lineWidth = 1; for (let i = 0; i < 70; i++) { const x = r() * W, y0 = r() * H, laps = 3 + Math.floor(r() * 3), y = wrap(y0 + laps * t * H, H + 40) - 20; c.beginPath(); c.moveTo(x, y); c.lineTo(x - 3, y + 16); c.stroke(); }
+    },
+    firefly: (c, t, W, H) => { // fireflies wandering and blinking over the outfield
+      const r = rng(137); for (let i = 0; i < 46; i++) { const x0 = r() * W, y0 = H * 0.25 + r() * H * 0.7, ax = 20 + r() * 50, ay = 10 + r() * 30, k = 1 + Math.floor(r() * 2), ph = r(), x = x0 + Math.sin(TAU * (t * k + ph)) * ax, y = y0 + Math.sin(TAU * (t * k * 2 + ph)) * ay, b = Math.max(0, Math.sin(TAU * (t * (2 + Math.floor(r() * 3)) + ph))) ** 3; glow(c, x, y, 16, '#e4ff6e', 0.8 * b); glow(c, x, y, 3, '#ffffff', 0.9 * b); }
+    },
+    jamun: (c, t, W, H) => { // a still violet night: stars, and a slow moon glow behind the floodlights
+      motes(c, t, W, H, { n: 120, min: 0.6, max: 1.8, cols: ['#ffffff', '#e7dcff'], twinkle: true, seed: 139, alpha: 0.85 });
+      glow(c, W * (0.2 + 0.05 * Math.sin(TAU * t)), H * 0.2, 160, '#c9a7ff', 0.3); glow(c, W * (0.2 + 0.05 * Math.sin(TAU * t)), H * 0.2, 36, '#f4ecff', 0.9);
+      falling(c, t, W, H, { n: 14, min: 4, max: 7, sway: 12, seed: 149 }, (x, y, s) => { glow(c, x, y, s * 2.2, '#8a5cc8', 0.6); glow(c, x - s * 0.3, y - s * 0.3, s * 0.6, '#ffffff', 0.5); });
+    },
     // ---- Festival looks
     uttarayan: (c, t, W, H) => { const r = rng(67), cols = ['#e8501f', '#ffd23c', '#0a8ac8', '#e0218a', '#30c39e']; for (let i = 0; i < 14; i++) { const x0 = r() * W, y0 = r() * H * 0.75 + 20, s = 12 + r() * 18, ph = r(); kite(c, x0 + Math.sin(TAU * (t + ph)) * 36, y0 + Math.sin(TAU * (t * 2 + ph)) * 16, s, cols[i % 5], Math.sin(TAU * (t + ph)) * 0.3, TAU * (t * 2 + ph)); } },
     tiranga: (c, t, W, H) => { const bands = [['#ff9933', 0.25], ['#ffffff', 0.45], ['#138808', 0.65]];

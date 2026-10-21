@@ -16,7 +16,7 @@ import { STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { closedDates, setClosed } from '../closures.ts';
 import { createFestival, deleteFestival, festivalCalendar, updateFestival } from '../festivals.ts';
 import { packCalendar, updatePack } from '../packs.ts';
-import { integrationStatuses, testIntegration } from '../integrations.ts';
+import { integrationStatuses, saveIntegrationNotes, testIntegration } from '../integrations.ts';
 import { addService, deleteService, listServices, updateService } from '../services.ts';
 import { saveAaSettings, viewAaSettings } from '../accounting/aa.ts';
 import { saveYodleeSettings, subscribeYodleeWebhooks, testYodlee, viewYodleeSettings } from '../yodleeSettings.ts';
@@ -93,6 +93,8 @@ export function adminRoutes(r: Router): void {
   // themselves are never shown
   r.get('/api/admin/integrations', (c) => ok({ items: integrationStatuses(c.cfg) }), A);
   r.post('/api/admin/integrations/:id/test', async (c) => ok(await testIntegration(c.cfg, U(c), c.params.id!)), A);
+  // the owner's notes on each account (who signed up, account names, what is pending); keys and passwords are refused
+  r.put('/api/admin/integrations/:id/notes', (c) => ok(saveIntegrationNotes(c.cfg, U(c), c.params.id!, c.json())), A);
 
   // The notebook of outside services and the accounts they were opened with (never keys or passwords).
   r.get('/api/admin/services', () => ok({ items: listServices() }), SAO);
