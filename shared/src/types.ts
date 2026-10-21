@@ -504,6 +504,8 @@ export interface GlobalSettings {
   festivalForEveryone: boolean;
   /** 'rotate' (the design changes through the day) or one fixed design id. */
   siteDesign: string;
+  /** How often the rotating design changes: daypart (four times a day), daily or weekly. */
+  designPace: 'daypart' | 'daily' | 'weekly';
 }
 
 export interface AuditEntry {

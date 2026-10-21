@@ -3,7 +3,7 @@ import { now } from './clock.ts';
 import { HttpError, notFound } from './errors.ts';
 import { audit } from './audit.ts';
 import { addDays, istDate, isValidDate } from './time.ts';
-import { DESIGN_BANDS, rotatingDesign, type Band } from './design.ts';
+import { DESIGN_BANDS, rotatingDesign, type Band, type DesignPace } from './design.ts';
 import type { UserRow } from './auth.ts';
 
 // Design packs: the website's designer themes come in a new set every quarter. Each pack is built in code (its colours,
@@ -97,11 +97,11 @@ export function livePack(ms: number = now()): PackDef {
 }
 
 /** The design the website shows now for a visitor who has not picked one, by the owner's setting and the live pack. */
-export function siteDesign(setting: string, ms: number, packId?: string | null): { design: string; rotating: boolean; band: string | null; until: number | null; pack: { id: string; name: string; designs: string[] } } {
+export function siteDesign(setting: string, ms: number, packId?: string | null, pace: DesignPace = 'daypart'): { design: string; rotating: boolean; band: string | null; until: number | null; pack: { id: string; name: string; designs: string[] } } {
   const preview = packId ? PACKS.find((p) => p.id === packId) : undefined, pk = preview || livePack(ms);
   const pack = { id: pk.id, name: pk.name, designs: designsOf(pk) };
   if (!preview && setting !== 'rotate' && SITE_DESIGN_CHOICES.includes(setting)) return { design: setting, rotating: false, band: null, until: null, pack };
-  const r = rotatingDesign(ms, pk.bands);
+  const r = rotatingDesign(ms, pk.bands, pace);
   return { design: r.design, rotating: true, band: r.band, until: r.until, pack };
 }
 const designsOf = (p: PackDef): string[] => p.bands.flatMap((b) => [...b.designs]);

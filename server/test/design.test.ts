@@ -42,3 +42,25 @@ test('the website gets the rotating design by default, or the owner’s fixed on
   assert.equal(bad.status, 400);
   assert.equal(bad.body.error.details.fields[0].field, 'siteDesign');
 });
+
+test('the owner can slow the rotation to once a day or once a week', async () => {
+  const owner = await h.login('owner1');
+  assert.equal((await h.put('/api/admin/settings', { designPace: 'daily' }, owner)).status, 200);
+  setNow(at('2026-10-21', 8));
+  const morning = (await h.get('/api/festival')).body.site;
+  setNow(at('2026-10-21', 22));
+  const night = (await h.get('/api/festival')).body.site;
+  assert.equal(morning.design, night.design);
+  assert.equal(night.band, 'Today');
+  assert.equal(night.until, at('2026-10-22', 6));
+  setNow(at('2026-10-22', 8));
+  assert.notEqual((await h.get('/api/festival')).body.site.design, morning.design);
+  assert.equal((await h.put('/api/admin/settings', { designPace: 'weekly' }, owner)).status, 200);
+  // Wednesday 21 October to Sunday 25 October is one week, and it changes on Monday the 26th at 6 am
+  setNow(at('2026-10-21', 8)); const wed = (await h.get('/api/festival')).body.site;
+  setNow(at('2026-10-25', 23)); const sun = (await h.get('/api/festival')).body.site;
+  setNow(at('2026-10-26', 7)); const mon = (await h.get('/api/festival')).body.site;
+  assert.equal(wed.design, sun.design); assert.notEqual(mon.design, sun.design);
+  assert.equal(wed.until, at('2026-10-26', 6));
+  assert.equal((await h.put('/api/admin/settings', { designPace: 'hourly' }, owner)).status, 400);
+});

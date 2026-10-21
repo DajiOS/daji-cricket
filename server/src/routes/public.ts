@@ -39,7 +39,7 @@ export function publicRoutes(r: Router): void {
     const festival = preview ? festivalPreview(preview, Number(c.query.get('day') ?? 1)) : festivalOn(date || istDate(now()));
     // the site's design for visitors who have not picked one: rotating through the day, or the owner's fixed choice
     const s = getSettings();
-    return ok({ festival, forEveryone: s.festivalForEveryone, site: siteDesign(s.siteDesign, now(), c.query.get('pack')), time: now() });
+    return ok({ festival, forEveryone: s.festivalForEveryone, site: siteDesign(s.siteDesign, now(), c.query.get('pack'), s.designPace), time: now() });
   });
 
   r.get('/api/config', (c) => {

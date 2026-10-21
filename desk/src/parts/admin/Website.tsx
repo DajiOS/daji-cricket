@@ -98,14 +98,24 @@ function Design({ cal }: { cal: PackCalendar }) {
     try { await put('/api/admin/settings', { siteDesign: v }); toast(v === 'rotate' ? 'The design now changes through the day.' : `The website now always shows ${nameOf(v)}.`); reload(); setNow(null); } catch (e) { toast(errText(e)); }
     setBusy(false);
   }
-  const rotate = (s.siteDesign || 'rotate') === 'rotate', bands = cal.live.bands;
+  const rotate = (s.siteDesign || 'rotate') === 'rotate', bands = cal.live.bands, pace: string = s.designPace || 'daypart';
+  async function setPace(v: string) {
+    setBusy(true);
+    try { await put('/api/admin/settings', { designPace: v }); toast(v === 'daily' ? 'The design now changes once a day.' : v === 'weekly' ? 'The design now changes once a week.' : 'The design now changes four times a day.'); reload(); setNow(null); } catch (e) { toast(errText(e)); }
+    setBusy(false);
+  }
   const all = [...new Set(cal.packs.flatMap((p) => p.designs)), 'ivory', 'obsidian'];
   return (
-    <Panel title="Website design" note="What visitors see when they have not picked a design themselves. Festival days still come first.">
+    <Panel title="Website design" note="Visitors cannot choose a design; the website shows the one set here. Every design has a day version (6 am to 6 pm) and a night version, and visitors can flip between the two with the sun and moon switch. Festival days still come first.">
       <div className="form-grid">
         <label className="check full"><input type="radio" name="sd" checked={rotate} disabled={busy} onChange={() => pick('rotate')} /><span><b>Change by itself through the day</b> (recommended): a design from the live pack to suit the light at the ground, and a different one each day</span></label>
         {rotate && <div className="full" style={{ display: 'grid', gap: 4, paddingLeft: 26 }}>
-          {bands.map((b, i) => <div key={b.name} className="small"><b>{b.name}</b> <span className="muted">({hourText(b.from)} to {hourText(bands[(i + 1) % bands.length]!.from)}):</span> {b.designs.map(nameOf).join(', ')}</div>)}
+          <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>How often it changes
+            <select className="inp" style={{ width: 'auto' }} disabled={busy} value={pace} onChange={(e) => setPace(e.target.value)}>
+              <option value="daypart">Four times a day (morning, afternoon, evening, night)</option><option value="daily">Once a day, at 6 am</option><option value="weekly">Once a week, on Monday at 6 am</option>
+            </select></label>
+          {pace === 'daypart' ? bands.map((b, i) => <div key={b.name} className="small"><b>{b.name}</b> <span className="muted">({hourText(b.from)} to {hourText(bands[(i + 1) % bands.length]!.from)}):</span> {b.designs.map(nameOf).join(', ')}</div>)
+            : <div className="small">In turn: {bands.flatMap((b) => b.designs).map(nameOf).join(', ')}</div>}
           {now && now.design && <div className="hint" style={{ marginTop: 4 }}>Showing now: {nameOf(now.design)}{now.band ? ` (${now.band.toLowerCase()})` : ''}</div>}
         </div>}
         <label className="check full"><input type="radio" name="sd" checked={!rotate} disabled={busy} onChange={() => pick(s.siteDesign && s.siteDesign !== 'rotate' ? s.siteDesign : cal.live.designs[0]!)} /><span><b>Always show one design</b></span></label>

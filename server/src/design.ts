@@ -21,9 +21,23 @@ export const DESIGN_BANDS: Band[] = [
 
 const dayNumber = (date: string): number => Math.round(istMidnight(date) / (24 * HOUR));
 
-/** The design for a moment: the part of the day picks the group, the date picks the design in it. */
-export function rotatingDesign(ms: number, bands: readonly Band[] = DESIGN_BANDS): { design: string; band: string; until: number } {
+/** How often the design changes: in every part of the day (four times a day), once a day, or once a week. */
+export const DESIGN_PACES = ['daypart', 'daily', 'weekly'] as const;
+export type DesignPace = (typeof DESIGN_PACES)[number];
+
+/** The design for a moment: the part of the day picks the group, the date picks the design in it. Daily and weekly go through all
+ *  the pack's designs in turn, changing at 6 am (on Mondays for weekly). */
+export function rotatingDesign(ms: number, bands: readonly Band[] = DESIGN_BANDS, pace: DesignPace = 'daypart'): { design: string; band: string; until: number } {
   const date = istDate(ms), hour = Math.floor((ms - istMidnight(date)) / HOUR);
+  if (pace !== 'daypart') {
+    const all = bands.flatMap((b) => [...b.designs]), start = bands[0]!.from;
+    const day = dayNumber(date) - (hour < start ? 1 : 0); // the day begins at 6 am
+    const dayStart = istMidnight(date) + (hour < start ? -24 * HOUR : 0) + start * HOUR;
+    if (pace === 'daily') return { design: all[((day % all.length) + all.length) % all.length]!, band: 'Today', until: dayStart + 24 * HOUR };
+    // day 0 (1 January 1970) was a Thursday, so Monday is day 4 of each run of seven
+    const sinceMonday = (((day - 4) % 7) + 7) % 7, week = Math.floor((day - 4) / 7);
+    return { design: all[((week % all.length) + all.length) % all.length]!, band: 'This week', until: dayStart + (7 - sinceMonday) * 24 * HOUR };
+  }
   // before 6 am still counts as the night that began the evening before
   let i = bands.length - 1;
   for (let k = bands.length - 1; k >= 0; k--) if (hour >= bands[k]!.from) { i = k; break; }
