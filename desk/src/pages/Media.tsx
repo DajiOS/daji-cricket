@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PageHead, Stat, Loading, ErrorBox, useToast } from '../ui';
-import { useApi, del, patch, getToken } from '../lib';
+import { useApi, del, patch, post, getToken } from '../lib';
 import { errText } from '../parts/admin/common';
 
 interface Item { thumb?: string | null; web?: string | null; hd?: string | null; poster?: string | null; info?: { width: number; height: number; codec: string; seconds: number } | null; id: string; name: string; kind: 'image' | 'video'; bytes: number; tag: string; url: string; createdAt: number }
@@ -13,6 +13,8 @@ const resLabel = (i: { width: number; height: number }) => { const s = Math.min(
 const fullUrl = (it: Item) => (it.kind === 'video' && it.info?.codec === 'hevc' && it.hd ? it.hd : it.url);
 const size = (b: number) => (b >= 1073741824 ? (b / 1073741824).toFixed(2) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
 
+interface BulkRes { results: { id: string; ok: boolean; error?: string }[] }
+type TypeFilter = 'all' | 'image' | 'video';
 interface Job { key: string; name: string; pct: number; state: 'up' | 'done' | 'fail'; msg?: string }
 
 export default function Media() {
@@ -21,6 +23,31 @@ export default function Media() {
   const [tag, setTag] = useState('gallery');
   const [jobs, setJobs] = useState<Job[]>([]);
   const input = useRef<HTMLInputElement>(null);
+  const [type, setType] = useState<TypeFilter>('all');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [confirming, setConfirming] = useState(false);
+  const [working, setWorking] = useState(false);
+  const shown = useMemo(() => (lib?.items ?? []).filter((i) => type === 'all' || i.kind === type), [lib, type]);
+  // a file that was removed elsewhere can no longer be selected
+  useEffect(() => { if (lib) setPicked((p) => { const ids = new Set(lib.items.map((i) => i.id)); const n = new Set([...p].filter((x) => ids.has(x))); return n.size === p.size ? p : n; }); }, [lib]);
+  const chosen = shown.filter((i) => picked.has(i.id));
+  const allShown = shown.length > 0 && chosen.length === shown.length;
+  const toggle = (id: string) => { setConfirming(false); setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
+  const selectAll = () => { setConfirming(false); setPicked(allShown ? new Set() : new Set(shown.map((i) => i.id))); };
+  const plural = (n: number) => `${n} file${n === 1 ? '' : 's'}`;
+  /** Runs one bulk call and reports each file: the ones that went through leave the selection, the ones that failed stay selected. */
+  async function bulk(path: string, extra: Record<string, unknown>, done: string) {
+    const ids = chosen.map((i) => i.id);
+    setWorking(true);
+    try {
+      const r = await post<BulkRes>(path, { ids, ...extra });
+      const bad = r.results.filter((x) => !x.ok);
+      const name = (id: string) => lib?.items.find((i) => i.id === id)?.name ?? id;
+      toast(bad.length ? `${done} ${plural(r.results.length - bad.length)}. ${plural(bad.length)} failed: ${bad.slice(0, 3).map((b) => `${name(b.id)} (${b.error ?? 'error'})`).join(', ')}${bad.length > 3 ? ', …' : ''}` : `${done} ${plural(r.results.length)}`);
+      setPicked(new Set(bad.map((b) => b.id)));
+    } catch (e) { toast(errText(e)); }
+    setConfirming(false); setWorking(false); reload();
+  }
   const [drag, setDrag] = useState(false);
   // while previews and light copies are still being made, look again every 20 seconds
   const busy = !!lib && lib.items.some((i) => !i.thumb || (i.kind === 'video' && (!i.web || !i.hd)));
@@ -92,11 +119,42 @@ export default function Media() {
           ))}
         </div>}
       </div>
-      {!lib ? <Loading /> : lib.items.length === 0 ? <p className="hint">Nothing uploaded yet.</p> : (
+      {lib && lib.items.length > 0 && (
+        <div className="card" style={{ padding: 12, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', position: 'sticky', top: 8, zIndex: 5 }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+            <input type="checkbox" checked={allShown} onChange={selectAll} aria-label="Select all" />
+            <span>{allShown ? 'Clear selection' : `Select all ${shown.length}`}</span>
+          </label>
+          <label className="hint">Show&nbsp;
+            <select className="inp" value={type} onChange={(e) => { setType(e.target.value as TypeFilter); setConfirming(false); }}>
+              <option value="all">Photos and videos</option><option value="image">Photos only</option><option value="video">Videos only</option>
+            </select>
+          </label>
+          {chosen.length > 0 && !confirming && (
+            <>
+              <strong style={{ marginLeft: 'auto' }}>{chosen.length} selected</strong>
+              <select className="inp" value="" disabled={working} onChange={(e) => { if (e.target.value) void bulk('/api/library/bulk-tag', { tag: e.target.value }, 'Moved'); }} aria-label="Move selected to">
+                <option value="">Move selected to…</option>{TAGS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+              <button className="btn ghost" onClick={() => setPicked(new Set())}>Clear</button>
+              <button className="btn primary" style={{ background: 'var(--bad)' }} onClick={() => setConfirming(true)}>Remove selected</button>
+            </>
+          )}
+          {chosen.length > 0 && confirming && (
+            <div role="alertdialog" style={{ marginLeft: 'auto', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span><strong>Remove {plural(chosen.length)}?</strong> They disappear from the website and are deleted from the server. This cannot be undone.</span>
+              <button className="btn ghost" disabled={working} onClick={() => setConfirming(false)}>Keep them</button>
+              <button className="btn primary" style={{ background: 'var(--bad)' }} disabled={working} onClick={() => void bulk('/api/library/bulk-remove', {}, 'Removed')}>{working ? 'Removing…' : `Yes, remove ${chosen.length}`}</button>
+            </div>
+          )}
+        </div>
+      )}
+      {!lib ? <Loading /> : lib.items.length === 0 ? <p className="hint">Nothing uploaded yet.</p> : shown.length === 0 ? <p className="hint">No {type === 'image' ? 'photos' : 'videos'} yet.</p> : (
         <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))' }}>
-          {lib.items.map((it) => (
-            <div key={it.id} className="card" style={{ padding: 10, display: 'grid', gap: 8, minWidth: 0 }}>
+          {shown.map((it) => (
+            <div key={it.id} className="card" style={{ padding: 10, display: 'grid', gap: 8, minWidth: 0, outline: picked.has(it.id) ? '2px solid var(--strong)' : undefined }}>
               <a href={API + fullUrl(it)} target="_blank" rel="noreferrer" style={{ display: 'block', position: 'relative' }} title="Open at full resolution">
+                <input type="checkbox" checked={picked.has(it.id)} onChange={() => toggle(it.id)} onClick={(e) => e.stopPropagation()} aria-label={`Select ${it.name}`} style={{ position: 'absolute', left: 8, top: 8, width: 20, height: 20, zIndex: 2 }} />
                 {it.thumb ? <img src={API + it.thumb} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
                   : it.kind === 'image' ? <img src={API + it.url} alt={it.name} loading="lazy" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
                   : <div style={{ width: '100%', aspectRatio: '16/10', borderRadius: 10, background: 'var(--deep)', display: 'grid', placeItems: 'center', color: '#f3ead2' }}>Video</div>}
