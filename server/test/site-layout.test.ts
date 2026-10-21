@@ -26,3 +26,17 @@ test('the academy wordmark scales with its box, so a wide display face is never 
   assert.match(css, /\.mp\{container-type:inline-size\}/);
   assert.match(css, /\.mp b\{font-size:min\([^}]*cqi\)!important\}/);
 });
+
+test('every design in every pack is complete: listed, drawn, both halves coloured, faces and a background film', async () => {
+  const { PACKS } = await import('../src/packs.ts');
+  const app = readFileSync(join(import.meta.dirname, '../../web/public/app.js'), 'utf8');
+  const loops = join(import.meta.dirname, '../../web/public/assets/loops');
+  for (const d of PACKS.flatMap((p) => p.bands.flatMap((b) => b.designs))) {
+    assert.match(app, new RegExp(`\\['${d}', '`), `${d} in THEMES`);
+    assert.match(app, new RegExp(`\\n  ${d}: \\{ layout: '`), `${d} in DESIGNS`);
+    assert.match(app, new RegExp(`[ ,]${d}: '[A-Z]`), `${d} in THEME_FONTS`);
+    assert.ok(css.includes(`:root[data-theme="${d}"]{`), `${d} colours`);
+    assert.ok(css.includes(`:root[data-theme="${d}"][data-mode=`) || ['noir', 'pavilion', 'whites', 'pinkball', 'monsoon', 'maroon', 'carbon', 'champagne', 'stadium', 'willow'].includes(d), `${d} other half`);
+    for (const ext of ['mp4', 'webm']) assert.ok(readFileSync(join(loops, `${d}.${ext}`)).length > 10_000, `${d}.${ext} film`);
+  }
+});

@@ -35,10 +35,18 @@ test('this quarter’s pack is live with next quarter’s waiting, and a reminde
   await at('2027-03-05');
   c = await cal();
   assert.equal(c.live.id, '2027-q1');
-  assert.equal(c.reminder, 'The Apr to Jun 2027 pack is not built yet. This quarter’s designs carry on until it is.');
-  // with nothing new, the pack simply carries on
-  await at('2027-04-10');
-  assert.equal((await cal()).live.id, '2027-q1');
+  assert.equal(c.reminder, null, 'the Apr to Jun pack is built');
+  assert.equal(c.next.id, '2027-q2');
+  assert.deepEqual(c.next.designs, ['kulfi', 'camp', 'neem', 'heatwave', 'gola', 'khus', 'powerplay', 'thunder', 'firefly', 'jamun']);
+  // the summer pack goes live by itself on 1 April
+  await at('2027-04-01', 9);
+  assert.equal((await cal()).live.id, '2027-q2');
+  assert.ok(['kulfi', 'camp', 'neem'].includes((await site()).design));
+  // a month before June ends with no Jul to Sep pack, the reminder shows; with nothing new, the pack simply carries on
+  await at('2027-06-05');
+  assert.equal((await cal()).reminder, 'The Jul to Sep 2027 pack is not built yet. This quarter’s designs carry on until it is.');
+  await at('2027-07-10');
+  assert.equal((await cal()).live.id, '2027-q2');
   assert.equal((await h.get('/api/admin/design-packs', await h.login('staff1'))).status, 403);
 });
 
