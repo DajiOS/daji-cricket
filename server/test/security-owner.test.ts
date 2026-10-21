@@ -8,13 +8,24 @@ before(async () => { h = await startHarness(); });
 after(async () => { await h.close(); });
 beforeEach(async () => { ({ owner, admin, staff } = await buildScenario(h)); });
 
-test('an owner cannot reach the platform: people, passwords, audit log, backups, services, connections', async () => {
+test('an owner cannot reach the platform: people, passwords, audit log, backups, services', async () => {
   const body = { role: 'super_admin', name: 'Evil Admin', email: 'evil@x.test', password: 'Evil@12345' };
   assert.equal((await h.post('/api/admin/users', body, owner)).status, 403);
   assert.equal((await h.post('/api/admin/users/anything/password', { password: 'Pwned@12345' }, owner)).status, 403);
-  for (const p of ['/api/admin/users', '/api/admin/audit', '/api/admin/backups', '/api/admin/services', '/api/admin/integrations']) assert.equal((await h.get(p, owner)).status, 403, p);
+  for (const p of ['/api/admin/users', '/api/admin/audit', '/api/admin/backups', '/api/admin/services']) assert.equal((await h.get(p, owner)).status, 403, p);
   assert.equal((await h.patch('/api/admin/users/anything', { active: false }, owner)).status, 403);
   assert.equal((await h.post('/api/admin/users', body, admin)).status, 201, 'the software owner still can');
+});
+
+test('an owner sees which services are connected and can test them, but never the keys', async () => {
+  const r = await h.get('/api/admin/integrations', owner);
+  assert.equal(r.status, 200);
+  assert.ok(r.body.items.some((i: { id: string }) => i.id === 'email'));
+  assert.ok(!JSON.stringify(r.body).includes(h.cfg.jwtSecret));
+  const t = await h.post('/api/admin/integrations/email/test', {}, owner);
+  assert.equal(t.status, 200);
+  assert.equal(typeof t.body.ok, 'boolean');
+  assert.equal((await h.get('/api/admin/integrations', staff)).status, 403);
 });
 
 test('staff with no permissions cannot read refunds, payment history or grounds', async () => {
