@@ -3,16 +3,19 @@ import { useState } from 'react';
 import { useApi, post, patch, del, fmtDateTime, formatPhone } from '../../lib';
 import { Loading, ErrorBox, Chip, Table, Modal, Field, Empty, useToast, type Tone } from '../../ui';
 import { Panel, errText } from './common';
+import { useSession } from '../../App';
 
 const CONN: Record<string, [Tone, string]> = { ready: ['good', 'Ready'], partial: ['warn', 'Partly set up'], missing: ['mute', 'Not connected'], not_built: ['mute', 'Not built yet'] };
 const SERVICE_STATUS: Record<string, [Tone, string]> = { not_started: ['mute', 'Not started'], account_created: ['info', 'Account created'], connected: ['info', 'Connected'], live: ['good', 'Live'], problem: ['bad', 'Needs attention'] };
 
 export function Connections() {
+  const { me } = useSession();
   const [data, error, reload] = useApi<{ items: any[] }>('/api/admin/integrations');
   const [testing, setTesting] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, { ok: boolean; message: string }>>({});
-  if (error) return <ErrorBox msg={error} />;
-  if (!data) return <Loading />;
+  // never a blank card: while loading, a line saying so; on a failure, the server's own message and code
+  if (error) return <Panel title="Connections"><ErrorBox msg={`Could not load the services: ${error} (signed in as ${me.role})`} /><button className="btn sm" style={{ marginTop: 10 }} onClick={reload}>Try again</button></Panel>;
+  if (!data) return <Panel title="Connections"><Loading /></Panel>;
   async function test(id: string) {
     setTesting(id);
     try { const t = await post<{ ok: boolean; message: string }>(`/api/admin/integrations/${encodeURIComponent(id)}/test`, {}); setResults((r) => ({ ...r, [id]: t })); reload(); }
@@ -21,7 +24,7 @@ export function Connections() {
   }
   return (
     <Panel title="Connections" note="What the server needs for each service. Only the names of missing settings are shown, never their values. New services appear here as they are added.">
-      {!data.items?.length && <div className="hint">The server listed no services ({Array.isArray(data.items) ? 'an empty list' : 'no list at all'}). Reload the page; if this stays, the server is running an older build.</div>}
+      {!data.items?.length && <div className="err" role="alert">The server answered but listed no services ({Array.isArray(data.items) ? 'an empty list' : 'no list'}; signed in as {me.role}). It said: <code style={{ wordBreak: 'break-all' }}>{JSON.stringify(data).slice(0, 300)}</code></div>}
       {(data.items || []).map((c) => {
         const res = results[c.id];
         return (
