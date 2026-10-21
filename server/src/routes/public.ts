@@ -17,6 +17,7 @@ import { isValidDate, istDate } from '../time.ts';
 import { closedByScope } from '../closures.ts';
 import { now } from '../clock.ts';
 import { one, run } from '../db.ts';
+import { festivalOn, festivalPreview } from '../festivals.ts';
 
 export function publicRoutes(r: Router): void {
   // Used by Docker's health check and by deploy/check-live.sh. It reads the database, so "ok" means bookings can be served. `demo` is true while
@@ -27,6 +28,15 @@ export function publicRoutes(r: Router): void {
     const healthy = database === 'ok';
     return ok({ ok: healthy, time: now(), database, demo: c.cfg.demoMode }, healthy ? 200 : 503);
   }, { rate: 'none' });
+
+  // Today's festival look (India time), read by the website on every page load. ?date= shows another day and
+  // ?preview=<id>&day=<n> one festival's day, so the owner can see a look before the day comes.
+  r.get('/api/festival', (c) => {
+    const preview = c.query.get('preview'), date = c.query.get('date');
+    if (date && !isValidDate(date)) throw new HttpError(400, 'VALIDATION_FAILED', 'date must look like 2026-11-08', { fields: [{ field: 'date', message: 'A date like 2026-11-08' }] });
+    const festival = preview ? festivalPreview(preview, Number(c.query.get('day') ?? 1)) : festivalOn(date || istDate(now()));
+    return ok({ festival, forEveryone: getSettings().festivalForEveryone, time: now() });
+  });
 
   r.get('/api/config', (c) => {
     const s = getSettings();

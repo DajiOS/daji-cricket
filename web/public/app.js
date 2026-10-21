@@ -13,7 +13,7 @@ const store = {
 };
 
 // colour theme: the theme button at the top right, ?theme= in the address or the admin picker; remembered in this browser.
-// With nothing chosen (or "Automatic" picked), the festival look for today switches on by itself; see FESTIVALS.
+// On a festival day the server's festival calendar (/api/festival) switches the look by itself; see loadFestival().
 const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', 'Pitch green & gold', '#0b2e23', '#d3b26a'], ['navy', 'Navy & brass', '#0e192d', '#c8a96b'], ['ivory', 'Ivory & emerald', '#f6f2e9', '#0f3d2e'], ['pearl', 'White, red & green', '#ffffff', '#b3261e'], ['rose-onyx', 'Onyx & rose gold', '#0b0909', '#d9a08e'], ['rose-plum', 'Plum & rose gold', '#150d14', '#e0a9a0'], ['rose-wine', 'Wine & rose gold', '#1c0a10', '#e8b09c'], ['rose-slate', 'Slate & rose gold', '#101417', '#dfa592'], ['slate-gold', 'Slate & gold', '#101417', '#c9a96b'], ['slate-black', 'Slate-black & gold', '#0a0d0f', '#c9a96b'], ['onyx-slate', 'Onyx & gold (slate glow)', '#0a0c0b', '#c9a96b'],
   // designer themes
   ['noir', 'Floodlight Noir', '#07090a', '#d6b36a'], ['pavilion', 'Emerald Pavilion', '#0b2a20', '#dcc289'], ['whites', 'Test Whites', '#fbfbf8', '#b3261e'], ['pinkball', 'Pink Ball Night', '#0b0c22', '#ff7ab6'], ['monsoon', 'Monsoon Glass', '#0d1a1e', '#7fd6c3'], ['maroon', 'Royal Maroon', '#260a10', '#e4bb6a'], ['carbon', 'Carbon T20', '#0c0e11', '#9fd8ff'], ['champagne', 'Champagne Minimal', '#ffffff', '#9a7a3e'], ['stadium', 'Stadium Royal Blue', '#06184a', '#ffcb3d'], ['willow', 'Willow & Leather', '#1c120b', '#dca66b'],
@@ -21,20 +21,6 @@ const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', '
   ['uttarayan', 'Uttarayan', '#eef6fc', '#d9461a'], ['tiranga', 'Tiranga (Republic and Independence Day)', '#fffdf8', '#c45800'], ['holi', 'Holi', '#fff8fc', '#c41f6f'], ['ganesh', 'Ganesh Chaturthi', '#2b0d06', '#ffa21a'], ['navratri', 'Navratri', '#1a0626', '#ffb703'], ['diwali', 'Diwali', '#0d0820', '#ffb547'], ['christmas', 'Christmas and New Year', '#0c1f17', '#d9b25e']];
 const DESIGNER_THEMES = ['noir', 'pavilion', 'whites', 'pinkball', 'monsoon', 'maroon', 'carbon', 'champagne', 'stadium', 'willow'];
 const FESTIVAL_THEMES = ['uttarayan', 'tiranga', 'holi', 'ganesh', 'navratri', 'diwali', 'christmas'];
-/** Festival dates, India time, both days included. 'MM-DD' repeats every year; lunar festivals move, so add each new year's dates here. */
-const FESTIVALS = [
-  ['01-01', '01-01', 'christmas', 'Happy New Year'],
-  ['01-13', '01-15', 'uttarayan', 'Happy Uttarayan'],
-  ['01-25', '01-26', 'tiranga', 'Happy Republic Day'],
-  ['08-14', '08-15', 'tiranga', 'Happy Independence Day'],
-  ['12-24', '12-31', 'christmas', 'Merry Christmas and a happy New Year'],
-  ['2026-11-05', '2026-11-11', 'diwali', 'Happy Diwali and Saal Mubarak'],
-  ['2027-03-20', '2027-03-22', 'holi', 'Happy Holi'],
-  ['2027-09-04', '2027-09-14', 'ganesh', 'Ganpati Bappa Morya'],
-  ['2027-09-30', '2027-10-09', 'navratri', 'Happy Navratri'],
-  ['2027-10-26', '2027-11-01', 'diwali', 'Happy Diwali and Saal Mubarak'],
-];
-const FEST_GREETING = { uttarayan: 'Happy Uttarayan', tiranga: 'Happy Independence Day', holi: 'Happy Holi', ganesh: 'Ganpati Bappa Morya', navratri: 'Happy Navratri', diwali: 'Happy Diwali and Saal Mubarak', christmas: 'Merry Christmas and a happy New Year' };
 const FEST_ICON = {
   uttarayan: '<path d="M12 2 20 11 12 20 4 11Z" fill="#e8501f"/><path d="M12 2v18M4 11h16" stroke="#fff" stroke-width="1.2"/><path d="M12 20c-1 2 1 2 0 4" stroke="#0a8ac8" stroke-width="1.4" fill="none"/>',
   tiranga: '<rect x="2" y="4" width="20" height="5" fill="#ff9933"/><rect x="2" y="9" width="20" height="6" fill="#fff" stroke="#ddd" stroke-width=".4"/><rect x="2" y="15" width="20" height="5" fill="#138808"/><circle cx="12" cy="12" r="2.2" fill="none" stroke="#000080" stroke-width=".8"/>',
@@ -53,20 +39,6 @@ const THEME_FONTS = {
   holi: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700', ganesh: 'Yatra+One&family=Mulish:wght@400;500;600;700', navratri: 'Yatra+One&family=Mulish:wght@400;500;600;700', diwali: 'Yatra+One&family=Mulish:wght@400;500;600;700', christmas: 'Manrope:wght@400;500;600;700',
 };
 function loadThemeFonts(t) { const f = THEME_FONTS[t]; if (!f || document.getElementById('tf-' + t)) return; const l = document.createElement('link'); l.id = 'tf-' + t; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + f + '&display=swap'; document.head.appendChild(l); }
-/** Today's festival as a FESTIVALS row, by the date in India, or null. */
-function festivalToday() {
-  let d; try { d = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch { d = new Date().toISOString().slice(0, 10); }
-  return FESTIVALS.find(([a, b]) => (a.length === 5 ? d.slice(5) : d) >= a && (b.length === 5 ? d.slice(5) : d) <= b) || null;
-}
-/** The greeting chip above the home headline, while a festival look is on. */
-function syncFestGreet() {
-  const t = document.documentElement.getAttribute('data-theme'), hero = document.querySelector('#view-home header.hero > div'), old = document.querySelector('.fest-greet');
-  if (!FESTIVAL_THEMES.includes(t) || !hero) { if (old) old.remove(); return; }
-  const f = festivalToday(), text = f && f[2] === t ? f[3] : FEST_GREETING[t];
-  const el = old || document.createElement('p'); el.className = 'fest-greet';
-  el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${FEST_ICON[t]}</svg><span></span>`; el.lastChild.textContent = text + ' from Daji Cricket Ground';
-  if (!old) hero.insertBefore(el, hero.querySelector('h1'));
-}
 /** The ten designer themes change the whole home page, as in the design concepts: the hero layout, its decoration, the
  *  headline and the 3D scene (scene3d.js). layout: split (copy left, scene right), split-rev, center (scene above the
  *  copy), overlay (scene full width behind the copy, booking card floating on the right) or editorial (huge headline over
@@ -128,15 +100,16 @@ function syncDesign() {
 const LIGHT_LOGO_THEMES = ['ivory', 'whites', 'champagne', 'uttarayan', 'tiranga', 'holi'];
 function swapLogos() { const light = LIGHT_LOGO_THEMES.includes(document.documentElement.getAttribute('data-theme')); for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
 try { matchMedia('(min-width:1021px)').addEventListener('change', swapLogos); } catch { /* older browser: logo stays as loaded */ }
-function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; loadThemeFonts(t); document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); syncFestGreet(); syncDesign(); } catch { /* not ready yet */ } if (save) store.set('daji.theme', t); }
-/** "Automatic": today's festival look, or the usual light look. */
-function applyAutoTheme(save) { const f = festivalToday(); applyTheme(f ? f[2] : 'ivory'); if (save) store.set('daji.theme', 'auto'); }
+// A festival look is never saved as the visitor's own choice: it comes and goes with the festival.
+function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; loadThemeFonts(t); document.documentElement.setAttribute('data-theme', t); swapLogos(); try { syncThemeIcon(); syncDesign(); syncFest(); } catch { /* not ready yet */ } if (save && !FESTIVAL_THEMES.includes(t)) store.set('daji.theme', t); }
+/** The visitor's own look: what they picked in this browser, or Light. */
+const ownTheme = () => { const s = store.get('daji.theme'); return s && s !== 'auto' && !FESTIVAL_THEMES.includes(s) && THEMES.some((x) => x[0] === s) ? s : 'ivory'; };
 // light / dark icon at the far right of the top bar: ivory is the light look, obsidian the dark one
 const DARK_THEMES = THEMES.filter((t) => { const h = t[2].slice(1); return (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000 < 110; }).map((t) => t[0]);
 const isDarkTheme = () => DARK_THEMES.includes(document.documentElement.getAttribute('data-theme'));
 function syncThemeIcon() { const b = document.getElementById('theme-toggle'); if (!b) return; const d = isDarkTheme(); b.setAttribute('aria-label', d ? 'Switch to light theme' : 'Switch to dark theme'); b.dataset.mode = d ? 'dark' : 'light'; }
 document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#theme-toggle')) { applyTheme(isDarkTheme() ? 'ivory' : 'obsidian', true); syncThemeIcon(); } });
-// the theme button left of the light / dark switch: Light, Dark, the designer themes and the festival looks
+// the theme button left of the light / dark switch: Light, Dark and the designer themes, plus today's festival look on a festival day
 function themeMenu() {
   let m = document.getElementById('theme-menu');
   if (!m) {
@@ -145,14 +118,20 @@ function themeMenu() {
     const name = (id) => THEMES.find((t) => t[0] === id)[1];
     m.innerHTML = '<h6>Built in</h6>' + item('ivory', 'Light') + item('obsidian', 'Dark')
       + '<h6>Designer themes</h6>' + DESIGNER_THEMES.map((id) => item(id, name(id))).join('')
-      + '<h6>Festival looks</h6>' + item('auto', 'Automatic', 'Festival look on festival days, Light otherwise') + FESTIVAL_THEMES.map((id) => item(id, name(id))).join('')
-      + '<p>Saved on this device only.</p>';
-    m.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; if (b.dataset.pick === 'auto') applyAutoTheme(true); else applyTheme(b.dataset.pick, true); markThemeMenu(); });
+      + '<div id="theme-menu-fest"></div><p>Saved on this device only. On festival days the website dresses up by itself.</p>';
+    m.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; if (b.dataset.pick === 'festival' && fest.today) applyTheme(fest.today.look); else applyTheme(b.dataset.pick, true); markThemeMenu(); });
     document.body.appendChild(m);
   }
   return m;
 }
-function markThemeMenu() { const m = document.getElementById('theme-menu'); if (!m) return; const saved = store.get('daji.theme'), cur = (!saved || saved === 'auto') ? 'auto' : document.documentElement.getAttribute('data-theme'); for (const b of m.querySelectorAll('[data-pick]')) b.setAttribute('aria-checked', String(b.dataset.pick === cur)); }
+function markThemeMenu() {
+  const m = document.getElementById('theme-menu'); if (!m) return;
+  const f = fest.today, slot = m.querySelector('#theme-menu-fest'), t = document.documentElement.getAttribute('data-theme');
+  if (slot) slot.innerHTML = f ? `<h6>Today</h6><button type="button" role="menuitemradio" data-pick="festival"><span class="sw" style="--sw-in:${(THEMES.find((x) => x[0] === f.look) || [])[2] || '#fff'};--sw:${f.dayLook.colour || (THEMES.find((x) => x[0] === f.look) || [])[3] || '#d9b25e'}"></span><span></span></button>` : '';
+  if (f && slot) { const sp = slot.querySelector('button span:last-child'); sp.textContent = f.name; const sm = document.createElement('small'); sm.textContent = f.of > 1 ? `Day ${f.day} of ${f.of}: ${f.dayLook.title}` : 'The festival look'; sp.appendChild(sm); }
+  const cur = f && t === f.look ? 'festival' : t;
+  for (const b of m.querySelectorAll('[data-pick]')) b.setAttribute('aria-checked', String(b.dataset.pick === cur));
+}
 function closeThemeMenu() { const m = document.getElementById('theme-menu'), b = document.getElementById('theme-pick'); if (m && !m.hidden) { m.hidden = true; if (b) b.setAttribute('aria-expanded', 'false'); } }
 document.addEventListener('click', (e) => {
   const b = e.target.closest && e.target.closest('#theme-pick');
@@ -162,9 +141,169 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = document.getElementById('theme-menu'); if (m && !m.hidden) { closeThemeMenu(); const b = document.getElementById('theme-pick'); if (b) b.focus(); } } });
 try {
   const q = new URLSearchParams(location.search).get('theme'), saved = store.get('daji.theme');
-  if (window.parent === window) { if (q) applyTheme(q, true); else if (saved && saved !== 'auto') applyTheme(saved); else applyAutoTheme(false); }
+  if (window.parent === window) { if (q) applyTheme(q, true); else applyTheme(ownTheme()); }
 } catch { /* keep the default */ }
 swapLogos();
+// ------------------------------------------------------------------ festival days
+// The owner keeps the festival calendar in the desk (Settings, Festivals). On a festival day the server says which festival
+// and which of its days it is; the site then wears that look (for everyone, or only for visitors who have not picked a
+// theme, as the owner chose), with the day's greeting, headline, colour, offer and decoration (festive.js). When the
+// festival is over it goes back to the visitor's own look. New Year's Eve counts down to midnight India time.
+// ?festival=<id>&day=<n> previews one festival day, ?fdate=YYYY-MM-DD shows a date, and ?fat=HH:MM:SS sets the time.
+const fest = { today: null, forEveryone: true, skew: 0, params: null, orig: null, timer: 0, midnight: 0, celebrated: false };
+const IST_MS = 5.5 * 3600000;
+const istMidnightMs = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d) - IST_MS; };
+const nextDay = (iso) => new Date(Date.UTC(...iso.split('-').map((x, i) => Number(x) - (i === 1 ? 1 : 0))) + 86400000).toISOString().slice(0, 10);
+const festNow = () => Date.now() + fest.skew;
+const festToday = () => new Date(festNow() + IST_MS).toISOString().slice(0, 10);
+const scriptOf = (s) => (/[઀-૿]/.test(s) ? 'gu' : /[ऀ-ॿ]/.test(s) ? 'hi' : '');
+const dm = (iso) => `${+iso.slice(8)} ${MON[+iso.slice(5, 7) - 1]}`;
+const festSpan = (f) => (f.from === f.to ? dm(f.from) : f.from.slice(5, 7) === f.to.slice(5, 7) ? `${+f.from.slice(8)} to ${dm(f.to)}` : `${dm(f.from)} to ${dm(f.to)}`);
+const festMode = (f) => (f.date.endsWith('-01-01') ? 'newyear' : f.dayLook.countdown ? 'eve' : f.look === 'christmas' ? 'christmas' : '');
+function festIcon(look) { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = FEST_ICON[look] || FEST_ICON.diwali; return s; }
+function localFonts(text) { if (!scriptOf(text) || document.getElementById('tf-local')) return; const l = document.createElement('link'); l.id = 'tf-local'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Hind+Vadodara:wght@500;600&family=Hind:wght@500;600&display=swap'; document.head.appendChild(l); }
+
+async function loadFestival(next) {
+  if (window.parent !== window || document.documentElement.hasAttribute('data-embed')) return;
+  const p = fest.params || (fest.params = (() => { const q = new URLSearchParams(location.search), d = q.get('fdate'); return { id: q.get('festival'), day: Number(q.get('day')) || 1, date: d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null, at: q.get('fat') }; })());
+  const pretend = !!(p.id || p.date);
+  if (next && pretend) { if (p.id) p.day += 1; else p.date = nextDay(p.date); p.at = '00:00:05'; }
+  let r;
+  try { const res = await fetch(API + '/api/festival' + (p.id ? `?preview=${encodeURIComponent(p.id)}&day=${p.day}` : p.date ? `?date=${p.date}` : '')); if (!res.ok) return; r = await res.json(); } catch { return; }
+  const f = r.festival || null;
+  fest.forEveryone = r.forEveryone !== false;
+  if (f && pretend) {
+    // a preview stands on that day: the clock moves to it (?fat sets the time; 8 pm on a countdown day, noon on others)
+    if (p.at !== undefined) { const [hh, mm, ss] = String(p.at || (f.dayLook.countdown ? '20:00:00' : '12:00:00')).split(':').map(Number); fest.skew = istMidnightMs(f.date) + ((hh || 0) * 3600 + (mm || 0) * 60 + (ss || 0)) * 1000 - Date.now(); p.at = undefined; }
+    if (p.id && p.day > f.of) { fest.today = null; festOff(); return; }
+  } else if (!pretend) fest.skew = (r.time || Date.now()) - Date.now();
+  const was = fest.today;
+  fest.today = f; fest.celebrated = false;
+  const saved = store.get('daji.theme'), picked = !!saved && saved !== 'auto' && !FESTIVAL_THEMES.includes(saved);
+  if (f && (pretend || fest.forEveryone || !picked)) applyTheme(f.look);
+  else if (was && document.documentElement.getAttribute('data-theme') === was.look) applyTheme(ownTheme());
+  else syncFest();
+  festBanner(); festTimers(); markThemeMenu();
+}
+function festOff() { festBanner(); festTimers(); const t = document.documentElement.getAttribute('data-theme'); if (FESTIVAL_THEMES.includes(t)) applyTheme(ownTheme()); else syncFest(); markThemeMenu(); }
+
+/** The day's look on the home page: decoration, greeting, headline, colour, countdown and the offer on the booking card. */
+function syncFest() {
+  const root = document.documentElement, f = fest.today, t = root.getAttribute('data-theme');
+  const hero = document.querySelector('#view-home header.hero'); if (!hero) return;
+  const on = !!f && t === f.look && !root.hasAttribute('data-embed');
+  const h1 = hero.querySelector('h1'), lead = hero.querySelector('p.lead');
+  let layer = document.getElementById('fest-layer');
+  if (!on) {
+    if (layer) { if (window.DajiFestive) window.DajiFestive.unmount(); layer.remove(); }
+    for (const id of ['fest-greet', 'fest-offer', 'fest-count']) { const el = document.getElementById(id); if (el) el.remove(); }
+    root.removeAttribute('data-fest'); root.style.removeProperty('--fest-day');
+    if (fest.orig && !DESIGNS[t]) { h1.innerHTML = fest.orig.h1; lead.textContent = fest.orig.lead; }
+    fest.orig = null;
+    return;
+  }
+  const d = f.dayLook;
+  if (!fest.orig) fest.orig = { h1: h1.innerHTML, lead: lead.textContent };
+  root.setAttribute('data-fest', f.look);
+  if (d.colour) root.style.setProperty('--fest-day', d.colour); else root.style.removeProperty('--fest-day');
+  // decoration, drawn again only when the day changes
+  const key = `${f.id}:${f.day}:${festMode(f)}`;
+  if (!layer) { layer = document.createElement('div'); layer.id = 'fest-layer'; layer.className = 'fest-layer'; layer.setAttribute('aria-hidden', 'true'); hero.appendChild(layer); }
+  if (layer.dataset.key !== key && window.DajiFestive) { layer.dataset.key = key; window.DajiFestive.mount(layer, f.look, { colour: d.colour, mode: festMode(f) }); }
+  // greeting chip above the headline, in English and Gujarati or Hindi
+  let g = document.getElementById('fest-greet');
+  if (!g) { g = document.createElement('p'); g.id = 'fest-greet'; g.className = 'fest-greet'; h1.parentNode.insertBefore(g, h1); }
+  g.textContent = ''; g.append(festIcon(f.look));
+  const en = document.createElement('span'); en.textContent = d.greeting || f.name; g.append(en);
+  if (d.local) { localFonts(d.local); const lo = document.createElement('span'); lo.className = 'fg-local'; lo.lang = scriptOf(d.local) || 'hi'; lo.textContent = d.local; g.append(lo); }
+  // headline and lead line of the day
+  if (d.headline || d.headline2) {
+    h1.textContent = '';
+    for (const [i, text] of [d.headline, d.headline2].entries()) { if (!text) continue; const ln = document.createElement('span'); ln.className = 'ln'; const sp = document.createElement('span'); if (i === 1) sp.className = 'fest-h2'; sp.textContent = text; ln.append(sp); h1.append(ln, ' '); }
+  }
+  if (d.lede) lead.textContent = d.lede;
+  // the festival offer on the booking card
+  let o = document.getElementById('fest-offer');
+  if (f.offer) {
+    if (!o) { o = document.createElement('div'); o.id = 'fest-offer'; o.className = 'fest-offer'; const sub = document.getElementById('p-sub'); if (sub) sub.after(o); }
+    o.textContent = ''; o.append(festIcon(f.look)); const s = document.createElement('span'); s.textContent = f.offer; o.append(s);
+  } else if (o) o.remove();
+  festTick();
+}
+
+/** The strip at the very top: the festival, which day it is, the dates, the offer, and the countdown on New Year's Eve. */
+function festBanner() {
+  const view = document.getElementById('view-home'), f = fest.today;
+  let b = document.getElementById('fest-banner');
+  if (!f || !view) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'fest-banner'; b.className = 'fest-banner'; b.setAttribute('role', 'region'); b.setAttribute('aria-label', 'Festival'); }
+  placeBanner(b);
+  b.dataset.look = f.look; b.textContent = '';
+  const inner = document.createElement('div'); inner.className = 'fb-in';
+  const add = (cls, text, tag = 'span') => { const e = document.createElement(tag); e.className = cls; e.textContent = text; inner.append(e); return e; };
+  inner.append(festIcon(f.look));
+  add('fb-greet', f.dayLook.greeting || f.name, 'b');
+  if (f.dayLook.local) { const lo = add('fb-local', f.dayLook.local); lo.lang = scriptOf(f.dayLook.local) || 'hi'; localFonts(f.dayLook.local); }
+  add('fb-meta', [f.name, f.of > 1 ? `Day ${f.day} of ${f.of}${f.dayLook.title && f.dayLook.title !== f.name ? ': ' + f.dayLook.title : ''}` : '', festSpan(f)].filter(Boolean).join(' · '));
+  const c = add('fb-count', ''); c.id = 'fb-count'; c.hidden = true; c.setAttribute('role', 'timer');
+  if (f.offer) add('fb-offer', f.offer);
+  b.append(inner);
+}
+
+// across the top on a computer; under the top bar on a phone, where the theme buttons float over the top edge
+const narrow = (() => { try { return matchMedia('(max-width:1020px)'); } catch { return { matches: false, addEventListener() {} }; } })();
+function placeBanner(b) {
+  const view = document.getElementById('view-home'), nav = view && view.querySelector('.wrap > nav');
+  b.classList.toggle('fb-under', !!(narrow.matches && nav));
+  if (narrow.matches && nav) { if (nav.nextSibling !== b) nav.after(b); } else if (view.firstChild !== b) view.insertBefore(b, view.firstChild);
+}
+try { narrow.addEventListener('change', () => { const b = document.getElementById('fest-banner'); if (b) placeBanner(b); }); } catch { /* older browser: stays where it was put */ }
+function festTimers() {
+  clearInterval(fest.timer); fest.timer = 0; clearTimeout(fest.midnight);
+  const f = fest.today;
+  if (f && f.countdownTo) { fest.timer = setInterval(festTick, 1000); festTick(); return; }
+  // look again just after midnight India time, so a page left open moves to the next day (or out of the festival)
+  const p = fest.params || {};
+  if (p.id || p.date) return;
+  const wait = istMidnightMs(nextDay(festToday())) - festNow() + 2000;
+  fest.midnight = setTimeout(() => loadFestival(), Math.min(Math.max(wait, 5000), 2147483000));
+}
+const two = (n) => String(n).padStart(2, '0');
+function festTick() {
+  const f = fest.today; if (!f || !f.countdownTo) return;
+  const now = festNow(), left = f.countdownTo - now, year = new Date(f.countdownTo + IST_MS).getUTCFullYear();
+  const showing = now >= (f.countdownStart || 0) && left > 0;
+  const hh = Math.floor(left / 3600000), mm = Math.floor(left / 60000) % 60, ss = Math.floor(left / 1000) % 60;
+  const bc = document.getElementById('fb-count');
+  if (bc) { bc.hidden = !showing; if (showing) bc.textContent = `${hh}h ${two(mm)}m ${two(ss)}s to ${year}`; }
+  const hero = document.querySelector('#view-home header.hero h1'), on = document.documentElement.getAttribute('data-fest') === f.look;
+  let box = document.getElementById('fest-count');
+  if (showing && on && hero) {
+    if (!box) {
+      box = document.createElement('div'); box.id = 'fest-count'; box.className = 'fest-count'; box.setAttribute('role', 'timer'); box.setAttribute('aria-label', `Countdown to ${year}`);
+      box.innerHTML = '<div><b></b><span>hours</span></div><div><b></b><span>minutes</span></div><div><b></b><span>seconds</span></div><p></p>';
+      hero.after(box);
+    }
+    const bs = box.querySelectorAll('b'); bs[0].textContent = two(hh); bs[1].textContent = two(mm); bs[2].textContent = two(ss);
+    box.querySelector('p').textContent = `to ${year}`;
+  } else if (box && !(left <= 0 && fest.celebrated)) box.remove();
+  if (left <= 0 && !fest.celebrated) festCelebrate(year);
+}
+/** Midnight: Happy New Year, fireworks, then the New Year's Day look. */
+function festCelebrate(year) {
+  fest.celebrated = true; clearInterval(fest.timer); fest.timer = 0;
+  const h1 = document.querySelector('#view-home header.hero h1'), box = document.getElementById('fest-count'), bc = document.getElementById('fb-count');
+  if (box) box.remove();
+  if (bc) { bc.hidden = false; bc.textContent = `Happy New Year ${year}!`; }
+  if (h1 && document.documentElement.getAttribute('data-fest')) {
+    h1.textContent = ''; const a = document.createElement('span'); a.className = 'ln'; a.innerHTML = '<span></span>'; a.firstChild.textContent = 'Happy New Year'; const b = document.createElement('span'); b.className = 'ln'; b.innerHTML = '<span class="fest-h2"></span>'; b.firstChild.textContent = `${year}!`; h1.append(a, ' ', b);
+    h1.classList.add('fest-pop');
+  }
+  if (window.DajiFestive) window.DajiFestive.celebrate();
+  setTimeout(() => loadFestival(true), 9000);
+}
+loadFestival();
+
 const state = {
   config: null, grounds: [], ground: null, date: null, slots: [], sel: [],
   token: store.get('daji.token'), user: null, creditPaise: 0, useCredit: false, loading: false,

@@ -43,6 +43,8 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   cashRefundPercent: 50,
   creditExpiryDays: 90,
   noShowGraceMinutes: 30,
+  /** On a festival day the website wears the festival look for every visitor, even one who picked a theme. Off: a visitor's own pick wins. */
+  festivalForEveryone: true,
 };
 
 export function getSettings(): GlobalSettings {
@@ -77,7 +79,7 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
   const next: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULT_SETTINGS)) { fields.push({ field: k, message: 'Unknown setting' }); continue; }
-    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled') {
+    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone') {
       if (typeof v !== 'boolean') fields.push({ field: k, message: 'Must be true or false' }); else next[k] = v;
     } else if (k === 'bookingsOpenFrom' || k === 'bookingsCloseFrom') {
       if (typeof v !== 'string' || (v !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(v))) fields.push({ field: k, message: 'Must be a date like 2026-11-14, or empty' }); else next[k] = v;
