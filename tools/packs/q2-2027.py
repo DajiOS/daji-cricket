@@ -97,6 +97,8 @@ out.append('html:is(' + ','.join(f'[data-theme="{k}"]' for k in light_ids) + ') 
 for k, (decor, main, alt) in DECOR.items():
     kind = D[k][0]
     out.append(SEL('', decor) + '{background:' + main + ';-webkit-mask-image:linear-gradient(180deg,#000 45%,transparent 92%);mask-image:linear-gradient(180deg,#000 45%,transparent 92%)}')
+out.append('/* the bunting hangs in one row along the top, not over the headline */')
+out.append(SEL('', 'bunting') + '{background-repeat:repeat-x,no-repeat;background-position:0 96px,0 0}')
 out.append('/* their other halves: night versions of the five light designs, day versions of the five dark ones */')
 out += other
 out.append('/* the decorations in the other half: softer by night for the light designs, no night sky by day for the dark ones */')
