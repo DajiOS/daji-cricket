@@ -84,8 +84,10 @@ export function listBackups(cfg: Config): BackupInfo[] {
   return out.sort((a, b) => (a.name < b.name ? 1 : -1));
 }
 
-/** Folders under the data directory that are copied into every snapshot (the database is copied separately). */
-export const BACKED_UP_FOLDERS = ['uploads', 'task-photos', 'avatars', 'cards', 'library', 'media'];
+/** Folders under the data directory that are copied into every snapshot (the database is copied separately). The photo and video
+ *  library is left out: it runs to tens of GB of drone footage that would fill the disk with a copy every day. It lives on its own
+ *  storage disk, which Lightsail snapshots (deploy/STORAGE.md), and the owner keeps the original files. */
+export const BACKED_UP_FOLDERS = ['uploads', 'task-photos', 'avatars', 'cards', 'media'];
 
 /** Takes a snapshot now. Throws if the copy cannot be read back; nothing is left behind in that case. */
 export function backupNow(cfg: Config, reason: 'scheduled' | 'manual', actor: Actor = SYSTEM): BackupInfo {
@@ -102,7 +104,7 @@ export function backupNow(cfg: Config, reason: 'scheduled' | 'manual', actor: Ac
     db().exec(`VACUUM INTO '${dbFile.replace(/'/g, "''")}'`);
     const check = checkDatabaseFile(dbFile);
     if (check.integrity !== 'ok') throw new Error(`The copy failed SQLite's integrity check: ${check.integrity}`);
-    // Every folder of files the app keeps: receipts and documents, task photos, avatars, scanned cards, the media library and website media.
+    // Every folder of files the app keeps: receipts and documents, task photos, avatars, scanned cards and website media (not the video library, see above).
     let files = 0, filesBytes = 0;
     for (const dir of BACKED_UP_FOLDERS) {
       const src = join(cfg.dataDir, dir);
