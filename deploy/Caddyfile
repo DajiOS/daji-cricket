@@ -23,3 +23,16 @@ www.{$SITE_HOST:dajicricket.com} {
 {$SITE_HOST:dajicricket.com} {
 	redir https://www.{$SITE_HOST:dajicricket.com}{uri} permanent
 }
+
+# The media CDN (deploy/CDN.md) fetches photos, videos and the background films from this server over plain HTTP, by the server's
+# own address. Only those files are answered on it; the named sites above keep their HTTPS and their redirect from http://.
+http:// {
+	@files path /media/* /api/media/* /assets/*
+	handle @files {
+		reverse_proxy api:4000
+	}
+	handle {
+		respond "Not found" 404
+	}
+	header -Server
+}

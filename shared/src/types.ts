@@ -460,6 +460,8 @@ export interface PublicConfig {
   fullPaymentWithinHours: number;
   demoMode: boolean;
   publicUrl: string;
+  /** Where photos, videos and the background films load from when a CDN is set up (MEDIA_CDN); null = this server. */
+  mediaBase?: string | null;
 }
 
 /** A professional coach shown on the website's academy section. */
