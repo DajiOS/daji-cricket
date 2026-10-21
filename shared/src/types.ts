@@ -502,6 +502,8 @@ export interface GlobalSettings {
   noShowGraceMinutes: number;
   /** On a festival day the festival look applies to every visitor, even one who picked a theme. */
   festivalForEveryone: boolean;
+  /** 'rotate' (the design changes through the day) or one fixed design id. */
+  siteDesign: string;
 }
 
 export interface AuditEntry {

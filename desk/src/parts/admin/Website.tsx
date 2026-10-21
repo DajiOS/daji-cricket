@@ -1,6 +1,6 @@
 // Instagram link and the gallery photos shown on the website.
 import { useState } from 'react';
-import { useApi, put, sendFile } from '../../lib';
+import { useApi, put, sendFile, api } from '../../lib';
 import { Loading, ErrorBox, Field, useToast } from '../../ui';
 import { Panel, errText } from './common';
 
@@ -9,7 +9,52 @@ function Upload({ busy, onGo }: { busy: boolean; onGo: (f: FileList | null) => v
   return <div className="row" style={{ marginTop: 6 }}><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={(e) => setFiles(e.target.files)} /><button className="btn sm" disabled={busy} onClick={() => onGo(files)}>Upload</button></div>;
 }
 
+const DESIGN_NAMES: Record<string, string> = {
+  noir: 'Floodlight Noir', pavilion: 'Emerald Pavilion', whites: 'Test Whites', pinkball: 'Pink Ball Night', monsoon: 'Monsoon Glass',
+  maroon: 'Royal Maroon', carbon: 'Carbon T20', champagne: 'Champagne Minimal', stadium: 'Stadium Royal Blue', willow: 'Willow & Leather',
+  ivory: 'Plain light', obsidian: 'Plain dark',
+};
+const SCHEDULE: [string, string, string[]][] = [
+  ['Morning', '6 am to 11 am', ['whites', 'champagne', 'pavilion']], ['Afternoon', '11 am to 5 pm', ['willow', 'monsoon', 'maroon']],
+  ['Evening', '5 pm to 8 pm', ['stadium', 'carbon']], ['Night', '8 pm to 6 am', ['noir', 'pinkball']],
+];
+
+/** Which design the public website wears: one that changes through the day, or one the owner fixes. */
+function Design() {
+  const toast = useToast();
+  const [s, error, reload] = useApi<any>('/api/admin/settings');
+  const [now, setNow] = useState<{ design: string; band: string | null } | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!now) void api<any>('/api/festival').then((r) => setNow(r.site)).catch(() => setNow({ design: '', band: null }));
+  if (error) return <ErrorBox msg={error} />;
+  if (!s) return <Loading h={120} />;
+  async function pick(v: string) {
+    setBusy(true);
+    try { await put('/api/admin/settings', { siteDesign: v }); toast(v === 'rotate' ? 'The design now changes through the day.' : `The website now always shows ${DESIGN_NAMES[v]}.`); reload(); setNow(null); } catch (e) { toast(errText(e)); }
+    setBusy(false);
+  }
+  const rotate = (s.siteDesign || 'rotate') === 'rotate';
+  return (
+    <Panel title="Website design" note="What visitors see when they have not picked a design themselves. Festival days still come first.">
+      <div className="form-grid">
+        <label className="check full"><input type="radio" name="sd" checked={rotate} disabled={busy} onChange={() => pick('rotate')} /><span><b>Change by itself through the day</b> (recommended): a design to suit the light at the ground, and a different one each day</span></label>
+        {rotate && <div className="full" style={{ display: 'grid', gap: 4, paddingLeft: 26 }}>
+          {SCHEDULE.map(([n, t, ds]) => <div key={n} className="small"><b>{n}</b> <span className="muted">({t}):</span> {ds.map((d) => DESIGN_NAMES[d]).join(', ')}</div>)}
+          {now && now.design && <div className="hint" style={{ marginTop: 4 }}>Showing now: {DESIGN_NAMES[now.design] || now.design}{now.band ? ` (${now.band.toLowerCase()})` : ''}</div>}
+        </div>}
+        <label className="check full"><input type="radio" name="sd" checked={!rotate} disabled={busy} onChange={() => pick(s.siteDesign && s.siteDesign !== 'rotate' ? s.siteDesign : 'noir')} /><span><b>Always show one design</b></span></label>
+        {!rotate && <Field label="Design" full><select className="inp" disabled={busy} value={s.siteDesign} onChange={(e) => pick(e.target.value)}>{Object.entries(DESIGN_NAMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>}
+        <div className="full"><a className="btn sm ghost" href="/" target="_blank" rel="noopener">Open the website</a></div>
+      </div>
+    </Panel>
+  );
+}
+
 export default function Website() {
+  return <><Design /><div style={{ height: 12 }} /><Gallery /></>;
+}
+
+function Gallery() {
   const toast = useToast();
   const [s, error] = useApi<any>('/api/admin/settings');
   const [f, setF] = useState<{ ig: string; gal: string; acad: string } | null>(null);
