@@ -17,9 +17,12 @@ const store = {
 const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', 'Pitch green & gold', '#0b2e23', '#d3b26a'], ['navy', 'Navy & brass', '#0e192d', '#c8a96b'], ['ivory', 'Ivory & emerald', '#f6f2e9', '#0f3d2e'], ['pearl', 'White, red & green', '#ffffff', '#b3261e'], ['rose-onyx', 'Onyx & rose gold', '#0b0909', '#d9a08e'], ['rose-plum', 'Plum & rose gold', '#150d14', '#e0a9a0'], ['rose-wine', 'Wine & rose gold', '#1c0a10', '#e8b09c'], ['rose-slate', 'Slate & rose gold', '#101417', '#dfa592'], ['slate-gold', 'Slate & gold', '#101417', '#c9a96b'], ['slate-black', 'Slate-black & gold', '#0a0d0f', '#c9a96b'], ['onyx-slate', 'Onyx & gold (slate glow)', '#0a0c0b', '#c9a96b'],
   // designer themes
   ['noir', 'Floodlight Noir', '#07090a', '#d6b36a'], ['pavilion', 'Emerald Pavilion', '#0b2a20', '#dcc289'], ['whites', 'Test Whites', '#fbfbf8', '#b3261e'], ['pinkball', 'Pink Ball Night', '#0b0c22', '#ff7ab6'], ['monsoon', 'Monsoon Glass', '#0d1a1e', '#7fd6c3'], ['maroon', 'Royal Maroon', '#260a10', '#e4bb6a'], ['carbon', 'Carbon T20', '#0c0e11', '#9fd8ff'], ['champagne', 'Champagne Minimal', '#ffffff', '#9a7a3e'], ['stadium', 'Stadium Royal Blue', '#06184a', '#ffcb3d'], ['willow', 'Willow & Leather', '#1c120b', '#dca66b'],
+  // designer themes, Jan to Mar 2027 pack
+  ['mist', 'Winter Mist', '#eef2f4', '#2f6f8f'], ['scorebook', 'Scorebook', '#f6f1e4', '#2446a8'], ['sunrise', 'Sunrise Nets', '#fff4ec', '#d44d33'], ['azure', 'Azure Day', '#f3f8fd', '#0a6fd6'], ['terracotta', 'Stepwell Terracotta', '#f5e9dc', '#b14e2b'], ['mango', 'Mango Grove', '#0f2117', '#ffbf3c'], ['dusk', 'Golden Hour', '#1a1022', '#ffa84a'], ['scoreboard', 'Scoreboard', '#0a0a0a', '#ffb000'], ['aurora', 'Winter Night', '#070b1a', '#6ef0c8'], ['ember', 'Ember Night', '#0e0806', '#ff6a2b'],
   // festival looks
   ['uttarayan', 'Uttarayan', '#eef6fc', '#d9461a'], ['tiranga', 'Tiranga (Republic and Independence Day)', '#fffdf8', '#c45800'], ['holi', 'Holi', '#fff8fc', '#c41f6f'], ['ganesh', 'Ganesh Chaturthi', '#2b0d06', '#ffa21a'], ['navratri', 'Navratri', '#1a0626', '#ffb703'], ['diwali', 'Diwali', '#0d0820', '#ffb547'], ['christmas', 'Christmas and New Year', '#0c1f17', '#d9b25e']];
-const DESIGNER_THEMES = ['noir', 'pavilion', 'whites', 'pinkball', 'monsoon', 'maroon', 'carbon', 'champagne', 'stadium', 'willow'];
+const DESIGNER_THEMES = ['noir', 'pavilion', 'whites', 'pinkball', 'monsoon', 'maroon', 'carbon', 'champagne', 'stadium', 'willow',
+  'mist', 'scorebook', 'sunrise', 'azure', 'terracotta', 'mango', 'dusk', 'scoreboard', 'aurora', 'ember'];
 const FESTIVAL_THEMES = ['uttarayan', 'tiranga', 'holi', 'ganesh', 'navratri', 'diwali', 'christmas'];
 const FEST_ICON = {
   uttarayan: '<path d="M12 2 20 11 12 20 4 11Z" fill="#e8501f"/><path d="M12 2v18M4 11h16" stroke="#fff" stroke-width="1.2"/><path d="M12 20c-1 2 1 2 0 4" stroke="#0a8ac8" stroke-width="1.4" fill="none"/>',
@@ -37,6 +40,7 @@ const THEME_FONTS = {
   carbon: 'Barlow+Condensed:ital,wght@0,400;0,600;0,800;1,800&family=Barlow:wght@400;500;600', champagne: 'Italiana&family=Jost:wght@300;400;500;600', stadium: 'Big+Shoulders+Display:wght@400;700;900&family=Figtree:wght@400;500;600;700',
   willow: 'Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,400&family=Karla:wght@400;500;600', uttarayan: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700', tiranga: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700',
   holi: 'Baloo+2:wght@400;500;600;700&family=Mulish:wght@400;500;600;700', ganesh: 'Yatra+One&family=Mulish:wght@400;500;600;700', navratri: 'Yatra+One&family=Mulish:wght@400;500;600;700', diwali: 'Yatra+One&family=Mulish:wght@400;500;600;700', christmas: 'Manrope:wght@400;500;600;700',
+  mist: 'Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700', scorebook: 'Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=IBM+Plex+Sans:wght@400;500;600;700', sunrise: 'Young+Serif&family=Plus+Jakarta+Sans:wght@400;500;600;700', azure: 'Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700', terracotta: 'Rozha+One&family=Hind:wght@400;500;600;700', mango: 'Gloock&family=Nunito+Sans:wght@400;600;700', dusk: 'Libre+Caslon+Display&family=Work+Sans:wght@400;500;600;700', scoreboard: 'Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Rubik:wght@400;500;600;700', aurora: 'Red+Hat+Display:ital,wght@0,500;0,700;0,900;1,700&family=Red+Hat+Text:wght@400;500;600;700', ember: 'Anton&family=Archivo:wght@400;500;600;700',
 };
 function loadThemeFonts(t) { const f = THEME_FONTS[t]; if (!f || document.getElementById('tf-' + t)) return; const l = document.createElement('link'); l.id = 'tf-' + t; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + f + '&display=swap'; document.head.appendChild(l); }
 /** The ten designer themes change the whole home page, as in the design concepts: the hero layout, its decoration, the
@@ -74,7 +78,37 @@ const DESIGNS = {
     g: { mode: 'orbit', parts: 'dust', pc: '#ffe08a', key: '#fff7dc', rim: '#ffcb3d', acc: '#4f7dff', grass: ['#1c4a2c', '#21553a'], exp: 1.05, ox: 0.2 } },
   willow: { layout: 'editorial', decor: 'stitch', eyebrow: 'Leather ball · Tennis ball · Nets', h1: ['Willow, leather', 'and <em>a good wicket.</em>'],
     lede: 'Full-size turf for matches and practice nets for training. Book any of them in three taps.',
-    g: { mode: 'spin', parts: 'dust', pc: '#f2c690', key: '#fff0dc', rim: '#dca66b', acc: '#9a5a2c', exp: 1.1 } },
+    g: { mode: 'spin', parts: 'dust', pc: '#f2c690', key: '#fff0dc', rim: '#dca66b', acc: '#9a5a2c', exp: 1.1 } },  // Jan to Mar 2027 pack: winter mornings, kite-season afternoons, golden-hour evenings, crisp winter nights
+  mist: { layout: 'center', decor: 'fog', eyebrow: 'Winter mornings · Surat', h1: ['First light,', '<em>first</em> over.'],
+    lede: 'Cool, still mornings are the best time to bat. Book an early slot and have the ground to yourself.',
+    g: { mode: 'orbit', parts: 'dust', pc: '#ffffff', key: '#ffffff', rim: '#cfe3ee', acc: '#ffffff', grass: ['#7fa38a', '#88ad92'], exp: 1.15, day: true } },
+  scorebook: { layout: 'editorial', decor: 'ledger', eyebrow: 'Every run written down', h1: ['Your innings,', '<em>on the card.</em>'],
+    lede: 'Book a slot, play your match and keep the score. Clear prices, a small advance online, and the wicket is held in your name.',
+    g: { mode: 'spin', parts: 'none', key: '#fffaf0', rim: '#e9dcc0', acc: '#ffffff', exp: 1.15, day: true } },
+  sunrise: { layout: 'split', decor: 'sun', eyebrow: 'Nets open at 6 am', h1: ['Beat the heat.', 'Bat at <em>sunrise.</em>'],
+    lede: 'Early nets for your training before work or school. Pick a morning, pay the advance and walk straight in.',
+    g: { mode: 'delivery', parts: 'dust', pc: '#ffd6b8', key: '#fff1e0', rim: '#ffb38a', acc: '#ff8a5c', grass: ['#6c9a4a', '#77a653'], exp: 1.12, day: true } },
+  azure: { layout: 'overlay', decor: 'kites', eyebrow: 'Kite season · Clear skies', h1: ['Clear skies.', '<em>Full</em> overs.'],
+    lede: 'January afternoons are made for long matches. Book the full ground for your team and play until the light goes.',
+    g: { mode: 'orbit', parts: 'none', key: '#ffffff', rim: '#d8ecff', acc: '#ffffff', grass: ['#5f9a4a', '#6aa653'], exp: 1.12, ox: 0.2, day: true } },
+  terracotta: { layout: 'split-rev', decor: 'steps', eyebrow: 'Built in Surat · Played by Surat', h1: ['Gujarat’s', '<em>own</em> ground.'],
+    lede: 'Turf wicket, nets, changing rooms and parking, close to home. Reserve the ground for your team in under a minute.',
+    g: { mode: 'spin', rings: true, parts: 'dust', pc: '#f3c29b', key: '#fff1e2', rim: '#d9875c', acc: '#b14e2b', exp: 1.12, day: true } },
+  mango: { layout: 'split', decor: 'canopy', eyebrow: 'Weekend afternoons', h1: ['Long afternoons,', '<em>sweet</em> cricket.'],
+    lede: 'Weekend matches in the long afternoon light. Book your slot and bring the team.',
+    g: { mode: 'spin', parts: 'dust', pc: '#ffe39a', key: '#fff4d6', rim: '#ffbf3c', acc: '#5fa36a', exp: 1.1 } },
+  dusk: { layout: 'split', decor: 'horizon', eyebrow: 'Last overs before the lights', h1: ['Play into', 'the <em>golden hour.</em>'],
+    lede: 'The best light of the day falls between 5 and 7. Book an evening slot and the floodlights come on when the sun goes.',
+    g: { mode: 'delivery', parts: 'dust', pc: '#ffcf9a', key: '#ffd9a8', rim: '#ff8a5c', acc: '#ffa84a', grass: ['#2a3a22', '#30422a'], exp: 1.08 } },
+  scoreboard: { layout: 'editorial', decor: 'dots', eyebrow: 'Runs · Wickets · Overs', h1: ['Need six', '<em>off the last ball?</em>'],
+    lede: 'Book the ground for your league match or a friendly T20. Every free slot is on the board, so there is nothing to guess.',
+    g: { mode: 'orbit', parts: 'dust', pc: '#ffcf66', key: '#fff2d0', rim: '#ffb000', acc: '#ffb000', grass: ['#173322', '#1b3a27'], exp: 1.0 } },
+  aurora: { layout: 'overlay', decor: 'aurora', eyebrow: 'Cold nights · Bright lights', h1: ['Crisp air.', '<em>Bright</em> lights.'],
+    lede: 'Winter nights under the floodlights, until 11 pm. Book tonight and bring a jumper for the field.',
+    g: { mode: 'delivery', parts: 'stars', pc: '#ffffff', key: '#dfe8ff', rim: '#6ef0c8', acc: '#a98bff', grass: ['#0f2a2a', '#123030'], exp: 1.08, ox: 0.2 } },
+  ember: { layout: 'center', decor: 'embers', eyebrow: 'Late slots until 11 pm', h1: ['After dark,', 'the game <em>glows.</em>'],
+    lede: 'Night matches when the city has gone quiet. Book the ground, pay a small advance and the evening is yours.',
+    g: { mode: 'spin', rings: true, parts: 'dust', pc: '#ffb27a', key: '#ffe1c8', rim: '#ff6a2b', acc: '#ffb000', exp: 1.08 } },
 };
 let heroOrig = null;
 function syncDesign() {
