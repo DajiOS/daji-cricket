@@ -21,7 +21,8 @@ export function Connections() {
   }
   return (
     <Panel title="Connections" note="What the server needs for each service. Only the names of missing settings are shown, never their values. New services appear here as they are added.">
-      {data.items.map((c) => {
+      {!data.items?.length && <div className="hint">The server listed no services ({Array.isArray(data.items) ? 'an empty list' : 'no list at all'}). Reload the page; if this stays, the server is running an older build.</div>}
+      {(data.items || []).map((c) => {
         const res = results[c.id];
         return (
           <div className="ad-line" key={c.id} style={{ alignItems: 'flex-start' }}>
