@@ -36,7 +36,8 @@ test('the website gets the rotating design by default, or the owner’s fixed on
   const owner = await h.login('owner1');
   assert.equal((await h.put('/api/admin/settings', { siteDesign: 'stadium' }, owner)).status, 200);
   r = await h.get('/api/festival');
-  assert.deepEqual(r.body.site, { design: 'stadium', rotating: false, band: null, until: null });
+  assert.deepEqual({ ...r.body.site, pack: undefined }, { design: 'stadium', rotating: false, band: null, until: null, pack: undefined });
+  assert.equal(r.body.site.pack.id, '2026-q4');
   const bad = await h.put('/api/admin/settings', { siteDesign: 'neon' }, owner);
   assert.equal(bad.status, 400);
   assert.equal(bad.body.error.details.fields[0].field, 'siteDesign');

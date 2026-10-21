@@ -52,6 +52,8 @@ export default function Dashboard({ sub }: { sub: string }) {
 
   const [ex] = useApi<{ items: string[] }>('/api/staff/ask/examples');
   const [appr] = useApi<{ count: number }>(can(me, 'manage_accounting') ? '/api/accounting/approvals/count' : null, [ownerId]);
+  // the owner is reminded here when next quarter's design pack is missing or not looked at yet
+  const [packs] = useApi<{ reminder: string | null }>(me.role === 'owner' || me.role === 'super_admin' ? '/api/admin/design-packs' : null);
   const [ask, setAsk] = useState('');
   const hour = Number(new Date(Date.now() + 19800000).toISOString().slice(11, 13));
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -68,6 +70,7 @@ export default function Dashboard({ sub }: { sub: string }) {
   if (today) {
     if (today.awaitingVerification) events.push({ time: 'Now', title: `${today.awaitingVerification} UPI payment${today.awaitingVerification === 1 ? '' : 's'} to check`, detail: 'Match them with the bank, then confirm the booking', dot: '#B86E12', href: '#/bookings/payments' });
     if (today.needsReview) events.push({ time: 'Now', title: `${today.needsReview} booking${today.needsReview === 1 ? '' : 's'} to approve`, detail: 'Waiting for your decision', dot: '#B86E12', href: '#/bookings/approvals' });
+    if (packs?.reminder) events.push({ time: 'Soon', title: 'Website design pack', detail: packs.reminder, dot: '#B86E12', href: '#/settings/website' });
     for (const b of rows) events.push({ time: fmtTime(b.startAt), title: `${b.customerName} · ${b.groundName}`, detail: `${fmtTime(b.startAt)} – ${fmtTime(b.endAt)}${b.status === 'held' ? ' · held, not paid' : b.status === 'confirmed' && b.balancePaise > 0 ? ` · ${inr(b.balancePaise)} to collect` : ''}`, dot: b.endAt <= t ? '#9AA39F' : b.startAt <= t ? '#1E6E4A' : '#2F6FB0', href: `#/bookings/${b.id}` });
   }
 

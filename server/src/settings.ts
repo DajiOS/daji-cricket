@@ -3,7 +3,7 @@ import { many, one, run } from './db.ts';
 import { now } from './clock.ts';
 import { HttpError } from './errors.ts';
 import { normalizePhone } from './input.ts';
-import { SITE_DESIGN_CHOICES } from './design.ts';
+import { SITE_DESIGN_CHOICES } from './packs.ts';
 
 export const DEFAULT_SETTINGS: GlobalSettings = {
   razorpayEnabled: true,
