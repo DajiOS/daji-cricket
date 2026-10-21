@@ -27,7 +27,25 @@ CREATE TABLE media_lib (
 `);
 
 export const TAGS = ['hero', 'gallery', 'academy', 'other'] as const;
-export const MAX_LIBRARY_BYTES = 8 * 1024 * 1024 * 1024;
+export const MAX_LIBRARY_BYTES = 20 * 1024 * 1024 * 1024;
+/** Largest piece of a resumable upload. */
+export const MAX_CHUNK_BYTES = 64 * 1024 * 1024;
+// Resumable uploads: a big file goes up in pieces, each appended to <id>.part. A lost connection, or a closed tab, costs one
+// piece: picking the same file again carries on from the last piece the server has. The finished file is the original byte for
+// byte; previews and the HD and light copies are made from it afterwards and never replace it.
+registerSchema('library-uploads-1', `
+CREATE TABLE media_uploads (
+  id TEXT PRIMARY KEY,
+  resume_key TEXT NOT NULL,
+  name TEXT NOT NULL,
+  ext TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  received INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  created_by TEXT NOT NULL
+);
+`);
 const TYPES: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif',
   mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
@@ -54,7 +72,9 @@ let dataRoot = '';
 export const setLibraryRoot = (dataDir: string): void => { dataRoot = dataDir; };
 const thumbPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.thumb.jpg`);
 const webPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.web.mp4`);
-const hdPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.hd.mp4`);
+const hdPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.hd2.mp4`);
+/** The first HD copies were made at up to 10 Mbit/s, which buffers on ordinary connections; they are remade at 6. */
+const oldHdPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.hd.mp4`);
 const posterPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.poster.jpg`);
 const infoPath = (dataDir: string, id: string) => join(dataDir, 'library', `${id}.info.json`);
 const made = (p: (d: string, id: string) => string, r: Row, name: string) => (dataRoot && existsSync(p(dataRoot, r.id)) ? `/media/${r.id}.${name}` : null);
@@ -64,7 +84,7 @@ function readInfo(id: string): MediaInfo | null {
 }
 const toOut = (r: Row): LibItem => ({
   id: r.id, name: r.name, mime: r.mime, kind: r.mime.startsWith('video/') ? 'video' : 'image', bytes: r.bytes, tag: r.tag, url: `/media/${r.id}.${r.ext}`,
-  thumb: made(thumbPath, r, 'thumb.jpg'), poster: made(posterPath, r, 'poster.jpg'), hd: made(hdPath, r, 'hd.mp4'), web: made(webPath, r, 'web.mp4'),
+  thumb: made(thumbPath, r, 'thumb.jpg'), poster: made(posterPath, r, 'poster.jpg'), hd: made(hdPath, r, 'hd2.mp4'), web: made(webPath, r, 'web.mp4'),
   info: readInfo(r.id), createdAt: r.created_at,
 });
 const dir = (dataDir: string) => join(dataDir, 'library');
@@ -138,13 +158,13 @@ export function makeThumb(dataDir: string, id: string, ext: string, isVideo: boo
     }
   });
   if (isVideo) slow.push(async () => {
-    // a high-definition copy, 1080p (never larger than the original), in H.264 so every browser can play it. The original stays untouched
-    // and is what the website plays on a fast connection; this copy is for browsers that cannot play the original (HEVC from drones) and
-    // for average connections.
+    // a high-definition copy, 1080p (never larger than the original), in H.264 so every browser can play it, at up to 6 Mbit/s so it
+    // streams on an ordinary connection. It is what the website plays first; the untouched original (often 4K at 50 to 100 Mbit/s) only
+    // when the visitor asks for it.
     const src = pathOf(dataDir, id, ext), hd = hdPath(dataDir, id);
     if (!existsSync(src) || existsSync(hd)) return;
     const tmp = hd + '.part.mp4';
-    const done = await ffmpeg(['-i', src, '-vf', "scale=-2:'min(1080,ih)'", '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-maxrate', '10M', '-bufsize', '20M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-threads', '2', tmp]);
+    const done = await ffmpeg(['-i', src, '-vf', "scale=-2:'min(1080,ih)'", '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-maxrate', '6M', '-bufsize', '12M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-threads', '2', tmp]);
     try { if (done) renameSync(tmp, hd); else unlinkSync(tmp); } catch { /* nothing to clean */ }
   });
   void drain();
@@ -154,6 +174,7 @@ export function backfillThumbs(dataDir: string): void {
   dataRoot = dataDir;
   for (const r of many<Row>('SELECT * FROM media_lib')) {
     const v = r.mime.startsWith('video/');
+    try { unlinkSync(oldHdPath(dataDir, r.id)); } catch { /* none */ }
     const missing = [thumbPath, infoPath, ...(v ? [webPath, hdPath, posterPath] : [])].some((p) => !existsSync(p(dataDir, r.id)));
     if (missing) makeThumb(dataDir, r.id, r.ext, v);
   }
@@ -168,7 +189,7 @@ export async function saveUpload(dataDir: string, req: IncomingMessage, actorId:
   if (!mime) throw new HttpError(415, 'UNSUPPORTED_TYPE', 'Upload a JPG, PNG, WebP, GIF, AVIF, MP4, MOV or WebM file');
   if (!(TAGS as readonly string[]).includes(tag)) tag = 'gallery';
   const len = Number(req.headers['content-length'] ?? 0);
-  if (len > MAX_LIBRARY_BYTES) throw new HttpError(413, 'BODY_TOO_LARGE', 'That file is over 8 GB');
+  if (len > MAX_LIBRARY_BYTES) throw new HttpError(413, 'BODY_TOO_LARGE', 'That file is over 20 GB');
   mkdirSync(dir(dataDir), { recursive: true });
   try { const f = statfsSync(dir(dataDir)); if (len && len + 512 * 1024 * 1024 > f.bavail * f.bsize) throw new HttpError(507, 'DISK_FULL', 'The server does not have enough free space for this file'); } catch (e) { if (e instanceof HttpError) throw e; }
   const id = newId('lib');
@@ -200,7 +221,7 @@ export function removeFile(dataDir: string, id: string): void {
   run('DELETE FROM media_lib WHERE id = ?', id);
   try { unlinkSync(pathOf(dataDir, r.id, r.ext)); } catch { /* already gone */ }
   try { unlinkSync(thumbPath(dataDir, r.id)); } catch { /* none */ }
-  for (const p of [webPath, hdPath, posterPath, infoPath]) { try { unlinkSync(p(dataDir, r.id)); } catch { /* none */ } }
+  for (const p of [webPath, hdPath, oldHdPath, posterPath, infoPath]) { try { unlinkSync(p(dataDir, r.id)); } catch { /* none */ } }
 }
 
 export const MAX_BULK = 200;
@@ -236,14 +257,14 @@ export function serveLibraryFile(dataDir: string, req: IncomingMessage, res: Ser
   const m = /^\/media\/(lib_[A-Za-z0-9_-]+)\.([a-z0-9.]+)$/.exec(pathname);
   if (!m) return false;
   const r = one<Row>('SELECT * FROM media_lib WHERE id = ?', m[1]!);
-  const copies: Record<string, [(d: string, id: string) => string, string]> = { 'thumb.jpg': [thumbPath, 'image/jpeg'], 'poster.jpg': [posterPath, 'image/jpeg'], 'web.mp4': [webPath, 'video/mp4'], 'hd.mp4': [hdPath, 'video/mp4'] };
+  const copies: Record<string, [(d: string, id: string) => string, string]> = { 'thumb.jpg': [thumbPath, 'image/jpeg'], 'poster.jpg': [posterPath, 'image/jpeg'], 'web.mp4': [webPath, 'video/mp4'], 'hd2.mp4': [hdPath, 'video/mp4'] };
   const copy = copies[m[2]!];
   const file = r && copy ? copy[0](dataDir, r.id) : r && r.ext === m[2] ? pathOf(dataDir, r.id, r.ext) : '';
   if (!r || !existsSync(file)) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Not found'); return true; }
   const total = statSync(file).size;
   const base: Record<string, string> = {
     'Content-Type': copy ? copy[1] : r.mime, 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'cross-origin',
-    'Content-Security-Policy': "default-src 'none'; sandbox", 'Cache-Control': 'public, max-age=86400',
+    'Content-Security-Policy': "default-src 'none'; sandbox", 'Cache-Control': 'public, max-age=31536000, immutable', // a library file never changes under its name
   };
   let start = 0, end = total - 1, status = 200;
   const rg = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
@@ -261,4 +282,65 @@ export function serveLibraryFile(dataDir: string, req: IncomingMessage, res: Ser
   res.on('close', () => s.destroy());
   s.pipe(res);
   return true;
+}
+
+interface UploadRow { id: string; resume_key: string; name: string; ext: string; tag: string; size: number; received: number; created_at: number; created_by: string }
+const partPath = (dataDir: string, id: string) => join(dir(dataDir), `${id}.part`);
+const cleanName = (name: string) => name.replace(/[\\/\u0000-\u001f]/g, '').trim().slice(0, 150) || 'file';
+
+/** Start (or pick up again) a resumable upload. resumeKey names the file on the visitor's device (name, size, date). */
+export function startUpload(dataDir: string, actorId: string, body: unknown): { id: string; received: number; size: number } {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const name = cleanName(String(b.name ?? '')), size = Number(b.size), key = String(b.key ?? '').slice(0, 300);
+  let tag = String(b.tag ?? 'gallery');
+  const ext = (name.split('.').pop() ?? '').toLowerCase();
+  if (!TYPES[ext]) throw new HttpError(415, 'UNSUPPORTED_TYPE', 'Upload a JPG, PNG, WebP, GIF, AVIF, MP4, MOV or WebM file');
+  if (!Number.isSafeInteger(size) || size <= 0) throw new HttpError(400, 'EMPTY', 'The file is empty');
+  if (size > MAX_LIBRARY_BYTES) throw new HttpError(413, 'BODY_TOO_LARGE', 'That file is over 20 GB');
+  if (!(TAGS as readonly string[]).includes(tag)) tag = 'gallery';
+  mkdirSync(dir(dataDir), { recursive: true });
+  // pieces of uploads nobody came back to for a week are cleared away
+  for (const old of many<UploadRow>('SELECT * FROM media_uploads WHERE created_at < ?', now() - 7 * 86_400_000)) {
+    try { unlinkSync(partPath(dataDir, old.id)); } catch { /* gone */ }
+    run('DELETE FROM media_uploads WHERE id = ?', old.id);
+  }
+  const same = key ? one<UploadRow>('SELECT * FROM media_uploads WHERE resume_key = ? AND created_by = ? AND size = ?', key, actorId, size) : undefined;
+  if (same && existsSync(partPath(dataDir, same.id))) {
+    const have = statSync(partPath(dataDir, same.id)).size;
+    if (have !== same.received) run('UPDATE media_uploads SET received = ? WHERE id = ?', Math.min(have, same.received), same.id);
+    return { id: same.id, received: Math.min(have, same.received), size };
+  }
+  try { const f = statfsSync(dir(dataDir)); if (size + 512 * 1024 * 1024 > f.bavail * f.bsize) throw new HttpError(507, 'DISK_FULL', 'The server does not have enough free space for this file'); } catch (e) { if (e instanceof HttpError) throw e; }
+  const id = newId('lib');
+  writeFileSync(partPath(dataDir, id), '');
+  run('INSERT INTO media_uploads (id, resume_key, name, ext, tag, size, received, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?)', id, key || id, name, ext, tag, size, 0, now(), actorId);
+  return { id, received: 0, size };
+}
+
+function uploadOr404(id: string, actorId: string): UploadRow {
+  const u = one<UploadRow>('SELECT * FROM media_uploads WHERE id = ? AND created_by = ?', id, actorId);
+  if (!u) throw notFound('Upload');
+  return u;
+}
+export const uploadStatus = (id: string, actorId: string): { id: string; received: number; size: number } => { const u = uploadOr404(id, actorId); return { id: u.id, received: u.received, size: u.size }; };
+
+/** One piece, written at ?offset= (which must be where the file has got to). The last piece turns the upload into a library file. */
+export async function putChunk(dataDir: string, req: IncomingMessage, id: string, actorId: string, offset: number): Promise<{ received: number; size: number; item: LibItem | null }> {
+  const u = uploadOr404(id, actorId);
+  if (offset !== u.received) throw new HttpError(409, 'WRONG_OFFSET', `The server has ${u.received} bytes of this file`, { received: u.received });
+  const left = u.size - u.received;
+  let got = 0;
+  req.on('data', (c: Buffer) => { got += c.length; if (got > Math.min(left, MAX_CHUNK_BYTES)) req.destroy(); });
+  try { await pipeline(req, createWriteStream(partPath(dataDir, id), { flags: 'r+', start: offset })); }
+  catch { throw new HttpError(400, 'UPLOAD_FAILED', 'This piece did not arrive. It will be sent again.'); }
+  const received = offset + got;
+  run('UPDATE media_uploads SET received = ? WHERE id = ?', received, id);
+  if (received < u.size) return { received, size: u.size, item: null };
+  const file = pathOf(dataDir, id, u.ext);
+  renameSync(partPath(dataDir, id), file);
+  run('DELETE FROM media_uploads WHERE id = ?', id);
+  dataRoot = dataDir;
+  run('INSERT INTO media_lib (id, name, mime, ext, bytes, tag, created_at, created_by) VALUES (?,?,?,?,?,?,?,?)', id, u.name, TYPES[u.ext]!, u.ext, u.size, u.tag, now(), actorId);
+  makeThumb(dataDir, id, u.ext, TYPES[u.ext]!.startsWith('video/'));
+  return { received, size: u.size, item: toOut(one<Row>('SELECT * FROM media_lib WHERE id = ?', id)!) };
 }

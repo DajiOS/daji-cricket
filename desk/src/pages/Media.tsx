@@ -54,23 +54,46 @@ export default function Media() {
   useEffect(() => { if (!busy) return; const t = setInterval(reload, 20000); return () => clearInterval(t); }, [busy]);
 
   const patchJob = (key: string, p: Partial<Job>) => setJobs((j) => j.map((x) => (x.key === key ? { ...x, ...p } : x)));
-  function send(file: File): Promise<void> {
-    const key = Math.random().toString(36).slice(2);
-    setJobs((j) => [...j, { key, name: file.name, pct: 0, state: 'up' }]);
-    return new Promise((resolve) => {
+  /** One piece of a resumable upload, with its own progress. Resolves with the server's answer, or rejects on a lost connection. */
+  function piece(id: string, offset: number, blob: Blob, onPct: (loaded: number) => void): Promise<{ status: number; body: any }> {
+    return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
-      x.open('POST', `${API}/api/library?name=${encodeURIComponent(file.name)}&tag=${encodeURIComponent(tag)}`);
+      x.open('PUT', `${API}/api/library/uploads/${id}?offset=${offset}`);
       const t = getToken(); if (t) x.setRequestHeader('authorization', 'Bearer ' + t);
       x.setRequestHeader('content-type', 'application/octet-stream');
-      x.upload.onprogress = (e) => { if (e.lengthComputable) patchJob(key, { pct: Math.round((e.loaded / e.total) * 100) }); };
-      x.onload = () => {
-        if (x.status === 201) patchJob(key, { pct: 100, state: 'done' });
-        else { let m = `Upload failed (${x.status || 'no answer'})`; try { m = JSON.parse(x.responseText).error.message; } catch { /* keep default */ } patchJob(key, { state: 'fail', msg: m }); }
-        resolve();
-      };
-      x.onerror = () => { patchJob(key, { state: 'fail', msg: 'Connection lost. Try this file again.' }); resolve(); };
-      x.send(file);
+      x.upload.onprogress = (e) => onPct(e.loaded);
+      x.onload = () => { let body: any = null; try { body = JSON.parse(x.responseText); } catch { /* none */ } resolve({ status: x.status, body }); };
+      x.onerror = () => reject(new Error('lost')); x.ontimeout = () => reject(new Error('lost'));
+      x.send(blob);
     });
+  }
+  /** Sends a file in 32 MB pieces. A dropped piece is sent again (up to ten tries, waiting longer each time); choosing the same
+   *  file again after closing the page carries on from where the server got to. The file arrives exactly as it is on the device. */
+  async function send(file: File): Promise<void> {
+    const key = Math.random().toString(36).slice(2), CHUNK = 32 * 1024 * 1024;
+    setJobs((j) => [...j, { key, name: file.name, pct: 0, state: 'up' }]);
+    const free = lib?.freeBytes;
+    if (free != null && file.size + 512 * 1024 * 1024 > free) { patchJob(key, { state: 'fail', msg: `Not enough space on the server: this file is ${size(file.size)} and ${size(Math.max(0, free - 512 * 1024 * 1024))} is free` }); return; }
+    let up: { id: string; received: number; size: number };
+    try { up = await post('/api/library/uploads', { name: file.name, size: file.size, tag, key: `${file.name}|${file.size}|${file.lastModified}` }); }
+    catch (e) { patchJob(key, { state: 'fail', msg: errText(e) }); return; }
+    if (up.received) patchJob(key, { msg: `Carrying on from ${Math.floor((up.received / file.size) * 100)}%` });
+    let at = up.received, tries = 0;
+    while (at < file.size) {
+      const end = Math.min(file.size, at + CHUNK);
+      try {
+        const r = await piece(up.id, at, file.slice(at, end), (loaded) => patchJob(key, { pct: Math.min(99, Math.floor(((at + loaded) / file.size) * 100)) }));
+        if (r.status === 200) { at = r.body.received; tries = 0; continue; }
+        if (r.status === 409 && r.body?.error?.details?.received != null) { at = r.body.error.details.received; continue; }
+        if (r.status >= 400 && r.status < 500) { patchJob(key, { state: 'fail', msg: r.body?.error?.message || `Upload failed (${r.status})` }); return; }
+        throw new Error('server');
+      } catch {
+        if (++tries > 10) { patchJob(key, { state: 'fail', msg: 'The connection keeps dropping. Choose the same file again later and it carries on from here.' }); return; }
+        patchJob(key, { msg: `Connection lost, trying again (${tries})` });
+        await new Promise((r) => setTimeout(r, Math.min(30000, 1000 * 2 ** tries)));
+      }
+    }
+    patchJob(key, { pct: 100, state: 'done', msg: undefined });
   }
   async function pick(files: FileList | File[]) {
     // one at a time, so a slow connection finishes each file instead of stalling them all
@@ -102,7 +125,8 @@ export default function Media() {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', border: `2px dashed ${drag ? 'var(--gold, #c9a96b)' : 'rgba(127,127,127,.4)'}`, borderRadius: 14, padding: 18 }}>
           <div style={{ flex: '1 1 220px' }}>
             <strong>Drop files here, or choose them</strong>
-            <div className="hint">JPG, PNG, WebP, MP4, MOV, WebM. Keep this page open until the bars finish. For the top banner, a short clip under 30 seconds plays best on phones.</div>
+            <div className="hint">JPG, PNG, WebP, MP4, MOV, WebM, up to 20 GB each, kept exactly as uploaded (no shrinking). If the connection drops, choose the same file again and it carries on. For the top banner, a short clip under 30 seconds plays best on phones.</div>
+            {lib && lib.freeBytes != null && lib.freeBytes < 15 * 1073741824 && <div className="hint" style={{ color: 'var(--warn, #b7791f)', marginTop: 6 }}><b>Space is low: {size(lib.freeBytes)} free on the server.</b> That is about {Math.max(0, Math.floor(lib.freeBytes / (650 * 1048576)))} minutes of 4K video. Add a storage disk to the server before uploading more 4K originals.</div>}
           </div>
           <label className="hint">Use as&nbsp;
             <select className="inp" value={tag} onChange={(e) => setTag(e.target.value)}>{TAGS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -113,7 +137,7 @@ export default function Media() {
         {jobs.length > 0 && <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
           {jobs.map((j) => (
             <div key={j.key}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{j.name}</span><span>{j.state === 'fail' ? j.msg : j.state === 'done' ? 'Done' : j.pct + '%'}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{j.name}</span><span>{j.state === 'fail' ? j.msg : j.state === 'done' ? 'Done' : `${j.msg ? j.msg + ' · ' : ''}${j.pct}%`}</span></div>
               <div style={{ height: 6, borderRadius: 4, background: 'rgba(127,127,127,.25)', overflow: 'hidden' }}><div style={{ width: j.pct + '%', height: '100%', background: j.state === 'fail' ? 'var(--bad)' : 'var(--strong)' }} /></div>
             </div>
           ))}

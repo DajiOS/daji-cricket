@@ -101,3 +101,29 @@ test('bulk: needs an owner, a non-empty list and at most 200 files', async () =>
   assert.equal((await h.post('/api/library/bulk-remove', {}, owner)).status, 400);
   assert.equal((await h.post('/api/library/bulk-remove', { ids: Array.from({ length: 201 }, (_, i) => `lib_${i}`) }, owner)).status, 400);
 });
+
+test('a big file goes up in pieces, picks up where it stopped, and arrives byte for byte', async () => {
+  const file = Buffer.concat([Buffer.from('....ftypmp42'), Buffer.from(Array.from({ length: 250000 }, (_, i) => i % 251))]);
+  const put = (id: string, offset: number, body: Buffer) => fetch(`${h.url}/api/library/uploads/${id}?offset=${offset}`, { method: 'PUT', headers: { authorization: `Bearer ${owner}`, 'content-type': 'application/octet-stream' }, body });
+  const start = await h.post('/api/library/uploads', { name: 'drone 4k.mp4', size: file.length, tag: 'gallery', key: 'drone 4k.mp4|250012|1' }, owner);
+  assert.equal(start.status, 201); assert.equal(start.body.received, 0);
+  const id = start.body.id;
+  let r = await put(id, 0, file.subarray(0, 100000));
+  assert.equal(r.status, 200); assert.equal(((await r.json()) as any).received, 100000);
+  // the tab was closed: the same file again carries on from 100000, and a piece at the wrong place is refused with where to go on
+  const again = await h.post('/api/library/uploads', { name: 'drone 4k.mp4', size: file.length, tag: 'gallery', key: 'drone 4k.mp4|250012|1' }, owner);
+  assert.deepEqual([again.body.id, again.body.received], [id, 100000]);
+  r = await put(id, 50, file.subarray(50, 100));
+  assert.equal(r.status, 409); assert.equal(((await r.json()) as any).error.details.received, 100000);
+  assert.equal((await h.get(`/api/library/uploads/${id}`, owner)).body.received, 100000);
+  r = await put(id, 100000, file.subarray(100000));
+  const done = await r.json() as any;
+  assert.equal(r.status, 200); assert.equal(done.item.id, id); assert.equal(done.item.bytes, file.length);
+  assert.deepEqual(Buffer.from(await (await fetch(h.url + done.item.url)).arrayBuffer()), file);
+  assert.equal((await h.get(`/api/library/uploads/${id}`, owner)).status, 404);
+  // only the owner, only real types, and not bigger than 20 GB
+  assert.equal((await h.post('/api/library/uploads', { name: 'x.mp4', size: 10 }, cust)).status, 403);
+  assert.equal((await h.post('/api/library/uploads', { name: 'x.exe', size: 10 }, owner)).status, 415);
+  assert.equal((await h.post('/api/library/uploads', { name: 'x.mp4', size: 21 * 1024 ** 3 }, owner)).status, 413);
+  await libraryIdle();
+});
