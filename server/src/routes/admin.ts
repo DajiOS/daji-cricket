@@ -15,6 +15,7 @@ import { now } from '../clock.ts';
 import { STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { closedDates, setClosed } from '../closures.ts';
 import { createFestival, deleteFestival, festivalCalendar, updateFestival } from '../festivals.ts';
+import { packCalendar, updatePack } from '../packs.ts';
 import { integrationStatuses, testIntegration } from '../integrations.ts';
 import { addService, deleteService, listServices, updateService } from '../services.ts';
 import { saveAaSettings, viewAaSettings } from '../accounting/aa.ts';
@@ -50,6 +51,9 @@ export function adminRoutes(r: Router): void {
   r.post('/api/admin/festivals', (c) => created(createFestival(U(c), c.json())), A);
   r.put('/api/admin/festivals/:id', (c) => ok(updateFestival(U(c), c.params.id!, c.json())), A);
   r.del('/api/admin/festivals/:id', (c) => { deleteFestival(U(c), c.params.id!); return ok({ deleted: true }); }, A);
+  // The quarterly design packs: the live one, the next one, and the owner's approve, delay and switch.
+  r.get('/api/admin/design-packs', () => ok(packCalendar()), A);
+  r.put('/api/admin/design-packs/:id', (c) => ok(updatePack(U(c), c.params.id!, c.json())), A);
 
   r.get('/api/admin/readiness', (c) => ok(readiness(c.cfg, U(c), c.query.get('ownerId'))), A);
 

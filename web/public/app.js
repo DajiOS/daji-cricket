@@ -20,6 +20,8 @@ const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', '
   // festival looks
   ['uttarayan', 'Uttarayan', '#eef6fc', '#d9461a'], ['tiranga', 'Tiranga (Republic and Independence Day)', '#fffdf8', '#c45800'], ['holi', 'Holi', '#fff8fc', '#c41f6f'], ['ganesh', 'Ganesh Chaturthi', '#2b0d06', '#ffa21a'], ['navratri', 'Navratri', '#1a0626', '#ffb703'], ['diwali', 'Diwali', '#0d0820', '#ffb547'], ['christmas', 'Christmas and New Year', '#0c1f17', '#d9b25e']];
 const DESIGNER_THEMES = ['noir', 'pavilion', 'whites', 'pinkball', 'monsoon', 'maroon', 'carbon', 'champagne', 'stadium', 'willow'];
+/** The designer themes in this quarter's pack (the server names them); a visitor's own pick from an older pack stays listed. */
+const packDesigns = () => { const ds = ((fest.site && fest.site.pack && fest.site.pack.designs) || DESIGNER_THEMES).filter((d) => THEMES.some((x) => x[0] === d)), mine = pickedTheme(); return mine && DESIGNER_THEMES.concat(ds).includes(mine) && !ds.includes(mine) ? ds.concat(mine) : ds; };
 const FESTIVAL_THEMES = ['uttarayan', 'tiranga', 'holi', 'ganesh', 'navratri', 'diwali', 'christmas'];
 const FEST_ICON = {
   uttarayan: '<path d="M12 2 20 11 12 20 4 11Z" fill="#e8501f"/><path d="M12 2v18M4 11h16" stroke="#fff" stroke-width="1.2"/><path d="M12 20c-1 2 1 2 0 4" stroke="#0a8ac8" stroke-width="1.4" fill="none"/>',
@@ -106,7 +108,8 @@ function applyTheme(t, save) { if (!THEMES.some((x) => x[0] === t)) return; load
 const pickedTheme = () => { const s = store.get('daji.theme'); return s && s !== 'auto' && !FESTIVAL_THEMES.includes(s) && THEMES.some((x) => x[0] === s) ? s : null; };
 /** The visitor's own look: their pick, else the ground's design (it rotates through the day unless the owner fixed one; the
  *  last one the server named is kept so the page opens in it), else Light. */
-const ownTheme = () => { const site = store.get('daji.site'); return pickedTheme() || (site && THEMES.some((x) => x[0] === site) && !FESTIVAL_THEMES.includes(site) ? site : 'ivory'); };
+let packTry = null; // a design pack tried with ?pack= (from the desk) stands in for the saved ground design on this page only
+const ownTheme = () => { const site = packTry || store.get('daji.site'); return pickedTheme() || (site && THEMES.some((x) => x[0] === site) && !FESTIVAL_THEMES.includes(site) ? site : 'ivory'); };
 // light / dark icon at the far right of the top bar: ivory is the light look, obsidian the dark one
 const DARK_THEMES = THEMES.filter((t) => { const h = t[2].slice(1); return (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000 < 110; }).map((t) => t[0]);
 const isDarkTheme = () => DARK_THEMES.includes(document.documentElement.getAttribute('data-theme'));
@@ -120,7 +123,7 @@ function themeMenu() {
     const item = (id, label, sub) => { const x = THEMES.find((t) => t[0] === id); return `<button type="button" role="menuitemradio" data-pick="${id}"><span class="sw" style="--sw-in:${x ? x[2] : 'conic-gradient(#ff9933,#f0479a,#ffb547,#138808,#ff9933)'};--sw:${x ? x[3] : '#d9b25e'}"></span><span>${label}${sub ? `<small>${sub}</small>` : ''}</span></button>`; };
     const name = (id) => THEMES.find((t) => t[0] === id)[1];
     m.innerHTML = '<h6>Built in</h6>' + item('site', 'Automatic', fest.site && !fest.site.rotating ? 'The ground’s own design' : 'A new design through the day') + item('ivory', 'Light') + item('obsidian', 'Dark')
-      + '<h6>Designer themes</h6>' + DESIGNER_THEMES.map((id) => item(id, name(id))).join('')
+      + `<h6>Designer themes${fest.site && fest.site.pack ? ` · ${String(fest.site.pack.name).replace(/[<>&"]/g, '')}` : ''}</h6>` + packDesigns().map((id) => item(id, name(id))).join('')
       + '<div id="theme-menu-fest"></div><p>Saved on this device only. On festival days the website dresses up by itself.</p>';
     m.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; if (b.dataset.pick === 'festival' && fest.today) applyTheme(fest.today.look); else if (b.dataset.pick === 'site') { store.set('daji.theme', null); applyTheme(fest.today && fest.forEveryone ? fest.today.look : ownTheme()); } else applyTheme(b.dataset.pick, true); markThemeMenu(); });
     document.body.appendChild(m);
@@ -168,11 +171,13 @@ function localFonts(text) { if (!scriptOf(text) || document.getElementById('tf-l
 
 async function loadFestival(next) {
   if (window.parent !== window || document.documentElement.hasAttribute('data-embed')) return;
-  const p = fest.params || (fest.params = (() => { const q = new URLSearchParams(location.search), d = q.get('fdate'); return { id: q.get('festival'), day: Number(q.get('day')) || 1, date: d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null, at: q.get('fat') }; })());
+  const p = fest.params || (fest.params = (() => { const q = new URLSearchParams(location.search), d = q.get('fdate'), pk = q.get('pack'); return { id: q.get('festival'), day: Number(q.get('day')) || 1, date: d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null, at: q.get('fat'), pack: pk && /^[\w-]{1,40}$/.test(pk) ? pk : null }; })());
   const pretend = !!(p.id || p.date);
   if (next && pretend) { if (p.id) p.day += 1; else p.date = nextDay(p.date); p.at = '00:00:05'; }
   let r;
-  try { const res = await fetch(API + '/api/festival' + (p.id ? `?preview=${encodeURIComponent(p.id)}&day=${p.day}` : p.date ? `?date=${p.date}` : '')); if (!res.ok) return; r = await res.json(); } catch { return; }
+  // ?pack=<id> tries another quarter's design pack (from the desk), without remembering it as this browser's design
+  const q = [p.id ? `preview=${encodeURIComponent(p.id)}&day=${p.day}` : p.date ? `date=${p.date}` : '', p.pack ? `pack=${p.pack}` : ''].filter(Boolean).join('&');
+  try { const res = await fetch(API + '/api/festival' + (q ? '?' + q : '')); if (!res.ok) return; r = await res.json(); } catch { return; }
   const f = r.festival || null;
   fest.forEveryone = r.forEveryone !== false;
   if (f && pretend) {
@@ -183,7 +188,7 @@ async function loadFestival(next) {
   const was = fest.today, first = !fest.loaded;
   fest.today = f; fest.celebrated = false; fest.loaded = true;
   // the ground's design for this visit (it is not changed under a visitor who is already reading the page)
-  if (first && r.site && THEMES.some((x) => x[0] === r.site.design)) { fest.site = r.site; store.set('daji.site', r.site.design); }
+  if (first && r.site && THEMES.some((x) => x[0] === r.site.design)) { fest.site = r.site; if (p.pack) packTry = r.site.design; else store.set('daji.site', r.site.design); }
   const picked = !!pickedTheme(), cur = document.documentElement.getAttribute('data-theme');
   if (f && (pretend || fest.forEveryone || !picked)) applyTheme(f.look);
   else if ((was && cur === was.look) || (first && !picked && cur !== ownTheme())) applyTheme(ownTheme());

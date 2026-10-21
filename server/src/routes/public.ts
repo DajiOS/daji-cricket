@@ -18,7 +18,7 @@ import { closedByScope } from '../closures.ts';
 import { now } from '../clock.ts';
 import { one, run } from '../db.ts';
 import { festivalOn, festivalPreview } from '../festivals.ts';
-import { siteDesign } from '../design.ts';
+import { siteDesign } from '../packs.ts';
 
 export function publicRoutes(r: Router): void {
   // Used by Docker's health check and by deploy/check-live.sh. It reads the database, so "ok" means bookings can be served. `demo` is true while
@@ -31,14 +31,15 @@ export function publicRoutes(r: Router): void {
   }, { rate: 'none' });
 
   // Today's festival look (India time), read by the website on every page load. ?date= shows another day and
-  // ?preview=<id>&day=<n> one festival's day, so the owner can see a look before the day comes.
+  // ?preview=<id>&day=<n> one festival's day, so the owner can see a look before the day comes. ?pack=<id> rotates
+  // through another quarter's design pack, so the owner can try a pack before it goes live.
   r.get('/api/festival', (c) => {
     const preview = c.query.get('preview'), date = c.query.get('date');
     if (date && !isValidDate(date)) throw new HttpError(400, 'VALIDATION_FAILED', 'date must look like 2026-11-08', { fields: [{ field: 'date', message: 'A date like 2026-11-08' }] });
     const festival = preview ? festivalPreview(preview, Number(c.query.get('day') ?? 1)) : festivalOn(date || istDate(now()));
     // the site's design for visitors who have not picked one: rotating through the day, or the owner's fixed choice
     const s = getSettings();
-    return ok({ festival, forEveryone: s.festivalForEveryone, site: siteDesign(s.siteDesign, now()), time: now() });
+    return ok({ festival, forEveryone: s.festivalForEveryone, site: siteDesign(s.siteDesign, now(), c.query.get('pack')), time: now() });
   });
 
   r.get('/api/config', (c) => {
