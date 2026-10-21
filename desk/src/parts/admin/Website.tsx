@@ -37,7 +37,7 @@ function Swatches({ designs }: { designs: string[] }) {
       <span aria-hidden="true" style={{ width: 14, height: 14, borderRadius: 999, background: `linear-gradient(135deg, ${bg} 50%, ${ac} 50%)`, boxShadow: '0 0 0 1px rgba(0,0,0,.15)' }} />{nameOf(d)}</a>); })}</div>;
 }
 
-/** The quarterly design packs: the live one, the next one with approve, delay and switch, and the archive. */
+/** The quarterly design packs: the live one, the next one (it goes live by itself; delay or switch if wanted), and the archive. */
 function Packs({ cal, reload }: { cal: PackCalendar; reload: () => void }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -60,14 +60,12 @@ function Packs({ cal, reload }: { cal: PackCalendar; reload: () => void }) {
         </div>
         <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
           {next ? <>
-            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}><Chip tone="info">Next</Chip><b>{next.name}</b><span className="muted">{next.quarter}</span>{next.approved ? <Chip tone="good">Approved</Chip> : <Chip tone="warn">Not looked at yet</Chip>}</div>
-            <div className="hint" style={{ marginTop: 4 }}>{next.note} Goes live by itself on {fmtDay(next.startsOn)}{next.delayed ? ' (delayed by you)' : ''}.</div>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}><Chip tone="info">Next</Chip><b>{next.name}</b><span className="muted">{next.quarter}</span></div>
+            <div className="hint" style={{ marginTop: 4 }}>{next.note} Goes live by itself on {fmtDay(next.startsOn)}{next.delayed ? ' (delayed by you)' : ''}. Nothing to approve; delay it or switch it on early only if you want to.</div>
             <Swatches designs={next.designs} />
             <div className="row" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
               <a className="btn sm ghost" href={`/?pack=${next.id}`} target="_blank" rel="noopener">Try the pack on the website</a>
-              {next.approved ? <button className="btn sm ghost" disabled={busy} onClick={() => act(next.id, { approve: false }, 'Approval taken back.')}>Take back approval</button>
-                : <button className="btn sm primary" disabled={busy} onClick={() => act(next.id, { approve: true }, `${next.name} approved. It goes live on ${fmtDay(next.startsOn)}.`)}>Approve</button>}
-              <button className="btn sm ghost" disabled={busy} onClick={() => setDelay(delay === null ? next.startsOn : null)}>Delay</button>
+              <button className="btn sm ghost" disabled={busy} onClick={() => setDelay(delay === null ? next.startsOn : null)}>Delay or hold</button>
               <button className="btn sm ghost" disabled={busy} onClick={() => act(next.id, { switchOn: true }, `${next.name} is live now.`)}>Switch on now</button>
             </div>
             {delay !== null && <div className="row" style={{ marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
@@ -76,7 +74,7 @@ function Packs({ cal, reload }: { cal: PackCalendar; reload: () => void }) {
               <button className="btn sm primary" disabled={busy || !delay} onClick={() => act(next.id, { startsOn: delay }, `${next.name} now starts on ${fmtDay(delay)}.`)}>Save</button>
               {next.delayed && <button className="btn sm ghost" disabled={busy} onClick={() => act(next.id, { startsOn: null }, `${next.name} starts on ${fmtDay(next.from)} again.`)}>Start on {fmtDay(next.from)}</button>}
             </div>}
-          </> : <div className="hint">No pack for next quarter yet. New packs are built and put here about a month before their quarter starts, for you to try and approve.</div>}
+          </> : <div className="hint">No pack for next quarter yet. New packs are built and put here about a month before their quarter starts, and go live by themselves.</div>}
         </div>
         {older.length > 0 && <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
           <div className="small" style={{ fontWeight: 600, marginBottom: 6 }}>Earlier packs</div>
