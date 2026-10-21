@@ -1911,3 +1911,16 @@ html[data-tone="light"] .hero-loopbox video{filter:invert(1) hue-rotate(180deg) 
 html[data-fest] .hero-loopbox video{opacity:.7}
 @media (max-width:760px){.hero-loopbox{inset:-80px calc(-1 * var(--gutter,20px)) 0}}
 @media (prefers-reduced-motion:reduce){.hero-loopbox{display:none}}
+
+/* The price list always spans the full width of its card, in every look (plain, designer, quarterly pack and festival), with the
+   ball columns side by side where there is room. A look may restyle the tiles but must not narrow the list: some card layouts
+   align their children to the start, which shrank it to its widest line (a 250 px column beside empty space). Checked for every
+   look by server/test/site-layout.test.ts. */
+#view-home .card .body > :is(.ratecard,.price){align-self:stretch!important;justify-self:stretch!important;width:auto!important;max-width:none!important;min-width:0}
+/* in the two-column editorial card the heading sits beside the facilities and description only, and the price list runs under both */
+@media(min-width:821px){#view-home .card.wide .body > h4{grid-row:1/span 2!important}#view-home .card.wide .body > :is(.ratecard,.price){grid-column:1/-1!important}}
+@media(min-width:621px){#view-home .ratecard .rc-cols{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))!important}}
+/* The big academy wordmark scales with its box as well as the screen, so a wide display face never cuts it off. */
+.mp{container-type:inline-size}
+.mp b{font-size:min(clamp(88px,11vw,150px),26cqi)!important}
+.acad-hero .mp b{font-size:min(clamp(60px,7.4vw,104px),26cqi)!important}

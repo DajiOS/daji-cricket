@@ -42,22 +42,20 @@ test('this quarter’s pack is live with next quarter’s waiting, and a reminde
   assert.equal((await h.get('/api/admin/design-packs', await h.login('staff1'))).status, 403);
 });
 
-test('the next pack goes live by itself on its day; the owner approves, delays and switches it', async () => {
+test('the next pack goes live by itself on its day; nothing needs approving; the owner can delay or switch it', async () => {
   const q1 = PACKS.find((p) => p.id === '2027-q1')!;
   {
     await at('2026-12-20');
     let c = await cal();
     assert.equal(c.next.id, '2027-q1');
-    assert.equal(c.reminder, 'Have a look at the Winter season pack before 2027-01-01. It goes live by itself that day.');
+    assert.equal(c.reminder, null, 'no approval is asked for');
+    assert.equal(c.next.approved, null);
     // the owner can try the pack on the website before it goes live
     assert.equal((await site('?pack=2027-q1')).pack.id, '2027-q1');
     assert.equal((await site('?pack=2027-q1')).design, rotatingDesign(Date.parse('2026-12-20T06:30:00Z'), q1.bands).design);
     assert.equal((await site()).pack.id, '2026-q4');
 
-    c = (await h.put('/api/admin/design-packs/2027-q1', { approve: true }, owner)).body;
-    assert.ok(c.next.approved);
-    assert.equal(c.reminder, null);
-
+    // never approved, it still goes live on its day
     await at('2027-01-01', 9);
     c = await cal();
     assert.equal(c.live.id, '2027-q1');
