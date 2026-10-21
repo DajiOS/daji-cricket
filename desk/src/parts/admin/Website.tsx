@@ -13,12 +13,16 @@ function Upload({ busy, onGo }: { busy: boolean; onGo: (f: FileList | null) => v
 export const DESIGN_NAMES: Record<string, string> = {
   noir: 'Floodlight Noir', pavilion: 'Emerald Pavilion', whites: 'Test Whites', pinkball: 'Pink Ball Night', monsoon: 'Monsoon Glass',
   maroon: 'Royal Maroon', carbon: 'Carbon T20', champagne: 'Champagne Minimal', stadium: 'Stadium Royal Blue', willow: 'Willow & Leather',
+  mist: 'Winter Mist', scorebook: 'Scorebook', sunrise: 'Sunrise Nets', azure: 'Azure Day', terracotta: 'Stepwell Terracotta',
+  mango: 'Mango Grove', dusk: 'Golden Hour', scoreboard: 'Scoreboard', aurora: 'Winter Night', ember: 'Ember Night',
   ivory: 'Plain light', obsidian: 'Plain dark',
 };
 /** Page colour and accent of each design, for the little swatches. */
 const SWATCH: Record<string, [string, string]> = {
   noir: ['#07090a', '#d6b36a'], pavilion: ['#0b2a20', '#dcc289'], whites: ['#fbfbf8', '#b3261e'], pinkball: ['#0b0c22', '#ff7ab6'], monsoon: ['#0d1a1e', '#7fd6c3'],
   maroon: ['#260a10', '#e4bb6a'], carbon: ['#0c0e11', '#9fd8ff'], champagne: ['#ffffff', '#9a7a3e'], stadium: ['#06184a', '#ffcb3d'], willow: ['#1c120b', '#dca66b'],
+  mist: ['#eef2f4', '#2f6f8f'], scorebook: ['#f6f1e4', '#2446a8'], sunrise: ['#fff4ec', '#d44d33'], azure: ['#f3f8fd', '#0a6fd6'], terracotta: ['#f5e9dc', '#b14e2b'],
+  mango: ['#0f2117', '#ffbf3c'], dusk: ['#1a1022', '#ffa84a'], scoreboard: ['#0a0a0a', '#ffb000'], aurora: ['#070b1a', '#6ef0c8'], ember: ['#0e0806', '#ff6a2b'],
 };
 const nameOf = (d: string) => DESIGN_NAMES[d] || d.charAt(0).toUpperCase() + d.slice(1);
 const hourText = (h: number) => (h === 0 ? 'midnight' : h === 12 ? 'noon' : h < 12 ? `${h} am` : `${h - 12} pm`);

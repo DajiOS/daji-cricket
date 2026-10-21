@@ -29,6 +29,14 @@ export interface PackDef {
 export const PACKS: PackDef[] = [
   { id: '2026-q4', name: 'Opening season', from: '2026-10-01', bands: DESIGN_BANDS,
     note: 'The first ten designs: floodlit nights, Test whites, the pavilion, monsoon glass and T20 carbon.' },
+  { id: '2027-q1', name: 'Winter season', from: '2027-01-01',
+    note: 'Ten new designs for January to March: winter mist, the scorebook, sunrise nets, kite-season skies, stepwell terracotta, mango shade, golden hour, the scoreboard, winter nights and embers.',
+    bands: [
+      { from: 6, name: 'Morning', designs: ['mist', 'sunrise', 'scorebook'] },
+      { from: 11, name: 'Afternoon', designs: ['azure', 'terracotta', 'mango'] },
+      { from: 17, name: 'Evening', designs: ['dusk', 'scoreboard'] },
+      { from: 20, name: 'Night', designs: ['aurora', 'ember'] },
+    ] },
 ];
 
 /** Every designer theme in any pack, live or archived. */
