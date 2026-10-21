@@ -111,6 +111,28 @@ const DESIGNS = {
     g: { mode: 'spin', rings: true, parts: 'dust', pc: '#ffb27a', key: '#ffe1c8', rim: '#ff6a2b', acc: '#ffb000', exp: 1.08 } },
 };
 let heroOrig = null;
+/** The background film behind the hero (assets/loops, drawn in code by tools/loops): one for each designer theme and festival look,
+ *  about 100 KB, light on black and laid over the page colour (site.css .hero-loopbox). It is left out for visitors who asked for
+ *  less motion or to save data, on slow connections and in embeds, and it pauses when the hero is off screen. */
+const LOOPS = new Set([...DESIGNER_THEMES, ...FESTIVAL_THEMES]);
+let loopSeen = null;
+function syncLoop() {
+  const root = document.documentElement, hero = document.querySelector('#view-home header.hero'); if (!hero) return;
+  const t = root.getAttribute('data-theme'), name = root.getAttribute('data-fest') || (root.hasAttribute('data-layout') ? t : null);
+  const c = navigator.connection || {};
+  const quiet = root.hasAttribute('data-embed') || root.hasAttribute('data-embed-section') || window.parent !== window || c.saveData || /(^|-)2g|3g/.test(c.effectiveType || '')
+    || (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })();
+  let box = hero.querySelector(':scope > .hero-loopbox');
+  if (!name || !LOOPS.has(name) || quiet) { if (box) { box.querySelector('video').pause(); box.remove(); } return; }
+  if (!box) {
+    box = h('div', { class: 'hero-loopbox', 'aria-hidden': 'true' }, h('video', { muted: '', loop: '', playsinline: '', autoplay: '', preload: 'auto', disablepictureinpicture: '' }, h('source', { type: 'video/webm' }), h('source', { type: 'video/mp4' })));
+    hero.append(box); // last, so the hero rules that style its first child (the copy) still find it
+    const v = box.querySelector('video'); v.muted = true;
+    if (window.IntersectionObserver) { loopSeen = loopSeen || new IntersectionObserver((es) => { for (const e of es) { const x = e.target.querySelector('video'); if (e.isIntersecting) x.play().catch(() => {}); else x.pause(); } }); loopSeen.observe(box); }
+  }
+  const v = box.querySelector('video'), [webm, mp4] = v.querySelectorAll('source'), want = 'assets/loops/' + name;
+  if (v.dataset.loop !== name) { v.dataset.loop = name; webm.src = want + '.webm'; mp4.src = want + '.mp4'; v.load(); v.play().catch(() => { /* autoplay refused: the page simply stays still */ }); }
+}
 function syncDesign() {
   const root = document.documentElement, t = root.getAttribute('data-theme'), hero = document.querySelector('#view-home header.hero');
   if (!hero) return;
@@ -228,7 +250,9 @@ async function loadFestival(next) {
 function festOff() { festBanner(); festTimers(); const t = document.documentElement.getAttribute('data-theme'); if (FESTIVAL_THEMES.includes(t)) applyTheme(ownTheme()); else syncFest(); }
 
 /** The day's look on the home page: decoration, greeting, headline, colour, countdown and the offer on the booking card. */
-function syncFest() {
+/** The festival look's extras, then the background film for whatever look is on. */
+function syncFest() { try { syncFestLook(); } finally { syncLoop(); } }
+function syncFestLook() {
   const root = document.documentElement, f = fest.today, t = root.getAttribute('data-theme');
   const hero = document.querySelector('#view-home header.hero'); if (!hero) return;
   const on = !!f && t === f.look && !root.hasAttribute('data-embed');

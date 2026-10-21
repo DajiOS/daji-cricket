@@ -1901,3 +1901,13 @@ html[data-tone="dark"][data-decor="sun"] #view-home .hero-decor,html[data-tone="
 html[data-tone="dark"][data-decor="ledger"] #view-home .hero-decor,html[data-tone="dark"][data-decor="ledger"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background-image:linear-gradient(90deg,transparent 0 calc(max(16px,4vw) - 1px),rgba(225,84,76,.4) calc(max(16px,4vw) - 1px) max(16px,4vw),transparent max(16px,4vw)),repeating-linear-gradient(180deg,transparent 0 35px,rgba(160,185,255,.08) 35px 36px)}
 html[data-tone="light"][data-decor="canopy"] #view-home .hero-decor,html[data-tone="light"][data-decor="canopy"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background:radial-gradient(140px 90px at 12% 18%,rgba(172,116,0,.08),transparent 70%),radial-gradient(180px 110px at 34% 6%,rgba(172,116,0,.06),transparent 70%),radial-gradient(160px 100px at 68% 22%,rgba(172,116,0,.07),transparent 70%),radial-gradient(1200px 600px at 50% -20%,rgba(31,110,70,.14) 0%,transparent 60%)}
 html[data-tone="light"][data-decor="horizon"] #view-home .hero-decor,html[data-tone="light"][data-decor="horizon"] :is(#view-academy,#view-bookings,#view-login,#view-platform)::before{background:linear-gradient(180deg,rgba(196,102,0,.14) 0%,rgba(255,170,90,.18) 40%,rgba(255,170,90,0) 74%)}
+/* ===== The hero's background film (app.js syncLoop, assets/loops). The film is light on black: over the page colour with
+   screen at night, and turned to dark on light with multiply by day. It sits under the decoration and fades out at the bottom. */
+#view-home header.hero:has(> .hero-loopbox){position:relative;isolation:isolate}
+.hero-loopbox{position:absolute;inset:-104px calc(50% - 50vw) 0;z-index:-2;pointer-events:none;overflow:hidden;background:var(--bg);isolation:isolate;
+  -webkit-mask-image:linear-gradient(180deg,#000 62%,transparent);mask-image:linear-gradient(180deg,#000 62%,transparent)}
+.hero-loopbox video{display:block;width:100%;height:100%;object-fit:cover;mix-blend-mode:screen;opacity:.6}
+html[data-tone="light"] .hero-loopbox video{filter:invert(1) hue-rotate(180deg) saturate(1.2);mix-blend-mode:multiply;opacity:.3}
+html[data-fest] .hero-loopbox video{opacity:.7}
+@media (max-width:760px){.hero-loopbox{inset:-80px calc(-1 * var(--gutter,20px)) 0}}
+@media (prefers-reduced-motion:reduce){.hero-loopbox{display:none}}
