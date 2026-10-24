@@ -40,8 +40,7 @@ export const cancellable = (b: Booking) => (b.status === 'confirmed' || b.status
 export const errText = (e: unknown) => {
   if (e instanceof ApiError) {
     if (e.code === 'ADVANCE_NOT_MET') return `At least ${inr((e.details as any)?.advancePaise)} must be received now to confirm this booking.`;
-    const f = (e.details as any)?.fields as { field: string; message: string }[] | undefined;
-    return f?.length ? f.map((x) => `${x.field}: ${x.message}`).join(' · ') : e.message;
+    return e.message; // field problems already read as plain sentences (see formtext.ts)
   }
   return (e as Error).message || 'Something went wrong.';
 };
@@ -152,6 +151,7 @@ export function RefundList({ refunds, canPay, onChanged }: { refunds: RefundItem
   const [err, setErr] = useState<string | null>(null);
   if (!refunds.length) return null;
   async function paid(r: RefundItem) {
+    if (!(refs[r.id] || '').trim()) return setErr(r.paymentMethod === 'cash' ? 'Write who received the cash, or a short note, then press Mark as paid.' : 'Enter the UTR or payout reference, then press Mark as paid.');
     setBusy(r.id); setErr(null);
     try { await post(`/api/staff/refunds/${encodeURIComponent(r.id)}/complete`, { reference: (refs[r.id] || '').trim() }); onChanged(); } catch (e) { setErr(errText(e)); } finally { setBusy(null); }
   }
@@ -170,7 +170,7 @@ export function RefundList({ refunds, canPay, onChanged }: { refunds: RefundItem
             {!auto && !done && !!r.approvedAt && canPay && (
               <div className="row" style={{ gap: 6 }}>
                 <input className="inp" style={{ flex: '1 1 200px', width: 'auto' }} placeholder={r.paymentMethod === 'cash' ? 'Who received it, or a note' : 'UTR or payout reference'} aria-label="Payout reference" value={refs[r.id] || ''} onChange={(e) => setRefs({ ...refs, [r.id]: e.target.value })} />
-                <button className="btn primary sm" disabled={busy === r.id || !(refs[r.id] || '').trim()} onClick={() => paid(r)}>Mark as paid</button>
+                <button className="btn primary sm" disabled={busy === r.id} onClick={() => paid(r)}>Mark as paid</button>
               </div>)}
           </div>
         );

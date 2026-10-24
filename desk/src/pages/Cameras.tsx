@@ -112,10 +112,10 @@ export default function Cameras({ sub }: { sub: string }) {
 }
 
 function AddCamera({ onClose, onAdd }: { onClose: () => void; onAdd: (name: string) => void }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(''); const [err, setErr] = useState<string | null>(null);
   return (
-    <Modal title="Add camera" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!name.trim()} onClick={() => onAdd(name.trim())}>Add camera</button></>}>
-      <label className="field"><span>Camera name</span><input autoFocus value={name} maxLength={60} placeholder="Pitch 1, north end" onChange={(e) => setName(e.target.value)} /></label>
+    <Modal title="Add camera" onClose={onClose} foot={<><ErrorBox msg={err} /><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" onClick={() => (name.trim() ? onAdd(name.trim()) : setErr('Give the camera a name, for example Pitch 1, north end.'))}>Add camera</button></>}>
+      <label className="field"><span>Camera name <b className="req">*</b></span><input autoFocus value={name} maxLength={60} placeholder="Pitch 1, north end" onChange={(e) => setName(e.target.value)} /></label>
     </Modal>
   );
 }

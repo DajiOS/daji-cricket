@@ -26,7 +26,7 @@ export default function MemberDialog({ id, onClose, onRenew, onChanged }: { id: 
       {m && (edit ? (
         <div className="form-grid">
           <NameField value={name} onChange={setName} />
-          <Field label="Mobile number"><input className="inp" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
+          <Field label="Mobile number" required><input className="inp" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
           <Field label="Notes" full><textarea className="inp" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={300} /></Field>
           <div className="full"><ErrorBox msg={e2} /></div>
         </div>

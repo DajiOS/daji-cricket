@@ -501,7 +501,32 @@ function toast(msg, bad = false) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), bad ? 6500 : 3800);
 }
 
-class ApiError extends Error { constructor(status, code, message, details) { super(message); this.status = status; this.code = code; this.details = details; } }
+// ------------------------------------------------------------------ plain-language form problems
+// The server names the field it turned down ("phone": "Required"). People get a sentence instead ("Enter your mobile number.").
+// The desk has the same words in desk/src/formtext.ts.
+const FIELD_NAMES = { phone: 'mobile number', mobile: 'mobile number', countryCode: 'country code', email: 'email', password: 'password', newPassword: 'new password',
+  currentPassword: 'current password', firstName: 'first name', lastName: 'last name', name: 'name', code: 'code', identifier: 'email or mobile number',
+  groundId: 'ground', date: 'date', preferredDate: 'preferred date', startTime: 'start time', slots: 'number of hours', players: 'number of players', message: 'message', notes: 'note' };
+const fieldName = (key) => { const k = String(key).split('.').pop().replace(/\[\d+\]$/, ''); return FIELD_NAMES[k] || k.replace(/(Paise|Id)$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase(); };
+function fieldSentence(f) {
+  if (/[.!?]$/.test(String(f.message || '').trim())) return String(f.message).trim(); // already a sentence
+  const m = String(f.message || '').trim().replace(/\.$/, ''), name = fieldName(f.field);
+  if (!m || /^(required|is required|missing)$/i.test(m)) return `Enter your ${name}.`;
+  if (m.split(/\s+/).length > 4 && /^[A-Z]/.test(m) && !/^(Must|Use|At|Not|Too|Should)\b/.test(m)) return m + '.';
+  return `${name[0].toUpperCase() + name.slice(1)}: ${m[0].toLowerCase() + m.slice(1)}.`;
+}
+const problemsSentence = (fields) => [...new Set(fields.map(fieldSentence))].join(' ');
+class ApiError extends Error {
+  constructor(status, code, message, details) {
+    const fields = (details && Array.isArray(details.fields)) ? details.fields : [];
+    // "Some fields are not valid" says nothing: say which field and what to do
+    super(fields.length && (!message || /^some fields are not valid/i.test(message)) ? problemsSentence(fields) : message);
+    this.status = status; this.code = code; this.details = details;
+  }
+}
+/** What to say when the server gives no reason of its own. */
+const serverTrouble = (status) => status === 429 ? 'Too many tries in a short time. Wait a minute and try again.'
+  : status >= 500 ? 'Something went wrong on our side and nothing was saved. Please try again in a minute.' : `Something went wrong (${status}). Please try again.`;
 
 const OWNER_SCOPED = ['/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask'];
 async function api(path, opts = {}) {
@@ -512,14 +537,14 @@ async function api(path, opts = {}) {
   if (opts.body !== undefined) { headers['content-type'] = 'application/json'; body = JSON.stringify(opts.body); }
   let res;
   try { res = await fetch(API + path, { method: opts.method || 'GET', headers, body }); }
-  catch { throw new ApiError(0, 'NETWORK', 'Cannot reach the server. Is it running?'); }
+  catch { throw new ApiError(0, 'NETWORK', 'We could not reach the server. Check your internet connection and try again.'); }
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
   if (!res.ok) {
     const e = (data && data.error) || {};
     if (res.status === 401 && state.token && !opts.keepToken) signOut(true);
-    throw new ApiError(res.status, e.code || 'ERROR', e.message || `Something went wrong (${res.status}).`, e.details);
+    throw new ApiError(res.status, e.code || 'ERROR', e.message || serverTrouble(res.status), e.details);
   }
   return data;
 }
@@ -533,15 +558,15 @@ async function apiFile(path, file, opts = {}) {
   if (state.token) headers.authorization = 'Bearer ' + state.token;
   let res;
   try { res = await fetch(API + path, { method: opts.method || 'POST', headers, body: file }); }
-  catch { throw new ApiError(0, 'NETWORK', 'Cannot reach the server. Is it running?'); }
+  catch { throw new ApiError(0, 'NETWORK', 'We could not reach the server. Check your internet connection and try again.'); }
   const text = await res.text(); let data = null; try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
-  if (!res.ok) { const e = (data && data.error) || {}; throw new ApiError(res.status, e.code || 'ERROR', e.message || `Something went wrong (${res.status}).`, e.details); }
+  if (!res.ok) { const e = (data && data.error) || {}; throw new ApiError(res.status, e.code || 'ERROR', e.message || serverTrouble(res.status), e.details); }
   return data;
 }
 /** Downloads a file the server makes (report, receipt). The sign-in token travels in a header, so it is fetched first and then saved. */
 async function apiDownload(path, filename) {
   const headers = {}; if (state.token) headers.authorization = 'Bearer ' + state.token;
-  let res; try { res = await fetch(API + path, { headers }); } catch { throw new ApiError(0, 'NETWORK', 'Cannot reach the server. Is it running?'); }
+  let res; try { res = await fetch(API + path, { headers }); } catch { throw new ApiError(0, 'NETWORK', 'We could not reach the server. Check your internet connection and try again.'); }
   if (!res.ok) { let e = {}; try { e = (await res.json()).error || {}; } catch { /* not JSON */ } throw new ApiError(res.status, e.code || 'ERROR', e.message || 'The download failed.'); }
   const url = URL.createObjectURL(await res.blob());
   const a = h('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove();
@@ -553,6 +578,59 @@ window.DAJI = { refreshCoaches: () => fillCoaches(), h, clear, $, $$, api, apiFi
 
 const fieldErrors = (e) => Object.fromEntries(((e.details && e.details.fields) || []).map((f) => [f.field, f.message]));
 window.DAJI.fieldErrors = fieldErrors;
+
+// ------------------------------------------------------------------ forms that never fail silently
+// Every form: required fields carry `required` (the label gets a mark), the message box sits right above the button,
+// formCheck() stops before sending when something is missing, formFail() shows any refusal, busyBtn() shows it is working.
+
+/** Takes the red marks and messages off a form before it is sent again. */
+function formClear(form, box, boxes = {}) {
+  if (box) { box.textContent = ''; box.classList.remove('show'); }
+  for (const k in boxes) boxes[k].textContent = '';
+  if (form) for (const el of $$('[aria-invalid="true"]', form)) { el.removeAttribute('aria-invalid'); el.classList.remove('bad'); }
+}
+/**
+ * Shows why a form did not go through: one plain message in `box` (put it right above the button), each field the server
+ * named outlined in red with its own reason under it when `boxes` has a place for it, and the first problem scrolled into view.
+ */
+function formFail(form, box, e, boxes = {}) {
+  formClear(form, box, boxes);
+  const fields = (e && e.details && Array.isArray(e.details.fields)) ? e.details.fields : [];
+  let first = null;
+  for (const f of fields) {
+    const k = String(f.field).split('.').pop();
+    const el = form && $(`[name="${k}"]`, form);
+    if (el) { el.setAttribute('aria-invalid', 'true'); el.classList.add('bad'); first = first || el; el.addEventListener('input', () => { el.removeAttribute('aria-invalid'); el.classList.remove('bad'); }, { once: true }); }
+    if (boxes[k]) boxes[k].textContent = fieldSentence(f);
+  }
+  if (box) { box.textContent = (e && e.message) || 'Something went wrong. Please try again.'; box.setAttribute('role', 'alert'); box.classList.add('show'); }
+  const target = first || box;
+  if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (first) try { first.focus({ preventScroll: true }); } catch { /* old browser */ }
+}
+/** The label text of a field ("First name"), for messages about it. */
+const labelOf = (el) => { const l = el.closest('label'); const t = l && l.querySelector('span'); return t ? t.textContent.replace(/\(.*?\)|\*/g, '').trim().toLowerCase() : fieldName(el.name || 'field'); };
+/** Before sending: every visible field marked `required` must be filled, and an email must look like one. Says what is missing and returns false when not. */
+function formCheck(form, box, boxes = {}) {
+  const fields = [];
+  for (const el of $$('input,select,textarea', form)) {
+    if (el.disabled || el.type === 'hidden' || !el.getClientRects().length) continue;
+    const v = String(el.value || '').trim();
+    if (el.required && !v) fields.push({ field: el.name || '', message: `Enter your ${labelOf(el)}.`, el });
+    else if (v && el.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) fields.push({ field: el.name || '', message: 'Enter a full email address, like name@gmail.com.', el });
+  }
+  if (!fields.length) return true;
+  const msg = fields.length > 1 ? `${fields[0].message} ${fields.length - 1} more ${fields.length === 2 ? 'field needs' : 'fields need'} filling in, marked in red.` : fields[0].message;
+  formFail(form, box, new ApiError(400, 'VALIDATION_FAILED', msg, { fields: fields.map((f) => ({ field: f.field, message: f.message })) }), boxes);
+  return false;
+}
+/** A button that is sending: greyed, says what it is doing, and comes back as it was. */
+function busyBtn(btn, on, text) {
+  if (on) { if (!btn.dataset.idle) btn.dataset.idle = btn.textContent; btn.textContent = text || 'Please wait…'; }
+  else if (btn.dataset.idle) { btn.textContent = btn.dataset.idle; delete btn.dataset.idle; }
+  btn.disabled = on; if (on) btn.setAttribute('aria-busy', 'true'); else btn.removeAttribute('aria-busy');
+}
+Object.assign(window.DAJI, { formFail, formCheck, formClear, busyBtn });
 
 // ------------------------------------------------------------------ dialogs
 
@@ -628,8 +706,8 @@ function openAuth({ after, mode = 'in', note } = {}) {
   const capName = (el) => el.addEventListener('input', () => { const p = el.selectionStart; el.value = el.value.replace(/(^|[\s'’-])(\p{L})/gu, (_m, a, c) => a + c.toUpperCase()); try { el.setSelectionRange(p, p); } catch { /* not supported */ } });
   /** Phone number, then the code sent to it. Creates the account when the number is new. */
   const otpForm = (signUp) => {
-    const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' });
-    const first = input('firstName', 'text', { autocomplete: 'given-name', autocapitalize: 'words', placeholder: 'First name' }), last = input('lastName', 'text', { autocomplete: 'family-name', autocapitalize: 'words', placeholder: 'Last name' });
+    const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe formerr', 'aria-live': 'assertive' });
+    const first = input('firstName', 'text', { autocomplete: 'given-name', autocapitalize: 'words', placeholder: 'First name', required: signUp }), last = input('lastName', 'text', { autocomplete: 'family-name', autocapitalize: 'words', placeholder: 'Last name', required: signUp });
     capName(first); capName(last);
     const phone = input('phone', 'tel', { autocomplete: 'tel', inputmode: 'numeric', required: true, placeholder: '98765 43210' });
     const code = input('code', 'text', { autocomplete: 'one-time-code', inputmode: 'numeric', maxlength: '8', placeholder: '6-digit code' });
@@ -644,37 +722,38 @@ function openAuth({ after, mode = 'in', note } = {}) {
     const resend = h('button', { type: 'button', class: 'linkbtn', hidden: true }, 'Send a new code');
     const tick = () => { if (wait > 0) { resend.disabled = true; resend.textContent = `Send a new code in ${wait}s`; wait--; timer = setTimeout(tick, 1000); } else { resend.disabled = false; resend.textContent = 'Send a new code'; } };
     const send = async () => {
-      errBox.textContent = ''; submit.disabled = true;
+      formClear(form, errBox); busyBtn(submit, true, 'Sending the code…');
       try {
         const r = await api('/api/auth/otp/request', { method: 'POST', body: { phone: phone.value.trim() } });
         sent = true; codeRow.hidden = false; info.hidden = false; resend.hidden = false; phone.readOnly = true; wait = 30; clearTimeout(timer); tick();
         clear(info); info.append(`We sent a 6-digit code to ${formatPhone(phone.value.trim())}. It works for 10 minutes.`);
         if (r.devCode) info.append(h('div', { style: 'margin-top:6px;color:var(--accent,#c9a96a)' }, `Demo mode: no WhatsApp message is sent. Your code is ${r.devCode}.`));
-        submit.textContent = signUp ? 'Create my account' : 'Sign in'; code.focus();
-      } catch (e) { const f = fieldErrors(e); errBox.textContent = f.phone || e.message; }
-      submit.disabled = false;
+        busyBtn(submit, false); submit.textContent = signUp ? 'Create my account' : 'Sign in'; code.focus(); return;
+      } catch (e) { busyBtn(submit, false); formFail(form, errBox, e); }
     };
     resend.addEventListener('click', send);
     form.append(namesRow, field('Mobile number', phone), info, codeRow, resend, consent, errBox, submit);
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
-      if (!sent) { if (signUp && (!first.value.trim() || !last.value.trim())) { errBox.textContent = 'Enter your first and last name.'; return; } await send(); return; }
-      errBox.textContent = ''; submit.disabled = true;
+      if (!sent) { if (!formCheck(form, errBox)) return; await send(); return; }
+      if (!code.value.trim()) { formFail(form, errBox, new ApiError(400, 'VALIDATION_FAILED', 'Enter the 6-digit code we sent to your WhatsApp.', { fields: [{ field: 'code', message: 'Required' }] })); return; }
+      formClear(form, errBox); busyBtn(submit, true, signUp ? 'Creating your account…' : 'Signing in…');
       try {
         const body = { phone: phone.value.trim(), code: code.value.trim(), ...(first.value.trim() && last.value.trim() ? { firstName: first.value.trim(), lastName: last.value.trim() } : {}), consent: { email: cE.checked, whatsapp: cW.checked, sms: cS.checked } };
         const a = await api('/api/auth/otp/verify', { method: 'POST', body, keepToken: true });
-        finishAuth(a, after);
+        busyBtn(submit, false); finishAuth(a, after);
       } catch (e) {
-        if (e.code === 'NAME_REQUIRED') { namesRow.hidden = false; consent.hidden = false; submit.textContent = 'Create my account'; errBox.textContent = e.message; first.focus(); }
-        else errBox.textContent = e.message;
-        submit.disabled = false;
+        busyBtn(submit, false);
+        if (e.code === 'NAME_REQUIRED') { namesRow.hidden = false; consent.hidden = false; first.required = last.required = true; submit.textContent = 'Create my account'; }
+        formFail(form, errBox, e);
+        if (e.code === 'NAME_REQUIRED') first.focus();
       }
     });
     return form;
   };
   /** Forgot password: a code goes to the email, then the code and a new password. Also gives a password to someone who never had one. */
   const forgotForm = () => {
-    const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' }), info = h('div', { class: 'hint', style: 'margin:0 0 12px' });
+    const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe formerr', 'aria-live': 'assertive' }), info = h('div', { class: 'hint', style: 'margin:0 0 12px' });
     const email = input('email', 'email', { autocomplete: 'email', required: true, autocapitalize: 'none', spellcheck: 'false' });
     const code = input('code', 'text', { autocomplete: 'one-time-code', inputmode: 'numeric', maxlength: '8' }), password = input('password', 'password', { autocomplete: 'new-password' });
     const codeRow = h('div', { hidden: true }, field('Code from the email', code), field('New password', password), h('div', { class: 'hint', style: 'margin:-4px 0 12px;font-size:12px' }, 'At least 8 characters with a capital letter, a small letter and a number.'));
@@ -682,30 +761,32 @@ function openAuth({ after, mode = 'in', note } = {}) {
     let sent = false;
     form.append(h('p', { class: 'hint', style: 'margin:0 0 12px' }, 'Enter the email on your account and we will send you a code to set a new password.'), field('Email', email), info, codeRow, errBox, submit);
     form.addEventListener('submit', async (ev) => {
-      ev.preventDefault(); errBox.textContent = ''; submit.disabled = true;
+      ev.preventDefault();
+      if (sent) { code.required = password.required = true; }
+      if (!formCheck(form, errBox)) return;
+      formClear(form, errBox); busyBtn(submit, true, sent ? 'Saving your new password…' : 'Sending the code…');
       try {
         if (!sent) {
           const r = await api('/api/auth/password/forgot', { method: 'POST', body: { email: email.value.trim() } });
-          sent = true; codeRow.hidden = false; submit.textContent = 'Set new password';
+          sent = true; codeRow.hidden = false; busyBtn(submit, false); submit.textContent = 'Set new password';
           info.textContent = `If ${email.value.trim()} has an account, a code is on its way. It works for ${Math.round(r.expiresInSeconds / 60)} minutes. Check your spam folder too.`;
           if (r.devCode) info.append(h('div', { style: 'margin-top:6px;color:var(--accent,#c9a96a)' }, `Demo mode: no email is sent. Your code is ${r.devCode}.`));
           code.focus();
         } else {
           await api('/api/auth/password/reset', { method: 'POST', body: { email: email.value.trim(), code: code.value.trim(), password: password.value } });
-          toast('Password changed. You are signed out on other devices.');
+          busyBtn(submit, false); toast('Password changed. You are signed out on other devices.');
           try { const a = await api('/api/auth/login', { method: 'POST', body: { identifier: email.value.trim(), password: password.value }, keepToken: true }); finishAuth(a, after); }
           catch { method = 'pw'; render(); }
           return;
         }
-      } catch (e) { const f = fieldErrors(e); errBox.textContent = f.password || f.email || f.code || e.message; }
-      submit.disabled = false;
+      } catch (e) { busyBtn(submit, false); formFail(form, errBox, e); }
     });
     return form;
   };
   let upMethod = cfg.codesEnabled ? 'otp' : 'email';
   /** Create an account with an email, a mobile number and a password. Either the email or the number signs in afterwards. */
   const emailSignup = () => {
-    const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' });
+    const form = h('form', { novalidate: true }), errBox = h('div', { class: 'fe formerr', 'aria-live': 'assertive' });
     const first = input('firstName', 'text', { autocomplete: 'given-name', autocapitalize: 'words', placeholder: 'First name', required: true }), last = input('lastName', 'text', { autocomplete: 'family-name', autocapitalize: 'words', placeholder: 'Last name', required: true });
     capName(first); capName(last);
     const email = input('email', 'email', { autocomplete: 'email', required: true }), phone = input('phone', 'tel', { autocomplete: 'tel-national', inputmode: 'tel', required: true, placeholder: '98765 43210', style: 'flex:1 1 auto;min-width:0' }), password = input('password', 'password', { autocomplete: 'new-password', required: true });
@@ -719,11 +800,19 @@ function openAuth({ after, mode = 'in', note } = {}) {
       h('p', { class: 'hint', style: 'margin:6px 0 10px' }, 'Optional: ground updates (closed days, rain, new timings). You can change this any time. Booking messages are always sent.'),
       h('label', { class: 'check' }, cE, h('span', {}, 'Email me ground updates')), h('label', { class: 'check' }, cW, h('span', {}, 'WhatsApp me ground updates')), h('label', { class: 'check' }, cS, h('span', {}, 'Text me ground updates')), errBox, submit);
     form.addEventListener('submit', async (ev) => {
-      ev.preventDefault(); errBox.textContent = ''; for (const k in fe) fe[k].textContent = ''; submit.disabled = true;
+      ev.preventDefault();
+      if (!formCheck(form, errBox, fe)) return;
+      // the same rule the server uses, said before sending so the person is not left guessing
+      const pw = password.value, weak = pw.length < 8 ? 'at least 8 characters' : (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/\d/.test(pw)) ? 'use a capital letter, a small letter and a number' : '';
+      if (weak) { formFail(form, errBox, new ApiError(400, 'VALIDATION_FAILED', `Choose a stronger password: ${weak}, for example Cricket2026.`, { fields: [{ field: 'password', message: weak[0].toUpperCase() + weak.slice(1) }] }), fe); return; }
+      formClear(form, errBox, fe); busyBtn(submit, true, 'Creating your account…');
       try {
         const a = await api('/api/auth/register', { method: 'POST', body: { firstName: first.value.trim(), lastName: last.value.trim(), email: email.value.trim(), countryCode: cc.value, phone: phone.value.trim(), password: password.value, consent: { email: cE.checked, whatsapp: cW.checked, sms: cS.checked } }, keepToken: true });
-        finishAuth(a, after);
-      } catch (e) { const f = fieldErrors(e); for (const k in fe) if (f[k]) fe[k].textContent = f[k]; if (!Object.keys(f).length) errBox.textContent = e.message; submit.disabled = false; }
+        busyBtn(submit, false); finishAuth(a, after);
+      } catch (e) {
+        busyBtn(submit, false); formFail(form, errBox, e, fe);
+        if (e.code === 'ACCOUNT_EXISTS' || e.code === 'EMAIL_TAKEN') errBox.append(' ', h('button', { type: 'button', class: 'linkbtn', onclick: () => { current = 'in'; method = 'pw'; sync(); } }, 'Go to Sign in'));
+      }
     });
     return form;
   };
@@ -742,7 +831,7 @@ function openAuth({ after, mode = 'in', note } = {}) {
       body.append(forgotForm(), h('div', { style: 'margin-top:14px' }, h('button', { type: 'button', class: 'linkbtn', onclick: () => { method = 'pw'; render(); } }, 'Back to sign in')));
       return;
     }
-    const errBox = h('div', { class: 'fe', style: 'margin:0 0 12px' });
+    const errBox = h('div', { class: 'fe formerr', 'aria-live': 'assertive' });
     const form = h('form', { novalidate: true });
     const submit = h('button', { class: 'btn primary block', type: 'submit' }, 'Sign in');
     const email = input('email', 'text', { autocomplete: 'username', required: true, autocapitalize: 'none', spellcheck: 'false', placeholder: 'Email or mobile number', style: 'flex:1 1 auto;min-width:0' });
@@ -753,9 +842,11 @@ function openAuth({ after, mode = 'in', note } = {}) {
     email.addEventListener('input', syncCc); syncCc();
     form.append(field('Email or mobile number', phoneRow(cc, email)), field('Password', password), errBox, submit);
     form.addEventListener('submit', async (ev) => {
-      ev.preventDefault(); errBox.textContent = ''; submit.disabled = true;
-      try { const a = await api('/api/auth/login', { method: 'POST', body: { identifier: email.value.trim(), password: password.value, ...(isNumber() ? { countryCode: cc.value } : {}) }, keepToken: true }); finishAuth(a, after); }
-      catch (e) { errBox.textContent = e.message; submit.disabled = false; }
+      ev.preventDefault();
+      if (!formCheck(form, errBox)) return;
+      formClear(form, errBox); busyBtn(submit, true, 'Signing in…');
+      try { const a = await api('/api/auth/login', { method: 'POST', body: { identifier: email.value.trim(), password: password.value, ...(isNumber() ? { countryCode: cc.value } : {}) }, keepToken: true }); busyBtn(submit, false); finishAuth(a, after); }
+      catch (e) { busyBtn(submit, false); formFail(form, errBox, e); }
     });
     const forgotLink = h('div', { style: 'margin-top:14px' }, h('button', { type: 'button', class: 'linkbtn', onclick: () => { method = 'forgot'; render(); } }, 'Forgot password?'));
     if (cfg.demoMode) {
@@ -835,13 +926,13 @@ function squarePhoto(file, side = 320) {
 }
 function openProfile() {
   const u = state.user; if (!u) return;
-  const err = h('div', { class: 'fe' }), pic = h('div', { class: 'pf-pic' }, avatarEl(u, 84));
+  const err = h('div', { class: 'fe formerr', 'aria-live': 'assertive' }), pic = h('div', { class: 'pf-pic' }, avatarEl(u, 84));
   const refreshPic = () => { clear(pic); pic.append(avatarEl(state.user, 84)); renderAuth(); };
   const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', hidden: true });
   file.addEventListener('change', async () => {
     const f = file.files[0]; if (!f) return; err.textContent = '';
     try { const blob = await squarePhoto(f); const r = await apiFile('/api/me/avatar', blob); state.user = r.user; refreshPic(); toast('Profile picture saved.'); }
-    catch (e) { err.textContent = e.message; }
+    catch (e) { formFail(null, err, e); }
     file.value = '';
   });
   const sn = (u.name || '').trim().split(/\s+/);
@@ -850,19 +941,22 @@ function openProfile() {
   const biz = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.businessName || '' }) : null, upi = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.upiId || '', placeholder: 'name@bank' }) : null;
   const f = (l, el) => { el.style.width = '100%'; return h('label', { class: 'lbl', style: 'display:grid;gap:6px;margin-top:12px' }, l, el); };
   const save = h('button', { class: 'btn primary block', type: 'button', style: 'margin-top:16px', onclick: async () => {
-    err.textContent = ''; save.disabled = true;
+    formClear(null, err); busyBtn(save, true, 'Saving…');
+    if (!first.value.trim()) { busyBtn(save, false); formFail(null, err, new ApiError(400, 'VALIDATION_FAILED', 'Enter your first name.')); first.classList.add('bad'); first.focus(); return; }
     try {
       const body = { firstName: first.value.trim(), lastName: last.value.trim(), ...(phone.value.trim() ? { countryCode: cc.value, phone: phone.value.trim() } : {}), email: email.value.trim() || undefined };
       if (biz) { body.businessName = biz.value.trim(); body.upiId = upi.value.trim(); }
-      const r = await api('/api/me', { method: 'PATCH', body }); state.user = r.user; renderAuth(); toast('Profile saved.'); closeModal();
-    } catch (e) { const fe = fieldErrors(e); err.textContent = Object.values(fe)[0] || e.message; save.disabled = false; }
+      const r = await api('/api/me', { method: 'PATCH', body }); busyBtn(save, false); state.user = r.user; renderAuth(); toast('Profile saved.'); closeModal();
+    } catch (e) { busyBtn(save, false); formFail(null, err, e); }
   } }, 'Save profile');
-  const cur = h('input', { type: 'password', autocomplete: 'current-password' }), nw = h('input', { type: 'password', autocomplete: 'new-password' }), pwErr = h('div', { class: 'fe' });
+  const cur = h('input', { type: 'password', autocomplete: 'current-password' }), nw = h('input', { type: 'password', autocomplete: 'new-password' }), pwErr = h('div', { class: 'fe formerr', 'aria-live': 'assertive' });
   const pwBtn = h('button', { class: 'btn outline block', type: 'button', style: 'margin-top:12px', onclick: async () => {
-    pwErr.textContent = ''; pwBtn.disabled = true;
+    formClear(null, pwErr);
+    if (!nw.value) { formFail(null, pwErr, new ApiError(400, 'VALIDATION_FAILED', 'Type the new password first: at least 8 characters with a capital letter, a small letter and a number.')); nw.focus(); return; }
+    busyBtn(pwBtn, true, 'Saving…');
     try { const r = await api('/api/me/password', { method: 'POST', body: { ...(u.hasPassword === false ? {} : { currentPassword: cur.value }), newPassword: nw.value } }); setUser(r); cur.value = nw.value = ''; toast(u.hasPassword === false ? 'Password set. You can now sign in with your email or mobile number.' : 'Password changed.'); if (u.hasPassword === false) closeModal(); }
-    catch (e) { const fe = fieldErrors(e); pwErr.textContent = Object.values(fe)[0] || e.message; }
-    pwBtn.disabled = false;
+    catch (e) { formFail(null, pwErr, e); }
+    busyBtn(pwBtn, false);
   } }, u.hasPassword === false ? 'Set password' : 'Change password');
   openModal([h('div', { class: 'eyebrow' }, roleName(u)), h('h3', {}, 'Your profile'),
     h('div', { class: 'pf-head' }, pic, h('div', { class: 'pf-acts' },
@@ -1486,27 +1580,30 @@ function showConfirmed(b) {
 function openEnquiry(kind) {
   const u = state.user && state.user.role === 'customer' ? state.user : null;
   const gsel = h('select', {}, state.grounds.map((g) => h('option', { value: g.id, selected: state.ground && g.id === state.ground.id }, g.name)));
-  const first = input('firstName', 'text', { value: u ? (u.firstName || u.name.split(' ')[0] || '') : '', autocomplete: 'given-name', autocapitalize: 'words' });
+  const first = input('firstName', 'text', { value: u ? (u.firstName || u.name.split(' ')[0] || '') : '', autocomplete: 'given-name', autocapitalize: 'words', required: true });
   const last = input('lastName', 'text', { value: u ? (u.lastName || u.name.split(' ').slice(1).join(' ')) : '', autocomplete: 'family-name', autocapitalize: 'words' });
-  const phone = input('phone', 'tel', { value: u && u.phone ? u.phone : '', autocomplete: 'tel' });
+  const phone = input('phone', 'tel', { value: u && u.phone ? u.phone : '', autocomplete: 'tel', required: true });
   const email = input('email', 'email', { value: u && u.email ? u.email : '', autocomplete: 'email' });
   const date = input('preferredDate', 'date', { min: firstDay() });
   const players = input('players', 'number', { min: '1', max: '500' });
-  const msg = h('textarea', { placeholder: kind === 'academy' ? 'Tell us about the player and what you are looking for.' : 'What are you planning? Match, practice, tournament…' }, kind === 'academy' ? 'I would like to know about MP13 Academy. ' : '');
-  const err = h('div', { class: 'fe' });
+  const msg = h('textarea', { name: 'message', required: true, placeholder: kind === 'academy' ? 'Tell us about the player and what you are looking for.' : 'What are you planning? Match, practice, tournament…' }, kind === 'academy' ? 'I would like to know about MP13 Academy. ' : '');
+  const err = h('div', { class: 'fe formerr', 'aria-live': 'assertive' });
   const submit = h('button', { class: 'btn primary block', type: 'submit' }, 'Send enquiry');
   const form = h('form', { novalidate: true },
     field('Ground', gsel), h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('First name', first), field('Last name', last)), field('Mobile number', phone), field('Email (optional)', email),
     h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('Preferred date', date), field('Players', players)),
     field('Message', msg), err, submit);
   form.addEventListener('submit', async (ev) => {
-    ev.preventDefault(); err.textContent = ''; submit.disabled = true;
+    ev.preventDefault();
+    if (!formCheck(form, err)) return;
+    if (msg.value.trim().length < 5) { formFail(form, err, new ApiError(400, 'VALIDATION_FAILED', 'Tell us a little more in the message, so we can help.', { fields: [{ field: 'message', message: 'Too short' }] })); return; }
+    formClear(form, err); busyBtn(submit, true, 'Sending…');
     const body = { groundId: gsel.value, firstName: first.value.trim(), lastName: last.value.trim(), phone: phone.value.trim(), message: msg.value.trim() };
     if (email.value.trim()) body.email = email.value.trim();
     if (date.value) body.preferredDate = date.value;
     if (players.value) body.players = Number(players.value);
-    try { await api('/api/enquiries', { method: 'POST', body }); closeModal(); toast('Thank you. We have your enquiry and will get back to you soon.'); }
-    catch (e) { const f = fieldErrors(e); err.textContent = Object.keys(f).length ? Object.entries(f).map(([k, m]) => `${k}: ${m}`).join('  ·  ') : e.message; submit.disabled = false; }
+    try { await api('/api/enquiries', { method: 'POST', body }); busyBtn(submit, false); closeModal(); toast('Thank you. We have your enquiry and will get back to you soon.'); }
+    catch (e) { busyBtn(submit, false); formFail(form, err, e); }
   });
   openModal([h('div', { class: 'eyebrow' }, 'Enquiry'), h('h3', {}, kind === 'academy' ? 'Ask about MP13 Academy' : 'Send an enquiry'), form]);
 }
@@ -1771,7 +1868,7 @@ function editService(s, done) {
     err.textContent = ''; save.disabled = true;
     const body = { name: name.value.trim(), purpose: purpose.value.trim(), accountEmail: email.value.trim(), phone: phone.value.trim(), loginUrl: url.value.trim(), status: status.value, notes: notes.value.trim() };
     try { await api(s ? '/api/admin/services/' + encodeURIComponent(s.id) : '/api/admin/services', { method: s ? 'PATCH' : 'POST', body }); closeModal(); toast('Saved'); done(); }
-    catch (e) { const fe = fieldErrors(e); err.textContent = Object.values(fe)[0] || e.message; save.disabled = false; }
+    catch (e) { err.textContent = e.message; save.disabled = false; }
   } }, 'Save');
   openModal([h('div', { class: 'eyebrow' }, s ? 'Edit' : 'New'), h('h3', {}, s ? s.name : 'Add a service'), f('Name', name), f('What it is for', purpose), f('Account email', email), f('Phone number', phone), f('Login link', url), f('Where it stands', status), f('Notes', notes), err, save,
     s ? h('button', { class: 'btn ghost block', type: 'button', style: 'margin-top:8px', onclick: async () => { try { await api('/api/admin/services/' + encodeURIComponent(s.id), { method: 'DELETE' }); closeModal(); done(); } catch (e) { err.textContent = e.message; } } }, 'Remove from the list') : null]);
@@ -2326,7 +2423,7 @@ async function loadTimings(box) {
         const gi = state.grounds.findIndex((x) => x.id === g.id); if (gi >= 0) Object.assign(state.grounds[gi], saved);
         if (state.ground && state.ground.id === g.id) { Object.assign(state.ground, saved); state.win = null; state.hr = null; }
         msg.style.color = 'var(--ok,#6fbf8b)'; msg.textContent = 'Saved. Customers see the new prices now.';
-      } catch (e) { const f = fieldErrors(e); msg.textContent = Object.keys(f).length ? Object.entries(f).map(([k, m]) => `${k}: ${m}`).join('  ·  ') : e.message; }
+      } catch (e) { msg.textContent = e.message; }
       save.disabled = false;
     } }, 'Save prices and timings');
     drawRows(); drawGlance();
@@ -2367,7 +2464,7 @@ async function loadPeople(box) {
         if (!body.firstName) delete body.firstName; if (!body.lastName) delete body.lastName;
         const r = await api('/api/admin/users/' + encodeURIComponent(u.id), { method: 'PATCH', body });
         first.value = r.firstName; last.value = r.lastName; msg.textContent = `Saved as ${r.name}.`; msg.style.color = 'var(--ok,#6fbf8b)'; u = r;
-      } catch (e) { const f = fieldErrors(e); msg.style.color = ''; msg.textContent = Object.keys(f).length ? Object.entries(f).map(([k, m]) => `${k}: ${m}`).join('  ·  ') : e.message; }
+      } catch (e) { msg.style.color = ''; msg.textContent = e.message; }
       save.disabled = false;
     } }, 'Save');
     return h('div', { class: 'personrow' }, h('div', { class: 'who' }, h('b', {}, u.name), h('span', { class: 'chip' }, u.role.replace('_', ' '))),
@@ -2418,7 +2515,7 @@ function siteEditor(s) {
       await api('/api/admin/settings', { method: 'PUT', body: { instagramUrl: ig.value.trim(), galleryImages: list, academyImages: academyList.value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) } });
       state.config.instagramUrl = ig.value.trim() || null; state.config.gallery = list; state.config.academyGallery = academyList.value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean); fillGallery(); fillAcademyPhotos();
       toast('Website updated.');
-    } catch (e) { const f = fieldErrors(e); msg.textContent = Object.keys(f).length ? Object.entries(f).map(([k, m]) => `${k}: ${m}`).join('  ·  ') : e.message; }
+    } catch (e) { msg.textContent = e.message; }
     save.disabled = false;
   } }, 'Save website details');
   const academyList = h('textarea', { name: 'academyImages', placeholder: 'Academy photos: one per line', style: 'height:90px' }, (s.academyImages || []).join('\n'));

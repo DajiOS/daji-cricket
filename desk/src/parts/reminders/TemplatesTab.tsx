@@ -22,7 +22,7 @@ function One({ t, saved }: { t: Template; saved: () => void }) {
       <Field label="Message" hint="Use {name} {date} {time} {amount}"><textarea className="inp" rows={4} value={body} maxLength={1000} onChange={(e) => setBody(e.target.value)} /></Field>
       <div className="rem-preview small"><span className="muted">Preview</span><div>{fill(body)}</div></div>
       <div className="row">
-        <button className="btn primary sm" disabled={busy || !body.trim() || body === t.body} onClick={() => run({ body }, 'Template saved')}>Save</button>
+        <button className="btn primary sm" disabled={busy || body === t.body} onClick={() => (body.trim() ? run({ body }, 'Template saved') : toast('The message is empty. Write the message, or press Reset to default.'))}>Save</button>
         {t.custom && <button className="btn ghost sm" disabled={busy} onClick={async () => { await run({ reset: true }, 'Back to the default'); setBody(t.defaultBody); }}>Reset to default</button>}
       </div>
     </div>

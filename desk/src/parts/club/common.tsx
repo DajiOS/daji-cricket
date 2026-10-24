@@ -3,11 +3,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ErrorBox, Icon, Loading } from '../../ui';
 import { ApiError } from '../../lib';
 
-/** Error text for a toast or an inline box, with the server's field messages appended. */
+/** Error text for a toast or an inline box. Field problems already come as plain sentences (see formtext.ts). */
 export function errMsg(e: unknown): string {
-  const x = e as ApiError | undefined;
-  const fields = (x?.details as { fields?: { message: string }[] } | undefined)?.fields;
-  return (x?.message || 'Something went wrong.') + (fields?.length ? ' ' + fields.map((f) => f.message).join('. ') : '');
+  return (e as ApiError | undefined)?.message || 'Something went wrong.';
 }
 export const forbidden = (m: string | null) => (m && /permission|role|forbidden|not allowed/i.test(m) ? 'Your role does not include this.' : m);
 

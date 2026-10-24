@@ -169,7 +169,7 @@ function VendorInspector({ node, onSaved, head }: { node: Node; onSaved: () => v
         ? <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setSig('')}><Icon name="inbox" />Fill from an email signature</button>
         : <div className="xp-sig">
             <label className="f full"><span>Paste the signature from the vendor's email</span><textarea className="inp" rows={6} autoFocus value={sig} onChange={(e) => setSig(e.target.value)} placeholder={'Ramesh Patel\nSurat Turf Supplies\n+91 98250 12345\nGSTIN 24ABCDE1234F1Z5\nramesh@surat-turf.in'} /></label>
-            <div className="row"><button className="btn primary sm" disabled={!sig.trim()} onClick={capture}>Read it</button><button className="btn ghost sm" onClick={() => setSig(null)}>Cancel</button></div>
+            <div className="row"><button className="btn primary sm" onClick={() => (sig.trim() ? capture() : setErr('Paste the signature from the vendor’s email first.'))}>Read it</button><button className="btn ghost sm" onClick={() => setSig(null)}>Cancel</button></div>
           </div>}
       {found.length > 0 && <p className="small" style={{ margin: 0, color: 'var(--i-green)' }}>Found {found.join(', ')}. Check the fields, then save. Fields that already had a value were kept.</p>}
       <div className="grid g2">

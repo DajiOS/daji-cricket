@@ -37,7 +37,7 @@ export function RejectModal({ bill, onClose, onDone }: { bill: Bill; onClose: ()
     <Modal title={`Reject bill from ${bill.vendorName}`} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn danger" disabled={busy} onClick={submit}>Reject bill</button></>}>
       <div className="stack"><ErrorBox msg={err} />
         <p className="muted">{inr(bill.amountPaise)}{bill.billNo ? ` · bill ${bill.billNo}` : ''}. The person who entered it can fix it and send it again.</p>
-        <Field label="Reason"><textarea className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong amount, duplicate of INV-12" autoFocus /></Field>
+        <Field label="Reason" required><textarea className="inp" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong amount, duplicate of INV-12" autoFocus /></Field>
       </div>
     </Modal>
   );

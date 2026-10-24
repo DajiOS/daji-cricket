@@ -70,7 +70,7 @@ function Connected({ accounts, reloadFeed, openFlow }: { accounts: { id: string;
                   <option value="">Choose {a.container === 'bank' ? 'a books account' : a.container === 'creditCard' ? 'a credit card account' : 'a loan account'}</option>
                   {choices.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                 </select>
-                <button className="btn sm primary" disabled={!pick[a.id] || busy === a.id} onClick={() => act(a.id, () => post('/api/accounting/feed/link', { accountId: pick[a.id], providerRef: a.id }), 'Linked')}>Link</button>
+                <button className="btn sm primary" disabled={busy === a.id} onClick={() => !pick[a.id] ? toast('Choose which account in your books this one goes to, then press Link.') : act(a.id, () => post('/api/accounting/feed/link', { accountId: pick[a.id], providerRef: a.id }), 'Linked')}>Link</button>
               </div>
             )}
             {a.status?.action === 'fix' && <button className="btn sm primary" onClick={() => openFlow({ flow: 'edit', providerAccountId: a.providerAccountId })}>Fix login</button>}

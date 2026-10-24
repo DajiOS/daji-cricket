@@ -9,6 +9,7 @@ function TeamForm({ tid, team, feePaise, onClose, onSaved }: { tid: string; team
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function save() {
+    if (!v.name.trim()) return setErr('Enter the team name.');
     setBusy(true); setErr(null);
     try {
       const body = { name: v.name, captain: v.captain, phone: v.phone, feePaid: v.feePaid, paymentRef: v.paymentRef };
@@ -17,7 +18,7 @@ function TeamForm({ tid, team, feePaise, onClose, onSaved }: { tid: string; team
     } catch (e: any) { setErr(e.message); setBusy(false); }
   }
   return (
-    <Modal title={team ? 'Edit team' : 'Add team'} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !v.name.trim()} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
+    <Modal title={team ? 'Edit team' : 'Add team'} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
       <ErrorBox msg={err} />
       <div className="form-grid">
         <Field label="Team name" full><input className="inp" {...bind('name')} autoFocus /></Field>

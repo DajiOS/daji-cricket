@@ -367,16 +367,18 @@ function platformPage() {
   const msg = h('textarea', { name: 'message', placeholder: 'How many grounds, what you use today, what you would like to fix' });
   const trap = h('input', { name: 'website', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true', style: 'position:absolute;left:-9999px;width:1px;height:1px;opacity:0' });
   const done = h('div', { class: 'answer', hidden: true }, h('p', {}, 'Thank you. We have your details and will call you soon.'));
-  const status = h('div', { class: 'fe' });
-  f.append(h('div', { class: 'two' }, h('div', {}, inp('firstName', 'First name', { autocomplete: 'given-name' }), inp('lastName', 'Last name', { autocomplete: 'family-name' }), inp('business', 'Ground or business name'), inp('city', 'City')),
-    h('div', {}, inp('phone', 'Phone', { inputmode: 'tel', autocomplete: 'tel' }), inp('email', 'Email', { type: 'email', autocomplete: 'email' }), inp('grounds', 'Number of grounds', { type: 'number', min: 1, max: 500 }))),
+  const status = h('div', { class: 'fe formerr', 'aria-live': 'assertive' });
+  f.append(h('div', { class: 'two' }, h('div', {}, inp('firstName', 'First name', { autocomplete: 'given-name', required: true }), inp('lastName', 'Last name', { autocomplete: 'family-name' }), inp('business', 'Ground or business name', { required: true }), inp('city', 'City')),
+    h('div', {}, inp('phone', 'Phone', { inputmode: 'tel', autocomplete: 'tel', required: true }), inp('email', 'Email', { type: 'email', autocomplete: 'email', required: true }), inp('grounds', 'Number of grounds', { type: 'number', min: 1, max: 500 }))),
     h('label', { class: 'field' }, h('span', {}, 'Anything else'), msg), trap, status, h('button', { class: 'btn primary', type: 'submit' }, 'Send'), done);
   f.addEventListener('submit', async (e) => {
-    e.preventDefault(); status.textContent = ''; for (const k of Object.keys(errs)) errs[k].textContent = '';
+    e.preventDefault();
+    if (!D.formCheck(f, status, errs)) return;
+    const send = f.querySelector('button[type=submit]'); D.formClear(f, status, errs); D.busyBtn(send, true, 'Sending…');
     const g = (n) => f.elements[n].value.trim();
     const body = { name: `${g('firstName')} ${g('lastName')}`.trim(), business: g('business'), city: g('city') || undefined, phone: g('phone'), email: g('email'), grounds: g('grounds') ? Number(g('grounds')) : undefined, message: g('message') || undefined, website: g('website') || undefined };
-    try { await api('/api/platform/leads', { method: 'POST', body }); f.querySelectorAll('input,textarea,button').forEach((x) => { x.disabled = true; }); done.hidden = false; }
-    catch (er) { const fe = D.fieldErrors(er); for (const [k, v] of Object.entries(fe)) if (errs[k]) errs[k].textContent = v; status.textContent = Object.keys(fe).length ? 'Please check the highlighted fields.' : er.message; }
+    try { await api('/api/platform/leads', { method: 'POST', body }); D.busyBtn(send, false); f.querySelectorAll('input,textarea,button').forEach((x) => { x.disabled = true; }); done.hidden = false; }
+    catch (er) { D.busyBtn(send, false); D.formFail(f, status, er, errs); }
   });
   const cta = $('#plat-cta'); if (cta) cta.addEventListener('click', () => $('#plat-form').scrollIntoView({ behavior: 'smooth', block: 'start' }));
 }

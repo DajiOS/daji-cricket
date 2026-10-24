@@ -55,11 +55,12 @@ export function AccountAggregator() {
 function AskDialog({ onClose, done }: { onClose: () => void; done: () => void }) {
   const [mobile, setMobile] = useState(''); const [months, setMonths] = useState('12'); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const go = async () => {
+    if (mobile.replace(/\D/g, '').length < 10) { setErr('Enter the 10-digit mobile number linked to the bank account.'); return; }
     setBusy(true); setErr('');
     try { const r = await post<any>('/api/accounting/aa/consents', { provider: 'setu', mobile, months: Number(months) }); if (r.url) window.open(r.url, '_blank', 'noopener'); done(); } catch (x: any) { setErr(x.message); } finally { setBusy(false); }
   };
   return (
-    <Modal title="Ask for bank access" onClose={onClose} foot={<button className="btn primary" disabled={busy || !mobile.trim()} onClick={go}>Send to Setu</button>}>
+    <Modal title="Ask for bank access" onClose={onClose} foot={<button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={go}>{busy ? 'Sending…' : 'Send to Setu'}</button>}>
       <ErrorBox msg={err} />
       <Field label="Mobile number linked to the bank" hint="The account holder gets an OTP on this number and chooses which accounts to share."><input className="inp" inputMode="tel" autoFocus value={mobile} onChange={(e) => setMobile(e.target.value)} /></Field>
       <Field label="Keep access for" hint="They can stop it earlier at any time."><select className="inp" value={months} onChange={(e) => setMonths(e.target.value)}>{[3, 6, 12, 24].map((m) => <option key={m} value={m}>{m} months</option>)}</select></Field>

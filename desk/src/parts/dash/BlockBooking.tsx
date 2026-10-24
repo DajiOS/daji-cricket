@@ -61,24 +61,24 @@ export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone:
       foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={save}>Book {days || ''} day{days === 1 ? '' : 's'}</button></>}>
       <p className="small muted">For a custom programme agreed with the customer. One booking is made for each day, and the agreed total is shared across the days. Enter 0 in Received now if nothing has been received yet; the whole amount then stays due.</p>
       <div className="form-grid">
-        <Field label="Ground" full><select className="inp" value={gid} onChange={(e) => setGroundId(e.target.value)}>{grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
-        <Field label="First day"><DateInput className="inp" value={from} min={todayISO()} onChange={(e) => { setFrom(e.target.value); if (to < e.target.value) setTo(e.target.value); }} /></Field>
-        <Field label="Last day"><DateInput className="inp" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></Field>
+        <Field label="Ground" full required><select className="inp" value={gid} onChange={(e) => setGroundId(e.target.value)}>{grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
+        <Field label="First day" required><DateInput className="inp" value={from} min={todayISO()} onChange={(e) => { setFrom(e.target.value); if (to < e.target.value) setTo(e.target.value); }} /></Field>
+        <Field label="Last day" required><DateInput className="inp" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></Field>
         <Field label="From"><select className="inp" value={start} onChange={(e) => setStart(Number(e.target.value))}>{HOURS.map((h) => <option key={h} value={h}>{label(h)}</option>)}</select></Field>
         <Field label="Until"><select className="inp" value={end} onChange={(e) => setEnd(Number(e.target.value))}>{[...HOURS.filter((h) => h > start), ...LATE].map((h) => <option key={h} value={h}>{label(h)}</option>)}</select></Field>
-        <Field label="Agreed total for all days (rupees)" hint={totalPaise && days ? `${days} days, about ${inr(Math.round(totalPaise / days))} a day` : undefined}><input className="inp" inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value)} /></Field>
+        <Field label="Agreed total for all days (rupees)" required hint={totalPaise && days ? `${days} days, about ${inr(Math.round(totalPaise / days))} a day` : undefined}><input className="inp" inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value)} /></Field>
         <NameField value={cust.name} onChange={(n) => setCust((c) => ({ ...c, name: n }))} firstLabel="Customer first name" lastLabel="Customer last name" />
-        <Field label="Phone"><input className="inp" inputMode="tel" value={cust.phone} onChange={(e) => setCust({ ...cust, phone: e.target.value })} /></Field>
+        <Field label="Phone" required><input className="inp" inputMode="tel" value={cust.phone} onChange={(e) => setCust({ ...cust, phone: e.target.value })} /></Field>
         <Field label="Email (optional)"><input className="inp" value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} /></Field>
         <MatchNote m={match} />
         <label className="check full"><input type="checkbox" checked={isT} onChange={(e) => setIsT(e.target.checked)} /> This is a tournament. It is also added to Tournaments, linked to this booking.</label>
         {isT && <>
-          <Field label="Tournament name" full><input className="inp" value={tName} onChange={(e) => setTName(e.target.value)} placeholder="Diwali Cup 2026" /></Field>
+          <Field label="Tournament name" full required><input className="inp" value={tName} onChange={(e) => setTName(e.target.value)} placeholder="Diwali Cup 2026" /></Field>
           <Field label="Format"><select className="inp" value={tFormat} onChange={(e) => setTFormat(e.target.value)}><option value="round_robin">Round robin</option><option value="knockout">Knockout</option><option value="league_knockout">League then knockout</option><option value="other">Other</option></select></Field>
           <Field label="Overs per side"><input className="inp" inputMode="numeric" value={tOvers} onChange={(e) => setTOvers(e.target.value.replace(/\D/g, ''))} /></Field>
           <Field label="Entry fee per team (rupees)"><input className="inp" inputMode="decimal" value={tFee} onChange={(e) => setTFee(e.target.value)} /></Field>
         </>}
-        <Field label="Received now (rupees)"><input className="inp" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+        <Field label="Received now (rupees)" required><input className="inp" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
         <Field label="Paid by"><select className="inp" value={method} onChange={(e) => setMethod(e.target.value)}>{HAND_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
         <Field label="Reference (UTR, cheque no.)"><input className="inp" value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
         <Field label="Notes" full><input className="inp" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Camp name, contact person" /></Field>

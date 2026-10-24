@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, Suspense } from 'react';
 import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
-import { Icon, ToastHost, Loading, Crest } from './ui';
+import { Icon, ToastHost, Loading, Crest, ErrorBox } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
 import { HOME, NAV, PAGES, RAIL, BLURBS, railOf, itemFor, navVisible, type NavItem, type RailItem } from './registry';
@@ -148,10 +148,10 @@ function TermsGate({ terms, onDone, onSignOut }: { terms: Terms; onDone: () => v
           <p className="small muted">Please read these terms. You need to accept them once before you can use the desk. Your acceptance is saved with the time and your device address.</p>
           <pre style={{ whiteSpace: 'pre-wrap', font: 'inherit', maxHeight: '45vh', overflow: 'auto', padding: 12, border: '1px solid var(--line, #ddd)', borderRadius: 8 }}>{terms.body}</pre>
           <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /><span>I accept these terms</span></label>
-          {err && <p style={{ color: 'var(--bad)' }}>{err}</p>}
+          <ErrorBox msg={err} />
           <div className="row" style={{ marginTop: 12, justifyContent: 'space-between' }}>
             <button className="btn ghost" onClick={onSignOut}>Sign out</button>
-            <button className="btn primary" disabled={!agree || busy} onClick={accept}>Accept and continue</button>
+            <button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={() => (agree ? accept() : setErr('Tick “I accept these terms” first, then press Accept and continue.'))}>Accept and continue</button>
           </div>
         </div>
       </div>

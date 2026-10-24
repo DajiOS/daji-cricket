@@ -18,6 +18,7 @@ export function TournamentForm({ t, onClose, onSaved }: { t?: Tournament; onClos
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function save() {
+    if (!v.name.trim()) return setErr('Enter the tournament name.');
     const fee = toPaise(v.fee);
     if (fee === null || fee < 0) return setErr('Enter the entry fee in rupees, for example 5000');
     const org = { firstName: v.orgFirst.trim(), lastName: v.orgLast.trim(), phone: v.orgPhone.trim() || undefined, email: v.orgEmail.trim() || undefined };
@@ -39,10 +40,10 @@ export function TournamentForm({ t, onClose, onSaved }: { t?: Tournament; onClos
   return (
     <Modal title={t ? 'Edit tournament' : 'New tournament'} onClose={onClose} foot={<>
       <button className="btn ghost" onClick={onClose}>Cancel</button>
-      <button className="btn primary" disabled={busy || !v.name.trim()} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
+      <button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
       <ErrorBox msg={err} />
       <div className="form-grid">
-        <Field label="Name" full><input className="inp" {...bind('name')} placeholder="Diwali Cup 2026" autoFocus /></Field>
+        <Field label="Name" full required><input className="inp" {...bind('name')} placeholder="Diwali Cup 2026" autoFocus /></Field>
         <Field label="Starts"><DateInput className="inp" {...bind('startDate')} /></Field>
         <Field label="Ends"><DateInput className="inp" {...bind('endDate')} /></Field>
         <Field label="Format"><select className="inp" {...bind('format')}>{FORMATS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
