@@ -6,7 +6,7 @@ One app for iPhone and Android, for everyone. What a person sees depends on who 
 - **Staff:** Tasks (take photos with the camera to close a task), Bookings (today, upcoming, approvals, UPI payments to check; approve, record a payment, mark no-show, cancel), Books (the accounting overview) and More, each shown only if their permissions allow it.
 - **Owner:** the same, plus under More: Promo codes (typed or generated, one-time), Team (add people from a role, adjust permissions, switch off) and Booking controls (opening and closing day, close or open days for everything / ground / practice / academy, the Razorpay switch). Owners also create and assign tasks.
 - **Super admin:** the same as the owner, working inside the owner chosen under More.
-- **Everyone:** a profile with a picture (or the initial), name, email, mobile, password and Sign out.
+- **Everyone:** a profile with a picture (or the initial), name, email, mobile, password and Sign out, and Face ID / fingerprint unlock (turned on under Profile; the app then asks for it when it opens and when you come back after two minutes away).
 
 Task photos: the camera opens (never the gallery). The server accepts a photo only if it was taken within the last 5 minutes. Some phone cameras leave the shot time out of the saved file, so the app also sends the moment it took the picture, and the server uses that only when the file has no camera time of its own.
 
