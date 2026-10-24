@@ -22,13 +22,19 @@
       "package": "com.dajicricket.app",
       "permissions": [
         "CAMERA",
-        "READ_MEDIA_IMAGES",
         "POST_NOTIFICATIONS"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0a0c0b"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-secure-store",
@@ -42,7 +48,8 @@
         "expo-image-picker",
         {
           "cameraPermission": "Daji Cricket Ground uses the camera to take photos that prove a task is done.",
-          "photosPermission": "Daji Cricket Ground uses your photos so you can choose a profile picture."
+          "photosPermission": "Daji Cricket Ground uses your photos so you can choose a profile picture.",
+          "microphonePermission": false
         }
       ],
       [

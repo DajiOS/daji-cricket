@@ -18,13 +18,30 @@ The app is built with Expo (iOS and Android from one codebase). This repo is set
 - **Apple Developer Program** (about US$99 a year): developer.apple.com/programs. Gives you App Store Connect.
 - **Google Play Console** (one-time about US$25): play.google.com/console. New personal accounts must run a closed test with 12 testers for 14 days before production; business accounts do not.
 
-## 4. Build and submit
-```
-cd mobile
-eas build --profile production --platform all
-eas submit --profile production --platform all
-```
-Then complete the listing in App Store Connect / Play Console and press Submit for review.
+## 4. Build and submit (two apps)
+The repo makes two store apps from one codebase:
+
+| App | Store name | iOS bundle id / Android package | Build and submit profile |
+|---|---|---|---|
+| Customer | Daji Cricket Ground | `com.dajicricket.app` | `production-customer` |
+| Staff and owner | Daji Admin | `com.dajicricket.admin` | `production-admin` |
+
+Production builds are an AAB for Google Play and an IPA for the App Store. Each build is sent to the Play **internal testing** track (as a draft) and to **TestFlight**.
+
+**One-time steps only the account owner can do**
+1. **Apple signing (once per app).** On any computer (Mac not needed): `npm install -g eas-cli`, `eas login`, then in `mobile`:
+   `APP_VARIANT=customer eas credentials -p ios` and `APP_VARIANT=admin eas credentials -p ios` (on Windows PowerShell set `$env:APP_VARIANT="admin"` first). Choose the production profile, sign in with the Apple Developer account and let EAS create the distribution certificate, the provisioning profile and the push key.
+2. **App Store Connect API key** (so builds go to TestFlight without an Apple sign-in each time): App Store Connect, Users and Access, Integrations, App Store Connect API, create a key with the App Manager role. Upload the .p8 file, key id and issuer id in expo.dev, project daji-cricket-ground, Credentials, iOS.
+3. **App Store Connect apps.** My Apps, +, New App, once with bundle id `com.dajicricket.app` and once with `com.dajicricket.admin`.
+4. **Google Play apps.** Play Console, Create app, once for "Daji Cricket Ground" and once for "Daji Admin". Google only allows the very first AAB of each app to be uploaded by hand: download the AAB from expo.dev and upload it in Testing, Internal testing, Create new release.
+5. **Google Play service account** (so later builds upload themselves): Google Cloud console, create a service account and a JSON key; Play Console, Users and permissions, invite the service account's email with release permissions for both apps. Upload the JSON key in expo.dev, Credentials, Android, for each of the two packages.
+6. **EXPO_TOKEN.** expo.dev, Account settings, Access tokens: create one and add it to GitHub, Settings, Secrets and variables, Actions, as `EXPO_TOKEN`.
+
+**Every release after that**
+- GitHub, Actions, Store release, Run workflow (choose the app and store), or on a computer: `npm run eas:production` in `mobile`.
+- Build numbers go up by themselves (EAS keeps them). Change `version` in `app.json` only for a release that adds native code or a permission, because installed apps only take over-the-air updates made for the same version.
+
+**Daji Admin on the App Store.** Apple turns down apps that only a business's own staff can use (guideline 3.2). Keep Daji Admin on TestFlight (up to 10,000 testers, no store review for internal testers), or ask Apple for unlisted distribution. On Google Play, keep it on internal or closed testing.
 
 ## 5. What the reviewers need (already built into the app and website)
 | Requirement | Status |

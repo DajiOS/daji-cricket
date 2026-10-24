@@ -9,9 +9,8 @@
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
     "eas:preview": "eas build --profile preview-customer --platform all && eas build --profile preview-admin --platform all",
-    "eas:production": "eas build --profile production-customer --platform all && eas build --profile production-admin --platform all",
-    "eas:update": "eas update --auto",
-    "eas:submit": "eas submit --profile production --platform all"
+    "eas:production": "eas build --profile production-customer --platform all --auto-submit-with-profile production-customer && eas build --profile production-admin --platform all --auto-submit-with-profile production-admin",
+    "eas:update": "eas update --auto"
   },
   "dependencies": {
     "expo": "~52.0.0",
