@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { api, setToken, upload } from './api';
 import { pickProfilePhoto } from './camera';
 import type { User } from './types';
 import { Avatar, Btn, Field, PhoneField, Section, s, NameFields, splitName, splitPhone } from './ui';
 import { C } from './theme';
+import { biometricName, lockOn, setLockOn, unlock } from './lock';
 
 const ROLE: Record<string, string> = { customer: 'Customer', staff: 'Team member', owner: 'Owner', super_admin: 'Super admin' };
 
@@ -16,6 +17,8 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const [delOpen, setDelOpen] = useState(false); const [delPw, setDelPw] = useState(''); const [delWord, setDelWord] = useState('');
   const [err, setErr] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
   const owner = user.role === 'owner';
+  const [bio, setBio] = useState<string | null>(null); const [bioOn, setBioOn] = useState(false);
+  useEffect(() => { void biometricName().then(setBio); void lockOn().then(setBioOn); }, []);
 
   const save = async () => {
     setErr(''); setNote(''); setBusy(true);
@@ -33,6 +36,14 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
     setErr(''); setNote('');
     const first = user.hasPassword === false; // made with a phone code or at the desk: no current password to give
     try { const r = await api<{ token: string; user: User }>('/api/me/password', { method: 'POST', body: { ...(first ? {} : { currentPassword: cur }), newPassword: nw } }); setCur(''); setNw(''); await setToken(r.token); onUser(r.user); setNote(first ? 'Password set. You can now sign in with your email or mobile number.' : 'Password changed.'); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
+  };
+
+  // turning it on asks for the face or finger once, so nobody switches it on for a phone that cannot unlock it
+  const flipBio = async () => {
+    setErr(''); setNote('');
+    if (bioOn) { await setLockOn(false); setBioOn(false); setNote(`${bio ?? 'Biometric'} unlock is off.`); return; }
+    if (!(await unlock(`Turn on ${bio} unlock`))) return;
+    await setLockOn(true); setBioOn(true); setNote(`The app now asks for ${bio} when it opens.`);
   };
 
   const del = async () => {
@@ -57,6 +68,11 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
       <PhoneField code={cc} number={phone} onCode={setCc} onNumber={setPhone} />
       {owner && <><Field label="Business name" value={biz} onChangeText={setBiz} autoCapitalize="words" /><Field label="UPI ID for payments" value={upi} onChangeText={setUpi} /></>}
       <Btn label="Save profile" onPress={save} busy={busy} />
+      {!!bio && <>
+        <Section>{bio === 'Face ID' || bio === 'Touch ID' ? bio : 'Fingerprint or face'} unlock</Section>
+        <Text style={[s.muted, { marginBottom: 10 }]}>{bioOn ? `On. The app asks for ${bio} when it opens and when you come back to it.` : `Ask for ${bio} when the app opens, so nobody else can use it on this phone.`}</Text>
+        <Btn kind="outline" label={bioOn ? `Turn off ${bio} unlock` : `Turn on ${bio} unlock`} onPress={flipBio} />
+      </>}
       <Section>Password</Section>
       {user.hasPassword === false ? <Text style={[s.muted, { marginBottom: 10 }]}>Set a password to sign in with your email or mobile number.</Text>
         : <Field label="Current password" value={cur} onChangeText={setCur} secureTextEntry />}

@@ -34,6 +34,8 @@ import { registerForPush, unregisterPush, onNotificationTap } from './src/push';
 import { C, inr, mode, setMode, type Mode } from './src/theme';
 import { ADMIN_APP } from './src/variant';
 import { useWake } from './src/fresh';
+import { lockOn, setLockOn, useLock } from './src/lock';
+import { LockScreen } from './src/LockScreen';
 
 // One app for everyone. What each person sees depends on who signed in:
 //   customer     Book, Mine (bookings and academy), Ask AI, Profile
@@ -57,11 +59,12 @@ function AppInner({ theme }: { theme: Mode }) {
   const [viewOwner, setView] = useState<string | null>(null);
   const [signin, setSignin] = useState(false); // customer app: the sign-in screen over the booking page
   const wake = useWake(!!hold); // back after a while: the open screen loads again (never in the middle of paying)
+  const [locked, unlocked, lockNow] = useLock(!!user); // Face ID / fingerprint, when the person turned it on under Profile
 
   useEffect(() => {
     (async () => {
       if (!(await loadToken())) { setUser(null); return; }
-      try { setUser((await api<{ user: User }>('/api/me')).user); } catch { await setToken(null); setUser(null); }
+      try { const me = (await api<{ user: User }>('/api/me')).user; if (await lockOn()) lockNow(); setUser(me); } catch { await setToken(null); await setLockOn(false); setUser(null); }
     })();
   }, []);
   // once signed in, people who work for the ground land on their own first tab
@@ -75,7 +78,7 @@ function AppInner({ theme }: { theme: Mode }) {
       .catch(() => {});
   }, [user?.role]);
   useEffect(() => onNotificationTap(() => { setHold(null); setDone(null); setMore(null); setTab(user && user.role !== 'customer' ? 'tasks' : 'me'); }), [user?.role]);
-  const signOut = useCallback(async () => { await unregisterPush(); await serverSignOut(); await setToken(null); setViewOwner(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('book'); }, []);
+  const signOut = useCallback(async () => { await unregisterPush(); await serverSignOut(); await setToken(null); await setLockOn(false); setViewOwner(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('book'); }, []);
 
   if (user === undefined) return <View style={s.screen}><Loading /></View>;
   if (user === null && ADMIN_APP) return <><StatusBar style={mode === 'light' ? 'dark' : 'light'} /><AuthScreen admin onUser={setUser} /></>;
@@ -198,6 +201,7 @@ function AppInner({ theme }: { theme: Mode }) {
           ))}
         </View>
       )}
+      {locked && <LockScreen name={user.name} onUnlock={unlocked} onSignOut={signOut} />}
     </View>
   );
 }
