@@ -19,6 +19,7 @@ import { now } from '../clock.ts';
 import { one, run } from '../db.ts';
 import { festivalOn, festivalPreview } from '../festivals.ts';
 import { siteDesign } from '../packs.ts';
+import { callback as microsoftCallback, microsoftConfigured, redeem as microsoftRedeem, startUrl as microsoftStart } from '../microsoft.ts';
 
 export function publicRoutes(r: Router): void {
   // Used by Docker's health check and by deploy/check-live.sh. It reads the database, so "ok" means bookings can be served. `demo` is true while
@@ -54,6 +55,7 @@ export function publicRoutes(r: Router): void {
       academyGallery: s.academyImages,
       razorpayEnabled: s.razorpayEnabled,
       codesEnabled: c.cfg.otpSignIn && otpAvailable(c.cfg.demoMode),
+      microsoftSignIn: microsoftConfigured(c.cfg),
       razorpayDemo: !razorpayConfigured(c.cfg) && c.cfg.demoMode,
       razorpayKeyId: razorpayConfigured(c.cfg) ? c.cfg.razorpay.keyId : null,
       holdMinutesOnline: s.holdMinutesOnline,
@@ -140,6 +142,22 @@ export function publicRoutes(r: Router): void {
     const countryCode = v.str('countryCode', { max: 4 });
     v.done();
     return ok(login(c.cfg, who!, password!, code, countryCode));
+  }, { rate: 'auth' });
+
+  // ---- Sign in with Microsoft, for the phone apps (the steps are in src/microsoft.ts)
+  r.get('/api/auth/microsoft/start', (c) => ({ status: 302, headers: { Location: microsoftStart(c.cfg, c.query.get('app'), c.query.get('challenge')), 'Cache-Control': 'no-store' }, raw: '' }), { rate: 'auth' });
+  r.get('/api/auth/microsoft/callback', async (c) => {
+    const r = await microsoftCallback(c.cfg, c.query);
+    if ('location' in r) return { status: 302, headers: { Location: r.location, 'Cache-Control': 'no-store' }, raw: '' };
+    return { status: 400, contentType: 'text/html; charset=utf-8', raw: `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Daji sign-in</title><p style="font:16px system-ui;margin:40px 20px">${r.page}</p>` };
+  }, { rate: 'auth' });
+  r.post('/api/auth/microsoft/redeem', (c) => {
+    const v = new Validator(c.json());
+    const ticket = v.str('ticket', { required: true, max: 100 });
+    const verifier = v.str('verifier', { required: true, min: 43, max: 128 });
+    const code = v.str('code', { max: 12 });
+    v.done();
+    return ok(microsoftRedeem(c.cfg, ticket!, verifier!, code));
   }, { rate: 'auth' });
 
   // ---- forgot password: a code sent to the email, then the code and a new password. The answer never says whether the email has an account.

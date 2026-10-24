@@ -207,6 +207,9 @@ Generated from `server/src/routes`. All bodies are JSON unless noted; errors use
 
 | Method | Path | Notes |
 |---|---|---|
+| GET | `/api/auth/microsoft/start` | `app` (`dajicricket` or `dajiadmin`), `challenge` (base64url SHA-256 of a secret the app keeps); sends the browser to Microsoft. 404 `MICROSOFT_OFF` until MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET are set |
+| GET | `/api/auth/microsoft/callback` | Microsoft comes back here; sends the browser to `<app>://auth/microsoft?ticket=…` (or `?error=…`). The ticket lasts 2 minutes and works once |
+| POST | `/api/auth/microsoft/redeem` | body `ticket`, `verifier` (the secret behind the challenge), `code` when the account has 2-step sign-in (else 401 `MFA_REQUIRED`); returns `token`, `user` |
 | POST | `/api/auth/otp/request` | body `phone`; sends a 6-digit code (demo mode returns `devCode`) |
 | POST | `/api/auth/otp/verify` | body `phone`, `code`, and `firstName`, `lastName` for a new number (else 400 `NAME_REQUIRED`); returns `token`, `user`, `created` |
 | POST | `/api/auth/register` | now also accepts `firstName` and `lastName` instead of `name` |

@@ -2,6 +2,10 @@
 
 One app for iPhone and Android, for everyone. What a person sees depends on who signs in (the same sign-in as the website: email or mobile number).
 
+Sign-in extras:
+- **Sign in with Microsoft**, shown once the server has `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET` (`deploy/.env.example`). It signs in people who already have an account with the same email. A 2-step code is still asked for when the account has one.
+- **Site switch**: the live server, or a test server (for example one running with `DEMO_MODE=1`). Always on the Daji Admin sign-in screen; in the customer app it opens with a long press on the logo. Store builds only reach `https` test servers.
+
 - **Customer:** Book (ground, day inside the booking window, slots in a row, promo code, account credit, hold), Pay (Razorpay Checkout, a demo card on a demo server, or UPI with the reference), Mine (spend, history, cancel; for parents the Ground / Academy toggle and a switcher per child), Ask AI, Profile.
 - **Staff:** Tasks (take photos with the camera to close a task), Bookings (today, upcoming, approvals, UPI payments to check; approve, record a payment, mark no-show, cancel), Books (the accounting overview) and More, each shown only if their permissions allow it.
 - **Owner:** the same, plus under More: Promo codes (typed or generated, one-time), Team (add people from a role, adjust permissions, switch off) and Booking controls (opening and closing day, close or open days for everything / ground / practice / academy, the Razorpay switch). Owners also create and assign tasks.
