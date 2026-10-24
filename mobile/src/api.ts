@@ -26,13 +26,16 @@ export class ApiError extends Error { constructor(public status: number, public 
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
   let res: Response;
+  // a slow or sleeping server must not leave a screen spinning forever
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 25000);
   try {
     res = await fetch(API_URL + scoped(path), {
       method: opts.method ?? 'GET',
       headers: { ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      signal: ctl.signal,
     });
-  } catch { throw new ApiError(0, 'NETWORK', 'Could not reach the server. Check your connection.'); }
+  } catch { throw new ApiError(0, 'NETWORK', ctl.signal.aborted ? 'The server is taking too long to answer. Please try again.' : 'Could not reach the server. Check your connection.'); } finally { clearTimeout(timer); }
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
