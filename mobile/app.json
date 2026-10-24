@@ -2,7 +2,7 @@
   "expo": {
     "name": "Daji Cricket Ground",
     "slug": "daji-cricket-ground",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0a0c0b",
@@ -38,6 +38,12 @@
     },
     "plugins": [
       "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Daji uses Face ID to unlock the app, so only you can open it on this phone."
+        }
+      ],
       [
         "expo-notifications",
         {
