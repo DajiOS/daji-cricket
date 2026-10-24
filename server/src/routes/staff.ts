@@ -13,7 +13,7 @@ import { tournamentForBlock } from '../tournaments.ts';
 import { lookupCustomer, readName, createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
 import { cancelBooking, previewCancel } from '../cancellation.ts';
 import { createPromos, listPromos, setPromoActive } from '../promo.ts';
-import { completeManualRefund, listPayments, listRefunds, paymentHistory, paymentOr404, recordOffline, verifyUpi } from '../payments.ts';
+import { completeManualRefund, requestRefund, listPayments, listRefunds, paymentHistory, paymentOr404, recordOffline, verifyUpi } from '../payments.ts';
 import { blockRange, createGround, listGrounds, toGround, unblockRange, updateGround } from '../grounds.ts';
 import { addEnquiryNote, closeEnquiry, convertEnquiry, convertEnquiryToBlock, getEnquiry, listEnquiries, sendQuotation } from '../enquiries.ts';
 import { customerList, overview, parseRange } from '../reports.ts';
@@ -212,6 +212,13 @@ export function staffRoutes(r: Router): void {
     return ok({ ...out, booking: viewBooking(out.payment.bookingId) });
   }, A);
 
+  r.post('/api/staff/payments/:id/refund', (c) => {
+    const v = new Validator(c.json());
+    const amountPaise = v.int('amountPaise', { required: true, min: 100 });
+    const reason = v.str('reason', { required: true, min: 3, max: 150 });
+    v.done();
+    return created(requestRefund(U(c), c.params.id!, { amountPaise: amountPaise!, reason: reason! }));
+  }, A);
   r.get('/api/staff/refunds', (c) => { needPay(U(c)); return ok({ items: listRefunds(ownerFilter(c), c.query.get('status') ?? undefined) }); }, A);
   r.post('/api/staff/refunds/:id/complete', (c) => {
     const v = new Validator(c.json());

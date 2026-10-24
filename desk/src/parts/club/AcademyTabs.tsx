@@ -57,7 +57,7 @@ export function Fees({ month, setMonth, raising, setRaising }: { month: string; 
   const [n, setN] = useState(0);
   const [fees, fErr] = useApi<{ items: Fee[]; billedPaise: number; collectedPaise: number; outstandingPaise: number }>('/api/staff/academy/fees?month=' + month, [n]);
   const [stmt, sErr] = useApi<{ collectedPaise: number; coachSharePaise: number | null; academyKeepsPaise: number; share: Share }>('/api/staff/academy/share/statement?month=' + month, [n]);
-  const [pay, setPay] = useState<Fee | null>(null); const [terms, setTerms] = useState(false);
+  const [pay, setPay] = useState<Fee | null>(null); const [waive, setWaive] = useState<Fee | null>(null); const [terms, setTerms] = useState(false);
   const again = () => setN((x) => x + 1);
   return (
     <div className="stack">
@@ -75,7 +75,7 @@ export function Fees({ month, setMonth, raising, setRaising }: { month: string; 
             { head: 'Fee', num: true, cell: (f) => inr(f.amountPaise) },
             { head: 'Paid', num: true, cell: (f) => inr(f.paidPaise) },
             { head: 'Status', cell: (f) => <Status s={f.status} map={FEE} /> },
-            { head: '', cell: (f) => (f.duePaise > 0 ? <button className="btn sm" onClick={() => setPay(f)}>Record payment</button> : null) },
+            { head: '', cell: (f) => (f.duePaise > 0 ? <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}><button className="btn sm" onClick={() => setPay(f)}>Record payment</button><button className="btn sm ghost" onClick={() => setWaive(f)}>Waive</button></span> : null) },
           ]} />
         )}</Async>
       </div>
@@ -94,6 +94,7 @@ export function Fees({ month, setMonth, raising, setRaising }: { month: string; 
       </div>
       {raising && <RaiseDialog month={month} onClose={() => setRaising(false)} onSaved={again} />}
       {pay && <PayDialog f={pay} onClose={() => setPay(null)} onSaved={again} />}
+      {waive && <WaiveDialog f={waive} onClose={() => setWaive(null)} onSaved={again} />}
     </div>
   );
 }
@@ -128,6 +129,26 @@ function PayDialog({ f, onClose, onSaved }: { f: Fee; onClose: () => void; onSav
         <Field label="How paid"><Select value={mode} onChange={setMode} options={[['cash', 'Cash'], ['upi', 'UPI'], ['bank', 'Bank transfer'], ['cheque', 'Cheque'], ['card', 'Card']]} /></Field>
         <Field label="Received on"><DateInput className="inp" value={on} onChange={(e) => setOn(e.target.value)} /></Field>
       </div>
+      {err && <div className="err" role="alert" style={{ marginTop: 12 }}>{err}</div>}
+    </Modal>
+  );
+}
+
+/** Waive all or part of what a student owes. The owner's fee waiver rules decide whether it happens now or waits for sign-off. */
+function WaiveDialog({ f, onClose, onSaved }: { f: Fee; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast(); const [amt, setAmt] = useState(rupees(f.duePaise)); const [why, setWhy] = useState(''); const [err, setErr] = useState<string | null>(null);
+  const go = async () => {
+    const p = toPaise(amt); if (!p || p <= 0) { setErr('Enter the amount in rupees.'); return; }
+    if (why.trim().length < 3) { setErr('Say why, so whoever signs it knows.'); return; }
+    try { const r = await post(`/api/staff/academy/fees/${f.id}/waive`, { amountPaise: p, reason: why.trim() }); toast(r.waiting ? 'Sent for sign-off. The fee drops once it is approved.' : 'Fee waived.'); onSaved(); onClose(); } catch (e) { setErr(errMsg(e)); }
+  };
+  return (
+    <Modal title={'Waive a fee for ' + f.studentName} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" onClick={go}>Waive</button></>}>
+      <div className="form-grid">
+        <Field label="Amount to waive (₹)" hint={`Up to the ${rupees(f.duePaise)} still owed`}><input className="inp" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)} /></Field>
+        <Field label="Why"><input className="inp" maxLength={300} placeholder="For example: scholarship, or away for the month" value={why} onChange={(e) => setWhy(e.target.value)} /></Field>
+      </div>
+      <p className="small muted" style={{ marginTop: 10 }}>Larger waivers may need a sign-off first, depending on your approval rules.</p>
       {err && <div className="err" role="alert" style={{ marginTop: 12 }}>{err}</div>}
     </Modal>
   );

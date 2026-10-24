@@ -18,7 +18,7 @@ export function RefundApprovals() {
         { head: 'Amount', cell: (r) => inr(r.amountPaise, 2), num: true },
         { head: 'How', cell: (r) => (r.mode === 'gateway' ? 'Back to the card or UPI via Razorpay' : 'Paid by hand') },
         { head: 'Reason', cell: (r) => r.reason ?? '' },
-        { head: '', cell: (r) => <div className="row" style={{ gap: 6 }}><button className="btn sm primary" disabled={busy === r.id} onClick={() => act(r.id, 'approve', {}, 'Authorised')}>Authorise</button><button className="btn sm ghost" disabled={busy === r.id} onClick={() => decline(r.id)}>Decline</button></div> },
+        { head: '', cell: (r) => <div className="row" style={{ gap: 6 }}>{r.waitingOnGround ? <span className="small muted">Waiting on the ground's sign-off</span> : <button className="btn sm primary" disabled={busy === r.id} onClick={() => act(r.id, 'approve', {}, 'Authorised')}>Authorise</button>}<button className="btn sm ghost" disabled={busy === r.id} onClick={() => decline(r.id)}>Decline</button></div> },
       ]} />
     </Panel>
   );

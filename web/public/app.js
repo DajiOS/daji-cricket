@@ -191,6 +191,16 @@ function syncDesign() {
     : { ...d.g, day: false, exp: 1.05, parts: d.g.parts === 'none' ? 'dust' : d.g.parts, pc: '#fff3d8', grass: ['#163a24', '#1b4529'] };
   if (window.DajiScene) window.DajiScene.mount(box, g); else window.DajiScenePending = { el: box, p: g };
 }
+/** What the 3D opening film needs to know about the look on screen: its colours, day or night, its scene and any festival. */
+window.dajiIntroLook = function introLook() {
+  const root = document.documentElement, t = root.getAttribute('data-theme'), th = THEMES.find((x) => x[0] === t) || THEMES[0], dark = isDarkTheme();
+  const d = DESIGNS[t];
+  let g = null;
+  if (d) g = dark === !d.g.day ? d.g : dark ? { ...d.g, day: false, parts: d.g.parts === 'none' ? 'dust' : d.g.parts, grass: null } : { ...d.g, day: true, parts: d.g.parts === 'stars' ? 'none' : d.g.parts, grass: null };
+  return { theme: t, dark, fest: FESTIVAL_THEMES.includes(t) ? t : null, g, bg: th[2], acc: th[3], logo: dark ? 'assets/logo.svg' : 'assets/logo-brass.svg' };
+};
+// the opening film waits briefly for today's festival (see the splash below, outside this block)
+window.dajiFestLoaded = () => fest.loaded;
 // Day and night. Every designer theme has a day version and a night version (site.css): the website uses the day one from 6 am to
 // 6 pm India time and the night one after that. The sun / moon switch at the top right flips it for this visitor until the next
 // change-over. data-mode is day or night; data-tone is what is on screen, light or dark (a festival look has its own colours).
@@ -2754,8 +2764,24 @@ async function renderMyDash(el) {
     root.classList.add('splash-reveal'); box.classList.add('out');
     setTimeout(() => { root.classList.remove('splash-on', 'splash-reveal'); box.remove(); }, 700);
   };
-  try { window.DajiIntro.play(box, { dark, logo: dark ? 'assets/logo.svg' : 'assets/logo-brass.svg', onDone: end }); } catch { end(); }
-  setTimeout(end, 14000);
+  const flat = () => { try { const dk = root.getAttribute('data-tone') !== 'light'; window.DajiIntro.play(box, { dark: dk, logo: dk ? 'assets/logo.svg' : 'assets/logo-brass.svg', onDone: end }); } catch { end(); } };
+  // the 3D film (intro3d.js) in the colours of the look that is on; the flat intro when 3D cannot run or three.js is slow to arrive
+  const c = navigator.connection || {}, slow = c.saveData || /(^|-)2g|3g/.test(c.effectiveType || '');
+  let started = false;
+  const go3d = () => {
+    if (started || done) return; started = true;
+    const ok = !slow && window.DajiIntro3D && window.THREE && (() => { try { return window.DajiIntro3D.play(box, window.dajiIntroLook(), { onDone: end }); } catch { return false; } })();
+    if (!ok) flat();
+  };
+  const ready = () => new Promise((ok) => { if (window.DajiIntro3D) ok(); else document.addEventListener('DOMContentLoaded', ok, { once: true }); });
+  if (slow) go3d();
+  else {
+    // wait for three.js and, briefly, for today's festival so the film opens in the right look
+    const festSeen = new Promise((ok) => { const t0 = Date.now(); (function wait() { if (!window.dajiFestLoaded || window.dajiFestLoaded() || Date.now() - t0 > 1200) ok(); else setTimeout(wait, 50); })(); });
+    ready().then(() => Promise.all([window.DajiIntro3D ? window.DajiIntro3D.load() : Promise.reject(), festSeen])).then(go3d, go3d);
+    setTimeout(go3d, 3000);
+  }
+  setTimeout(end, 16000);
 })();
 
 document.addEventListener('DOMContentLoaded', () => { try { syncThemeIcon(); } catch { /* ignore */ } });

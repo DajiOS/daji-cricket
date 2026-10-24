@@ -14,6 +14,19 @@ interface Data { kinds: KindData[]; people: { id: string; name: string; permissi
 const ABOUT: Record<string, string> = {
   bill: 'Vendor bills, from the moment someone sends one for approval until it can be paid.',
   payroll: 'The monthly staff pay run, before the month is locked and salaries can be paid.',
+  refund: 'Money going back to a customer: after a cancellation, a double payment, or when the front desk asks for one. Only the owner and the general manager sign; then the super admin authorises it.',
+  discount: 'Money taken off what a booking still owes, asked for from the booking. Only the owner and the general manager sign.',
+  waiver: 'All or part of an academy fee that a student no longer has to pay.',
+  expense: 'Money out entered by hand in the books, such as cash spent at the ground. Bank imports are not held.',
+};
+// What the builder shows for each kind: the empty state, the first and last step of the try-it chain, and the amount's name.
+const WORDS: Record<string, { none: string; start: string; end: string; amount: string }> = {
+  bill: { none: 'No sign-off. A bill is approved as soon as it is sent.', start: 'Someone sends the bill in', end: 'Ready to pay', amount: 'Bill amount' },
+  payroll: { none: 'No sign-off. The owner locks the month straight away.', start: 'Owner sends the pay run', end: 'Month locked', amount: 'Total net pay' },
+  refund: { none: 'No sign-off at the ground. The refund goes straight to the super admin.', start: 'A refund is started', end: 'Super admin authorises', amount: 'Refund amount' },
+  discount: { none: 'No sign-off. A discount is given as soon as it is asked for.', start: 'Someone asks for a discount', end: 'Discount given', amount: 'Discount' },
+  waiver: { none: 'No sign-off. A fee is waived as soon as it is asked for.', start: 'Someone asks to waive a fee', end: 'Fee waived', amount: 'Amount waived' },
+  expense: { none: 'No sign-off. Money out is recorded as soon as it is entered.', start: 'Someone enters the expense', end: 'Recorded in the books', amount: 'Expense amount' },
 };
 const whoKey = (w: Who) => (w.type === 'role' || w.type === 'person' ? `${w.type}:${w.value}` : w.type);
 const whoFrom = (k: string): Who => (k.startsWith('role:') ? { type: 'role', value: k.slice(5) } : k.startsWith('person:') ? { type: 'person', value: k.slice(7) } : { type: k as 'owner' | 'anyone' });
@@ -93,7 +106,7 @@ export default function Rules() {
           </div>
 
           <h3 className="apr-h">Steps, in order</h3>
-          {!draft.steps.length && <p className="apr-none">{kind === 'payroll' ? 'No sign-off. The owner locks the month straight away.' : 'No sign-off. A bill is approved as soon as it is sent.'}</p>}
+          {!draft.steps.length && <p className="apr-none">{WORDS[kind]?.none ?? cur.defaultSummary}</p>}
           <ol className="apr-steps">
             {draft.steps.map((x, i) => (
               <li key={x.id} className="apr-step">
@@ -154,9 +167,9 @@ export default function Rules() {
 
         <aside className="dcard dap-panel" aria-label="Try it">
           <h3 className="apr-h" style={{ marginTop: 0 }}>Try an amount</h3>
-          <label className="apr-f"><span>{kind === 'payroll' ? 'Total net pay' : 'Bill amount'}, in rupees</span><span className="apr-money"><i>₹</i><input className="inp" inputMode="decimal" value={tryAmt} onChange={(e) => setTryAmt(e.target.value)} /></span></label>
+          <label className="apr-f"><span>{WORDS[kind]?.amount ?? 'Amount'}, in rupees</span><span className="apr-money"><i>₹</i><input className="inp" inputMode="decimal" value={tryAmt} onChange={(e) => setTryAmt(e.target.value)} /></span></label>
           <ol aria-label="Steps for this amount" className="dap-chain">
-            {[kind === 'payroll' ? 'Owner sends the pay run' : 'Someone sends the bill in', ...applies.map((x) => x.label || 'Unnamed step'), kind === 'payroll' ? 'Month locked' : 'Ready to pay'].map((label, i, arr) => {
+            {[WORDS[kind]?.start ?? 'Sent in', ...applies.map((x) => x.label || 'Unnamed step'), WORDS[kind]?.end ?? 'Done'].map((label, i, arr) => {
               const st = i > 0 && i < arr.length - 1 ? applies[i - 1] : undefined;
               return (
                 <li key={`${i}-${label}`}>

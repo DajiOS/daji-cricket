@@ -1,5 +1,5 @@
 # The phone app (Expo). On every pull request that touches mobile/, check the types and, if an Expo token is set, publish a preview
-# update that reviewers open in Expo Go or a preview build (a link appears as a comment). On main, publish to the production channel.
+# update that reviewers open in Expo Go or a preview build (a link appears as a comment). On main, publish to the production and preview channels of both apps.
 # Needs one repository secret: EXPO_TOKEN (expo.dev, Account settings, Access tokens). Without it the check still runs and the publish steps are skipped.
 name: Phone app
 on:
@@ -49,3 +49,6 @@ jobs:
         run: |
           APP_VARIANT=customer eas update --branch production-customer --message "${{ github.event.head_commit.message }}" --non-interactive
           APP_VARIANT=admin eas update --branch production-admin --message "${{ github.event.head_commit.message }}" --non-interactive
+          # the installable test builds (preview-customer / preview-admin profiles) listen on their own channels, so they get main too
+          APP_VARIANT=customer eas update --branch preview-customer --message "${{ github.event.head_commit.message }}" --non-interactive
+          APP_VARIANT=admin eas update --branch preview-admin --message "${{ github.event.head_commit.message }}" --non-interactive

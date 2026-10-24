@@ -1,0 +1,41 @@
+# Store release for the phone apps, run by hand from the Actions tab. Builds the chosen app(s) for the App Store and Google Play on EAS
+# and sends each finished build to TestFlight and the Play internal testing track (eas.json, submit profiles).
+# Needs the EXPO_TOKEN repository secret, and the Apple and Google credentials saved in expo.dev (docs/APP_REVIEW.md, section 4).
+name: Store release
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Which app
+        type: choice
+        options: [both, customer, admin]
+        default: both
+      platform:
+        description: Which store
+        type: choice
+        options: [all, ios, android]
+        default: all
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Customer app
+        if: inputs.app != 'admin'
+        run: eas build --profile production-customer --platform ${{ inputs.platform }} --auto-submit-with-profile production-customer --non-interactive --no-wait
+      - name: Admin app
+        if: inputs.app != 'customer'
+        run: eas build --profile production-admin --platform ${{ inputs.platform }} --auto-submit-with-profile production-admin --non-interactive --no-wait

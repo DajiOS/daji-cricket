@@ -46,13 +46,18 @@ CREATE INDEX ix_approval_requests_owner ON approval_requests(owner_id, status, k
 CREATE INDEX ix_approval_requests_entity ON approval_requests(kind, entity_id);
 `);
 
-export const APPROVAL_KINDS = ['bill', 'payroll'] as const;
+export const APPROVAL_KINDS = ['bill', 'payroll', 'refund', 'discount', 'waiver', 'expense'] as const;
 export type ApprovalKind = typeof APPROVAL_KINDS[number];
 
-/** What each kind is called, the right that looks after it, and the audit entity its trail is written against. */
-export const KIND_INFO: Record<ApprovalKind, { name: string; one: string; perm: StaffPermission; area: string; entity: string; selfNo: string }> = {
-  bill: { name: 'Bills', one: 'bill', perm: 'manage_accounting', area: 'Anyone who can manage the books', entity: 'acct_bill', selfNo: 'You entered this bill, so someone else has to approve it' },
-  payroll: { name: 'Staff pay', one: 'pay run', perm: 'manage_accounting', area: 'Anyone who can manage the books', entity: 'payroll_runs', selfNo: 'You sent this pay run, so someone else has to approve it' },
+/** What each kind is called, the right that looks after it, the audit entity its trail is written against, and what
+ * happens when no step applies. */
+export const KIND_INFO: Record<ApprovalKind, { name: string; one: string; perm: StaffPermission; role?: string; area: string; can: string; entity: string; selfNo: string; none: string }> = {
+  bill: { name: 'Bills', one: 'bill', perm: 'manage_accounting', area: 'Anyone who can manage the books', can: 'manage the books', entity: 'acct_bill', selfNo: 'You entered this bill, so someone else has to approve it', none: 'Approved as soon as it is sent, with no sign-off.' },
+  payroll: { name: 'Staff pay', one: 'pay run', perm: 'manage_accounting', area: 'Anyone who can manage the books', can: 'manage the books', entity: 'payroll_runs', selfNo: 'You sent this pay run, so someone else has to approve it', none: 'The owner locks the month with no extra sign-off.' },
+  refund: { name: 'Refunds', one: 'refund', perm: 'record_payments', role: 'general_manager', area: 'The general manager', can: 'act as general manager', entity: 'refund', selfNo: 'You started this refund, so someone else has to approve it', none: 'Goes straight to the super admin to authorise, with no sign-off at the ground.' },
+  discount: { name: 'Discounts', one: 'discount', perm: 'manage_bookings', role: 'general_manager', area: 'The general manager', can: 'act as general manager', entity: 'money_ask', selfNo: 'You asked for this discount, so someone else has to approve it', none: 'Given as soon as it is asked for, with no sign-off.' },
+  waiver: { name: 'Fee waivers', one: 'fee waiver', perm: 'manage_academy', area: 'Anyone who runs the academy', can: 'run the academy', entity: 'money_ask', selfNo: 'You asked for this waiver, so someone else has to approve it', none: 'Given as soon as it is asked for, with no sign-off.' },
+  expense: { name: 'Expenses', one: 'expense', perm: 'manage_accounting', area: 'Anyone who can manage the books', can: 'manage the books', entity: 'money_ask', selfNo: 'You entered this expense, so someone else has to approve it', none: 'Recorded in the books as soon as it is entered, with no sign-off.' },
 };
 
 export type Who = { type: 'owner' } | { type: 'anyone' } | { type: 'role'; value: string } | { type: 'person'; value: string };
@@ -60,10 +65,14 @@ export interface FlowStep { id: string; label: string; who: Who; overPaise: numb
 export interface Flow { steps: FlowStep[]; notSelf: boolean; distinct: boolean; sendBack: 'start' | 'previous' }
 interface Snap extends FlowStep { signedBy: string | null; signedAt: number | null; note: string | null }
 
-/** Out of the box each kind behaves the way it always has: a bill needs one sign-off from someone else who manages the books,
- * and a pay run is locked by the owner with no extra sign-off. */
+/** Out of the box: a bill needs one sign-off from someone else who manages the books; a refund needs the owner or the general
+ * manager before the super admin authorises it; a discount or fee waiver of ₹1,000 or more needs the owner; an expense of
+ * ₹5,000 or more needs a second person; a pay run needs no extra sign-off. */
 export function defaultFlow(kind: ApprovalKind): Flow {
   if (kind === 'bill') return { steps: [{ id: 'approve', label: 'Approve the bill', who: { type: 'anyone' }, overPaise: null }], notSelf: true, distinct: false, sendBack: 'start' };
+  if (kind === 'discount' || kind === 'waiver') return { steps: [{ id: 'owner', label: 'Owner sign-off', who: { type: 'owner' }, overPaise: 1000_00 }], notSelf: false, distinct: false, sendBack: 'start' };
+  if (kind === 'refund') return { steps: [{ id: 'approve', label: 'Owner or GM approves', who: { type: 'anyone' }, overPaise: null }], notSelf: false, distinct: false, sendBack: 'start' };
+  if (kind === 'expense') return { steps: [{ id: 'second', label: 'Second person checks', who: { type: 'anyone' }, overPaise: 5000_00 }], notSelf: true, distinct: false, sendBack: 'start' };
   return { steps: [], notSelf: false, distinct: false, sendBack: 'start' };
 }
 
@@ -79,6 +88,13 @@ export function getFlow(ownerId: string, kind: ApprovalKind): { flow: Flow; cust
 const name = (id: string | null): string | null => (id ? one<{ name: string }>('SELECT name FROM users WHERE id = ?', id)?.name ?? null : null);
 const team = (ownerId: string) => many<UserRow>("SELECT * FROM users WHERE role = 'staff' AND owner_id = ? AND active = 1 ORDER BY name", ownerId);
 const perms = (u: UserRow): string[] => (u.role === 'staff' ? JSON.parse(u.permissions || '[]') as string[] : []);
+/** Whether a team member looks after this kind: its right, and for refunds and discounts every right of the General manager
+ * role too (the owner decided only the owner and the general manager deal with those). */
+const holds = (mine: string[], kind: ApprovalKind): boolean => {
+  const k = KIND_INFO[kind];
+  return mine.includes(k.perm) && (!k.role || (ROLE_PRESETS[k.role]?.permissions ?? []).every((x) => mine.includes(x)));
+};
+export const looksAfter = (u: UserRow, kind: ApprovalKind): boolean => u.role === 'owner' || u.role === 'super_admin' || holds(perms(u), kind);
 
 /** The signer in plain words, e.g. "The owner", "Someone with the Accountant role", "Priya Shah". */
 export function whoWords(kind: ApprovalKind, w: Who): string {
@@ -98,7 +114,7 @@ export function validateFlow(ownerId: string, kind: ApprovalKind, raw: unknown):
   if (!Array.isArray(list)) v.fail('steps', 'Send a list of steps');
   else if (list.length > 6) v.fail('steps', 'Six steps at most');
   else {
-    const people = new Set(team(ownerId).filter((u) => perms(u).includes(KIND_INFO[kind].perm)).map((u) => u.id));
+    const people = new Set(team(ownerId).filter((u) => holds(perms(u), kind)).map((u) => u.id));
     list.forEach((s, i) => {
       const f = `steps[${i}]`;
       if (!s || typeof s !== 'object') { v.fail(f, 'Each step is an object'); return; }
@@ -111,7 +127,7 @@ export function validateFlow(ownerId: string, kind: ApprovalKind, raw: unknown):
       else if (w.type === 'role' && typeof w.value === 'string' && w.value in ROLE_PRESETS) who = { type: 'role', value: w.value };
       else if (w.type === 'person' && typeof w.value === 'string') {
         if (people.has(w.value)) who = { type: 'person', value: w.value };
-        else v.fail(`${f}.who`, `That person is not on the team or cannot ${KIND_INFO[kind].perm === 'manage_accounting' ? 'manage the books' : 'do this'}`);
+        else v.fail(`${f}.who`, `That person is not on the team or cannot ${KIND_INFO[kind].can}`);
       } else v.fail(`${f}.who`, 'Pick who signs this step');
       let over: number | null = null;
       if (o.overPaise !== undefined && o.overPaise !== null) {
@@ -152,7 +168,7 @@ const rupees = (p: number) => '₹' + (p / 100).toLocaleString('en-IN', { maximu
 
 /** The whole flow as one or two sentences, for the builder's summary and the audit log. */
 export function describe(kind: ApprovalKind, f: Flow): string {
-  if (!f.steps.length) return kind === 'payroll' ? 'The owner locks the month with no extra sign-off.' : 'Approved as soon as it is sent, with no sign-off.';
+  if (!f.steps.length) return KIND_INFO[kind].none;
   const steps = f.steps.map((s, i) => `${i + 1}. ${s.label} (${whoWords(kind, s.who)}${s.overPaise ? `, only for ${rupees(s.overPaise)} or more` : ''})`).join('; ');
   const extra = [f.notSelf ? 'the person who sent it in cannot sign it' : '', f.distinct ? 'each step needs a different person' : ''].filter(Boolean).join(' and ');
   return `${steps}.${extra ? ` ${extra[0]!.toUpperCase()}${extra.slice(1)}.` : ''} Sent back goes ${f.sendBack === 'previous' ? 'back one step' : 'to the person who sent it in'}.`;
@@ -220,7 +236,7 @@ export function whyNot(r: ReqRow, u: UserRow | Actor & { permissions?: string })
   const row = (u as UserRow).permissions !== undefined ? u as UserRow : one<UserRow>('SELECT * FROM users WHERE id = ?', u.id);
   if (!row || row.role !== 'staff' || row.owner_id !== r.owner_id) return 'Only the team can sign this';
   const mine = perms(row);
-  if (!mine.includes(KIND_INFO[r.kind].perm)) return 'You do not have the right to approve this';
+  if (!holds(mine, r.kind)) return KIND_INFO[r.kind].role ? 'Only the owner or the general manager can approve this' : 'You do not have the right to approve this';
   if (rules.notSelf && r.submitted_by && r.submitted_by === row.id) return KIND_INFO[r.kind].selfNo;
   if (rules.distinct && steps.slice(0, r.at_step).some((s) => s.signedBy === row.id)) return 'You signed an earlier step, so someone else signs this one';
   const w = step.who;
@@ -244,8 +260,10 @@ export function signStep(r: ReqRow, actor: Actor, note: string | null): { done: 
   return { done, step: steps[i]!, index: i };
 }
 
-/** Send the item back. `toStart` is true when it goes back to the person who sent it in (the caller then reopens the item). */
-export function sendBack(r: ReqRow, actor: Actor, note: string): { toStart: boolean } {
+/** Send the item back. `toStart` is true when it goes back to the person who sent it in (the caller then reopens the item).
+ * With `keepWaiting` (refunds, which have nobody to fix and resend them) going back to the start clears every signature and
+ * the chain waits again from its first step. */
+export function sendBack(r: ReqRow, actor: Actor, note: string, opts: { keepWaiting?: boolean } = {}): { toStart: boolean } {
   const why = whyNot(r, actor);
   if (why) throw forbidden(why);
   const steps = JSON.parse(r.steps) as Snap[];
@@ -256,6 +274,12 @@ export function sendBack(r: ReqRow, actor: Actor, note: string): { toStart: bool
     steps[back] = { ...steps[back]!, signedBy: null, signedAt: null, note: null };
     run("UPDATE approval_requests SET steps = ?, at_step = ?, updated_at = ? WHERE id = ? AND status = 'pending'", JSON.stringify(steps), back, t, r.id);
     audit(actor, `${r.kind}.sendback`, KIND_INFO[r.kind].entity, r.entity_id, { from: r.at_step + 1, to: back + 1, label: steps[back]!.label, round: r.round, reason: note }, r.owner_id);
+    return { toStart: false };
+  }
+  if (opts.keepWaiting) {
+    const fresh = steps.map((x) => ({ ...x, signedBy: null, signedAt: null, note: null }));
+    run("UPDATE approval_requests SET steps = ?, at_step = 0, updated_at = ? WHERE id = ? AND status = 'pending'", JSON.stringify(fresh), t, r.id);
+    audit(actor, `${r.kind}.sendback`, KIND_INFO[r.kind].entity, r.entity_id, { from: r.at_step + 1, to: 1, label: fresh[0]!.label, round: r.round, reason: note }, r.owner_id);
     return { toStart: false };
   }
   run("UPDATE approval_requests SET status = 'sent_back', decided_at = ?, updated_at = ? WHERE id = ?", t, t, r.id);
@@ -284,17 +308,20 @@ export function requestOut(r: ReqRow, viewer: UserRow) {
       steps.length === 1 ? 'One sign-off.' : `${steps.length} sign-offs, in order.`,
       rules.notSelf ? 'The person who sent it in cannot sign it; the owner can sign any step.' : 'The owner can sign any step.',
       rules.distinct ? 'Each step needs a different person.' : '',
-      rules.sendBack === 'previous' ? 'Send back returns it one step.' : 'Send back returns it to the person who sent it in.',
+      rules.sendBack === 'previous' ? 'Send back returns it one step.' : r.kind === 'refund' ? 'Send back returns it to the first step; it keeps waiting.' : 'Send back returns it to the person who sent it in.',
     ].filter(Boolean).join(' '),
     canSign: why === null, whyNot: why, trail,
   };
 }
 
+/** Whether this person looks after any kind of approval (so may open the board). */
+export const looksAfterAny = (u: UserRow): boolean => isBoss(u) || APPROVAL_KINDS.some((k) => holds(perms(u), k));
+
 /** The chains waiting now, for the board: everything for the owner, and for a team member the ones in an area they look after. */
 export function listOpen(ownerId: string, viewer: UserRow) {
   const mine = perms(viewer);
   return many<ReqRow>("SELECT * FROM approval_requests WHERE owner_id = ? AND status = 'pending' ORDER BY submitted_at", ownerId)
-    .filter((r) => isBoss(viewer) || mine.includes(KIND_INFO[r.kind].perm))
+    .filter((r) => isBoss(viewer) || holds(mine, r.kind))
     .map((r) => requestOut(r, viewer));
 }
 

@@ -546,6 +546,8 @@ export interface Page<T> {
 export interface RefundRow {
   /** Set when the super admin has authorised it; no money moves before then. */
   approvedAt?: number | null;
+  /** True while the ground's own approval steps for this refund are still waiting; the super admin can authorise it only after. */
+  waitingOnGround?: boolean;
   /** How the customer originally paid. Decides how the money goes back: Razorpay through the gateway, anything else by hand. */
   paymentMethod?: string | null;
   id: string;

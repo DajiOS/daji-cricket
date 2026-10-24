@@ -12,10 +12,11 @@ export async function takeProofPhoto(): Promise<{ uri: string; shotAt: number } 
   return { uri: r.assets[0].uri, shotAt: Date.now() };
 }
 
-/** A profile picture may come from the gallery. It is cropped square and kept small. */
+/**
+ * A profile picture may come from the gallery. It is cropped square and kept small. The system photo picker needs no photo permission
+ * (Android 13+ and iOS 14+), which keeps the app clear of Google Play's photo permission declaration.
+ */
 export async function pickProfilePhoto(): Promise<{ uri: string } | null> {
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) throw new Error('Allow photo access in your phone settings to choose a picture.');
   const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
   if (r.canceled || !r.assets[0]) return null;
   return { uri: r.assets[0].uri };

@@ -45,3 +45,11 @@ test('on festival days the background film stays behind the page instead of join
   assert.ok(css.includes('html[data-fest] #view-home header.hero > :not(.fest-layer,.hero-loopbox){position:relative;z-index:1}'));
   assert.ok(!css.includes('header.hero > :not(.fest-layer){'), 'the old rule pulled the film into the page');
 });
+
+test('on laptop widths the "how it is built" list shows only the lit item’s line, so a wide festival face cannot push it out of its stage', () => {
+  assert.match(css, /@media\(min-width:861px\) and \(max-width:1280px\)\{\.an-list li\{grid-template-columns:minmax\(0,7\.5em\) minmax\(0,1fr\);gap:14px\}\.an-list li:not\(\.on\) span\{display:none\}/);
+});
+
+test('the summer bunting hangs in one row along the top instead of tiling over the headline', () => {
+  assert.match(css, /html\[data-decor="bunting"\] #view-home \.hero-decor,[^{]*\{background-repeat:repeat-x,no-repeat;/);
+});

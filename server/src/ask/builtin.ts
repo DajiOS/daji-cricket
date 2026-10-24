@@ -32,7 +32,7 @@ const RULES: [Intent, RegExp][] = [
   ['pnl', /profit (and|&|n|\/) ?loss|\bp ?(&|and|n|\/) ?l\b|\bpnl\b|income statement|how (much )?(did|do|have) (we|i) (make|made|earn|earned|do|done)|how are we doing|how.?s (the )?business|how is (the )?business|financial summary|financial position/],
   ['approvals_why', /why (cant|cannot|am i not|do i not|wont|isnt)\b.*\b(sign|approve|approval)|\b(cant|cannot|unable to|not able to) (i )?(sign|approve)\b|why.* (greyed|disabled|locked)/],
   ['approvals_report', /(how many|report|summary|history|stats|statistics)\b.*\b(approvals?|sign.?offs?|signed off|sent back)|\b(approvals?|sign.?offs?) (report|summary|history)\b/],
-  ['approvals_waiting', /\b(whom|who)\b.*\b(waiting|holding|pending)|(waiting|pending|stuck|open|outstanding) (on|for)? ?(whom|who|which)\b|\bapprovals?\b|sign.?offs?|waiting (for|on) (my )?(sign|approval)|bills? (waiting|pending)|pay ?roll (waiting|pending)/],
+  ['approvals_waiting', /\b(whom|who)\b.*\b(waiting|holding|pending)|(waiting|pending|stuck|open|outstanding) (on|for)? ?(whom|who|which)\b|\bapprovals?\b|sign.?offs?|waiting (for|on) (my )?(sign|approval)|bills? (waiting|pending)|pay ?roll (waiting|pending)|(discounts?|waivers?|expenses?|refunds?) (waiting|pending) (for |on )?(sign|approv)/],
   ['awaiting', /awaiting|to verify|verification|waiting for (me|us|approval|verification)|payments? (to|waiting|pending) (verify|check|approv)|upi (proof|screenshot)s?/],
   ['outstanding', /outstanding|\bowe[ds]?\b|\bdues?\b|unpaid|pending (payment|balance|amount|dues)|to collect|receivables?|balance (due|pending|remaining|left|owed)|yet to (pay|collect)|hasn.?t paid|haven.?t paid|not (yet )?paid|who (still )?owes/],
   ['refunds', /refund/],

@@ -14,6 +14,7 @@ import { checkCashReceipt } from './taxrules.ts';
 import type { Config } from './config.ts';
 import { getGateway, verifyWebhookSignature, webhookSecretFor } from './gateway.ts';
 import * as credits from './credits.ts';
+import { pendingFor, sendBack, signStep, startRequest, withdrawRequest, type ReqRow } from './approvals.ts';
 
 export interface PaymentRow {
   id: string; booking_id: string; customer_id: string; owner_id: string; method: PayMethod;
@@ -371,8 +372,40 @@ export function refundPayment(p: PaymentRow, amountPaise: number, reason: string
     run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', total, total >= p.amount_paise ? 'refunded' : 'partially_refunded', now(), p.id);
     logEvent(p.id, actor.id, 'refund.requested', { refundId: id, amountPaise, mode, reason });
     audit(actor, 'payment.refund', 'payment', p.id, { refundId: id, amountPaise, mode, reason }, p.owner_id);
+    // The owner's approval rules for refunds come before the super admin's authorisation. A refund the owner (or the super
+    // admin) starts needs no sign-off at the ground.
+    if (actor.role === 'owner' || actor.role === 'super_admin') return;
+    const ref = one<{ ref: string; name: string | null }>('SELECT b.ref, u.name FROM bookings b LEFT JOIN users u ON u.id = b.customer_id WHERE b.id = ?', p.booking_id);
+    startRequest(p.owner_id, 'refund', id, { title: `Refund · ${ref?.name ?? 'customer'}${ref ? ' · ' + ref.ref : ''}`, amountPaise, submittedBy: actor.id });
   });
   return id;
+}
+
+/** A team member who records payments asks for money back on a payment (part or all of what is left). It waits for the
+ * owner or the general manager under the refund rules, then for the super admin, like every refund. */
+export function requestRefund(staff: UserRow, paymentId: string, input: { amountPaise: number; reason: string }): RefundRow {
+  const p = paymentOr404(paymentId);
+  accessBooking(staff, p.booking_id);
+  requirePermission(staff, 'record_payments');
+  if (p.method === 'credit') throw new HttpError(409, 'CREDIT_PAYMENT', 'This was paid with account credit. Adjust the customer\'s credit instead.');
+  if (p.status !== 'captured' && p.status !== 'partially_refunded') throw new HttpError(409, 'BAD_STATE', 'Only money that was received can be refunded');
+  const id = refundPayment(p, input.amountPaise, `requested by the team: ${input.reason}`.slice(0, 200), { id: staff.id, role: staff.role });
+  return toRefund(one<any>('SELECT * FROM refunds WHERE id = ?', id));
+}
+
+/** Sign the step of a refund's approval chain that is waiting. The last step clears it for the super admin to authorise. */
+export function signRefund(ownerId: string, actor: Actor, req: ReqRow, note: string | null): void {
+  tx(() => {
+    const s = signStep(req, actor, note);
+    if (s.done) audit(actor, 'refund.cleared', 'refund', req.entity_id, { step: s.index + 1, label: s.step.label, amountPaise: req.amount_paise, ...(note ? { note } : {}) }, ownerId);
+  });
+}
+
+/** Send a refund back: one step back, or back to the first step. Either way it keeps waiting and is never declined here;
+ * only the super admin declines a refund. */
+export function sendBackRefund(ownerId: string, actor: Actor, req: ReqRow, note: string): void {
+  void ownerId;
+  tx(() => { sendBack(req, actor, note, { keepWaiting: true }); });
 }
 
 function finishRefund(refundId: string, actor: Actor, rpRefundId: string | null, reference: string | null): void {
@@ -424,7 +457,7 @@ export function completeManualRefund(staff: UserRow, refundId: string, reference
 
 export const toRefund = (r: any): RefundRow => ({
   id: r.id, paymentId: r.payment_id, bookingId: r.booking_id, amountPaise: r.amount_paise, status: r.status, mode: r.mode, reference: r.reference,
-  reason: r.reason, createdAt: r.created_at, completedAt: r.completed_at, approvedAt: r.approved_at ?? null,
+  reason: r.reason, createdAt: r.created_at, completedAt: r.completed_at, approvedAt: r.approved_at ?? null, waitingOnGround: !!pendingFor(r.owner_id, 'refund', r.id),
   paymentMethod: one<{ method: string }>('SELECT method FROM payments WHERE id = ?', r.payment_id)?.method ?? null,
 });
 
@@ -435,6 +468,7 @@ export function approveRefund(admin: UserRow, refundId: string): RefundRow {
   if (!r) throw notFound('Refund not found');
   if (r.approved_at) throw new HttpError(409, 'BAD_STATE', 'This refund is already authorised');
   if (r.status !== 'pending') throw new HttpError(409, 'BAD_STATE', `This refund is ${r.status}`);
+  if (pendingFor(r.owner_id, 'refund', refundId)) throw new HttpError(409, 'WAITING_ON_GROUND', "The ground's own approval steps for this refund are not finished yet");
   run('UPDATE refunds SET approved_at = ?, approved_by = ? WHERE id = ?', now(), admin.id, refundId);
   logEvent(one<{ p: string }>('SELECT payment_id p FROM refunds WHERE id = ?', refundId)!.p, admin.id, 'refund.approved', { refundId });
   audit({ id: admin.id, role: admin.role }, 'refund.approve', 'refund', refundId, { amountPaise: r.amount_paise }, r.owner_id);
@@ -444,19 +478,26 @@ export function approveRefund(admin: UserRow, refundId: string): RefundRow {
 /** The super admin declines: nothing is paid, and the payment and the booking go back to showing the money as not refunded (the ground keeps it). */
 export function declineRefund(admin: UserRow, refundId: string, reason: string): RefundRow {
   if (admin.role !== 'super_admin') throw new HttpError(403, 'FORBIDDEN', 'Only the super admin can decline a refund');
-  const r = one<{ id: string; status: string; approved_at: number | null; owner_id: string; amount_paise: number; payment_id: string; booking_id: string; on_booking: number }>('SELECT id, status, approved_at, owner_id, amount_paise, payment_id, booking_id, on_booking FROM refunds WHERE id = ?', refundId);
+  const r = one<{ owner_id: string }>('SELECT owner_id FROM refunds WHERE id = ?', refundId);
   if (!r) throw notFound('Refund not found');
-  if (r.approved_at || r.status !== 'pending') throw new HttpError(409, 'BAD_STATE', 'Only a refund waiting for authorisation can be declined');
   tx(() => {
-    run("UPDATE refunds SET status = 'failed', reason = COALESCE(reason, '') || ' [declined: ' || ? || ']', completed_at = ?, completed_by = ? WHERE id = ?", reason.slice(0, 200), now(), admin.id, refundId);
-    const p = one<{ amount_paise: number; refunded_paise: number }>('SELECT amount_paise, refunded_paise FROM payments WHERE id = ?', r.payment_id)!;
-    const left = Math.max(p.refunded_paise - r.amount_paise, 0);
-    run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', left, left === 0 ? 'captured' : left >= p.amount_paise ? 'refunded' : 'partially_refunded', now(), r.payment_id);
-    if (r.on_booking) run('UPDATE bookings SET refund_paise = MAX(refund_paise - ?, 0), updated_at = ? WHERE id = ?', r.amount_paise, now(), r.booking_id);
-    logEvent(r.payment_id, admin.id, 'refund.declined', { refundId, reason });
-    audit({ id: admin.id, role: admin.role }, 'refund.decline', 'refund', refundId, { reason }, r.owner_id);
+    undoRefund(refundId, { id: admin.id, role: admin.role }, reason, r.owner_id, 'admin');
+    withdrawRequest(r.owner_id, 'refund', refundId);
   });
   return toRefund(one<any>('SELECT * FROM refunds WHERE id = ?', refundId));
+}
+
+function undoRefund(refundId: string, actor: Actor, reason: string, ownerId: string, by: 'admin' | 'ground'): void {
+  const r = one<{ id: string; status: string; approved_at: number | null; owner_id: string; amount_paise: number; payment_id: string; booking_id: string; on_booking: number }>('SELECT id, status, approved_at, owner_id, amount_paise, payment_id, booking_id, on_booking FROM refunds WHERE id = ? AND owner_id = ?', refundId, ownerId);
+  if (!r) throw notFound('Refund not found');
+  if (r.approved_at || r.status !== 'pending') throw new HttpError(409, 'BAD_STATE', 'Only a refund waiting for authorisation can be declined');
+  run("UPDATE refunds SET status = 'failed', reason = COALESCE(reason, '') || ' [declined: ' || ? || ']', completed_at = ?, completed_by = ? WHERE id = ?", reason.slice(0, 200), now(), actor.id, refundId);
+  const p = one<{ amount_paise: number; refunded_paise: number }>('SELECT amount_paise, refunded_paise FROM payments WHERE id = ?', r.payment_id)!;
+  const left = Math.max(p.refunded_paise - r.amount_paise, 0);
+  run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', left, left === 0 ? 'captured' : left >= p.amount_paise ? 'refunded' : 'partially_refunded', now(), r.payment_id);
+  if (r.on_booking) run('UPDATE bookings SET refund_paise = MAX(refund_paise - ?, 0), updated_at = ? WHERE id = ?', r.amount_paise, now(), r.booking_id);
+  logEvent(r.payment_id, actor.id, 'refund.declined', { refundId, reason, ...(by === 'ground' ? { by } : {}) });
+  audit(actor, by === 'ground' ? 'refund.reject' : 'refund.decline', 'refund', refundId, { reason }, r.owner_id);
 }
 
 export function listRefunds(ownerId: string | null, status?: string): RefundRow[] {

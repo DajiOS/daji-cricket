@@ -17,6 +17,8 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
   const [pay, setPay] = useState(false);
   const [inv, setInv] = useState<Invoice | null>(null);
   const [cancel, setCancel] = useState(false);
+  const [disc, setDisc] = useState(false);
+  const [refundOf, setRefundOf] = useState<Pay | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const changed = () => { reload(); onChanged(); };
   const act = async (path: string, body: unknown, done: string) => {
@@ -41,6 +43,7 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
         {b.status === 'confirmed' && b.approval === 'pending' && <button className="btn primary" onClick={() => act('approve', {}, 'Approved. The customer has been told.')}>Approve</button>}
         {(b.status === 'confirmed' || b.status === 'completed') && b.paidPaise > 0 && <button className="btn" onClick={async () => { try { setInv(await api<Invoice>(`/api/bookings/${encodeURIComponent(b.id)}/invoice`)); } catch (e) { toast(errText(e)); } }}>Invoice</button>}
         {canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}
+        {can(me, 'manage_bookings') && (b.status === 'confirmed' || b.status === 'completed') && b.balancePaise > 0 && <button className="btn" onClick={() => setDisc(true)}>Give a discount</button>}
         {b.status === 'confirmed' && started && <Confirm label="Mark no-show" ask="No refund, no credit?" onYes={() => act('no-show', {}, 'Marked as a no-show.')} />}
         {cancellable(b) && <button className="btn danger" onClick={() => setCancel(true)}>Cancel booking</button>}
         <button className="btn ghost" onClick={onClose}>Close</button>
@@ -82,7 +85,8 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
             { head: 'Method', cell: (p) => <>{METHOD_LABEL[p.method] || p.method}{p.reference && <div className="small muted">{p.reference}</div>}</> },
             { head: 'Status', cell: (p) => <><Status s={p.status} map={PAY_STATUS} />{p.rejectReason && <div className="small muted">{p.rejectReason}</div>}</> },
             { head: 'Amount', num: true, cell: (p) => <>{inr(p.amountPaise)}{p.refundedPaise > 0 && <div className="small muted">{inr(p.refundedPaise)} back</div>}</> },
-            { head: '', cell: (p) => (p.status === 'submitted' && p.method === 'upi' && can(me, 'verify_payments') ? <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}><button className="btn sm primary" onClick={() => verify(p, true)}>Verify</button><button className="btn sm" onClick={() => verify(p, false)}>Reject</button></span> : null) },
+            { head: '', cell: (p) => (p.status === 'submitted' && p.method === 'upi' && can(me, 'verify_payments') ? <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}><button className="btn sm primary" onClick={() => verify(p, true)}>Verify</button><button className="btn sm" onClick={() => verify(p, false)}>Reject</button></span>
+              : (p.status === 'captured' || p.status === 'partially_refunded') && p.method !== 'credit' && p.amountPaise > p.refundedPaise && can(me, 'record_payments') ? <button className="btn sm ghost" onClick={() => setRefundOf(p)}>Refund</button> : null) },
           ]} /></div>
         </div>
 
@@ -98,6 +102,8 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
     </Modal>
     {inv && <InvoiceView i={inv} onClose={() => setInv(null)} />}
     {pay && <RecordPayment b={b} onClose={() => setPay(false)} onDone={() => { setPay(false); toast('Payment recorded.'); changed(); }} />}
+    {refundOf && <RefundRequest p={refundOf} onClose={() => setRefundOf(null)} onDone={() => { setRefundOf(null); toast('Refund requested. It waits for the owner or the general manager.'); changed(); }} />}
+    {disc && <DiscountDialog b={b} onClose={() => setDisc(false)} onDone={(waiting) => { setDisc(false); toast(waiting ? 'Sent for sign-off. The discount is given once it is approved.' : 'Discount given.'); changed(); }} />}
     {cancel && <CancelDialog b={b} onClose={() => setCancel(false)} onDone={() => { setCancel(false); toast('Cancelled. The customer has been told.'); changed(); }} />}
     </>
   );
@@ -118,6 +124,61 @@ function InvoiceView({ i, onClose }: { i: Invoice; onClose: () => void }) {
           <tr><td className="strong">Total</td><td className="num right strong">{inr(i.totalPaise)}</td></tr>
         </tbody></table>
         <div className="small">{i.reverseChargeLine}</div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Ask for money back on one payment. The owner's refund rules decide who approves it, then the super admin authorises it. */
+function RefundRequest({ p, onClose, onDone }: { p: Pay; onClose: () => void; onDone: () => void }) {
+  const left = p.amountPaise - p.refundedPaise;
+  const [amount, setAmount] = useState(rupees(left).replace(/\.00$/, ''));
+  const [reason, setReason] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    const paise = toPaise(amount);
+    if (!paise || paise <= 0) return setErr('Enter the refund in rupees.');
+    if (reason.trim().length < 3) return setErr('Say why, so whoever approves it knows.');
+    setBusy(true); setErr(null);
+    try { await post(`/api/staff/payments/${encodeURIComponent(p.id)}/refund`, { amountPaise: paise, reason: reason.trim() }); onDone(); }
+    catch (e) { setErr(errText(e)); setBusy(false); }
+  };
+  return (
+    <Modal title="Request a refund" onClose={onClose}
+      foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={submit}>Request refund</button></>}>
+      <div className="form-grid">
+        <Field label="Refund (₹)" hint={`Up to ${inr(left)} on this payment`}><input className="inp" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+        <Field label="Why"><input className="inp" maxLength={150} placeholder="For example: rain stopped play after an hour" value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+        <div className="full small muted">Nothing is paid back until the owner or the general manager approves it.</div>
+        <div className="full"><ErrorBox msg={err} /></div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Ask for money off what the booking still owes. The owner's discount rules decide whether it is given now or waits for sign-off. */
+function DiscountDialog({ b, onClose, onDone }: { b: Booking; onClose: () => void; onDone: (waiting: boolean) => void }) {
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    const paise = toPaise(amount);
+    if (!paise || paise <= 0) return setErr('Enter the discount in rupees.');
+    if (reason.trim().length < 3) return setErr('Say why, so whoever signs it knows.');
+    setBusy(true); setErr(null);
+    try { const r = await post<{ waiting: boolean }>(`/api/staff/bookings/${encodeURIComponent(b.id)}/discount`, { amountPaise: paise, reason: reason.trim() }); onDone(r.waiting); }
+    catch (e) { setErr(errText(e)); setBusy(false); }
+  };
+  return (
+    <Modal title="Give a discount" onClose={onClose}
+      foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={submit}>Give discount</button></>}>
+      <div className="form-grid">
+        <Field label="Discount (₹)" hint={`Up to the balance of ${inr(b.balancePaise)}`}><input className="inp" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+        <Field label="Why"><input className="inp" maxLength={300} placeholder="For example: floodlight failed for 20 minutes" value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+        <div className="full small muted">Larger discounts may need a sign-off first, depending on your approval rules.</div>
+        <div className="full"><ErrorBox msg={err} /></div>
       </div>
     </Modal>
   );

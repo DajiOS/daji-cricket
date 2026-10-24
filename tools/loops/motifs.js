@@ -122,7 +122,7 @@
     },
     camp: (c, t, W, H) => { // bunting swaying on two strings and a ball looping over the nets
       const cols = ['#ff8a45', '#5aa9f0', '#ffd23c', '#50d39a', '#ff5c93'];
-      for (const [y0, ph] of [[H * 0.16, 0], [H * 0.34, 0.5]]) { c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 1.2; c.beginPath(); for (let x = 0; x <= W; x += 12) { const y = y0 + Math.sin(TAU * (x / W + t + ph)) * 10 + 20 * Math.sin(Math.PI * x / W); if (x === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke();
+      for (const [y0, ph] of [[H * 0.04, 0]]) { c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 1.2; c.beginPath(); for (let x = 0; x <= W; x += 12) { const y = y0 + Math.sin(TAU * (x / W + t + ph)) * 10 + 20 * Math.sin(Math.PI * x / W); if (x === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke();
         for (let i = 0; i < 12; i++) { const x = (i + 0.5) * W / 12, y = y0 + Math.sin(TAU * (x / W + t + ph)) * 10 + 20 * Math.sin(Math.PI * x / W), sw = Math.sin(TAU * (t * 2 + i * 0.3)) * 0.15; c.save(); c.translate(x, y); c.rotate(sw); c.fillStyle = rgba(cols[i % 5], 0.75); c.beginPath(); c.moveTo(-14, 0); c.lineTo(14, 0); c.lineTo(0, 30); c.closePath(); c.fill(); c.restore(); } }
       const u = wrap(t * 2, 1), bx = -40 + u * (W + 80), by = H * 0.85 - Math.sin(Math.PI * u) * H * 0.4; glow(c, bx, by, 14, '#ffffff', 0.9); glow(c, bx, by, 40, '#ff8a45', 0.25);
     },
