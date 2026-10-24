@@ -54,6 +54,8 @@ export interface Config {
   /** Email through Gmail SMTP with an App Password. The address defaults to the ground's own Gmail; GMAIL_APP_PASSWORD switches sending on. */
   email: { user: string; appPassword: string; fromName: string; host: string; port: number; tls: boolean };
   ai: { apiKey: string; model: string; apiUrl: string; mode: 'builtin' | 'auto' | 'claude'; limitPerHour: number; timeoutMs: number };
+  /** Sign in with Microsoft in the phone apps (src/microsoft.ts). Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET from the Entra app registration to switch it on. */
+  microsoft: { clientId: string; clientSecret: string; tenant: string; loginUrl: string };
 }
 
 export const DEV_SECRET = 'dev-only-secret-change-me-dev-only-secret';
@@ -200,6 +202,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       mode: aiMode(env.AI_MODE),
       limitPerHour: Math.max(1, Number(env.AI_LIMIT_PER_HOUR ?? 30) || 30),
       timeoutMs: Math.max(1000, Number(env.AI_TIMEOUT_MS ?? 25000) || 25000),
+    },
+    microsoft: {
+      clientId: env.MICROSOFT_CLIENT_ID || '',
+      clientSecret: env.MICROSOFT_CLIENT_SECRET || '',
+      tenant: env.MICROSOFT_TENANT || 'common',
+      loginUrl: (env.MICROSOFT_LOGIN_URL || 'https://login.microsoftonline.com').replace(/\/+$/, ''),
     },
   };
 }

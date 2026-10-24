@@ -435,6 +435,8 @@ export interface PublicConfig {
   razorpayEnabled: boolean;
   /** Whether sign-in codes by WhatsApp or text message can be sent. When false, sign-up and sign-in use email and password. */
   codesEnabled?: boolean;
+  /** Whether the phone apps can offer Sign in with Microsoft (the server has a Microsoft Entra app registration). */
+  microsoftSignIn?: boolean;
   razorpayDemo: boolean;
   razorpayKeyId: string | null;
   holdMinutesOnline: number;
