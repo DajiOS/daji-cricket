@@ -32,6 +32,7 @@ import { ThemeButton } from './src/ThemeButton';
 import { registerForPush, unregisterPush, onNotificationTap } from './src/push';
 import { C, inr, mode, setMode, type Mode } from './src/theme';
 import { ADMIN_APP } from './src/variant';
+import { useWake } from './src/fresh';
 
 // One app for everyone. What each person sees depends on who signed in:
 //   customer     Book, Mine (bookings and academy), Ask AI, Profile
@@ -53,6 +54,7 @@ function AppInner({ theme }: { theme: Mode }) {
   const [owners, setOwners] = useState<User[]>([]);
   const [viewOwner, setView] = useState<string | null>(null);
   const [signin, setSignin] = useState(false); // customer app: the sign-in screen over the booking page
+  const wake = useWake(!!hold); // back after a while: the open screen loads again (never in the middle of paying)
 
   useEffect(() => {
     (async () => {
@@ -184,7 +186,7 @@ function AppInner({ theme }: { theme: Mode }) {
   return (
     <View style={s.screen}>
       <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
-      <View style={{ flex: 1 }}>{body}</View>
+      <View key={wake} style={{ flex: 1 }}>{body}</View>
       {!hold && (
         <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: 18 }}>
           {tabs.map(([id, name]) => (
