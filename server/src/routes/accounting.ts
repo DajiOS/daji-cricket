@@ -2,6 +2,7 @@ import { deleteCoa, listCoa, patchCoa } from '../accounting/coa.ts';
 import { feedLog, feedStatus, linkAccount, syncAccount } from '../accounting/feed.ts';
 import { aaWebhookAuthorised, createConsent, handleAaWebhook, listConsents, mapAccount, revokeLocal, syncConsent, viewAaSettings } from '../accounting/aa.ts';
 import { autoLinkAccounts, disconnectProviderAccount, fastLinkSession, listProviderAccounts, ownersInWebhook, refreshProviderAccount, webhookAuthorised } from '../accounting/yodlee.ts';
+import { askExpense, expenseNeedsSignoff } from '../money-asks.ts';
 import { Router, ok, created } from '../http.ts';
 import type { Ctx, Reply } from '../http.ts';
 import { U, page, ownerOrFail } from './helpers.ts';
@@ -187,7 +188,13 @@ export function accountingRoutes(r: Router): void {
     };
     return download(c, owner, f, `bank-transactions-${istDate(now())}`, tableSheets(business(owner), t));
   }, A);
-  r.post('/api/accounting/transactions', (c) => { canWrite(c); return created(addTransaction(ownerOrFail(c, 'add a transaction'), actor(c), c.json())); }, A);
+  r.post('/api/accounting/transactions', (c) => {
+    canWrite(c);
+    const owner = ownerOrFail(c, 'add a transaction'), body = c.json();
+    // Money going out waits for sign-off when the owner's expense rules have a step for this amount; otherwise it is recorded as always.
+    if (expenseNeedsSignoff(owner, actor(c), body)) return ok(askExpense(owner, actor(c), body), 202);
+    return created(addTransaction(owner, actor(c), body));
+  }, A);
   r.patch('/api/accounting/transactions/:id', (c) => { canWrite(c); return ok(updateTransaction(ownerOrFail(c, 'change a transaction'), c.params.id!, actor(c), c.json())); }, A);
   r.del('/api/accounting/transactions/:id', (c) => { canWrite(c); deleteTransaction(ownerOrFail(c, 'remove a transaction'), c.params.id!, actor(c)); return ok({ deleted: true }); }, A);
 

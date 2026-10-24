@@ -251,7 +251,8 @@ function cashRules(ownerId: string, e: { kind: string; date: string; amount: num
   return why ? `Cash exception (40A(3)): ${why}`.slice(0, 300) : null;
 }
 
-export function addTransaction(ownerId: string, actor: Actor, body: unknown): TxnOut {
+/** Check a hand-entered transaction without saving it (an expense waiting for sign-off is checked when it is sent in). */
+export function checkTransaction(ownerId: string, body: unknown) {
   const v = new Validator(body);
   const accountId = v.str('accountId', { required: true, max: 60 });
   const date = v.date('date', true);
@@ -260,7 +261,7 @@ export function addTransaction(ownerId: string, actor: Actor, body: unknown): Tx
   const counterparty = v.str('counterparty', { max: 100 });
   const reference = v.str('reference', { max: 60 });
   const catId = v.str('categoryId', { max: 60 });
-  let note = v.str('note', { max: 300 });
+  const note = v.str('note', { max: 300 });
   const cashReason = v.str('cashReason', { max: 300 });
   if (amount === 0) v.fail('amountPaise', 'Cannot be zero');
   if (date && date > addDays(today(), 1)) v.fail('date', 'Cannot be in the future');
@@ -269,6 +270,12 @@ export function addTransaction(ownerId: string, actor: Actor, body: unknown): Tx
   assertAccountActive(accountId!);
   if (catId) categoryOr400(ownerId, catId);
   assertOpen(ownerId, date!);
+  return { acct, accountId: accountId!, date: date!, amount: amount!, description: description!, counterparty, reference, catId, note, cashReason };
+}
+
+export function addTransaction(ownerId: string, actor: Actor, body: unknown): TxnOut {
+  const { acct, accountId, date, amount, description, counterparty, reference, catId, cashReason, ...c } = checkTransaction(ownerId, body);
+  let note = c.note;
   const cashNote = cashRules(ownerId, { kind: acct.kind, date: date!, amount: amount!, catId: catId ?? null, who: (counterparty ?? description!), reason: cashReason });
   if (cashNote) note = cashNote;
   const id = newId('txn'), t = now();
