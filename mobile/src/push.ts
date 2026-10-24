@@ -5,7 +5,7 @@ import { api } from './api';
 
 // Show alerts while the app is open too, so a waiting approval is never missed.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
+  handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
 });
 
 let registered: string | null = null;

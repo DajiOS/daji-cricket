@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, loadToken, serverSignOut, setToken, setViewOwner } from './src/api';
 import type { Booking, HoldResponse, User } from './src/types';
 import { AuthScreen } from './src/AuthScreen';
@@ -44,6 +45,7 @@ type Tab = 'book' | 'me' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'accounts'
 type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings';
 
 function AppInner({ theme }: { theme: Mode }) {
+  const insets = useSafeAreaInsets(); // Android draws behind the system bars now, so the tab bar clears the gesture or button bar itself
   void theme; // a new value makes the whole app draw again with the new colours
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [tab, setTab] = useState<Tab>('book');
@@ -84,7 +86,7 @@ function AppInner({ theme }: { theme: Mode }) {
         <View style={{ flex: 1, display: signin ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
         {signin && <AuthScreen onUser={(u) => { setSignin(false); setUser(u); }} onBack={() => setSignin(false)} note="Sign in to hold your slot. Your day and time stay as you left them." />}
         {!signin && (
-          <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: 18 }}>
+          <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: Math.max(18, insets.bottom) }}>
             {([['book', 'Book'], ['signin', 'Sign in']] as [string, string][]).map(([id, name]) => (
               <Pressable key={id} onPress={() => (id === 'signin' ? ask() : setTab(id as Tab))} style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}>
                 <Text style={{ color: tab === id ? C.gold : C.muted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>{name}</Text>
@@ -186,7 +188,7 @@ function AppInner({ theme }: { theme: Mode }) {
       <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
       <View style={{ flex: 1 }}>{body}</View>
       {!hold && (
-        <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: 18 }}>
+        <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: Math.max(18, insets.bottom) }}>
           {tabs.map(([id, name]) => (
             <Pressable key={id} onPress={() => { setDone(null); setMore(null); setTab(id); }} style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}>
               <Text style={{ color: tab === id ? C.gold : C.muted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>{name}</Text>
@@ -208,10 +210,12 @@ export default function App() {
   const flip = () => { const next: Mode = m === 'dark' ? 'light' : 'dark'; setMode(next); refreshStyles(); setM(next); SecureStore.setItemAsync(THEME_KEY, next).catch(() => {}); };
   if (!ready) return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <AppInner theme={m} />
-      {!intro && <ThemeButton onPress={flip} />}
-      {intro && <Intro onDone={() => setIntro(false)} />}
-    </View>
+    <SafeAreaProvider>
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <AppInner theme={m} />
+        {!intro && <ThemeButton onPress={flip} />}
+        {intro && <Intro onDone={() => setIntro(false)} />}
+      </View>
+    </SafeAreaProvider>
   );
 }

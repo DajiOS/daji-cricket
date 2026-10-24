@@ -2,7 +2,7 @@
   "expo": {
     "name": "Daji Cricket Ground",
     "slug": "daji-cricket-ground",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0a0c0b",
@@ -56,7 +56,8 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.25"
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36
           }
         }
       ]
