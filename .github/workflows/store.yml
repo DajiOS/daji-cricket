@@ -16,7 +16,7 @@ on:
         options: [all, ios, android]
         default: all
       build_id:
-        description: Send an already finished build to the store instead of building (its id from expo.dev; set Which app to customer or admin)
+        description: Send an already finished build to the store instead of building (its id from expo.dev; set Which app to customer or admin, and Which store to ios or android)
         type: string
         default: ''
 jobs:
@@ -41,7 +41,7 @@ jobs:
         if: inputs.build_id != ''
         env:
           APP_VARIANT: ${{ inputs.app }}
-        run: eas submit --id ${{ inputs.build_id }} --profile production-${{ inputs.app }} --non-interactive --no-wait
+        run: eas submit --platform ${{ inputs.platform }} --id ${{ inputs.build_id }} --profile production-${{ inputs.app }} --non-interactive --no-wait
       - name: Customer app
         if: inputs.build_id == '' && inputs.app != 'admin'
         continue-on-error: true # a failed store upload must not stop the admin build
