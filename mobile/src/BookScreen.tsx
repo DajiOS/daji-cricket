@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { AppConfig, Availability, Ball, Ground, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
-import { Btn, Chip, Field, Loading, s } from './ui';
+import { Btn, Chip, Field, Loading, MonthBar, s } from './ui';
 import { C, inr, MON } from './theme';
 
 const istToday = (): string => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
@@ -11,6 +11,35 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const BALLS: Record<Ball, string> = { leather: 'Leather ball', tennis: 'Tennis ball', practice: 'Practice nets' };
 const REPEATS: Record<RepeatFrequency, { word: string; def: number; max: number }> = { daily: { word: 'every day', def: 5, max: 60 }, weekly: { word: 'every week', def: 4, max: 52 }, monthly: { word: 'every month', def: 3, max: 12 }, yearly: { word: 'every year', def: 2, max: 3 } };
 const hm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
+
+/** A month at a time. Only the days in `open` can be picked. */
+function DayPicker({ open, value, onPick }: { open: string[]; value: string; onPick: (d: string) => void }) {
+  const [month, setMonth] = useState(value.slice(0, 7));
+  useEffect(() => { setMonth(value.slice(0, 7)); }, [value]);
+  const ok = new Set(open);
+  const firstDow = new Date(month + '-01T00:00:00Z').getUTCDay();
+  const inMonth = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate();
+  const cells: (string | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: inMonth }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
+  return (
+    <View style={{ marginVertical: 8 }}>
+      <MonthBar month={month} onChange={setMonth} max={open[open.length - 1]?.slice(0, 7)} />
+      <View style={{ flexDirection: 'row' }}>{DOW.map((d) => <Text key={d} style={[s.muted, { width: '14.28%', textAlign: 'center', fontSize: 11 }]}>{d[0]}</Text>)}</View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {cells.map((d, i) => {
+          if (!d) return <View key={'x' + i} style={{ width: '14.28%', height: 42 }} />;
+          const on = d === value, can = ok.has(d);
+          return (
+            <Pressable key={d} disabled={!can} onPress={() => onPick(d)} accessibilityRole="button" accessibilityLabel={d} style={{ width: '14.28%', height: 42, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.strong : 'transparent' }}>
+                <Text style={{ color: on ? C.onStrong : can ? C.text : C.line, fontWeight: on ? '700' : '400' }}>{Number(d.slice(8))}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
 
 export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse) => void; onNeedSignIn?: () => void }) {
   const [cfg, setCfg] = useState<AppConfig | null>(null);
@@ -25,16 +54,17 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const [promo, setPromo] = useState('');
   const [rep, setRep] = useState<{ f: RepeatFrequency; n: number } | null>(null);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [cal, setCal] = useState(false); // the month calendar for dates further ahead
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [c, g] = await Promise.all([api<AppConfig>('/api/config'), api<{ items: Ground[] }>('/api/grounds')]);
-        setCfg(c); setDate(c.bookingsOpenFrom && c.bookingsOpenFrom > istToday() ? c.bookingsOpenFrom : istToday()); setGrounds(g.items); if (g.items[0]) setGid(g.items[0].id);
-        try { const d = await api<{ creditPaise: number }>('/api/my/dashboard'); setCredit(d.creditPaise); } catch { /* credit is a convenience */ }
-      } catch (e: any) { setErr(e.message); }
-    })();
+  const loadGrounds = useCallback(async () => {
+    setErr('');
+    try {
+      const [c, g] = await Promise.all([api<AppConfig>('/api/config'), api<{ items: Ground[] }>('/api/grounds')]);
+      setCfg(c); setDate(c.bookingsOpenFrom && c.bookingsOpenFrom > istToday() ? c.bookingsOpenFrom : istToday()); setGrounds(g.items); if (g.items[0]) setGid(g.items[0].id);
+      try { const d = await api<{ creditPaise: number }>('/api/my/dashboard'); setCredit(d.creditPaise); } catch { /* credit is a convenience */ }
+    } catch (e: any) { setErr(e.message); }
   }, []);
+  useEffect(() => { void loadGrounds(); }, [loadGrounds]);
 
   const ground = grounds.find((g) => g.id === gid);
   const hasRates = !!ground?.rates?.length;
@@ -101,11 +131,17 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
     } catch (e: any) { if (e.status === 401 && onNeedSignIn) { onNeedSignIn(); return; } setErr(e.message); void loadSlots(); } finally { setBusy(false); }
   };
 
-  if (!cfg && !err) return <Loading />;
+  if (!cfg) return (
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>
+      <Text style={s.eyebrow}>Reserve</Text>
+      <Text style={s.h1}>Book the ground</Text>
+      {err ? (<><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={() => void loadGrounds()} style={{ marginTop: 16 }} /></>) : (<><Loading /><Text style={[s.muted, { textAlign: 'center' }]}>Loading today's slots…</Text></>)}
+    </ScrollView>
+  );
   // days inside the booking window, skipping days the ground has switched off for online booking
   const first = cfg?.bookingsOpenFrom && cfg.bookingsOpenFrom > istToday() ? cfg.bookingsOpenFrom : istToday();
   const shut = new Set(cfg?.closedDates?.ground ?? []);
-  const days = Array.from({ length: Math.min(cfg?.maxDaysAhead ?? 30, 30) }, (_, i) => addDays(first, i)).filter((d) => !(cfg?.bookingsCloseFrom && d >= cfg.bookingsCloseFrom) && !shut.has(d));
+  const days = Array.from({ length: Math.min(cfg?.maxDaysAhead ?? 30, 366) }, (_, i) => addDays(first, i)).filter((d) => !(cfg?.bookingsCloseFrom && d >= cfg.bookingsCloseFrom) && !shut.has(d));
   const fixed = opts.filter((o) => o.mode === 'fixed'), hourly = opts.filter((o) => o.mode === 'hourly');
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>
@@ -113,8 +149,10 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       <Text style={s.h1}>Book the ground</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 }}>{grounds.map((g) => <Chip key={g.id} label={g.name} on={g.id === gid} onPress={() => setGid(g.id)} />)}</View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
-        {days.map((d) => { const dt = new Date(d + 'T00:00:00Z'); return <Chip key={d} on={d === date} onPress={() => setDate(d)} label={`${DOW[dt.getUTCDay()]} ${dt.getUTCDate()} ${MON[dt.getUTCMonth()]}`} />; })}
+        {days.slice(0, 14).map((d) => { const dt = new Date(d + 'T00:00:00Z'); return <Chip key={d} on={d === date} onPress={() => setDate(d)} label={`${DOW[dt.getUTCDay()]} ${dt.getUTCDate()} ${MON[dt.getUTCMonth()]}`} />; })}
+        <Chip label={cal ? 'Hide calendar' : 'More dates…'} on={cal} onPress={() => setCal(!cal)} />
       </ScrollView>
+      {cal && <DayPicker open={days} value={date} onPick={(d) => { setDate(d); setCal(false); }} />}
 
       {av === null ? <Loading /> : av.closed ? <Text style={s.muted}>The ground is closed on this day. Please pick another day.</Text> : hasRates ? (<>
         <Text style={[s.muted, { marginBottom: 6 }]}>Play with</Text>

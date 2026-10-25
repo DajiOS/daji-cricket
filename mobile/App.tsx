@@ -90,15 +90,13 @@ function AppInner({ theme }: { theme: Mode }) {
         <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
         <View style={{ flex: 1, display: signin ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
         {signin && <AuthScreen onUser={(u) => { setSignin(false); setUser(u); }} onBack={() => setSignin(false)} note="Sign in to hold your slot. Your day and time stay as you left them." />}
-        {!signin && (
-          <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: Math.max(18, insets.bottom) }}>
-            {([['book', 'Book'], ['signin', 'Sign in']] as [string, string][]).map(([id, name]) => (
-              <Pressable key={id} onPress={() => (id === 'signin' ? ask() : setTab(id as Tab))} style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}>
-                <Text style={{ color: tab === id ? C.gold : C.muted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>{name}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: Math.max(18, insets.bottom) }}>
+          {([['book', 'Book'], ['signin', 'Sign in']] as [string, string][]).map(([id, name]) => (
+            <Pressable key={id} onPress={() => (id === 'signin' ? ask() : setSignin(false))} style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}>
+              <Text style={{ color: (signin ? 'signin' : 'book') === id ? C.gold : C.muted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>{name}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
     );
   }
@@ -212,7 +210,7 @@ export default function App() {
   const [m, setM] = useState<Mode>(mode);
   const [intro, setIntro] = useState(true);
   const [ready, setReady] = useState(false);
-  useEffect(() => { (async () => { try { const v = await SecureStore.getItemAsync(THEME_KEY); if (v === 'light' || v === 'dark') { setMode(v); refreshStyles(); setM(v); } } catch { /* keep dark */ } setReady(true); })(); }, []);
+  useEffect(() => { (async () => { try { const v = await SecureStore.getItemAsync(THEME_KEY); if (v === 'light' || v === 'dark') { setMode(v); refreshStyles(); setM(v); } } catch { /* keep light */ } setReady(true); })(); }, []);
   const flip = () => { const next: Mode = m === 'dark' ? 'light' : 'dark'; setMode(next); refreshStyles(); setM(next); SecureStore.setItemAsync(THEME_KEY, next).catch(() => {}); };
   if (!ready) return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;
   return (
