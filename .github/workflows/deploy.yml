@@ -1,4 +1,4 @@
-# Deploys to the Lightsail server whenever main changes.
+# Deploys to the Lightsail server whenever main changes, but only after the server tests pass on that commit.
 # Switched on by the repository variable DEPLOY_ENABLED=true and the secrets SERVER_HOST, SERVER_USER, SERVER_KEY.
 # The code is copied to ~/cricket-booking on the server with rsync (the server needs no access to GitHub),
 # then the same steps you ran by hand: docker compose up -d --build. .env files and data on the server are never touched,
@@ -10,7 +10,22 @@ on:
   workflow_dispatch:
 concurrency: deploy
 jobs:
+  test:
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Link the shared package
+        run: mkdir -p server/node_modules/@daji && ln -s ../../../shared server/node_modules/@daji/shared
+      - name: Test
+        working-directory: server
+        run: npm test
   deploy:
+    needs: test
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25

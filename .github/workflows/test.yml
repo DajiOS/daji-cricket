@@ -1,4 +1,4 @@
-# Runs the server tests on every push and pull request. Informational: it does not block a deploy.
+# Runs the server tests on every push and pull request. Deploy (deploy.yml) runs the same tests first and stops if they fail.
 name: Tests
 on:
   push:
@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
       - name: Link the shared package
         run: mkdir -p server/node_modules/@daji && ln -s ../../../shared server/node_modules/@daji/shared
       - name: Test

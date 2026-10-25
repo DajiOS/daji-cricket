@@ -1,4 +1,5 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -298,6 +299,17 @@ export function fullSchema(): string {
 export function registeredSchemaIds(): string[] {
   return schemaModules.map((m) => m.id);
 }
+export const schemaChecksum = (sql: string): string => createHash('sha256').update(sql).digest('hex');
+/** Every module's id and checksum, plus the core's under "core". server/schema.lock.json holds the released ones (test/schema-lock.test.ts). */
+export function schemaChecksums(): Record<string, string> {
+  return Object.fromEntries([['core', schemaChecksum(SCHEMA_CORE)], ...schemaModules.map((m) => [m.id, schemaChecksum(m.sql)])]);
+}
+
+let drift: string[] = [];
+/** Modules whose SQL changed after this database applied them: the change never reached this database. */
+export function schemaDrift(): string[] {
+  return [...drift];
+}
 
 let current: DatabaseSync | null = null;
 const stmtCache = new WeakMap<DatabaseSync, Map<string, ReturnType<DatabaseSync['prepare']>>>();
@@ -312,13 +324,23 @@ export function openDb(path: string): DatabaseSync {
   const has = d.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
   if (!has) d.exec(SCHEMA_CORE);
   d.exec('CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)');
-  const applied = new Set((d.prepare('SELECT id FROM schema_migrations').all() as { id: string }[]).map((r) => r.id));
+  // Databases from before checksums were kept get the column; their modules are trusted as they are now.
+  const cols = (d.prepare("SELECT name FROM pragma_table_info('schema_migrations')").all() as { name: string }[]).map((c) => c.name);
+  if (!cols.includes('checksum')) d.exec('ALTER TABLE schema_migrations ADD COLUMN checksum TEXT');
+  const applied = new Map((d.prepare('SELECT id, checksum FROM schema_migrations').all() as { id: string; checksum: string | null }[]).map((r) => [r.id, r.checksum]));
+  drift = [];
   for (const m of schemaModules) {
-    if (applied.has(m.id)) continue;
+    const sum = schemaChecksum(m.sql);
+    if (applied.has(m.id)) {
+      const had = applied.get(m.id);
+      if (had == null) d.prepare('UPDATE schema_migrations SET checksum = ? WHERE id = ?').run(sum, m.id);
+      else if (had !== sum) drift.push(m.id);
+      continue;
+    }
     d.exec('BEGIN IMMEDIATE');
     try {
       d.exec(m.sql);
-      d.prepare('INSERT INTO schema_migrations(id, applied_at) VALUES(?, ?)').run(m.id, Date.now());
+      d.prepare('INSERT INTO schema_migrations(id, applied_at, checksum) VALUES(?, ?, ?)').run(m.id, Date.now(), sum);
       d.exec('COMMIT');
     } catch (e) {
       try { d.exec('ROLLBACK'); } catch { /* ignore */ }
@@ -326,6 +348,9 @@ export function openDb(path: string): DatabaseSync {
       throw new Error(`could not apply schema module ${m.id}: ${(e as Error).message}`);
     }
   }
+  // An applied module is never run again, so an edit to it only reaches new databases. Say so loudly instead of
+  // silently running two different schemas; the fix is a new module (CI catches this first: test/schema-lock.test.ts).
+  if (drift.length) console.warn(`WARNING: schema module(s) changed after this database applied them, so the change was not applied here: ${drift.join(', ')}. Add a new schema module instead of editing a released one.`);
   current = d;
   return d;
 }
