@@ -15,6 +15,10 @@ on:
         type: choice
         options: [all, ios, android]
         default: all
+      build_id:
+        description: Send an already finished build to the store instead of building (its id from expo.dev; set Which app to customer or admin)
+        type: string
+        default: ''
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -33,9 +37,15 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Install
         run: npm install --no-audit --no-fund
+      - name: Send a finished build
+        if: inputs.build_id != ''
+        env:
+          APP_VARIANT: ${{ inputs.app }}
+        run: eas submit --id ${{ inputs.build_id }} --profile production-${{ inputs.app }} --non-interactive --no-wait
       - name: Customer app
-        if: inputs.app != 'admin'
+        if: inputs.build_id == '' && inputs.app != 'admin'
+        continue-on-error: true # a failed store upload must not stop the admin build
         run: eas build --profile production-customer --platform ${{ inputs.platform }} --auto-submit-with-profile production-customer --non-interactive --no-wait
       - name: Admin app
-        if: inputs.app != 'customer'
+        if: inputs.build_id == '' && inputs.app != 'customer'
         run: eas build --profile production-admin --platform ${{ inputs.platform }} --auto-submit-with-profile production-admin --non-interactive --no-wait
