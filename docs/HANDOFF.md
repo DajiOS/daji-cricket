@@ -44,7 +44,7 @@ cd server && npm test          # about 585 tests, about 1 minute
 cd desk && node build.mjs      # rebuilds web/public/desk (commit the output)
 ```
 - Money is whole paise (integers). The 269ST cash limit is **not enforced** by owner decision; the 40A(3) and 269SS checks remain.
-- Database changes: `registerSchema('unique-id', sql)`. A repeated id stops the server booting.
+- Database changes: `registerSchema('unique-id', sql)`. A repeated id stops the server booting. A released module never runs again on a database that has it, so never edit one: add `'<id>-2'` instead. After adding a module run `cd server && node scripts/schema-lock.ts` to record it in `server/schema.lock.json`; `test/schema-lock.test.ts` fails on an edited, removed or unrecorded module, and the server logs a warning if a database applied an older version.
 - GitHub Actions runs the server tests on every push. They are informational and do not block deploys. If they fail, read the failing test first.
 - Permissions are listed in `shared/src/types.ts` (`STAFF_PERMISSIONS`) and labelled in `desk/src/pages/Team.tsx`.
 
