@@ -71,10 +71,16 @@
       "ios": {}
     },
     "production-customer": {
-      "extends": "production"
+      "extends": "production",
+      "ios": {
+        "ascAppId": "6826630876"
+      }
     },
     "production-admin": {
-      "extends": "production"
+      "extends": "production",
+      "ios": {
+        "ascAppId": "6826631859"
+      }
     }
   }
 }
