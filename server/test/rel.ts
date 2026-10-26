@@ -29,13 +29,15 @@ function versions(): Record<string, unknown> {
 }
 
 export function rel(id: string, title: string, fn: (t: TestContext) => unknown | Promise<unknown>): void {
+  // the test file is read from the stack here, where rel() is called, because inside the async case the stack no longer shows it
+  const callerFile = new Error().stack?.split('\n').find((l) => /test[\\/][^:)\\/]+\.test\.ts/.test(l))?.replace(/^.*test[\\/]([^:)\\/]+\.test\.ts).*$/, 'test/$1') ?? '';
   test(`${id}: ${title}`, async (t) => {
     const started = Date.now();
     current = { id, facts: {} };
     const rec: Rec = {
       id, title, result: 'PASS', facts: current.facts, startedAt: new Date(started).toISOString(), durationMs: 0, versions: {},
       environment: { name: 'automated test harness', node: process.version, platform: process.platform, database: 'SQLite (node:sqlite) in-memory unless a case says otherwise', paymentProvider: 'demo gateway (no real provider)', clock: 'frozen test clock' },
-      file: new Error().stack?.split('\n').find((l) => /test\/.*\.test\.ts/.test(l))?.replace(/^.*(test\/[^:)]+).*$/, '$1') ?? '',
+      file: callerFile,
     };
     try {
       await fn(t);

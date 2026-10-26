@@ -2,7 +2,7 @@
 // record, FAIL when any wrote FAIL, and NOT_RUN when no record exists. A case that skipped itself (missing fixture, missing tool) is SKIPPED and counts as not run.
 //
 //   node scripts/build-p0-tracker.ts --starter <dir with the starter CSVs> --evidence <dir of rel JSON records> --out <dir>
-//        [--construction <vitest json>] [--before <dir of records from the base release>] [--executor "<name>"] [--evidence-prefix TESTS/evidence]
+//        [--construction <vitest json>] [--before <dir of records from the base release> [--before-logs <dir of the base-release run logs>]] [--executor "<name>"] [--evidence-prefix TESTS/evidence]
 //
 // Writes P0_TEST_EXECUTION_TRACKER.csv, P0_GATES.json and TRACEABILITY.csv into --out, and exits 1 when a gate is not met (so a pipeline cannot call it a GO).
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -14,7 +14,7 @@ function arg(name: string, dflt?: string): string | undefined {
 }
 const starter = arg('starter'), evidenceDir = arg('evidence'), out = arg('out');
 if (!starter || !evidenceDir || !out) { console.error('usage: build-p0-tracker.ts --starter D --evidence D --out D [--construction F] [--before D] [--executor N]'); process.exit(2); }
-const constructionFile = arg('construction'), beforeDir = arg('before'), executor = arg('executor', 'Claude Code (automated test run)')!, prefix = arg('evidence-prefix', 'TESTS/evidence')!;
+const constructionFile = arg('construction'), beforeDir = arg('before'), beforeLogs = arg('before-logs'), executor = arg('executor', 'Claude Code (automated test run)')!, prefix = arg('evidence-prefix', 'TESTS/evidence')!;
 
 // ---- CSV helpers
 function parseCsv(text: string): string[][] {
@@ -41,6 +41,16 @@ function load(dir: string): Rec[] {
   } catch { return []; }
 }
 const after = load(evidenceDir);
+/** A test file that cannot even load on the base release names the module that is not there: that absence is the gap. */
+function absentOnBase(testFile: string): string | null {
+  if (!beforeLogs || !testFile) return null;
+  const name = testFile.replace(/^.*\//, '').replace(/\.ts$/, '').replace(/\.test$/, '');
+  try {
+    const log = readFileSync(join(beforeLogs, `${name}.log`), 'utf8');
+    const m = log.match(/Cannot find module '[^']*?\/((?:server|mobile)\/(?:src|scripts)\/[^']+)'/);
+    return m ? m[1]! : null;
+  } catch { return null; }
+}
 const before = beforeDir ? load(beforeDir) : [];
 const group = (recs: Rec[]) => { const m = new Map<string, Rec[]>(); for (const r of recs) m.set(r.id, [...(m.get(r.id) ?? []), r]); return m; };
 const A = group(after), B = group(before);
@@ -112,8 +122,10 @@ for (const r of trackerRows.slice(1)) {
   else { gates.notRun++; if (skipped) gates.skippedUnapproved++; }
 
   const bs = B.get(id);
-  const beforeResult = !beforeDir ? 'not run' : !bs ? 'no test existed on the base release' : bs.some((x) => x.result === 'FAIL') ? 'FAIL (defect reproduced on the base release)' : bs.every((x) => x.result === 'PASS') ? 'PASS (no defect on the base release)' : 'SKIPPED';
-  const defect = /FAIL/.test(beforeResult) && result === 'PASS' ? `DEF-${id}` : '';
+  const gone = !bs && recs[0] ? absentOnBase(recs[0].file) : null;
+  const errSnippet = bs?.find((x) => x.result === 'FAIL')?.error?.replace(/\s+/g, ' ').slice(0, 140) ?? '';
+  const beforeResult = !beforeDir ? 'not run' : gone ? `FAIL: not runnable on the base release, ${gone} does not exist there` : !bs ? 'not run on the base release (the test needs the migrated database, or covers another project)' : bs.some((x) => x.result === 'FAIL') ? `FAIL on the base release: ${errSnippet}` : bs.every((x) => x.result === 'PASS') ? 'PASS on the base release (existing behaviour verified, not a defect)' : 'SKIPPED (needs the old-release fixture)';
+  const defect = /^FAIL/.test(beforeResult) && result === 'PASS' ? `DEF-${id}` : '';
   const first = recs[0];
   const facts = recs.flatMap((x) => Object.entries(x.facts).map(([k, v]) => `${k}=${JSON.stringify(v)}`)).join('; ');
   const files = [...new Set(recs.map((x) => x.file).filter(Boolean))].join(' ');
