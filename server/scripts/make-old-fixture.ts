@@ -2,9 +2,9 @@
 // It plays a month of business through the old API: online bookings paid in full and in part, a UPI payment, a late cancellation that kept money, an early cancellation that
 // was refunded, a walk-in, a webhook capture, an accounting entry and uploaded files, then writes the database and the data folder to the output folder.
 //   cd <old checkout>/server && node --disable-warning=ExperimentalWarning scripts/make-old-fixture.ts <output folder>
-import { mkdirSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { startHarness, grounds, hold, bookAndPay, dayFromNow, advance, MIN, sendWebhook, capturedEvent } from '../test/helpers.ts';
+import { startHarness, grounds, hold, bookAndPay, dayFromNow, advance, MIN } from '../test/helpers.ts';
 import { db, one, many } from '../src/db.ts';
 import { runSweeps } from '../src/jobs.ts';
 import { createHash } from 'node:crypto';
@@ -20,7 +20,7 @@ const log: Record<string, unknown> = {};
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('fixture picture')]);
 
 // paid in full, three different days
-const b1 = await bookAndPay(h, cust, g.id, dayFromNow(3), '19:00', 2);
+await bookAndPay(h, cust, g.id, dayFromNow(3), '19:00', 2);
 const b2 = await bookAndPay(h, cust, g.id, dayFromNow(5), '10:00', 1);
 const b3 = await bookAndPay(h, cust, g.id, dayFromNow(9), '20:00', 1);
 // a cancellation inside the free window with the deposit kept as credit, one far ahead with a refund

@@ -4,15 +4,13 @@
 //   OLD_FIXTURE_DIR  the folder make-old-fixture.ts wrote (old.db, data/)
 //   OLD_CHECKOUT     a checkout of the previous release (for the rollback: its code runs against the migrated database)
 // Without them the cases say so and are recorded SKIPPED, never PASS.
-import { before, after } from 'node:test';
+import { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, copyFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { startHarness, grounds, bookAndPay, dayFromNow, setting, type Harness, type GroundLite } from './helpers.ts';
-import { reconcile } from '../src/finevents.ts';
 import { rel, ev } from './rel.ts';
 
 const FIXTURE = process.env.OLD_FIXTURE_DIR ?? '';
