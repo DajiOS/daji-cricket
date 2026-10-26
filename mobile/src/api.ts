@@ -31,7 +31,7 @@ export async function serverSignOut(): Promise<void> {
 /** details carries the server's extra facts, such as the fields that failed ({ fields: [{ field, message }] }). */
 export class ApiError extends Error { constructor(public status: number, public code: string, message: string, public details?: any) { super(message); } }
 
-export async function api<T = any>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T = any>(path: string, opts: { method?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<T> {
   let res: Response;
   const env = guarded();
   // a slow or sleeping server must not leave a screen spinning forever
@@ -39,7 +39,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   try {
     res = await fetch(API_URL + scoped(path), {
       method: opts.method ?? 'GET',
-      headers: { ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...env },
+      headers: { ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(opts.headers ?? {}), ...env },
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       signal: ctl.signal,
     });

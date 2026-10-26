@@ -531,7 +531,7 @@ const serverTrouble = (status) => status === 429 ? 'Too many tries in a short ti
 const OWNER_SCOPED = ['/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask'];
 async function api(path, opts = {}) {
   if (state.user && state.user.role === 'super_admin' && state.viewOwner && OWNER_SCOPED.some((p) => path.startsWith(p)) && !/[?&]ownerId=/.test(path)) path += (path.includes('?') ? '&' : '?') + 'ownerId=' + encodeURIComponent(state.viewOwner);
-  const headers = {};
+  const headers = { ...(opts.headers || {}) };
   if (state.token) headers.authorization = 'Bearer ' + state.token;
   let body;
   if (opts.body !== undefined) { headers['content-type'] = 'application/json'; body = JSON.stringify(opts.body); }
@@ -1518,6 +1518,81 @@ function openPay(res) {
   }
   openModal(content, { onClose: close });
   tick(); stopHoldTimer(); holdTimer = setInterval(tick, 1000);
+}
+
+// ------------------------------------------------------------------ Guppi booking (any language)
+
+// This chat only shows what the server's booking conversation returns (/api/guppi/understand) and sends back the customer's words, choices and taps. It has no booking rules
+// of its own: the date, time, price, advance and availability it shows are the booking system's. It stops at the normal secure payment window (openPay) and never
+// takes, confirms or marks a payment. The same endpoint serves the iPad site and the iOS and Android apps.
+const GUPPI_FIRST = { title: 'Guppi booking assistant', placeholder: 'Tell Guppi what you need, in any language', send: 'Send', option: 'Option', total: 'Total', advance: 'Advance', hold: 'Hold and go to secure payment', change: 'Change', secure: 'Guppi never takes payment. Payment happens only on the secure payment screen.', reset: 'Start over', signIn: 'Sign in to book with Guppi.', example: 'Example: Sunday 7 PM for 3 hours' };
+
+function guppiButton() {
+  const head = $('#book .pc-head');
+  if (!head || $('#guppi-open') || !(state.config && state.config.guppiBookingEnabled)) return;
+  head.append(h('button', { class: 'btn outline', id: 'guppi-open', type: 'button', onclick: () => openGuppi() }, 'Book with Guppi · ગુજરાતી · हिन्दी · English'));
+}
+
+function openGuppi() {
+  if (!state.user) return openAuth({ note: GUPPI_FIRST.signIn, after: openGuppi });
+  const g = { reply: null, draft: {}, action: null, busy: false };
+  const log = h('div', { id: 'guppi-log', class: 'gp-log', 'aria-live': 'polite' });
+  const offersBox = h('div', { id: 'guppi-offers' });
+  const needsBox = h('div', { id: 'guppi-needs', class: 'gp-needs' });
+  const err = h('div', { class: 'hint err', id: 'guppi-err' });
+  const input = h('textarea', { id: 'guppi-input', rows: '2', maxlength: '400', autocomplete: 'off' });
+  const sendBtn = h('button', { class: 'btn primary block', id: 'guppi-send', type: 'button' }, GUPPI_FIRST.send);
+  const note = h('p', { class: 'hint', id: 'guppi-secure' }, GUPPI_FIRST.secure);
+  const head = h('h3', { id: 'guppi-title' }, GUPPI_FIRST.title);
+  const example = h('p', { class: 'hint', id: 'guppi-example' }, GUPPI_FIRST.example);
+  const L = () => (g.reply && g.reply.labels) || GUPPI_FIRST;
+  const say = (who, text) => log.append(h('div', { class: 'gp-msg ' + who }, text)); // text only: a customer's words can never become markup
+  const relabel = () => { const l = L(); head.textContent = l.title; input.placeholder = l.placeholder; sendBtn.textContent = l.send; note.textContent = l.secure; example.textContent = g.reply ? '' : l.example; };
+
+  const holdIt = async (optionId) => {
+    if (!g.action || g.action.optionId !== optionId) g.action = { optionId, id: 'guppi-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10) };
+    const id = g.action.id; // the same tap repeated reuses one action id, so a retry cannot hold twice
+    const hold = await api('/api/guppi/hold', { method: 'POST', body: { optionId, actionId: id }, headers: { 'idempotency-key': id } });
+    const pay = await api('/api/bookings/' + encodeURIComponent(hold.hold.id) + '/payment-instructions');
+    g.draft = { ...g.draft, holdBookingId: hold.hold.id };
+    state.sel = [];
+    openPay({ booking: hold.hold, payment: pay.payment, creditAppliedPaise: hold.creditAppliedPaise });
+    loadSlots(); loadCredit();
+  };
+
+  const draw = () => {
+    clear(offersBox); clear(needsBox); relabel();
+    const r = g.reply, l = L();
+    if (!r) return;
+    for (const n of r.needs || []) for (const c of n.choices || []) needsBox.append(h('button', { class: 'btn outline sm', type: 'button', 'data-patch': JSON.stringify(c.patch), onclick: () => turn({ patch: c.patch }, c.label) }, c.label));
+    if (r.status === 'options' || r.status === 'selected') {
+      (r.offers || []).forEach((o, i) => offersBox.append(h('div', { class: 'gp-offer', id: 'guppi-offer-' + (i + 1), 'data-option-id': o.optionId || '' },
+        h('div', {}, h('b', {}, l.option + ' ' + (i + 1)), ' ', o.text),
+        h('button', { class: 'btn outline sm', type: 'button', onclick: () => turn({ text: '#' + (i + 1) }, l.option + ' ' + (i + 1)) }, l.option + ' ' + (i + 1)))));
+    }
+    if (r.status === 'selected' && r.option) {
+      offersBox.append(h('div', { class: 'gp-offer pick', id: 'guppi-selected' },
+        h('div', {}, r.option.text), h('div', { class: 'hint' }, l.total + ' ' + inr(r.option.totalPaise) + ' · ' + l.advance + ' ' + inr(r.option.advancePaise)),
+        h('button', { class: 'btn primary block', id: 'guppi-hold', type: 'button', onclick: async (e) => { e.currentTarget.disabled = true; err.textContent = ''; try { await holdIt(r.option.optionId); } catch (x) { err.textContent = x.message; e.currentTarget.disabled = false; } } }, l.hold)));
+    }
+  };
+
+  const turn = async (body, shown) => {
+    if (g.busy) return;
+    g.busy = true; err.textContent = ''; sendBtn.disabled = true;
+    try {
+      const r = await api('/api/guppi/understand', { method: 'POST', body: { ...body, draft: g.draft, offers: ((g.reply && g.reply.offers) || []).map((o) => o.optionId).filter(Boolean) } });
+      if (shown || body.text) say('me', shown || body.text);
+      say('guppi', r.message);
+      g.reply = r; g.draft = r.draft; draw();
+      if (r.status === 'ready_to_hold' && r.next) await holdIt(r.next.optionId);
+    } catch (x) { err.textContent = x.message; } finally { g.busy = false; sendBtn.disabled = false; }
+  };
+  const send = () => { const t = input.value.trim(); if (!t) return; input.value = ''; turn({ text: t }); };
+  sendBtn.addEventListener('click', send);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+  openModal([head, example, log, needsBox, offersBox, err, input, sendBtn, note], { wide: true });
+  relabel();
 }
 
 async function payDemo(p, b, btn, status, outcome) {
@@ -2682,6 +2757,7 @@ async function start() {
   try {
     const [config, gs] = await Promise.all([api('/api/config'), api('/api/grounds')]);
     state.config = config; state.grounds = gs.items;
+    guppiButton();
   } catch (e) {
     $('#p-name').textContent = 'The server is not reachable';
     $('#p-sub').textContent = e.message;

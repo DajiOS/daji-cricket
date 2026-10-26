@@ -4,6 +4,7 @@ import { api } from './api';
 import type { AppConfig, Availability, Ball, Ground, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
 import { Btn, Chip, Field, Loading, MonthBar, s } from './ui';
 import { C, inr, MON } from './theme';
+import { GuppiBookScreen } from './GuppiBookScreen';
 
 const istToday = (): string => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 const addDays = (d: string, n: number): string => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
@@ -55,6 +56,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const [rep, setRep] = useState<{ f: RepeatFrequency; n: number } | null>(null);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const [cal, setCal] = useState(false); // the month calendar for dates further ahead
+  const [guppi, setGuppi] = useState(false); // the Guppi booking screen (any language), when the release switch is on
 
   const loadGrounds = useCallback(async () => {
     setErr('');
@@ -138,6 +140,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       {err ? (<><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={() => void loadGrounds()} style={{ marginTop: 16 }} /></>) : (<><Loading /><Text style={[s.muted, { textAlign: 'center' }]}>Loading today's slots…</Text></>)}
     </ScrollView>
   );
+  if (guppi && cfg.guppiBookingEnabled) return <View style={s.screen}><GuppiBookScreen onHold={onHold} onBack={() => setGuppi(false)} signedIn={!onNeedSignIn} onNeedSignIn={onNeedSignIn} /></View>;
   // days inside the booking window, skipping days the ground has switched off for online booking
   const first = cfg?.bookingsOpenFrom && cfg.bookingsOpenFrom > istToday() ? cfg.bookingsOpenFrom : istToday();
   const shut = new Set(cfg?.closedDates?.ground ?? []);
@@ -147,6 +150,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>
       <Text style={s.eyebrow}>Reserve</Text>
       <Text style={s.h1}>Book the ground</Text>
+      {!!cfg.guppiBookingEnabled && <Chip label="Book with Guppi · ગુજરાતી · हिन्दी · English" onPress={() => setGuppi(true)} />}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 }}>{grounds.map((g) => <Chip key={g.id} label={g.name} on={g.id === gid} onPress={() => setGid(g.id)} />)}</View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
         {days.slice(0, 14).map((d) => { const dt = new Date(d + 'T00:00:00Z'); return <Chip key={d} on={d === date} onPress={() => setDate(d)} label={`${DOW[dt.getUTCDay()]} ${dt.getUTCDate()} ${MON[dt.getUTCMonth()]}`} />; })}

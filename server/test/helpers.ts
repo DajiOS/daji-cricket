@@ -40,7 +40,7 @@ export async function startHarness(env: Record<string, string> = {}): Promise<Ha
   setNow(T0);
   openDb(':memory:');
   seedDemo(cfg);
-  updateSettings({ requireApproval: false, bookingsOpenFrom: '', bookingsCloseFrom: '' }, null); // the older tests book and confirm straight away; approval has its own tests
+  updateSettings({ requireApproval: false, bookingsOpenFrom: '', bookingsCloseFrom: '', guppiAssistEnabled: true, customerRescheduleEnabled: true }, null); // the older tests book and confirm straight away; approval has its own tests. The release switches ship OFF; tests of those features turn them on here (rel-lang.test.ts checks the shipped defaults).
   const server = buildServer(cfg);
   await new Promise<void>((res) => server.listen(0, '127.0.0.1', res));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -68,7 +68,7 @@ export async function startHarness(env: Record<string, string> = {}): Promise<Ha
       d.exec('PRAGMA foreign_keys = ON');
       setNow(T0);
       seedDemo(cfg);
-      updateSettings({ requireApproval: false, bookingsOpenFrom: '', bookingsCloseFrom: '' }, null);
+      updateSettings({ requireApproval: false, bookingsOpenFrom: '', bookingsCloseFrom: '', guppiAssistEnabled: true, customerRescheduleEnabled: true }, null);
       ensureBuiltinCategories();
     },
     async close() {

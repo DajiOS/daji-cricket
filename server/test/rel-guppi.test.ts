@@ -90,7 +90,7 @@ rel('REL-CH-003', 'Guppi acts only on the record the person has selected, with t
   assert.equal((await h.call('GET', '/api/guppi/context', {})).status, 401);
   // the context report tells each person what Guppi can do for them, and that it decides nothing
   const c1 = await h.get('/api/guppi/context', cust), c2 = await h.get('/api/guppi/context', staff);
-  assert.deepEqual(c1.body.actions, ['options', 'hold', 'reschedule']); assert.deepEqual(c2.body.actions, ['options']); assert.equal(c1.body.authoritative, false);
+  assert.deepEqual(c1.body.actions, ['options', 'hold', 'reschedule', 'understand']); assert.deepEqual(c2.body.actions, ['options']); assert.equal(c1.body.authoritative, false);
   ev('actor', 'signed-in customer'); ev('staffActions', c2.body.actions);
 });
 

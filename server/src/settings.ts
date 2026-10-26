@@ -47,8 +47,10 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   noShowGraceMinutes: 30,
   /** On a festival day the website wears the festival look for every visitor, even one who picked a theme. Off: a visitor's own pick wins. */
   festivalForEveryone: true,
-  guppiAssistEnabled: true,
-  customerRescheduleEnabled: true,
+  /** Off until the owner switches it on: the customer Guppi booking assistant (any language) over the normal booking commands. */
+  guppiAssistEnabled: false,
+  /** Off in this release: customers changing a booked slot themselves. The API exists but no client has a screen for it. */
+  customerRescheduleEnabled: false,
   retentionDisputesEnabled: true,
   /** The website's design for visitors who have not picked one: 'rotate' changes it through the day (design.ts), or one fixed design. */
   siteDesign: 'rotate',

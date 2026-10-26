@@ -462,6 +462,8 @@ export interface PublicConfig {
   publicUrl: string;
   /** Where photos, videos and the background films load from when a CDN is set up (MEDIA_CDN); null = this server. */
   mediaBase?: string | null;
+  /** The Guppi booking assistant (any language) is switched on. Clients show its screen only when this is true. */
+  guppiBookingEnabled?: boolean;
 }
 
 /** A professional coach shown on the website's academy section. */

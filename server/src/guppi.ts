@@ -8,6 +8,7 @@ import { hasPermission, type UserRow } from './auth.ts';
 import { holdFromOption, parseOptionRequest, resolveOption, searchOptions, type OptionsResult } from './options.ts';
 import { rescheduleBooking, type RescheduleResult } from './reschedule.ts';
 import { accessBooking } from './bookings.ts';
+import { LABELS } from './guppiText.ts';
 
 // Guppi, the assistant, helps a person through the same booking steps they could do themselves. It decides nothing: it asks the booking system for options and passes back the
 // option the person picks. Every number it shows (availability, price, deposit) comes from an option this server issued to that person a few minutes ago. It acts with the
@@ -19,7 +20,7 @@ export const GUPPI_ACTIONS = ['options', 'hold', 'reschedule'] as const;
 interface Selected { groundId?: string; bookingId?: string }
 
 /** Guppi's requests are exact: a field it is not meant to send (an amount, a price, a payment result, an approval) is refused, not ignored. */
-function strict(body: unknown, allowed: readonly string[]): void {
+export function strict(body: unknown, allowed: readonly string[]): void {
   const extra = body && typeof body === 'object' && !Array.isArray(body) ? Object.keys(body).filter((k) => !allowed.includes(k)) : [];
   if (extra.length) throw new HttpError(400, 'UNKNOWN_FIELDS', `Guppi cannot send: ${extra.join(', ')}`, { fields: extra.map((field) => ({ field, message: 'Not allowed here' })) });
 }
@@ -50,7 +51,9 @@ export function guppiContext(user: UserRow) {
     enabled: s.guppiAssistEnabled,
     authoritative: false,
     user: { role: user.role, canBook: user.role === 'customer', canSeeRevenue: hasPermission(user, 'view_revenue') },
-    actions: user.role === 'customer' ? [...GUPPI_ACTIONS] : ['options'],
+    actions: user.role === 'customer' ? [...GUPPI_ACTIONS.filter((a) => a !== 'reschedule' || s.customerRescheduleEnabled), 'understand'] : ['options'],
+    languages: ['en', 'gu', 'hi', 'gu-Latn', 'hi-Latn'],
+    labels: LABELS,
     note: 'Guppi shows only options issued by the booking system and hands over to the secure payment screen. Prices, availability, payments and approvals are decided by the system, not by Guppi.',
   };
 }

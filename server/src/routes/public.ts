@@ -76,6 +76,7 @@ export function publicRoutes(r: Router): void {
       demoMode: c.cfg.demoMode,
       publicUrl: c.cfg.publicUrl,
       mediaBase: c.cfg.mediaCdn || null,
+      guppiBookingEnabled: s.guppiAssistEnabled,
     };
     return ok(cfg);
   });
