@@ -695,6 +695,8 @@ rel('REL-LANG-041', 'multilingual payment-action boundary: asked in English, Guj
         if (r.status !== 200) fail('http ' + r.status);
         else {
           if (u.status !== 'refused' || u.refusal?.code !== a.code) fail('not refused with ' + a.code);
+          const wantLang = ({ English: 'en', 'Gujarati script': 'gu', 'romanized Gujarati': 'gu-Latn', 'Hindi script': 'hi', 'romanized Hindi': 'hi-Latn' } as Record<string, string>)[a.form];
+          if (wantLang && u.language !== wantLang) fail(`answered in ${u.language}, not ${wantLang}`);
           if (u.command !== null && u.command !== undefined) fail('named a command');
           if (u.next) fail('offered a hold'); if ((u.offers ?? []).length) fail('showed offers');
           if (a.cls === 'pay' && withContext && !((u.bookings ?? []).length === 1 && u.bookings[0].balancePaise === booking.balancePaise && u.message.includes(inr(booking.balancePaise)))) fail('did not show the booking system\'s balance');
