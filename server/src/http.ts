@@ -8,6 +8,7 @@ import { HttpError, forbidden } from './errors.ts';
 import { now } from './clock.ts';
 import { serveWeb } from './site.ts';
 import { serveLibraryFile } from './library.ts';
+import { configureIntake, gateUpload } from './intake.ts';
 import { idemAbandon, idemBegin, idemFinish, parseIdempotencyKey, requestHash } from './idempotency.ts';
 
 export interface Reply {
@@ -43,6 +44,8 @@ export interface RouteOpts {
   rate?: 'auth' | 'none';
   /** Honours the `Idempotency-Key` header: a retry with the same key and request gets the first answer back and the action is not repeated. 'required' refuses a request that has no key. */
   idempotent?: boolean | 'required';
+  /** The request body is an uploaded file. It is virus-checked (and refused if it fails or cannot be checked) before the handler runs; the name says what the file is for. */
+  upload?: string;
 }
 interface Route { method: string; re: RegExp; keys: string[]; handler: Handler; opts: RouteOpts }
 
@@ -194,6 +197,7 @@ export function errorBody(e: HttpError) {
 
 export function createApp(cfg: Config, router: Router): Server {
   setVaultKey(cfg.fieldKey);
+  configureIntake(cfg);
   const DEFAULT_BODY = 256 * 1024;
   return createServer(async (req, res) => {
     const started = Date.now();
@@ -261,6 +265,7 @@ export function createApp(cfg: Config, router: Router): Server {
       }
 
       const raw = method === 'GET' || method === 'HEAD' || route.opts.stream ? Buffer.alloc(0) : await readBody(req, route.opts.maxBody ?? DEFAULT_BODY);
+      if (route.opts.upload) await gateUpload(raw, route.opts.upload, user ? { id: user.id, role: user.role } : null, user ? (user.role === 'staff' ? user.owner_id : user.id) : null);
       let parsed: unknown;
       const ctx: Ctx = {
         req, res, url, params, query: url.searchParams, ip, cfg, user, raw,

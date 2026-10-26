@@ -178,7 +178,7 @@ export function staffRoutes(r: Router): void {
   r.patch('/api/milestones/:id', (c) => ok(updateMilestone(U(c), c.params.id!, c.json())), A);
   r.get('/api/tasks/:id', (c) => ok(getTaskOut(U(c), c.params.id!)), A);
   r.patch('/api/tasks/:id', (c) => ok(updateTask(U(c), c.params.id!, c.json())), A);
-  r.post('/api/tasks/:id/photos', (c) => created(addTaskPhoto(c.cfg.dataDir, U(c), c.params.id!, c.raw, c.query.get('note') ?? undefined, c.req.headers['x-app-shot-at'] ? Number(c.req.headers['x-app-shot-at']) : undefined)), { auth: STAFF_ROLES, maxBody: MAX_TASK_PHOTO_BYTES + 1024 });
+  r.post('/api/tasks/:id/photos', (c) => created(addTaskPhoto(c.cfg.dataDir, U(c), c.params.id!, c.raw, c.query.get('note') ?? undefined, c.req.headers['x-app-shot-at'] ? Number(c.req.headers['x-app-shot-at']) : undefined)), { auth: STAFF_ROLES, maxBody: MAX_TASK_PHOTO_BYTES + 1024, upload: 'task_photo' });
   r.post('/api/tasks/:id/checklist', (c) => ok(checkStep(U(c), c.params.id!, c.json())), A);
   r.post('/api/tasks/:id/complete', (c) => { const v = new Validator(c.json()); const note = v.str('note', { max: 300 }); v.done(); return ok(completeTask(U(c), c.params.id!, note)); }, A);
   r.post('/api/tasks/:id/reopen', (c) => ok(reopenTask(U(c), c.params.id!)), A);

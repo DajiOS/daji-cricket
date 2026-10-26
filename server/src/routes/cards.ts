@@ -8,7 +8,7 @@ import type { Ctx } from '../http.ts';
 
 const STAFF: ('owner' | 'staff' | 'super_admin')[] = ['owner', 'staff', 'super_admin'];
 const A = { auth: STAFF, maxBody: 64 * 1024 };
-const FILE = { auth: STAFF, maxBody: MAX_CARD_BYTES + 1024 };
+const FILE = { auth: STAFF, maxBody: MAX_CARD_BYTES + 1024, upload: 'card_image' };
 const vcf = (name: string, body: string): Reply => ({ status: 200, raw: Buffer.from(body, 'utf8'), contentType: 'text/vcard; charset=utf-8', headers: { 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 
 export function cardRoutes(r: Router): void {

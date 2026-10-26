@@ -8,7 +8,7 @@ import { addBillFile, approvalsCount, approveBill, createBill, createVendor, del
 
 const STAFF: ('owner' | 'staff' | 'super_admin')[] = ['owner', 'staff', 'super_admin'];
 const A = { auth: STAFF };
-const FILE = { auth: STAFF, maxBody: MAX_ATTACHMENT_BYTES + 1024 };
+const FILE = { auth: STAFF, maxBody: MAX_ATTACHMENT_BYTES + 1024, upload: 'accounting_file' };
 
 export function billsRoutes(r: Router): void {
   const read = (c: Ctx) => { const u = U(c); if (!hasPermission(u, 'view_reports') && !hasPermission(u, 'manage_accounting')) throw forbidden('This needs the "view_reports" permission'); requireRevenue(u); return ownerOrFail(c, 'use bills'); };

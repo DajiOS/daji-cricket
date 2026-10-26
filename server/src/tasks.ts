@@ -1,10 +1,11 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { many, one, registerSchema, run } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
 import { HttpError, notFound, forbidden } from './errors.ts';
+import { storeUpload } from './intake.ts';
 import { audit } from './audit.ts';
 import { hasPermission, userRow, type UserRow } from './auth.ts';
 import { readExif } from './exif.ts';
@@ -262,11 +263,14 @@ export function addTaskPhoto(dataDir: string, u: UserRow, id: string, data: Buff
   const sha = createHash('sha256').update(data).digest('hex');
   if (one('SELECT 1 FROM task_photos WHERE sha256 = ?', sha)) throw new HttpError(409, 'PHOTO_ALREADY_USED', 'This photo has already been uploaded. Take a new one.');
   const pid = newId('tph');
-  mkdirSync(join(dataDir, 'task-photos'), { recursive: true });
-  writeFileSync(join(dataDir, 'task-photos', `${pid}.jpg`), data);
   const note = noteIn?.trim().slice(0, 200) || null;
-  run('INSERT INTO task_photos(id, task_id, uploaded_by, taken_at, uploaded_at, ext, bytes, sha256, camera, note, source) VALUES (?,?,?,?,?,?,?,?,?,?,?)', pid, id, u.id, takenAt, now(), 'jpg', data.length, sha, camera, note, source);
-  audit({ id: u.id, role: u.role }, 'task.photo', 'task', id, { photo: pid, takenAt, camera, source }, t.owner_id);
+  storeUpload({
+    dataDir, buf: data, finalPath: join(dataDir, 'task-photos', `${pid}.jpg`), purpose: 'task_photo', actor: { id: u.id, role: u.role }, ownerId: t.owner_id,
+    writeMetadata: () => {
+      run('INSERT INTO task_photos(id, task_id, uploaded_by, taken_at, uploaded_at, ext, bytes, sha256, camera, note, source) VALUES (?,?,?,?,?,?,?,?,?,?,?)', pid, id, u.id, takenAt, now(), 'jpg', data.length, sha, camera, note, source);
+      audit({ id: u.id, role: u.role }, 'task.photo', 'task', id, { photo: pid, takenAt, camera, source }, t.owner_id);
+    },
+  });
   return toOut(t);
 }
 

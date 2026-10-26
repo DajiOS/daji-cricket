@@ -116,7 +116,7 @@ export function customerRoutes(r: Router): void {
   }, { auth: 'user' });
 
   // ---- profile picture
-  r.post('/api/me/avatar', (c) => { const url = setAvatar(c.cfg.dataDir, U(c), c.raw); return ok({ avatarUrl: url, user: toUser(userRow(U(c).id)!) }); }, { auth: 'user', maxBody: MAX_AVATAR_BYTES + 1024 });
+  r.post('/api/me/avatar', (c) => { const url = setAvatar(c.cfg.dataDir, U(c), c.raw); return ok({ avatarUrl: url, user: toUser(userRow(U(c).id)!) }); }, { auth: 'user', maxBody: MAX_AVATAR_BYTES + 1024, upload: 'avatar' });
   r.del('/api/me/avatar', (c) => { clearAvatar(c.cfg.dataDir, U(c)); return ok({ avatarUrl: null }); }, { auth: 'user' });
   r.get('/api/avatar/:id', (c): Reply => {
     const f = readAvatar(c.cfg.dataDir, c.params.id!);

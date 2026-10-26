@@ -69,7 +69,7 @@ export function adminRoutes(r: Router): void {
   r.put('/api/admin/yodlee', (c) => ok(saveYodleeSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);
   r.post('/api/admin/yodlee/subscribe', async (c) => { const res = await subscribeYodleeWebhooks(c.cfg); audit({ id: U(c).id, role: U(c).role }, 'yodlee.subscribe', 'yodlee', null, { ok: res.ok }); return ok(res); }, { ...SA, rate: 'auth' });
   // ---- software billing: what the platform costs to build and run (software owner only)
-  const SAFILE = { auth: ['super_admin' as const], maxBody: MAX_ATTACHMENT_BYTES + 1024 };
+  const SAFILE = { auth: ['super_admin' as const], maxBody: MAX_ATTACHMENT_BYTES + 1024, upload: 'invoice' };
   const qv = (c: Ctx, k: string): string | undefined => c.query.get(k) ?? undefined;
   r.get('/api/admin/aa', (c) => ok(viewAaSettings(c.cfg)), SA);
   r.put('/api/admin/aa', (c) => ok(saveAaSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);

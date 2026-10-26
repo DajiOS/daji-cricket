@@ -1,8 +1,9 @@
 import { createHash, createHmac } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
+import { storeUpload } from './intake.ts';
 import { audit, type Actor } from './audit.ts';
 import { seal, unseal } from './vault.ts';
 import { HttpError, conflict, notFound } from './errors.ts';
@@ -272,12 +273,15 @@ export function attachInvoiceFile(dataDir: string, actor: Actor, id: string, fil
   if (buf.length > MAX_ATTACHMENT_BYTES) throw new HttpError(413, 'FILE_TOO_LARGE', 'Files can be at most 5 MB.');
   const kind = sniff(buf);
   if (!kind) throw new HttpError(415, 'FILE_TYPE_NOT_ALLOWED', 'Only PDF, PNG, JPEG and WebP files can be attached.');
-  mkdirSync(join(dataDir, 'uploads', '_software'), { recursive: true });
-  writeFileSync(filePath(dataDir, id), buf, { mode: 0o600 });
   const base = filename.replace(/[\\/]/g, '_').replace(/[^\w .()\-]/g, '_').slice(0, 80).trim() || 'invoice';
   const name = /\.(pdf|png|jpe?g|webp)$/i.test(base) ? base : `${base}.${kind.ext}`;
-  run('UPDATE sw_invoices SET file_name = ?, file_mime = ?, updated_at = ? WHERE id = ?', name, kind.mime, now(), id);
-  audit(actor, 'billing.invoice.file', 'sw_invoice', id, { bytes: buf.length });
+  storeUpload({
+    dataDir, buf, finalPath: filePath(dataDir, id), purpose: 'invoice', actor, versioned: true,
+    writeMetadata: () => {
+      run('UPDATE sw_invoices SET file_name = ?, file_mime = ?, updated_at = ? WHERE id = ?', name, kind.mime, now(), id);
+      audit(actor, 'billing.invoice.file', 'sw_invoice', id, { bytes: buf.length });
+    },
+  });
   return toInv(one<InvRow>(`${INV_SELECT} AND i.id = ?`, id)!);
 }
 

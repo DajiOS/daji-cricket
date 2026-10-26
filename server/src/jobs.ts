@@ -16,6 +16,7 @@ import * as credits from './credits.ts';
 import { runBackupIfDue } from './backup.ts';
 import type { Config } from './config.ts';
 import { chargeDue } from './autodebit.ts';
+import { sweepQuarantine } from './intake.ts';
 
 export interface ExpiryResult { released: number; confirmed: number; extended: number }
 
@@ -108,6 +109,7 @@ export async function runFastSweeps(cfg: Config): Promise<SweepResult> {
 /** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries and the compliance check. */
 export async function runSlowSweeps(cfg: Config): Promise<void> {
   await chargeDue(cfg).catch(logErr('autodebit'));
+  try { sweepQuarantine(cfg.dataDir); } catch (e) { logErr('quarantine')(e); }
   runRecurring(null, null);
   runDepreciation(null, SYSTEM);
   await runFeedSync(cfg, logErr('bank-feed'));
