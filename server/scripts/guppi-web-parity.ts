@@ -56,7 +56,7 @@ try {
           await page.click('#guppi-open');
           await page.fill('#guppi-input', sc.text);
           await page.click('#guppi-send');
-          await page.waitForFunction("document.querySelectorAll('#guppi-log .gp-msg.guppi').length >= 1", null, { timeout: 15000 });
+          await page.waitForFunction(() => (globalThis as any).document.querySelectorAll('#guppi-log .gp-msg.guppi').length >= 1, null, { timeout: 15000 });
           row.reply = (await page.locator('#guppi-log .gp-msg.guppi').last().innerText()).trim();
           await shot('1-reply');
           if (kind === 'booking') {
