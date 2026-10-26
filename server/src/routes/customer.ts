@@ -10,7 +10,7 @@ import { run, one } from '../db.ts';
 import { now } from '../clock.ts';
 import { splitName, titleCase } from '../names.ts';
 import { accessBooking, bookingPayments, listBookings, viewBooking } from '../bookings.ts';
-import { readName, holdSlots, parseHold, planFor } from '../hold.ts';
+import { readName, holdSlots, parseHold, planFor, paymentInstructionsFor } from '../hold.ts';
 import { rescheduleBooking } from '../reschedule.ts';
 import { getRetentionCase, openRetentionDispute, withdrawRetentionDispute } from '../retention.ts';
 import { holdFromOption, parseOptionRequest, searchOptions } from '../options.ts';
@@ -172,6 +172,7 @@ export function customerRoutes(r: Router): void {
     return ok({ booking: viewBooking(b.id), payments: bookingPayments(b.id) });
   }, { auth: 'user' });
 
+  r.get('/api/bookings/:id/payment-instructions', (c) => ok({ payment: paymentInstructionsFor(c.cfg, U(c), c.params.id!) }), { auth: ['customer'] });
   r.post('/api/bookings/:id/upi-reference', (c) => {
     const v = new Validator(c.json());
     const utr = v.str('utr', { required: true, max: 30 });

@@ -559,3 +559,18 @@ export function recordBlockPayment(staff: UserRow, seriesId: string, input: { me
     return blockOf(seriesId)!;
   });
 }
+
+/**
+ * The way to pay for a booking that is being held, read back from the payment session that already exists for it (nothing new is created).
+ * This is what a payment screen opens after a hold, including when the hold was started somewhere else, such as through Guppi.
+ */
+export function paymentInstructionsFor(cfg: Config, customer: UserRow, bookingId: string): PaymentInstructions {
+  const b = accessBooking(customer, bookingId);
+  if (b.status !== 'held') throw new HttpError(409, 'BAD_STATE', `This booking is ${b.status}, so there is nothing to pay now`);
+  const p = one<{ id: string; method: string; amount_paise: number; rp_order_id: string | null }>("SELECT id, method, amount_paise, rp_order_id FROM payments WHERE booking_id = ? AND status IN ('created','pending') ORDER BY created_at DESC, rowid DESC LIMIT 1", b.id);
+  if (!p) return { mode: 'none', amountPaise: 0, paymentId: null };
+  if (p.method === 'upi') return upiInstructions(b, p.amount_paise, p.id);
+  const gw = getGateway(cfg);
+  if (!gw || !p.rp_order_id) throw new HttpError(503, 'PAYMENTS_UNAVAILABLE', 'Online payments are not available for this booking right now. Please try again later.');
+  return { mode: 'razorpay', amountPaise: p.amount_paise, paymentId: p.id, razorpay: { keyId: gw.keyId, orderId: p.rp_order_id, demo: gw.demo } };
+}

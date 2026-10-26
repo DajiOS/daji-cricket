@@ -7,7 +7,7 @@ import { HttpError } from './errors.ts';
 import { audit, type Actor } from './audit.ts';
 import { Validator } from './input.ts';
 import { HOUR, MIN, timeOfDay } from './time.ts';
-import { getSettings } from './settings.ts';
+import { getSettings, requireFeature } from './settings.ts';
 import { accessBooking, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
 import { getGroundOr404, slotPrice, slotStarts } from './grounds.ts';
 import { assertDayOpen, assertOnlineWindow, planFor, takeSlots } from './hold.ts';
@@ -72,8 +72,9 @@ function ensureMovable(b: BookingRow): void {
  * The old slots are given up and the new ones taken in one transaction; if the new ones are not free nothing changes. What was paid stays on the booking;
  * a dearer slot leaves a larger balance. A cheaper slot that would leave the booking over-paid is refused: cancel and rebook, so the money is settled by the refund rules.
  */
-export function rescheduleBooking(cfg: Config, user: UserRow, bookingId: string, body: unknown): RescheduleResult {
+export function rescheduleBooking(cfg: Config, user: UserRow, bookingId: string, body: unknown, via: { channel?: 'guppi'; actionId?: string } = {}): RescheduleResult {
   const byCustomer = user.role === 'customer';
+  if (byCustomer) requireFeature('customerRescheduleEnabled', 'Changing a booking yourself');
   const b0 = accessBooking(user, bookingId, byCustomer ? undefined : 'manage_bookings');
   const req = parseMove(cfg, user, body);
   if (req.groundId && req.groundId !== b0.ground_id) throw new HttpError(409, 'SAME_GROUND_ONLY', 'A booking can only be moved to another time on the same ground.');
@@ -103,7 +104,7 @@ export function rescheduleBooking(cfg: Config, user: UserRow, bookingId: string,
       plan.date, plan.starts[0]!, endAt, plan.starts.length, newTotal, newTotal, plan.format?.label ?? null, plan.format?.ball ?? null, t, b.id);
     run("INSERT INTO booking_reschedules(id, booking_id, owner_id, kind, from_start_at, from_end_at, from_slots, from_total_paise, to_start_at, to_end_at, to_slots, to_total_paise, actor_id, actor_role, reason, created_at) VALUES(?,?,?,'move',?,?,?,?,?,?,?,?,?,?,?,?)",
       newId('rsc'), b.id, b.owner_id, b.start_at, b.end_at, b.slot_count, b.total_paise, plan.starts[0]!, endAt, plan.starts.length, newTotal, user.id, user.role, req.reason ?? null, t);
-    audit(actor, 'booking.reschedule', 'booking', b.id, { fromStartAt: b.start_at, toStartAt: plan.starts[0], fromTotalPaise: b.total_paise, toTotalPaise: newTotal, paidPaise: b.paid_paise, reason: req.reason ?? null }, b.owner_id);
+    audit(actor, 'booking.reschedule', 'booking', b.id, { fromStartAt: b.start_at, toStartAt: plan.starts[0], fromTotalPaise: b.total_paise, toTotalPaise: newTotal, paidPaise: b.paid_paise, reason: req.reason ?? null, ...(via.channel ? { via: via.channel, actionId: via.actionId ?? null } : {}) }, b.owner_id);
     notify(b.customer_id, 'booking_rescheduled', { ref: b.ref, ground: ground.name, startAt: plan.starts[0], extra: newTotal > b.paid_paise ? `Balance to pay at the ground: ${formatPaise(newTotal - b.paid_paise)}.` : undefined, ...venueData(b.ground_id) }, b.id);
     if (byCustomer) pushStaffOf(b.owner_id, 'booking_rescheduled_by_customer', 'Booking moved', `${b.ref} was moved by the customer to ${timeOfDay(plan.starts[0]!)} on ${plan.date}.`, b.id);
     return { booking: viewBooking(b.id), fromStartAt: b.start_at, toStartAt: plan.starts[0]!, fromTotalPaise: b.total_paise, toTotalPaise: newTotal, balancePaise: Math.max(newTotal - b.paid_paise, 0) };

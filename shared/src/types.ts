@@ -504,6 +504,10 @@ export interface GlobalSettings {
   noShowGraceMinutes: number;
   /** On a festival day the festival look applies to every visitor, even one who picked a theme. */
   festivalForEveryone: boolean;
+  /** Release switches for the newer ways to change a booking. Off puts that way back to "call the ground"; the standard booking flow is never affected. */
+  guppiAssistEnabled: boolean;
+  customerRescheduleEnabled: boolean;
+  retentionDisputesEnabled: boolean;
   /** 'rotate' (the design changes through the day) or one fixed design id. */
   siteDesign: string;
   /** How often the rotating design changes: daypart (four times a day), daily or weekly. */

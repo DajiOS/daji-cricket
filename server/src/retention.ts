@@ -11,6 +11,7 @@ import { refundPayment, type PaymentRow } from './payments.ts';
 import * as credits from './credits.ts';
 import { notify, pushStaffOf } from './notifications.ts';
 import { requirePermission, type UserRow } from './auth.ts';
+import { requireFeature } from './settings.ts';
 
 // Money kept from a customer's deposit. When a booking is cancelled late, or only part of the cash is refunded, the rest of the deposit is kept (the cancellation rules). The customer can dispute
 // that. The ground answers with a figure to give back, as credit or as a refund to their payment method; the owner approves exactly that figure; it is applied once.
@@ -84,6 +85,7 @@ export function listRetentionCases(user: UserRow, ownerId: string | null, status
 /** The customer disputes what was kept. One dispute per booking. */
 export function openRetentionDispute(user: UserRow, bookingId: string, body: unknown): RetentionCase {
   if (user.role !== 'customer') throw new HttpError(403, 'FORBIDDEN', 'Only the customer disputes what was kept');
+  requireFeature('retentionDisputesEnabled', 'Disputing a deposit here');
   const v = new Validator(body);
   const reason = v.str('reason', { required: true, min: 10, max: 500 });
   v.done();

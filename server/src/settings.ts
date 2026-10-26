@@ -47,10 +47,18 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   noShowGraceMinutes: 30,
   /** On a festival day the website wears the festival look for every visitor, even one who picked a theme. Off: a visitor's own pick wins. */
   festivalForEveryone: true,
+  guppiAssistEnabled: true,
+  customerRescheduleEnabled: true,
+  retentionDisputesEnabled: true,
   /** The website's design for visitors who have not picked one: 'rotate' changes it through the day (design.ts), or one fixed design. */
   siteDesign: 'rotate',
   designPace: 'daypart',
 };
+
+/** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
+export function requireFeature(key: 'guppiAssistEnabled' | 'customerRescheduleEnabled' | 'retentionDisputesEnabled', what: string): void {
+  if (!getSettings()[key]) throw new HttpError(503, 'FEATURE_OFF', `${what} is switched off for now. Please use the normal booking screens or call the ground.`);
+}
 
 export function getSettings(): GlobalSettings {
   const out: Record<string, unknown> = { ...DEFAULT_SETTINGS };
@@ -84,7 +92,7 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
   const next: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULT_SETTINGS)) { fields.push({ field: k, message: 'Unknown setting' }); continue; }
-    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone') {
+    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled') {
       if (typeof v !== 'boolean') fields.push({ field: k, message: 'Must be true or false' }); else next[k] = v;
     } else if (k === 'siteDesign') {
       if (typeof v !== 'string' || !(SITE_DESIGN_CHOICES as readonly string[]).includes(v)) fields.push({ field: k, message: `One of ${SITE_DESIGN_CHOICES.join(', ')}` }); else next[k] = v;
