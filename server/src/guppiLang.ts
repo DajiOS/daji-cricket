@@ -129,11 +129,14 @@ const ACCEPT = N(['chale', 'chalse', 'chalshe', 'chalega', 'chalegi', 'ok', 'oka
 const ANY = N(['koi', 'koyi', 'kuch', 'any', 'game', 'gamey', 'कोई', 'कोइ', 'કોઈ', 'ગમે']);
 const ANY2 = N(['pan', 'bhi', 'te', 'also', 'પણ', 'भी', 'तે']);
 
-const PAY_WORD = N(['payment', 'paid', 'paisa', 'pay', 'paise', 'pese', 'peisa', 'rakam', 'amount', 'rashi', 'raashi', 'राशि', 'રકમ', 'रकम', 'પેમેન્ટ', 'પૈસા', 'ચુકવણી', 'ચૂકવણી', 'पेमेंट', 'पैसे', 'पैसा', 'भुगतान']);
-const CLAIM_VERB = N(['kari', 'kar', 'kiya', 'kiye', 'diya', 'didhu', 'didhi', 'didho', 'karyu', 'karyo', 'karli', 'karlidhu', 'bhari', 'bhar', 'done', 'made', 'paid', 'sent', 'transferred', 'થઈ', 'કરી', 'કર્યું', 'કર્યો', 'દીધું', 'દીધુ', 'ભરી', 'ચૂકવી', 'ચુકવી', 'कर', 'किया', 'कि', 'कर दिया', 'दिया', 'भर', 'भेज']);
+const PAY_WORD = N(['payment', 'paid', 'paisa', 'pay', 'paise', 'pese', 'peisa', 'rakam', 'amount', 'rashi', 'raashi', 'राशि', 'રકમ', 'रकम', 'પેમેન્ટ', 'પૈસા', 'ચુકવણી', 'ચૂકવણી', 'पेमेंट', 'पैसे', 'पैसा', 'भुगतान', 'bhugtan']);
+const CLAIM_VERB = N(['kari', 'kar', 'kiya', 'kiye', 'diya', 'didhu', 'didhi', 'didho', 'karyu', 'karyo', 'karli', 'karlidhu', 'bhari', 'bhar', 'done', 'made', 'paid', 'sent', 'transferred', 'થઈ', 'કરી', 'કર્યું', 'કર્યો', 'દીધું', 'દીધુ', 'ભરી', 'ચૂકવી', 'ચુકવી', 'कर', 'किया', 'कि', 'कर दिया', 'दिया', 'भर', 'भेज', 'bhej', 'bhejo', 'bhejna', 'mokal', 'mokalo', 'મોકલ', 'મોકલો']);
 const BALANCE = N(['baki', 'baaki', 'bakee', 'balance', 'outstanding', 'due', 'pending', 'remaining', 'બાકી', 'बाकी', 'बकाया', 'status']);
 // asking Guppi to DO something with money or a booking. None of these is ever carried out; each is answered with the same refusal in every language.
 const ACT_VERB = N(['pay', 'confirm', 'confirmed', 'mark', 'settle', 'clear', 'approve', 'process', 'chukavo', 'chukavi', 'chukvo', 'chukvi', 'chukav', 'chukave', 'chukavu', 'chukavyo', 'bharo', 'bharvu', 'bharvanu', 'bhugtan', 'kanfarm', 'konfarm', 'ચૂકવો', 'ચુકવો', 'ચૂકવ', 'ચુકવ', 'ભરો', 'ભરવું', 'કન્ફર્મ', 'કંફર્મ', 'चुकाओ', 'चुकाइए', 'चुकाना', 'चुकाएं', 'भरो', 'भरना', 'कन्फर्म', 'कंफर्म', 'पुष्टि']);
+// "make the payment", "send the payment": a verb that is only a payment request next to a payment NOUN (not next to "advance" or "balance", so "make a booking, advance is fine" is not refused).
+const MAKE_VERB = N(['make', 'send', 'transfer', 'complete', 'finish']);
+const PAY_NOUN = N(['payment', 'paymnt', 'paisa', 'paise', 'pese', 'bhugtan', 'પેમેન્ટ', 'પૈસા', 'ચુકવણી', 'ચૂકવણી', 'पेमेंट', 'पैसे', 'पैसा', 'भुगतान']);
 const REQUEST_MARK = N(['do', 'dyo', 'dijiye', 'dijie', 'karo', 'kijiye', 'please', 'plz', 'pls', 'now', 'abhi', 'hamna', 'hamnaj', 'atyare', 'turant', 'jaldi', 'kardo', 'kardijiye', 'karen', 'karjo', 'dedo', 'dena', 'देना', 'दे', 'દેજો', 'કરજો', 'दो', 'दीजिए', 'दीजिये', 'करो', 'कीजिए', 'कीजिये', 'अभी', 'तुरंत', 'દો', 'દ્યો', 'કરો', 'હમણાં', 'હમણા', 'અત્યારે', 'કૃપા']);
 const QUESTION_WORD = N(['ketla', 'ketlo', 'ketli', 'kitna', 'kitni', 'kitne', 'how', 'much', 'what', 'kya', 'શું', 'કેટલા', 'કેટલો', 'કેટલી', 'कितना', 'कितनी', 'कितने', 'क्या']);
 const REFUND_WORD = N(['refund', 'refunds', 'refunded', 'rifund', 'refand', 'રિફંડ', 'રીફંડ', 'रिफंड', 'रीफंड']);
@@ -517,7 +520,7 @@ export function parseBooking(text: string, today: string, ctx: { startTime?: str
   out.flags.refund = !out.flags.waiver && (anyTok(REFUND_WORD) || (anyTok(BACK_WORD) && anyTok(PAY_WORD)));
   out.flags.change = !out.flags.waiver && !out.flags.refund && anyTok(CANCEL_WORD);
   // "pay my balance", "payment confirm karo", "mark it paid": the person wants Guppi to act on money. A question about an amount ("ketla paisa baki che?") is only a question.
-  out.flags.payAct = !out.flags.waiver && !out.flags.refund && !out.flags.change && !asksQuestion && (anyTok(PAY_WORD) || anyTok(BALANCE) || anyTok(DEPOSIT_WORD)) && (anyTok(ACT_VERB) || (anyTok(CLAIM_VERB) && anyTok(REQUEST_MARK)));
+  out.flags.payAct = !out.flags.waiver && !out.flags.refund && !out.flags.change && !asksQuestion && (anyTok(PAY_WORD) || anyTok(BALANCE) || anyTok(DEPOSIT_WORD)) && (anyTok(ACT_VERB) || (anyTok(CLAIM_VERB) && anyTok(REQUEST_MARK)) || (anyTok(MAKE_VERB) && anyTok(PAY_NOUN)));
   const moneyAction = out.flags.payAct || out.flags.refund || out.flags.change;
   out.flags.payClaim = !out.flags.waiver && !moneyAction && anyTok(PAY_WORD) && anyTok(CLAIM_VERB) && !anyTok(BALANCE);
   out.flags.payStatus = !out.flags.waiver && !moneyAction && !out.flags.payClaim && anyTok(BALANCE);
