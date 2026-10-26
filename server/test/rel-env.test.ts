@@ -2,7 +2,7 @@ import { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { startHarness, grounds, hold, bookAndPay, dayFromNow, setting, type Harness, type GroundLite } from './helpers.ts';
+import { startHarness, grounds, bookAndPay, dayFromNow, setting, type Harness, type GroundLite } from './helpers.ts';
 import { loadConfig, fatalConfigProblems, type Config } from '../src/config.ts';
 import { getGateway } from '../src/gateway.ts';
 import { handleWebhook } from '../src/payments.ts';

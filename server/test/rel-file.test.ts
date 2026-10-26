@@ -10,12 +10,12 @@ import { db, many, one } from '../src/db.ts';
 import { configureIntake, intakeFault, builtinScan, clamdScan, sweepQuarantine } from '../src/intake.ts';
 import { rel, ev } from './rel.ts';
 
-let h: Harness, dir: string, owner: string, owner2: string, staff: string, cust: string, admin: string;
+let h: Harness, dir: string, owner: string, cust: string, admin: string;
 before(async () => { dir = mkdtempSync(join(tmpdir(), 'daji-file-')); h = await startHarness({ DATA_DIR: dir }); });
 after(async () => { await h.close(); });
 beforeEach(async () => {
   h.reset(); configureIntake(h.cfg); intakeFault.point = 'none';
-  owner = await h.login('owner1'); owner2 = await h.login('owner2'); staff = await h.login('staff1'); cust = await h.login('customer'); admin = await h.login('admin');
+  owner = await h.login('owner1'); cust = await h.login('customer'); admin = await h.login('admin');
 });
 
 const EICAR = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
@@ -133,7 +133,7 @@ rel('REL-FILE-001', 'when the virus scanner cannot be reached nothing is accepte
   const fake: Server = createServer((sock) => {
     const chunks: Buffer[] = [];
     sock.on('data', (d) => {
-      chunks.push(d);
+      chunks.push(d as Buffer);
       const all = Buffer.concat(chunks);
       if (!all.subarray(0, 10).equals(Buffer.from('zINSTREAM\0'))) return;
       // the stream ends with a zero-length chunk

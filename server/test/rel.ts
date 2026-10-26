@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { dbIsOpen, many, registeredSchemaIds } from '../src/db.ts';
 
-interface Rec { id: string; title: string; result: 'PASS' | 'FAIL'; error?: string; facts: Record<string, unknown>; startedAt: string; durationMs: number; versions: Record<string, unknown>; environment: Record<string, unknown>; file: string }
+interface Rec { id: string; title: string; result: 'PASS' | 'FAIL' | 'SKIPPED'; error?: string; facts: Record<string, unknown>; startedAt: string; durationMs: number; versions: Record<string, unknown>; environment: Record<string, unknown>; file: string }
 
 let current: { id: string; facts: Record<string, unknown> } | null = null;
 
@@ -39,6 +39,8 @@ export function rel(id: string, title: string, fn: (t: TestContext) => unknown |
     };
     try {
       await fn(t);
+      // a case that could not run here (a missing fixture, a tool that is not installed) says so with ev('skipped', why): that is recorded as SKIPPED, never as a pass
+      if (typeof current.facts.skipped === 'string') { rec.result = 'SKIPPED'; t.skip(current.facts.skipped); }
     } catch (e) {
       rec.result = 'FAIL';
       rec.error = String((e as Error)?.message ?? e).slice(0, 2000);

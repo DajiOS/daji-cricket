@@ -305,6 +305,9 @@ export function schemaChecksums(): Record<string, string> {
   return Object.fromEntries([['core', schemaChecksum(SCHEMA_CORE)], ...schemaModules.map((m) => [m.id, schemaChecksum(m.sql)])]);
 }
 
+/** Test hook for the migration rehearsal: called inside a module's transaction just before it commits, so a rehearsal can kill the process at the worst moment. Unset in normal running. */
+export const migrationFault: { beforeCommit?: (moduleId: string) => void } = {};
+
 let drift: string[] = [];
 /** Modules whose SQL changed after this database applied them: the change never reached this database. */
 export function schemaDrift(): string[] {
@@ -341,6 +344,7 @@ export function openDb(path: string): DatabaseSync {
     try {
       d.exec(m.sql);
       d.prepare('INSERT INTO schema_migrations(id, applied_at, checksum) VALUES(?, ?, ?)').run(m.id, Date.now(), sum);
+      migrationFault.beforeCommit?.(m.id);
       d.exec('COMMIT');
     } catch (e) {
       try { d.exec('ROLLBACK'); } catch { /* ignore */ }
