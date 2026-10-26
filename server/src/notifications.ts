@@ -6,6 +6,7 @@ import { formatPaise } from '@daji/shared';
 import { fmtDateTime } from './time.ts';
 import { getSettings } from './settings.ts';
 import { directionsUrl, groundRow } from './grounds.ts';
+import { permissionList } from './auth.ts';
 
 registerSchema('push-1', `CREATE TABLE IF NOT EXISTS push_tokens (
   token TEXT PRIMARY KEY,
@@ -160,7 +161,7 @@ export function pushNotify(userId: string, template: string, title: string, body
 export function pushStaffOf(ownerId: string, template: string, title: string, body: string, bookingId: string | null = null): void {
   const rows = many<{ id: string; permissions: string }>("SELECT id, permissions FROM users WHERE active = 1 AND (id = ? OR (role = 'staff' AND owner_id = ?))", ownerId, ownerId);
   for (const r of rows) {
-    if (r.id !== ownerId && !(JSON.parse(r.permissions || '[]') as string[]).includes('manage_bookings')) continue;
+    if (r.id !== ownerId && !permissionList(r.permissions).includes('manage_bookings')) continue;
     pushNotify(r.id, template, title, body, bookingId);
   }
 }

@@ -574,7 +574,8 @@ export interface Contact {
   slotsPlayed: number;
   firstPlayedAt: number;
   lastPlayedAt: number;
-  paidPaise: number;
+  /** Total paid by this person. Null when the viewer may not see revenue. */
+  paidPaise: number | null;
   groundIds: string[];
   consent: { email: boolean; sms: boolean; whatsapp: boolean };
   /** Can we message them on this channel right now: has the address, said yes, account not disabled. */

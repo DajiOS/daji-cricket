@@ -243,7 +243,12 @@ export function createApp(cfg: Config, router: Router): Server {
         }
       }
 
-      const user = authenticate(cfg, req.headers.authorization);
+      // If who this is cannot be worked out (the database could not answer), nothing is granted and the client is told to retry: never a 200, never a sign-out.
+      let user: UserRow | null;
+      try { user = authenticate(cfg, req.headers.authorization); } catch (e) {
+        if (cfg.log) console.error(JSON.stringify({ t: new Date().toISOString(), level: 'error', path: pathForLog, where: 'authenticate', error: String((e as Error)?.message ?? e) }));
+        throw new HttpError(503, 'AUTH_UNAVAILABLE', 'We could not check your access just now. Please try again in a moment.');
+      }
       const a = route.opts.auth;
       if (a) {
         if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Please sign in');

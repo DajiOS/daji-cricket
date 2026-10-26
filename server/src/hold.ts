@@ -89,8 +89,14 @@ export function planFor(ground: GroundRow, req: { date: string; startTime: strin
 /** Inserts the slot rows. The (ground, slot) primary key is the final guard against double booking. */
 function takeSlots(bookingId: string, ground: GroundRow, starts: number[]): void {
   for (const s of starts) {
-    const hit = one<{ kind: string }>('SELECT kind FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, s);
-    if (hit) throw new HttpError(409, 'SLOT_TAKEN', hit.kind === 'block' ? `The ${timeOfDay(s)} slot is not available` : `The ${timeOfDay(s)} slot has just been booked by someone else`, { slot: s });
+    const hit = one<{ kind: string; booking_id: string | null }>('SELECT kind, booking_id FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, s);
+    if (hit) {
+      // The same person asking again (a retry whose answer was lost, a second tap) is told about their own hold instead of "someone else booked it".
+      const mine = hit.kind === 'booking' && hit.booking_id
+        ? one<{ id: string; ref: string }>("SELECT o.id, o.ref FROM bookings o JOIN bookings n ON n.customer_id = o.customer_id WHERE o.id = ? AND n.id = ? AND o.status = 'held'", hit.booking_id, bookingId) : undefined;
+      if (mine) throw new HttpError(409, 'ALREADY_HELD_BY_YOU', `You already hold the ${timeOfDay(s)} slot (booking ${mine.ref}). Continue with that booking.`, { slot: s, bookingId: mine.id });
+      throw new HttpError(409, 'SLOT_TAKEN', hit.kind === 'block' ? `The ${timeOfDay(s)} slot is not available` : `The ${timeOfDay(s)} slot has just been booked by someone else`, { slot: s });
+    }
     try {
       run("INSERT INTO booking_slots(ground_id, slot_start, kind, booking_id) VALUES(?,?,'booking',?)", ground.id, s, bookingId);
     } catch (e) {
@@ -150,17 +156,29 @@ export function parseHold(body: unknown) {
   return { groundId: groundId!, date: date!, startTime: startTime!, slots, formatId, useCredit: !!useCredit, players, notes, ruleId, promoCode: promoCode ? normCode(promoCode) : undefined };
 }
 
+/**
+ * The release switches for online booking: the opening date, the closing date and a day switched off. Every online way in (the hold, a Guppi hold, a reschedule,
+ * a list of options) calls these, so none of them can reach a date the ground has not opened to customers.
+ */
+export function assertOnlineWindow(date: string): void {
+  const openFrom = getSettings().bookingsOpenFrom;
+  if (openFrom && date < openFrom) throw new HttpError(409, 'NOT_OPEN_YET', `Online bookings open on ${openFrom.slice(8, 10).replace(/^0/, '')} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(openFrom.slice(5, 7)) - 1]} ${openFrom.slice(0, 4)}. Please pick that day or later.`, { openFrom });
+  const closeFrom = getSettings().bookingsCloseFrom;
+  if (closeFrom && date >= closeFrom) throw new HttpError(409, 'BOOKINGS_CLOSED', 'Bookings are closed from that date for now. Please pick an earlier day, or call us.', { closeFrom });
+}
+export function assertDayOpen(date: string, scope: 'ground' | 'practice'): void {
+  if (isClosedDate(date, scope)) throw new HttpError(409, 'DATE_CLOSED', `Online booking for ${scope === 'practice' ? 'practice sessions' : 'the ground'} is switched off for that day. Please pick another day, or call us.`);
+}
+export function assertOnlineBookable(date: string, scope: 'ground' | 'practice'): void { assertOnlineWindow(date); assertDayOpen(date, scope); }
+
 /** Customer step 1: hold the slots, apply credit if asked, and say how to pay. */
-export async function holdSlots(cfg: Config, customer: UserRow, body: unknown): Promise<HoldResponse> {
+export async function holdSlots(cfg: Config, customer: UserRow, body: unknown, via: { channel?: 'guppi'; actionId?: string } = {}): Promise<HoldResponse> {
   const req = parseHold(body);
   const repeat = parseRepeat(body);
-  const openFrom = getSettings().bookingsOpenFrom;
-  if (openFrom && req.date < openFrom) throw new HttpError(409, 'NOT_OPEN_YET', `Online bookings open on ${openFrom.slice(8, 10).replace(/^0/, '')} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(openFrom.slice(5, 7)) - 1]} ${openFrom.slice(0, 4)}. Please pick that day or later.`, { openFrom });
-  const closeFrom = getSettings().bookingsCloseFrom;
-  if (closeFrom && req.date >= closeFrom) throw new HttpError(409, 'BOOKINGS_CLOSED', 'Bookings are closed from that date for now. Please pick an earlier day, or call us.', { closeFrom });
+  assertOnlineWindow(req.date);
   const ground = getGroundOr404(req.groundId);
   const plan = planFor(ground, req, true);
-  if (isClosedDate(req.date, plan.format?.ball === 'practice' ? 'practice' : 'ground')) throw new HttpError(409, 'DATE_CLOSED', `Online booking for ${plan.format?.ball === 'practice' ? 'practice sessions' : 'the ground'} is switched off for that day. Please pick another day, or call us.`);
+  assertDayOpen(req.date, plan.format?.ball === 'practice' ? 'practice' : 'ground');
   const promo = req.promoCode ? evaluatePromo(req.promoCode, ground, customer.id, plan.totalPaise) : null;
   if (promo) plan.totalPaise -= promo.discountPaise;
   const s = getSettings();
@@ -180,7 +198,7 @@ export async function holdSlots(cfg: Config, customer: UserRow, body: unknown): 
     takeSlots(id, ground, plan.starts);
     if (promo) run('UPDATE bookings SET promo_code = ?, discount_paise = ? WHERE id = ?', promo.promo.code, promo.discountPaise, id);
     if (repeat) seriesOut = reserveSeries(ground, customer, id, req, repeat, method, plan.format?.ball === 'practice' ? 'practice' : 'ground');
-    audit({ id: customer.id, role: customer.role }, 'booking.hold', 'booking', id, { promo: promo?.promo.code ?? null, discountPaise: promo?.discountPaise ?? 0, slots: plan.starts.length, totalPaise: plan.totalPaise, advancePaise: advance, method }, ground.owner_id);
+    audit({ id: customer.id, role: customer.role }, 'booking.hold', 'booking', id, { promo: promo?.promo.code ?? null, discountPaise: promo?.discountPaise ?? 0, slots: plan.starts.length, totalPaise: plan.totalPaise, advancePaise: advance, method, ...(via.channel ? { via: via.channel, actionId: via.actionId ?? null } : {}) }, ground.owner_id);
 
     let creditApplied = 0;
     if (req.useCredit) {
