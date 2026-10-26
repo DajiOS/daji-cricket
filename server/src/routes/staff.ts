@@ -56,7 +56,7 @@ export function staffRoutes(r: Router): void {
     return ok({ booking: viewBooking(b.id), block: b.series_id ? blockOf(b.series_id) : null, payments, refunds: listRefunds(b.owner_id).filter((x) => x.bookingId === b.id || (b.series_id && seriesBookingIds(b.series_id).includes(x.bookingId))), audit: listAudit({ entity: 'booking', entityId: b.id, limit: 100 }).items });
   }, A);
 
-  r.post('/api/staff/bookings', (c) => created({ booking: createStaffBooking(U(c), parseWalkIn(c.json())) }), A);
+  r.post('/api/staff/bookings', (c) => created({ booking: createStaffBooking(U(c), parseWalkIn(c.json())) }), { ...A, idempotent: true });
 
   // One booking per day for a run of days at one agreed total (camps, tournaments, shoots)
   r.post('/api/staff/bookings/block', (c) => {
@@ -74,7 +74,7 @@ export function staffRoutes(r: Router): void {
     const tournament = tournamentForBlock({ id: u.id, role: u.role }, owner, out.series.id, tn, org, cu.customerId ?? null);
     return created({ ...out, tournament });
     });
-  }, A);
+  }, { ...A, idempotent: true });
 
   // One payment for a whole multi-day booking: it fills the earliest days first
   r.post('/api/staff/bookings/block/:seriesId/payments', (c) => {
@@ -85,7 +85,7 @@ export function staffRoutes(r: Router): void {
     const note = v.str('note', { max: 200 });
     v.done();
     return created({ block: recordBlockPayment(U(c), c.params.seriesId!, { method: method!, amountPaise: amountPaise!, reference, note }) });
-  }, A);
+  }, { ...A, idempotent: true });
 
   // Cancel every day of a multi-day booking at once; `settle` also returns the money (or credits it) now
   r.post('/api/staff/bookings/block/:seriesId/cancel', (c) => {
@@ -95,20 +95,20 @@ export function staffRoutes(r: Router): void {
     const offers = v.strArray('offers', { max: 3, itemMax: 10 });
     v.done();
     return ok({ ...cancelBlock(U(c), c.params.seriesId!, { reason, settle, offers }), block: blockOf(c.params.seriesId!) });
-  }, A);
+  }, { ...A, idempotent: true });
   r.post('/api/staff/bookings/block/:seriesId/settle', (c) => {
     const v = new Validator(c.json());
     const choice = v.oneOf('choice', ['refund', 'half', 'credit'] as const, true);
     v.done();
     return ok({ ...settleBlock(U(c), c.params.seriesId!, choice!), block: blockOf(c.params.seriesId!) });
-  }, A);
+  }, { ...A, idempotent: true });
   // Settle one cancelled booking for the customer (they agreed in person or by phone)
   r.post('/api/staff/bookings/:id/settle', (c) => {
     const v = new Validator(c.json());
     const choice = v.oneOf('choice', ['refund', 'half', 'credit'] as const, true);
     v.done();
     return ok(settleForCustomer(U(c), c.params.id!, choice!));
-  }, A);
+  }, { ...A, idempotent: true });
 
   r.post('/api/staff/bookings/:id/payments', (c) => {
     const v = new Validator(c.json());
@@ -119,13 +119,13 @@ export function staffRoutes(r: Router): void {
     v.done();
     const out = recordOffline(U(c), c.params.id!, { method: method!, amountPaise: amountPaise!, reference, note });
     return created({ ...out, booking: viewBooking(c.params.id!) });
-  }, A);
+  }, { ...A, idempotent: true });
 
   r.post('/api/staff/bookings/:id/no-show', (c) => {
     const b = accessBooking(U(c), c.params.id!, 'manage_bookings');
     markNoShow({ id: U(c).id, role: U(c).role }, b.id);
     return ok({ booking: viewBooking(b.id) });
-  }, A);
+  }, { ...A, idempotent: true });
 
   r.post('/api/staff/bookings/:id/approve', (c) => {
     const b = accessBooking(U(c), c.params.id!, 'manage_bookings');
@@ -184,7 +184,7 @@ export function staffRoutes(r: Router): void {
     const offers = v.strArray('offers', { max: 3, itemMax: 10 });
     v.done();
     return ok(cancelBooking(U(c), c.params.id!, { reason, waive, prefer, offers }));
-  }, A);
+  }, { ...A, idempotent: true });
 
   // ---- payments and refunds
   r.get('/api/staff/payments', (c) => {
@@ -210,7 +210,7 @@ export function staffRoutes(r: Router): void {
     v.done();
     const out = verifyUpi(U(c), c.params.id!, { approve: approve!, reason, receivedPaise });
     return ok({ ...out, booking: viewBooking(out.payment.bookingId) });
-  }, A);
+  }, { ...A, idempotent: true });
 
   r.post('/api/staff/payments/:id/refund', (c) => {
     const v = new Validator(c.json());
@@ -218,14 +218,14 @@ export function staffRoutes(r: Router): void {
     const reason = v.str('reason', { required: true, min: 3, max: 150 });
     v.done();
     return created(requestRefund(U(c), c.params.id!, { amountPaise: amountPaise!, reason: reason! }));
-  }, A);
+  }, { ...A, idempotent: true });
   r.get('/api/staff/refunds', (c) => { needPay(U(c)); return ok({ items: listRefunds(ownerFilter(c), c.query.get('status') ?? undefined) }); }, A);
   r.post('/api/staff/refunds/:id/complete', (c) => {
     const v = new Validator(c.json());
     const reference = v.str('reference', { required: true, max: 80 });
     v.done();
     return ok(completeManualRefund(U(c), c.params.id!, reference!));
-  }, A);
+  }, { ...A, idempotent: true });
 
   // ---- grounds
   r.get('/api/staff/grounds', (c) => { const u = U(c); if (u.role === 'staff' && !hasPermission(u, 'manage_grounds') && !hasPermission(u, 'manage_bookings')) throw new HttpError(403, 'FORBIDDEN', 'This needs a grounds or bookings permission'); return ok({ items: listGrounds({ ownerId: ownerFilter(c), includeInactive: true }) }); }, A);
@@ -336,7 +336,7 @@ export function staffRoutes(r: Router): void {
     if (u.role === 'staff' && amountPaise! > 5_000_000) throw new HttpError(403, 'CREDIT_LIMIT', 'A team member can adjust up to ₹50,000 of credit at a time. Ask the owner for more.');
     credits.adjust(cust.id, owner, amountPaise!, note!, { id: u.id, role: u.role });
     return ok({ balancePaise: credits.balance(cust.id, owner) });
-  }, A);
+  }, { ...A, idempotent: true });
 
   // ---- reports
   r.get('/api/staff/reports/overview', (c) => {

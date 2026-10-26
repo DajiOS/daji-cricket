@@ -4,6 +4,7 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { loadConfig, type Config } from '../src/config.ts';
 import { openDb, closeDb, db } from '../src/db.ts';
+import { withAppendOnlyLifted } from '../src/appendOnly.ts';
 import { buildServer } from '../src/app.ts';
 import { seedDemo, DEMO_ACCOUNTS } from '../src/seed.ts';
 import { setNow, resetClock, advance, T0 } from '../src/clock.ts';
@@ -63,7 +64,7 @@ export async function startHarness(env: Record<string, string> = {}): Promise<Ha
       const d = db();
       d.exec('PRAGMA foreign_keys = OFF');
       const tables = d.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as { name: string }[];
-      for (const t of tables) d.exec(`DELETE FROM "${t.name}"`);
+      withAppendOnlyLifted(d, () => { for (const t of tables) d.exec(`DELETE FROM "${t.name}"`); });
       d.exec('PRAGMA foreign_keys = ON');
       setNow(T0);
       seedDemo(cfg);

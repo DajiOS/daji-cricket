@@ -1,6 +1,7 @@
 import type { AuditEntry } from '@daji/shared';
 import { many, run } from './db.ts';
 import { now } from './clock.ts';
+import './appendOnly.ts'; // registers the append-only guards on the audit log, payment history, credit ledger and webhook receipts
 
 export interface Actor {
   id: string | null;

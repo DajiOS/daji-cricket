@@ -8,6 +8,7 @@ import { HttpError, forbidden } from './errors.ts';
 import { now } from './clock.ts';
 import { serveWeb } from './site.ts';
 import { serveLibraryFile } from './library.ts';
+import { idemAbandon, idemBegin, idemFinish, parseIdempotencyKey, requestHash } from './idempotency.ts';
 
 export interface Reply {
   status: number;
@@ -40,6 +41,8 @@ export interface RouteOpts {
   /** The handler reads the request itself (a large upload streamed to disk); the body is not buffered. */
   stream?: boolean;
   rate?: 'auth' | 'none';
+  /** Honours the `Idempotency-Key` header: a retry with the same key and request gets the first answer back and the action is not repeated. 'required' refuses a request that has no key. */
+  idempotent?: boolean | 'required';
 }
 interface Route { method: string; re: RegExp; keys: string[]; handler: Handler; opts: RouteOpts }
 
@@ -130,7 +133,7 @@ function corsHeaders(cfg: Config, origin: string | undefined): Record<string, st
     }
   }
   if (h['Access-Control-Allow-Origin']) {
-    h['Access-Control-Allow-Headers'] = 'Authorization, Content-Type';
+    h['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, Idempotency-Key, X-Daji-Env';
     h['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
     h['Access-Control-Max-Age'] = '600';
   }
@@ -262,8 +265,24 @@ export function createApp(cfg: Config, router: Router): Server {
           try { return (parsed = JSON.parse(raw.toString('utf8'))); } catch { throw new HttpError(400, 'BAD_JSON', 'The request body is not valid JSON'); }
         },
       };
-      const out = await route.handler(ctx);
-      if ((out as unknown) === HANDLED) { status = res.statusCode; return; }
+      const idemKey = route.opts.idempotent ? parseIdempotencyKey(req.headers['idempotency-key']) : null;
+      if (route.opts.idempotent === 'required' && !idemKey) throw new HttpError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'Send an Idempotency-Key header so a retry cannot repeat this action');
+      const scope = user ? `u:${user.id}` : `ip:${ip}`;
+      if (idemKey) {
+        const begin = idemBegin(scope, idemKey, method, url.pathname + url.search, requestHash(method, url.pathname + url.search, raw));
+        if (begin.kind === 'replay') {
+          status = begin.status;
+          send(res, { status: begin.status, raw: begin.body, contentType: 'application/json; charset=utf-8', headers: { 'Idempotent-Replayed': 'true' } }, { ...cors, 'Cache-Control': 'no-store' });
+          return;
+        }
+      }
+      let out: Reply;
+      try { out = await route.handler(ctx); } catch (e) { if (idemKey) idemAbandon(scope, idemKey); throw e; }
+      if ((out as unknown) === HANDLED) { if (idemKey) idemAbandon(scope, idemKey); status = res.statusCode; return; }
+      if (idemKey) {
+        if (out.status >= 200 && out.status < 300 && out.raw === undefined) idemFinish(scope, idemKey, out.status, out.body === undefined ? '' : JSON.stringify(out.body));
+        else idemAbandon(scope, idemKey);
+      }
       status = out.status;
       send(res, out, { ...cors, 'Cache-Control': 'no-store' });
     } catch (e) {

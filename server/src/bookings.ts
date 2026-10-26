@@ -121,7 +121,7 @@ export function confirmBooking(id: string, actor: Actor, detail: Record<string, 
     const who = one<{ name: string }>('SELECT name FROM users WHERE id = ?', b.customer_id);
     pushStaffOf(b.owner_id, 'booking_needs_approval', 'Booking waiting for approval', `${who?.name ?? 'A customer'} · ${g?.name ?? ''} · ${fmtDateTime(b.start_at)} · deposit ${formatPaise(b.paid_paise)}. Open the app to approve.`, id);
   } else notify(b.customer_id, 'booking_confirmed', d, id);
-  confirmSiblings(b, needsApproval, t);
+  confirmSiblings(b, needsApproval, t, actor);
   return true;
 }
 
@@ -129,10 +129,10 @@ export function confirmBooking(id: string, actor: Actor, detail: Record<string, 
  * The first booking of a repeating series carries the deposit. The later dates are reserved with it (held without a timer);
  * once the first is confirmed they are confirmed too, with their balance due at the ground (or collected by auto-debit).
  */
-function confirmSiblings(first: BookingRow, needsApproval: boolean, t: number): void {
+function confirmSiblings(first: BookingRow, needsApproval: boolean, t: number, actor: Actor): void {
   if (!first.series_id || first.series_index !== 0) return;
   const r = run("UPDATE bookings SET status = 'confirmed', approval = ?, confirmed_at = ?, updated_at = ? WHERE series_id = ? AND series_index > 0 AND status = 'held'", needsApproval ? 'pending' : 'approved', t, t, first.series_id);
-  if (Number(r.changes) > 0) audit({ id: first.created_by ?? 'system', role: 'customer' }, 'series.confirm', 'booking', first.id, { dates: Number(r.changes) }, first.owner_id);
+  if (Number(r.changes) > 0) audit(actor, 'series.confirm', 'booking', first.id, { dates: Number(r.changes) }, first.owner_id);
 }
 
 /** The first booking of a series did not go through: the reserved later dates are given back. */
