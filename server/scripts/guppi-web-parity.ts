@@ -48,7 +48,7 @@ try {
         await ctx.addInitScript((t: string) => { try { localStorage.setItem('daji.token', t); } catch { /* blocked */ } }, token);
         const page = await ctx.newPage();
         const row: Record<string, unknown> = { device: profile.name, userAgent: profile.context.userAgent, viewport: profile.context.viewport, scenario: `${kind}: ${sc.id}`, input: sc.text };
-        const shot = async (step: string) => { const f = `${profile.name.replace(/\W+/g, '-')}_${kind}_${sc.id.replace(/\W+/g, '-')}_${step}.png`; await page.screenshot({ path: join(out, f) }); (row.screenshots as string[] ??= []).push(f); };
+        const shot = async (step: string) => { const f = `${profile.name.replace(/\W+/g, '-')}_${kind}_${sc.id.replace(/\W+/g, '-')}_${step}.png`; await page.screenshot({ path: join(out, f) }); ((row.screenshots ??= []) as string[]).push(f); };
         const before = fingerprint();
         try {
           await page.goto(h.url + '/', { waitUntil: 'domcontentloaded' });
@@ -56,7 +56,7 @@ try {
           await page.click('#guppi-open');
           await page.fill('#guppi-input', sc.text);
           await page.click('#guppi-send');
-          await page.waitForFunction(() => document.querySelectorAll('#guppi-log .gp-msg.guppi').length >= 1, null, { timeout: 15000 });
+          await page.waitForFunction("document.querySelectorAll('#guppi-log .gp-msg.guppi').length >= 1", null, { timeout: 15000 });
           row.reply = (await page.locator('#guppi-log .gp-msg.guppi').last().innerText()).trim();
           await shot('1-reply');
           if (kind === 'booking') {
