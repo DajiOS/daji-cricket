@@ -2,7 +2,7 @@
 // record, FAIL when any wrote FAIL, and NOT_RUN when no record exists. A case that skipped itself (missing fixture, missing tool) is SKIPPED and counts as not run.
 //
 //   node scripts/build-p0-tracker.ts --starter <dir with the starter CSVs> --evidence <dir of rel JSON records> --out <dir>
-//        [--construction <vitest json>] [--before <dir of records from the base release> [--before-logs <dir of the base-release run logs>]] [--executor "<name>"] [--evidence-prefix TESTS/evidence]
+//        [--construction <vitest json>] [--before <dir of records from the base release> [--before-logs <dir of the base-release run logs>]] [--register <gap register csv>] [--executor "<name>"] [--evidence-prefix TESTS/evidence]
 //
 // Writes P0_TEST_EXECUTION_TRACKER.csv, P0_GATES.json and TRACEABILITY.csv into --out, and exits 1 when a gate is not met (so a pipeline cannot call it a GO).
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -14,7 +14,7 @@ function arg(name: string, dflt?: string): string | undefined {
 }
 const starter = arg('starter'), evidenceDir = arg('evidence'), out = arg('out');
 if (!starter || !evidenceDir || !out) { console.error('usage: build-p0-tracker.ts --starter D --evidence D --out D [--construction F] [--before D] [--executor N]'); process.exit(2); }
-const constructionFile = arg('construction'), beforeDir = arg('before'), beforeLogs = arg('before-logs'), executor = arg('executor', 'Claude Code (automated test run)')!, prefix = arg('evidence-prefix', 'TESTS/evidence')!;
+const constructionFile = arg('construction'), beforeDir = arg('before'), beforeLogs = arg('before-logs'), registerFile = arg('register'), executor = arg('executor', 'Claude Code (automated test run)')!, prefix = arg('evidence-prefix', 'TESTS/evidence')!;
 
 // ---- CSV helpers
 function parseCsv(text: string): string[][] {
@@ -54,6 +54,14 @@ function absentOnBase(testFile: string): string | null {
 const before = beforeDir ? load(beforeDir) : [];
 const group = (recs: Rec[]) => { const m = new Map<string, Rec[]>(); for (const r of recs) m.set(r.id, [...(m.get(r.id) ?? []), r]); return m; };
 const A = group(after), B = group(before);
+
+// ---- the gap register decides what counts as a defect or a gap: a test that cannot even load on the base release only proves a gap when the register says the feature was MISSING
+const classOf = new Map<string, string[]>();
+if (registerFile) {
+  const [rh, ...rb] = parseCsv(readFileSync(registerFile, 'utf8')).filter((r) => r.length > 1);
+  const ri = rh!.indexOf('Requirement ID'), ci = rh!.indexOf('Classification');
+  for (const r of rb) classOf.set(r[ri]!, [...(classOf.get(r[ri]!) ?? []), r[ci]!]);
+}
 
 // ---- construction suite (a separate Fastify/Postgres project): its vitest JSON is evidence for the ids it covers
 interface VT { fullName: string; status: string }
@@ -122,10 +130,12 @@ for (const r of trackerRows.slice(1)) {
   else { gates.notRun++; if (skipped) gates.skippedUnapproved++; }
 
   const bs = B.get(id);
+  const cls = classOf.get(id) ?? [];
   const gone = !bs && recs[0] ? absentOnBase(recs[0].file) : null;
   const errSnippet = bs?.find((x) => x.result === 'FAIL')?.error?.replace(/\s+/g, ' ').slice(0, 140) ?? '';
-  const beforeResult = !beforeDir ? 'not run' : gone ? `FAIL: not runnable on the base release, ${gone} does not exist there` : !bs ? 'not run on the base release (the test needs the migrated database, or covers another project)' : bs.some((x) => x.result === 'FAIL') ? `FAIL on the base release: ${errSnippet}` : bs.every((x) => x.result === 'PASS') ? 'PASS on the base release (existing behaviour verified, not a defect)' : 'SKIPPED (needs the old-release fixture)';
-  const defect = /^FAIL/.test(beforeResult) && result === 'PASS' ? `DEF-${id}` : '';
+  const beforeResult = !beforeDir ? 'not run' : gone ? `FAIL: not runnable on the base release, ${gone} does not exist there${cls.length && !cls.some((c) => c === 'DEFECT' || c === 'MISSING') ? ' (the test uses it; the behaviour on the base release was not measured)' : ''}` : !bs ? 'no base-release run (a separate project, or a check on the new package itself)' : bs.some((x) => x.result === 'FAIL') ? `FAIL on the base release: ${errSnippet}` : bs.every((x) => x.result === 'PASS') ? 'PASS on the base release (existing behaviour verified, not a defect)' : 'SKIPPED (needs the old-release fixture)';
+  const failedBefore = /^FAIL/.test(beforeResult) && result === 'PASS';
+  const defect = !failedBefore ? '' : cls.length && !cls.some((c) => c === 'DEFECT' || c === 'MISSING') ? '' : /^FAIL on/.test(beforeResult) ? `DEF-${id}` : `GAP-${id}`;
   const first = recs[0];
   const facts = recs.flatMap((x) => Object.entries(x.facts).map(([k, v]) => `${k}=${JSON.stringify(v)}`)).join('; ');
   const files = [...new Set(recs.map((x) => x.file).filter(Boolean))].join(' ');

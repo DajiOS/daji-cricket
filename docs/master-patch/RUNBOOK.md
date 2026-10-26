@@ -13,7 +13,7 @@ This is for the person releasing the patch. Commands are run from `server/` unle
 | Razorpay keys, webhook secret | set (live keys, not `rzp_test_`), or `PAYMENTS_MODE=upi_only` | Live payments need them; a test key in a live system is refused, and a live key in a test system is refused. |
 | `PUBLIC_URL` | `https://...` | Refused otherwise. |
 
-`deploy/.env.example` has these. `deploy/check-live.sh` checks `/api/health` says `env: live`. Mobile: EAS `production*` profiles point at `https://api.dajicricket.com` and say `live`; `development` and `preview*` profiles never default to live (a preview build needs `EXPO_PUBLIC_API_URL` set to a test server).
+The construction suite (separate project) likewise refuses `NODE_ENV=production` unless `FILE_SCANNER=clamav` (with `CLAMAV_HOST`, `CLAMAV_PORT`) and needs its new migration `database/006_upload_scan.sql`. `deploy/.env.example` has the Daji settings. `deploy/check-live.sh` checks `/api/health` says `env: live`. Mobile: EAS `production*` profiles point at `https://api.dajicricket.com` and say `live`; `development` and `preview*` profiles never default to live (a preview build needs `EXPO_PUBLIC_API_URL` set to a test server).
 
 **Release switches** (Settings, admin): `guppiAssistEnabled`, `customerRescheduleEnabled`, `retentionDisputesEnabled`. A switched-off feature answers `503 FEATURE_OFF` on every route. Recommended for the first live release: switch the first two OFF, because no client has screens for them yet (open P1-01, P1-02).
 
