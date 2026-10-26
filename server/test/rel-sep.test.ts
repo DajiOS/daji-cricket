@@ -81,5 +81,5 @@ rel('REL-SEP-001', 'Daji project purity: no other-project name in any active fil
   }
   ev('scannedTextFiles', scanned); ev('files', rows.length); ev('terms', 'two other-project names (spelled out in the search evidence file, not in source)'); ev('databaseObjects', objects.length);
   ev('docsAddressOnlyHits', hits.filter((x) => x.file.startsWith('docs/')).length);
-  ev('renamed', 'desk/styles/' + 'ak' + 'ea.css -> desk/styles/daji.css (the desk build puts daji.css first, so the cascade is unchanged)');
+  ev('renamed', 'the desk stylesheet that carried another project\'s name is now desk/styles/daji.css (the desk build puts daji.css first, so the cascade is unchanged)');
 });
