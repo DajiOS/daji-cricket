@@ -87,13 +87,13 @@ export function planFor(ground: GroundRow, req: { date: string; startTime: strin
 }
 
 /** Inserts the slot rows. The (ground, slot) primary key is the final guard against double booking. */
-function takeSlots(bookingId: string, ground: GroundRow, starts: number[]): void {
+export function takeSlots(bookingId: string, ground: GroundRow, starts: number[]): void {
   for (const s of starts) {
     const hit = one<{ kind: string; booking_id: string | null }>('SELECT kind, booking_id FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, s);
     if (hit) {
-      // The same person asking again (a retry whose answer was lost, a second tap) is told about their own hold instead of "someone else booked it".
+      // The same person asking again for exactly the same time (a retry whose answer was lost, a second tap) is told about their own hold instead of "someone else booked it".
       const mine = hit.kind === 'booking' && hit.booking_id
-        ? one<{ id: string; ref: string }>("SELECT o.id, o.ref FROM bookings o JOIN bookings n ON n.customer_id = o.customer_id WHERE o.id = ? AND n.id = ? AND o.status = 'held'", hit.booking_id, bookingId) : undefined;
+        ? one<{ id: string; ref: string }>("SELECT o.id, o.ref FROM bookings o JOIN bookings n ON n.customer_id = o.customer_id AND n.start_at = o.start_at AND n.slot_count = o.slot_count WHERE o.id = ? AND n.id = ? AND o.status = 'held'", hit.booking_id, bookingId) : undefined;
       if (mine) throw new HttpError(409, 'ALREADY_HELD_BY_YOU', `You already hold the ${timeOfDay(s)} slot (booking ${mine.ref}). Continue with that booking.`, { slot: s, bookingId: mine.id });
       throw new HttpError(409, 'SLOT_TAKEN', hit.kind === 'block' ? `The ${timeOfDay(s)} slot is not available` : `The ${timeOfDay(s)} slot has just been booked by someone else`, { slot: s });
     }

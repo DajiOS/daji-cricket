@@ -11,6 +11,8 @@ import { now } from '../clock.ts';
 import { splitName, titleCase } from '../names.ts';
 import { accessBooking, bookingPayments, listBookings, viewBooking } from '../bookings.ts';
 import { readName, holdSlots, parseHold, planFor } from '../hold.ts';
+import { rescheduleBooking } from '../reschedule.ts';
+import { holdFromOption, parseOptionRequest, searchOptions } from '../options.ts';
 import { cancelSeries, seriesOf } from '../recurring.ts';
 import { cancelMandate, confirmMandate, mandateView, startMandate, LIMITS } from '../autodebit.ts';
 import { evaluatePromo } from '../promo.ts';
@@ -149,7 +151,15 @@ export function customerRoutes(r: Router): void {
     const { promo, discountPaise } = evaluatePromo(code, getGroundOr404(req.groundId), U(c).id, plan.totalPaise);
     return ok({ code: promo.code, label: promo.label, discountPaise, totalPaise: plan.totalPaise - discountPaise, fullPricePaise: plan.totalPaise });
   }, { auth: ['customer'] });
-  r.post('/api/bookings', async (c) => created(await holdSlots(c.cfg, U(c), c.json())), { idempotent: true, auth: ['customer'] });
+  r.post('/api/bookings', async (c) => {
+    const body = c.json();
+    const viaOption = !!body && typeof body === 'object' && 'optionId' in (body as object);
+    return created(await (viaOption ? holdFromOption(c.cfg, U(c), body) : holdSlots(c.cfg, U(c), body)));
+  }, { idempotent: true, auth: ['customer'] });
+  r.post('/api/availability/options', (c) => {
+    const q = parseOptionRequest(c.json());
+    return ok(searchOptions(c.cfg, U(c), q, q.max));
+  }, { auth: ['customer', 'owner', 'staff'] });
 
   r.get('/api/bookings', (c) => {
     const { limit, offset } = page(c);
@@ -174,6 +184,8 @@ export function customerRoutes(r: Router): void {
     const prefer = c.query.get('prefer');
     return ok(cancelPreviewFor(U(c), c.params.id!, prefer === 'credit' ? 'credit' : undefined));
   }, { auth: ['customer'] });
+
+  r.post('/api/bookings/:id/reschedule', (c) => ok(rescheduleBooking(c.cfg, U(c), c.params.id!, c.json())), { idempotent: true, auth: ['customer'] });
 
   r.post('/api/bookings/:id/cancel', (c) => {
     const v = new Validator(c.json());

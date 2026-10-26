@@ -40,7 +40,7 @@ registerSchema('offers-1', `ALTER TABLE bookings ADD COLUMN cancel_offers TEXT;`
 export interface BookingRow {
   id: string; ref: string; ground_id: string; owner_id: string; customer_id: string; date: string; start_at: number; end_at: number; slot_count: number; format_label: string | null; ball: 'red' | 'white' | 'tennis' | null;
   status: BookingStatus; source: 'online' | 'walk_in' | 'enquiry'; total_paise: number; advance_paise: number; paid_paise: number; pay_method: 'razorpay' | 'upi' | null;
-  hold_expires_at: number | null; hold_extensions: number; needs_review: number; confirmed_at: number | null; cancelled_at: number | null;
+  hold_expires_at: number | null; hold_extensions: number; reschedule_count: number; needs_review: number; confirmed_at: number | null; cancelled_at: number | null;
   cancel_kind: 'free' | 'credit' | 'none' | null; cancel_reason: string | null; cancelled_by: string | null; refund_paise: number; credit_paise: number;
   approval: 'pending' | 'approved'; resolution: 'awaiting' | 'refund' | 'half' | 'credit' | null; owner_cancelled: number; cancel_offers: string | null; promo_code: string | null; discount_paise: number; series_id: string | null; series_index: number | null;
   players: number | null; notes: string | null; enquiry_id: string | null; created_by: string | null; reminded_at: number | null; created_at: number; updated_at: number;

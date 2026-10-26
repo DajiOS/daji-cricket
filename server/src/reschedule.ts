@@ -1,0 +1,169 @@
+import type { Booking } from '@daji/shared';
+import { formatPaise } from '@daji/shared';
+import { many, one, run, tx, registerSchema } from './db.ts';
+import { now } from './clock.ts';
+import { newId } from './ids.ts';
+import { HttpError } from './errors.ts';
+import { audit, type Actor } from './audit.ts';
+import { Validator } from './input.ts';
+import { HOUR, MIN, timeOfDay } from './time.ts';
+import { getSettings } from './settings.ts';
+import { accessBooking, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
+import { getGroundOr404, slotPrice, slotStarts } from './grounds.ts';
+import { assertDayOpen, assertOnlineWindow, planFor, takeSlots } from './hold.ts';
+import { resolveOption } from './options.ts';
+import { cancelBooking } from './cancellation.ts';
+import { notify, pushStaffOf, venueData } from './notifications.ts';
+import { requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
+import type { Config } from './config.ts';
+
+// Moving a confirmed booking, adding time to it, and cancelling a whole day for weather. None of these is a second booking path: the new slots go through the
+// same planner and the same slot guard as a hold, inside one transaction, so a move either lands completely or changes nothing.
+
+registerSchema('reschedule-1', `
+ALTER TABLE bookings ADD COLUMN reschedule_count INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE booking_reschedules (
+  id TEXT PRIMARY KEY,
+  booking_id TEXT NOT NULL REFERENCES bookings(id),
+  owner_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('move','extend')),
+  from_start_at INTEGER NOT NULL, from_end_at INTEGER NOT NULL, from_slots INTEGER NOT NULL, from_total_paise INTEGER NOT NULL,
+  to_start_at INTEGER NOT NULL, to_end_at INTEGER NOT NULL, to_slots INTEGER NOT NULL, to_total_paise INTEGER NOT NULL,
+  actor_id TEXT NOT NULL, actor_role TEXT NOT NULL, reason TEXT, created_at INTEGER NOT NULL
+);
+CREATE INDEX ix_booking_reschedules_booking ON booking_reschedules(booking_id, created_at);
+CREATE TRIGGER trg_ao_booking_reschedules_update BEFORE UPDATE ON booking_reschedules BEGIN SELECT RAISE(ABORT, 'booking_reschedules is append-only: update refused'); END;
+CREATE TRIGGER trg_ao_booking_reschedules_delete BEFORE DELETE ON booking_reschedules BEGIN SELECT RAISE(ABORT, 'booking_reschedules is append-only: delete refused'); END;
+`);
+
+/** A customer may move a booking this many times. The ground's staff are not limited. */
+export const MAX_CUSTOMER_RESCHEDULES = 2;
+
+export interface RescheduleResult { booking: Booking; fromStartAt: number; toStartAt: number; fromTotalPaise: number; toTotalPaise: number; balancePaise: number }
+
+function parseMove(cfg: Config, user: UserRow, body: unknown): { groundId?: string; date: string; startTime: string; slots?: number; formatId?: string; ruleId?: string; reason?: string; totalPaise?: number } {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  if (typeof b.optionId === 'string') {
+    const extra = Object.keys(b).filter((k) => k !== 'optionId' && k !== 'reason');
+    if (extra.length) throw new HttpError(400, 'OPTION_FIELDS_NOT_ALLOWED', `A booking option fixes the slot and price; these fields cannot be sent with it: ${extra.join(', ')}`);
+    const { request, totalPaise } = resolveOption(cfg, user.id, b.optionId);
+    return { ...request, reason: typeof b.reason === 'string' ? b.reason.slice(0, 300) : undefined, totalPaise };
+  }
+  const v = new Validator(body);
+  const groundId = v.str('groundId', { max: 40 });
+  const date = v.date('date', true), startTime = v.time('startTime', true);
+  const formatId = v.str('formatId', { max: 40 }), ruleId = v.str('ruleId', { max: 40 });
+  const slots = v.int('slots', { min: 1, max: 24 });
+  const reason = v.str('reason', { max: 300 });
+  v.done();
+  return { groundId, date: date!, startTime: startTime!, slots, formatId, ruleId, reason };
+}
+
+function ensureMovable(b: BookingRow): void {
+  if (b.status !== 'confirmed') throw new HttpError(409, 'BAD_STATE', `Only a confirmed booking can be moved. This one is ${b.status}.`);
+  if (b.series_id) throw new HttpError(409, 'SERIES_NOT_MOVABLE', 'A repeating or block booking cannot be moved one date at a time. Cancel the date and book another.');
+  if (b.start_at <= now()) throw new HttpError(409, 'ALREADY_STARTED', 'This booking has already started.');
+  const inFlight = one<{ n: number }>("SELECT COUNT(*) n FROM payments WHERE booking_id = ? AND status IN ('created','pending','submitted')", b.id)!.n;
+  if (inFlight) throw new HttpError(409, 'PAYMENT_IN_FLIGHT', 'A payment on this booking is still being confirmed. Move it once that is settled.');
+}
+
+/**
+ * Moves a confirmed booking to another time on the same ground. Customers: before the free-cancellation cut-off, limited times, only to a time the ground offers online.
+ * The old slots are given up and the new ones taken in one transaction; if the new ones are not free nothing changes. What was paid stays on the booking;
+ * a dearer slot leaves a larger balance. A cheaper slot that would leave the booking over-paid is refused: cancel and rebook, so the money is settled by the refund rules.
+ */
+export function rescheduleBooking(cfg: Config, user: UserRow, bookingId: string, body: unknown): RescheduleResult {
+  const byCustomer = user.role === 'customer';
+  const b0 = accessBooking(user, bookingId, byCustomer ? undefined : 'manage_bookings');
+  const req = parseMove(cfg, user, body);
+  if (req.groundId && req.groundId !== b0.ground_id) throw new HttpError(409, 'SAME_GROUND_ONLY', 'A booking can only be moved to another time on the same ground.');
+  const actor: Actor = { id: user.id, role: user.role };
+  return tx(() => {
+    const b = accessBooking(user, bookingId);
+    ensureMovable(b);
+    const t = now();
+    if (byCustomer) {
+      if (b.start_at - t <= getSettings().freeCancelHours * HOUR) throw new HttpError(409, 'RESCHEDULE_TOO_LATE', `A booking can be moved up to ${getSettings().freeCancelHours} hours before it starts. Please call the ground.`);
+      if (b.reschedule_count >= MAX_CUSTOMER_RESCHEDULES) throw new HttpError(409, 'RESCHEDULE_LIMIT', `A booking can be moved ${MAX_CUSTOMER_RESCHEDULES} times. Please call the ground.`);
+      assertOnlineWindow(req.date);
+    }
+    const ground = getGroundOr404(b.ground_id);
+    const plan = planFor(ground, { date: req.date, startTime: req.startTime, slots: req.slots ?? (b.format_label ? undefined : b.slot_count), formatId: req.formatId, ruleId: req.ruleId }, byCustomer);
+    if (byCustomer) assertDayOpen(req.date, plan.format?.ball === 'practice' ? 'practice' : 'ground');
+    if (req.totalPaise !== undefined && req.totalPaise !== plan.totalPaise) throw new HttpError(409, 'OPTION_PRICE_CHANGED', 'The price changed since this option was offered. Ask for the options again.', { offeredPaise: req.totalPaise, currentPaise: plan.totalPaise });
+    const sameSlots = plan.starts.length === b.slot_count && plan.starts[0] === b.start_at;
+    if (sameSlots) throw new HttpError(409, 'NO_CHANGE', 'That is the time the booking already has.');
+    const newTotal = Math.max(plan.totalPaise - Math.min(b.discount_paise ?? 0, plan.totalPaise), 0);
+    if (newTotal < b.paid_paise) throw new HttpError(409, 'RESCHEDULE_NEEDS_SETTLEMENT', `That time costs ${formatPaise(newTotal)}, less than the ${formatPaise(b.paid_paise)} already paid. Cancel this booking and book the new time so the difference is settled by the refund rules.`, { newTotalPaise: newTotal, paidPaise: b.paid_paise });
+
+    releaseSlots(b.id);
+    takeSlots(b.id, ground, plan.starts); // a taken slot throws and the whole move rolls back, including the release above
+    const endAt = plan.starts[plan.starts.length - 1]! + ground.slot_minutes * MIN;
+    run(`UPDATE bookings SET date = ?, start_at = ?, end_at = ?, slot_count = ?, total_paise = ?, advance_paise = MIN(advance_paise, ?), format_label = ?, ball = ?, reminded_at = NULL, reschedule_count = reschedule_count + 1, updated_at = ? WHERE id = ?`,
+      plan.date, plan.starts[0]!, endAt, plan.starts.length, newTotal, newTotal, plan.format?.label ?? null, plan.format?.ball ?? null, t, b.id);
+    run("INSERT INTO booking_reschedules(id, booking_id, owner_id, kind, from_start_at, from_end_at, from_slots, from_total_paise, to_start_at, to_end_at, to_slots, to_total_paise, actor_id, actor_role, reason, created_at) VALUES(?,?,?,'move',?,?,?,?,?,?,?,?,?,?,?,?)",
+      newId('rsc'), b.id, b.owner_id, b.start_at, b.end_at, b.slot_count, b.total_paise, plan.starts[0]!, endAt, plan.starts.length, newTotal, user.id, user.role, req.reason ?? null, t);
+    audit(actor, 'booking.reschedule', 'booking', b.id, { fromStartAt: b.start_at, toStartAt: plan.starts[0], fromTotalPaise: b.total_paise, toTotalPaise: newTotal, paidPaise: b.paid_paise, reason: req.reason ?? null }, b.owner_id);
+    notify(b.customer_id, 'booking_rescheduled', { ref: b.ref, ground: ground.name, startAt: plan.starts[0], extra: newTotal > b.paid_paise ? `Balance to pay at the ground: ${formatPaise(newTotal - b.paid_paise)}.` : undefined, ...venueData(b.ground_id) }, b.id);
+    if (byCustomer) pushStaffOf(b.owner_id, 'booking_rescheduled_by_customer', 'Booking moved', `${b.ref} was moved by the customer to ${timeOfDay(plan.starts[0]!)} on ${plan.date}.`, b.id);
+    return { booking: viewBooking(b.id), fromStartAt: b.start_at, toStartAt: plan.starts[0]!, fromTotalPaise: b.total_paise, toTotalPaise: newTotal, balancePaise: Math.max(newTotal - b.paid_paise, 0) };
+  });
+}
+
+/**
+ * Overtime: adds hours after the end of a confirmed booking when the next slots are free, at the ground's hourly price for those slots. The price is added to the balance,
+ * which is collected the usual way (nothing is charged here). Staff only; a customer who wants longer asks the ground.
+ */
+export function extendBooking(user: UserRow, bookingId: string, body: unknown): RescheduleResult {
+  const v = new Validator(body);
+  const extra = v.int('slots', { required: true, min: 1, max: 6 });
+  const reason = v.str('reason', { max: 300 });
+  v.done();
+  const actor: Actor = { id: user.id, role: user.role };
+  return tx(() => {
+    const b = accessBooking(user, bookingId, 'manage_bookings');
+    if (b.status !== 'confirmed') throw new HttpError(409, 'BAD_STATE', `Only a confirmed booking can be extended. This one is ${b.status}.`);
+    if (b.series_id) throw new HttpError(409, 'SERIES_NOT_MOVABLE', 'A repeating or block booking cannot be extended one date at a time.');
+    if (b.end_at <= now() - 6 * HOUR) throw new HttpError(409, 'TOO_OLD', 'This booking ended too long ago to extend.');
+    const ground = getGroundOr404(b.ground_id);
+    const day = slotStarts(ground, b.date);
+    const last = b.end_at - ground.slot_minutes * MIN;
+    const at = day.indexOf(last);
+    const next = at < 0 ? [] : day.slice(at + 1, at + 1 + extra!);
+    if (next.length < extra!) throw new HttpError(409, 'OUTSIDE_HOURS', 'The ground closes before that much extra time.');
+    const add = next.reduce((s, x) => s + slotPrice(ground, b.date, x), 0);
+    takeSlots(b.id, ground, next);
+    const t = now();
+    const endAt = next[next.length - 1]! + ground.slot_minutes * MIN;
+    run('UPDATE bookings SET end_at = ?, slot_count = slot_count + ?, total_paise = total_paise + ?, updated_at = ? WHERE id = ?', endAt, next.length, add, t, b.id);
+    run("INSERT INTO booking_reschedules(id, booking_id, owner_id, kind, from_start_at, from_end_at, from_slots, from_total_paise, to_start_at, to_end_at, to_slots, to_total_paise, actor_id, actor_role, reason, created_at) VALUES(?,?,?,'extend',?,?,?,?,?,?,?,?,?,?,?,?)",
+      newId('rsc'), b.id, b.owner_id, b.start_at, b.end_at, b.slot_count, b.total_paise, b.start_at, endAt, b.slot_count + next.length, b.total_paise + add, user.id, user.role, reason ?? null, t);
+    audit(actor, 'booking.extend', 'booking', b.id, { addedSlots: next.length, addedPaise: add, fromEndAt: b.end_at, toEndAt: endAt, reason: reason ?? null }, b.owner_id);
+    notify(b.customer_id, 'booking_extended', { ref: b.ref, ground: ground.name, extra: `${next.length} more hour${next.length > 1 ? 's' : ''} added (${formatPaise(add)}).` }, b.id);
+    const after = viewBooking(b.id);
+    return { booking: after, fromStartAt: b.start_at, toStartAt: b.start_at, fromTotalPaise: b.total_paise, toTotalPaise: b.total_paise + add, balancePaise: after.balancePaise };
+  });
+}
+
+export interface DayCancelResult { cancelled: string[]; alreadyCancelled: string[]; skipped: { id: string; reason: string }[] }
+
+/**
+ * Weather or another operational reason closes a ground for a day. Every held or confirmed booking that day is cancelled by the ground with the reason;
+ * a booking with money on it goes to the customer's choice (full refund, credit, or another slot), exactly as a single cancellation by the ground does.
+ * Safe to run again: a booking already cancelled is left alone.
+ */
+export function cancelGroundDay(user: UserRow, groundId: string, date: string, reason: string, offers?: string[]): DayCancelResult {
+  const g = getGroundOr404(groundId);
+  if (user.role !== 'super_admin' && scopeOwnerId(user) !== g.owner_id) throw new HttpError(404, 'NOT_FOUND', 'Ground not found');
+  requirePermission(user, 'manage_bookings');
+  const r = reason.trim();
+  if (r.length < 10) throw new HttpError(400, 'REASON_REQUIRED', 'Explain why the day is cancelled (at least 10 characters). Customers will read it.');
+  const rows = many<BookingRow>("SELECT * FROM bookings WHERE ground_id = ? AND date = ? AND status IN ('held','confirmed') AND start_at > ? ORDER BY start_at", groundId, date, now());
+  const out: DayCancelResult = { cancelled: [], alreadyCancelled: many<{ id: string }>("SELECT id FROM bookings WHERE ground_id = ? AND date = ? AND status = 'cancelled'", groundId, date).map((x) => x.id), skipped: [] };
+  for (const b of rows) {
+    try { cancelBooking(user, b.id, { reason: r, offers, waive: false }); out.cancelled.push(b.id); }
+    catch (e) { out.skipped.push({ id: b.id, reason: (e as Error).message }); }
+  }
+  audit({ id: user.id, role: user.role }, 'ground.day_cancel', 'ground', groundId, { date, reason: r, cancelled: out.cancelled.length, skipped: out.skipped.length }, g.owner_id);
+  return out;
+}

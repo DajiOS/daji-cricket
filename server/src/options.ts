@@ -6,7 +6,8 @@ import { HttpError } from './errors.ts';
 import { addDays, MIN, timeOfDay } from './time.ts';
 import { advanceFor } from './bookings.ts';
 import { getGroundOr404, slotStarts, type GroundRow } from './grounds.ts';
-import { assertDayOpen, assertOnlineWindow, planFor } from './hold.ts';
+import { assertDayOpen, assertOnlineWindow, holdSlots, planFor } from './hold.ts';
+import type { HoldResponse } from '@daji/shared';
 import type { UserRow } from './auth.ts';
 import { Validator } from './input.ts';
 
@@ -148,4 +149,24 @@ const timeMinutes = (hhmm: string): number => Number(hhmm.slice(0, 2)) * 60 + Nu
 /** For tests and diagnostics: how many slots are held or booked on a ground in a range. */
 export function slotsTaken(groundId: string, from: number, to: number): number {
   return one<{ n: number }>('SELECT COUNT(*) n FROM booking_slots WHERE ground_id = ? AND slot_start >= ? AND slot_start < ?', groundId, from, to)!.n;
+}
+
+const OPTION_BODY_KEYS = new Set(['optionId', 'useCredit', 'players', 'notes', 'promoCode']);
+
+/**
+ * Starts a hold from an issued option id. The id fixes the ground, day, time and length; the caller can only add who is playing, notes, a promo code and
+ * whether to use credit. Any other field is refused (a channel cannot change what was offered), and if the price moved since it was offered
+ * the hold is refused so the person sees the new price first.
+ */
+export async function holdFromOption(cfg: Config, customer: UserRow, body: unknown, via: { channel?: 'guppi'; actionId?: string } = {}): Promise<HoldResponse> {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  if (typeof b.optionId !== 'string') throw new HttpError(400, 'OPTION_REQUIRED', 'optionId is required');
+  const extra = Object.keys(b).filter((k) => !OPTION_BODY_KEYS.has(k));
+  if (extra.length) throw new HttpError(400, 'OPTION_FIELDS_NOT_ALLOWED', `A booking option fixes the slot and price; these fields cannot be sent with it: ${extra.join(', ')}`);
+  const { request, totalPaise } = resolveOption(cfg, customer.id, b.optionId);
+  const ground = getGroundOr404(request.groundId);
+  const plan = planFor(ground, request, true);
+  if (plan.totalPaise !== totalPaise) throw new HttpError(409, 'OPTION_PRICE_CHANGED', 'The price changed since this option was offered. Ask for the options again.', { offeredPaise: totalPaise, currentPaise: plan.totalPaise });
+  const { optionId: _o, ...rest } = b;
+  return holdSlots(cfg, customer, { ...request, ...rest }, via);
 }

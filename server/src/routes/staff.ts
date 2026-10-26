@@ -8,6 +8,7 @@ import { one, many, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
+import { cancelGroundDay, extendBooking, rescheduleBooking } from '../reschedule.ts';
 import { cancelBlock, settleBlock, settleForCustomer } from '../cancellation.ts';
 import { tournamentForBlock } from '../tournaments.ts';
 import { lookupCustomer, readName, createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
@@ -138,6 +139,15 @@ export function staffRoutes(r: Router): void {
     clearReview({ id: U(c).id, role: U(c).role }, b.id);
     return ok({ booking: viewBooking(b.id) });
   }, A);
+
+  r.post('/api/staff/bookings/:id/reschedule', (c) => ok(rescheduleBooking(c.cfg, U(c), c.params.id!, c.json())), { ...A, idempotent: true });
+  r.post('/api/staff/bookings/:id/extend', (c) => ok(extendBooking(U(c), c.params.id!, c.json())), { ...A, idempotent: true });
+  r.post('/api/staff/grounds/:groundId/cancel-day', (c) => {
+    const v = new Validator(c.json());
+    const date = v.date('date', true), reason = v.str('reason', { required: true, max: 300 });
+    v.done();
+    return ok(cancelGroundDay(U(c), c.params.groundId!, date!, reason!));
+  }, { ...A, idempotent: true });
 
   r.get('/api/staff/bookings/:id/cancel-preview', (c) => {
     const b = accessBooking(U(c), c.params.id!, 'manage_bookings');
