@@ -1,51 +1,56 @@
-# Final verification pass (strict self-review)
+# Final verification pass (strict self-review), V2
 
-**This is not an independent review.** The same model (Sonnet 5.5) wrote the code, the tests and this review. Sunny chose this over a separate Opus 5.5 Max pass. The tests may share my blind spots. Treat this as a careful check of the package's own consistency, not as proof. An independent reviewer should repeat the checks in section 4 and read the code in section 5 first.
+**This is not an independent review.** The same model (Sonnet 5.5) wrote the code, the tests and this review. Sunny chose a strict self-review over a separate Opus 5.5 Max pass. The tests may share my blind spots. Treat this as a careful check of the package's own consistency, not as proof. `INDEPENDENT_OPUS_MAX_REPORT` is NOT_RUN. An independent reviewer should repeat section 4 first.
 
-Reviewed: branch `master-patch` (PR #143), package `DAJI_MASTER_PATCH_FINAL`, construction working copy. Test evidence comes from commit `62fdbbc`; later commits changed only documents, the register and the tracker script.
+Reviewed: branch `master-patch` (PR #143), package `DAJI_MASTER_PATCH_FINAL_V2`. The test evidence comes from commit `2d8c610`; later commits changed only documents (this file, the GO/NO-GO paper, one register row) and were followed by a re-run of the document-reading tests (section 2).
 
 ## 1. Result in one paragraph
 
-No P0 test failed, none was skipped, none is missing, and I found no contradiction left between the tracker, the register, the GO/NO-GO paper and the manifest after the corrections below. The package is still **NO-GO for live**, because 17 of 59 P0 rows are only proven in their automated scope (real provider, real ClamAV, devices, real offsite backup, real production database copy are NOT_RUN) and three decisions are still Sunny's.
+No required P0 test failed, none was skipped, none is missing, and after the corrections in section 3 I found no remaining contradiction between the tracker, the registers, the parity table, the GO/NO-GO paper, the manifest and the README. The package is **NO-GO for live** and **Guppi Booking is not complete under Sunny's rule**: tests (45 of 45 REL-LANG/REL-SEP records), language defects and traceability are met, but device parity (desktop web, iPad web, iOS, Android) is not: desktop Chromium passes, the iPad run is an emulation, and iOS and Android are NOT_RUN. Everything that needs an outside resource (real payment provider, ClamAV, production copy, offsite backup, the Finance consumer, devices, pilots, an independent review) is NOT_RUN and marked so.
 
 ## 2. Checks run, with what each found
 
 | Check asked for | How | Result |
 |---|---|---|
-| Contradictions | Cross-checked all 59 tracker rows against the register (residual named iff register says PARTIAL; every residual row is a release blocker; no non-PASS row marked VERIFIED); compared counts in README, manifest, GO/NO-GO and PR text with the generated gate file | 0 mismatches after the fixes in section 3 |
-| Incomplete P0 | Tracker gates: 59 required, 59 PASS, 0 FAIL, 0 NOT_RUN, 0 unapproved skipped | Met by the letter. **Not met in substance** for the 17 rows with residuals (GO/NO-GO says so) |
-| Skipped tests | Final server run: 797 tests, 0 skipped, 0 cancelled. Migration and rollback cases ran with the old-release fixture; without it they record SKIPPED (counts as not run). Searched the tests for `.skip`/`todo`: none | Clean |
-| Missing evidence | Every file named in the tracker's Evidence Reference exists in the package; every register Closure Evidence path resolves | Clean |
-| Duplicate business logic | One price/plan function (`planFor`) and one slot taker (`takeSlots`) are used by hold, options and reschedule; Guppi takes its amounts from the option the booking system issued; source guard `ARCH-001/002` fails the build if any other file inserts into the booking tables or if Guppi/options write booking or money tables | No duplicate found |
-| Akea contamination | Searched every changed or added file in the Daji repository and the construction changed files, and the whole package, for "akea"/"hotel"; confirmed `akea-hotel-platform` from `database-bundle.zip` was never used | None added. **One pre-existing file**, `desk/styles/akea.css` (CSS copied from Akea's approved design), is in the base release; left untouched; open P1-13 asks Sunny |
-| Removed Daji functionality | Dumped the router before and after (method, path, roles): 433 routes before, 454 after, 0 removed, 21 added, no existing route's roles changed. 0 files deleted. All 714 base tests still pass by name | None removed |
-| Migration and rollback gaps | Read the six modules for deletes/cascades that old code could hit after the new "no delete" guards: no code path deletes or replaces rows in the guarded tables, and no cascade reaches them | No gap found in code. Real production copy, offsite backup and provider-side state after rollback: NOT_RUN |
-| Unresolved security / payment / accounting / parity / reconciliation | Listed in section 5 | Nothing hidden; all listed |
-| Fresh adversarial probes (not committed) | Same Idempotency-Key from two customers does not cross over; another customer's option id is refused on a Guppi hold; a tampered option id is refused; a customer cannot reach staff reconcile, cancel-day, retention approve or admin reconcile | 4 of 4 behaved correctly |
-| Type check | Ran the TypeScript check on the base release and on the patch in the same environment | Base 43 errors, patch 41, **none new** (the 4 in `test/feed.test.ts` are the same errors with a longer type name) |
-| Construction suite | Re-ran on PostgreSQL 16 | 146 of 146 pass |
+| Required tests re-run | Whole server suite on the final code with the old-release fixture (migration and rollback cases included) | 842 of 842 pass, 0 skipped, 0 cancelled. Browser run 12 of 12 (desktop Chromium and iPad-size emulation, 6 scenarios each, stopping at the secure payment window). After the document edits I re-ran `rel-lang`, `rel-guppi`, `rel-sep` and `rel-traceability` (see the end of section 2). |
+| Incomplete P0 | `P0_GATES.json` | 104 required rows: 104 PASS, 0 FAIL, 0 not run, 0 unapproved skipped. Met by the letter. **Not met in substance** for 17 rows that carry a named real-world residual (GO/NO-GO says so). |
+| Skipped tests | Run log, and a search of `server/test` for `.skip`, `.todo` and `only` | 0 skipped; none found |
+| Missing evidence | Every `FOLDER/path.ext` named in any document in this package was resolved against the package (376 references) | All resolve. The one exception is the range `PAR-API-A..D`, a shorthand. |
+| Contradictions | Searched the package for stale statements ("no Guppi screen", old test counts, old route counts); compared tracker, gate file, README, manifest, GO/NO-GO and registers | Found and fixed four (section 3, items 1 to 4) |
+| Duplicate business logic | Guppi still only produces a canonical request; amounts, availability, holds and payment come from the existing options, hold and payment code. Source guards ARCH-001 and ARCH-002 pass: only the frozen modules write booking and money tables | None |
+| Other-project contamination | REL-SEP-001 (names, text, dependencies, imports, database objects, `/api/config`, `/`, `/desk/`) passes. Package search: `SEPARATION/REL-SEP-001-search-evidence.txt` | Active code: none. What remains is listed with reasons: third-party minified PDF code (the letters occur inside ordinary words), the GitHub account name as a web address in three docs, and the source diffs, which record the rename of the stylesheet and the removal of old wording. Sunny's call whether documents must also avoid the account name. |
+| Removed Daji functionality | Dumped the router before and after: 433 routes on the base release, 455 now, 0 removed, 22 added (21 from the first package plus `POST /api/guppi/understand`); no existing route's roles changed. 0 files deleted | None removed. The customer assistant (`/api/ask`) now refuses payment and waiver commands (intended); questions about balances are unchanged |
+| Migration and rollback gaps | V2 adds no table, column, index or trigger (diff of `server/src` since the first package contains no DDL). The two release switches are settings defaults only | No new gap. Real production copy and offsite backup: NOT_RUN |
+| Financial and security consistency | REL-LANG-041 and REL-LANG-044: money, booking and accounting tables are byte-identical before and after 36 payment, waiver, refund and cancel phrases in six language forms, with and without a booking in context, and the optional AI reader receives none of them. Fresh probe (below) | Consistent. Residual: P1-16 |
+| Fresh adversarial probe (not part of the suite; kept in `TESTS/self-review-probe/`) | 18 unusual phrasings, an instruction-injection sentence, anonymous / staff / owner callers, a 9,000-character body | Anonymous 401, staff and owner 403, oversize 413, database fingerprint unchanged. **Three phrasings were not recognised** ("make the payment of 5000 now", "bhugtan kar dijiye", "mera paisa bhej do"): fixed (DEF-LANG-042) |
+| Type check | Same environment, base release and V2 tree | 43 errors on the base release, 41 now, none in files I added or changed |
+| Mobile screen | Not type-checked or built (no `node_modules` here) | **Not verified** (P1-14) |
+| Desk rebuild | Normal build toolchain is not available here | **NOT_RUN**: the committed desk bundle still carries the earlier hand patch plus the V2 class-name rename (P1-12) |
+
+After the last document edits I re-ran `rel-lang`, `rel-guppi`, `rel-sep` and `rel-traceability` together: 52 of 52 pass, 0 skipped.
 
 ## 3. Problems this review found in my own work, and what I did
 
-1. I had told the team the type-check count "equals the base release (41)". In a like-for-like run the base has 43, the patch 41, none new. Corrected in the manifest and the PR.
-2. The tracker marked "defect" for tests that merely could not load on the base release because a new module did not exist (for example the deposit and accounting-failure cases, which probably worked on the base). Now the gap register decides: a failing behaviour is `DEF-`, a missing feature is `GAP-`, and a case where the behaviour on the base was not measured gets no label. Result: 17 defects reproduced on the base, 11 missing-feature gaps.
-3. The register called REL-AI-003 "PARTIAL" while the base had no switch or Guppi booking path at all; now MISSING. REL-AUD-002 described the base fault vaguely; now states the real one (later dates of a staff-made multi-day block were logged against the customer).
-4. The runbook said a missing `APP_ENV` stops the server "in every environment". A local machine defaults to `dev`; only a server on a real domain stops. Corrected.
-5. First construction run failed one test (E05) because I gave the test a socket-style database URL; the test builds a TCP relay to the database. Not a code fault; passes with the TCP URL. Both runs are in `CONSTRUCTION/evidence`.
-6. The committed staff desk bundle could not be rebuilt here (build tools missing); one minified chunk was patched by hand (open P1-12). It is syntax-checked but was not run in a browser.
+1. The route diff in the package was still the first package's (21 added) while the manifest said V2 adds one route. I re-dumped the router: 455 routes, 22 added, 0 removed. Regenerated.
+2. The iOS and Android README files still said "No reschedule or Guppi booking screen exists" next to a V2 section describing the Guppi screen. Rewritten; they now say the screen exists, is not type-checked and not run.
+3. Open item P1-02 was marked "RESOLVED" for web and mobile code, which overclaims while device parity is unmet. Changed to "PARTLY DONE (Guppi Booking is NOT complete until device parity passes)".
+4. The first package build ran the project-purity search before the final README and manifest were written, so it listed hits that did not exist in the final package. The search now runs last.
+5. A probe of unusual payment phrasings found three that reached a booking question instead of the payment boundary (DEF-LANG-042, P0 by the rule you set because the boundary was not reached). No money, booking or accounting row changed and nothing reached the optional AI reader. Fixed in Daji only, five phrases added to REL-LANG-041, the full suite re-run. The honest limit remains: a phrasing nobody listed is asked about, not acted on, because no Guppi route can move money (P1-16).
+6. The browser script had a syntax error that stopped the type check from analysing the project (the count looked like 3 instead of 41), and my first fix used a string evaluation that the website's content-security policy forbids (5 of 12 scenarios failed). Both fixed, and the 12 scenarios re-run: 12 of 12.
+7. For the record, seven test expectations were corrected while the tests were being built because the product was right and the test asked for the wrong thing (`REL_LANG/TEST_EXPECTATION_CORRECTIONS.csv`, TC-001 to TC-007). None changed product behaviour. Each is a place where my own blind spot could hide, so they are listed for the independent reviewer.
 
 ## 4. What an independent reviewer should repeat
 
-* A fresh run of the whole server suite (with the old-release fixture), the construction suite, and `build-p0-tracker.ts` from the commands in the runbook.
-* The route diff (`PATCH_MANIFEST/ROUTE_DIFF.txt`) and the DB object list (`DB_OBJECTS_ADDED.txt`).
-* The register's "Current Implementation" statements for the base release against the base code and the before-run logs (`TESTS/evidence-base-release-4edac99*`). I wrote those from the before-run results and my reading of the base code.
+* A fresh run of the whole server suite with the old-release fixture (`TESTS/how-the-final-run-was-made.sh`), the construction suite, and the browser script.
+* REL-LANG-041 against the base code and the fixed code: `REL_LANG/DEF-LANG-041/` holds both runs. Try phrasings of your own in all five language forms; any that is not refused or asked about, or that reaches a model, is a defect.
+* The route diff (`PATCH_MANIFEST/ROUTE_DIFF.txt`) and the claim that V2 adds no database object.
+* Read `server/src/guppiLang.ts` for over-refusal: a booking sentence that contains "advance" or "balance" must still book.
+* Run the iOS and Android screens on real devices; type-check them.
 
 ## 5. Open items I am not hiding
 
-* **Payments:** real provider NOT_RUN for REL-PAY-001..007 and 011; direct UPI against a real bank NOT_RUN.
-* **Files:** real ClamAV NOT_RUN. The built-in scanner is a minimum, not a malware engine. Large library uploads are scanned per chunk (P1-06).
-* **Accounting:** a refund on a live booking does not lower the booking's paid figure; reconcile reports it as information (P1-03). The live Finance consumer of the construction event is outside this repository.
-* **Parity:** device runs NOT_RUN; no reschedule or Guppi booking screen on any client (P1-01, P1-02). The two features are reachable by API only; recommended OFF at first live release (UD-07).
-* **Decisions:** UD-01 (deposit means the booking advance), UD-02 (hierarchy reading), UD-03 (reschedule policy) are assumptions awaiting Sunny.
-* **Migration:** rehearsed on a database generated by the previous release's code, not production data.
-* **Process:** no staff pilot, no customer canary, no signed GO.
+* **Devices:** iOS, Android and real iPad NOT_RUN; the mobile Guppi screen is unbuilt. Guppi Booking is **not complete**.
+* **Owner decisions:** UD-01, UD-02, UD-03 are assumptions awaiting Sunny's own words. UD-08 (relative dates) and UD-09 (flexible ground) are my proposals.
+* **Payments:** real provider NOT_RUN. **Files:** real ClamAV NOT_RUN. **Migration and backup:** rehearsed on a generated database, not production; real offsite backup NOT_RUN. **Construction to Finance:** producer proven, real consumer NOT_RUN. **Desk:** not rebuilt with the normal toolchain.
+* **Language:** spelling tolerance is a word list, not a language model (P1-16); the "learn how this person speaks" idea and automatic translation for other languages are unbuilt proposals.
+* **Process:** no independent Opus Max review, no staff pilot, no customer canary, no signed GO.
