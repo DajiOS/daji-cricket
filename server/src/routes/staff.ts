@@ -8,6 +8,8 @@ import { one, many, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
+import { reconcile } from '../finevents.ts';
+import { approveRetentionRelease, getRetentionCase, listRetentionCases, proposeRetentionRelease, rejectRetentionRelease } from '../retention.ts';
 import { cancelGroundDay, extendBooking, rescheduleBooking } from '../reschedule.ts';
 import { cancelBlock, settleBlock, settleForCustomer } from '../cancellation.ts';
 import { tournamentForBlock } from '../tournaments.ts';
@@ -229,6 +231,13 @@ export function staffRoutes(r: Router): void {
     v.done();
     return created(requestRefund(U(c), c.params.id!, { amountPaise: amountPaise!, reason: reason! }));
   }, { ...A, idempotent: true });
+  // The owner's own books check: does every figure agree with the records behind it?
+  r.get('/api/staff/reconcile', (c) => { requireRevenue(U(c)); return ok(reconcile(ownerOrFail(c, 'check the books'))); }, A);
+  r.get('/api/staff/retention-disputes', (c) => { needPay(U(c)); return ok({ items: listRetentionCases(U(c), ownerFilter(c), c.query.get('status') ?? undefined) }); }, A);
+  r.get('/api/staff/bookings/:id/retention-dispute', (c) => ok({ dispute: getRetentionCase(U(c), c.params.id!) }), A);
+  r.post('/api/staff/bookings/:id/retention-dispute/propose', (c) => ok({ dispute: proposeRetentionRelease(U(c), c.params.id!, c.json()) }), { ...A, idempotent: true });
+  r.post('/api/staff/bookings/:id/retention-dispute/approve', (c) => ok(approveRetentionRelease(U(c), c.params.id!, c.json())), { ...A, idempotent: true });
+  r.post('/api/staff/bookings/:id/retention-dispute/reject', (c) => ok(rejectRetentionRelease(U(c), c.params.id!, c.json())), { ...A, idempotent: true });
   r.get('/api/staff/refunds', (c) => { needPay(U(c)); return ok({ items: listRefunds(ownerFilter(c), c.query.get('status') ?? undefined) }); }, A);
   r.post('/api/staff/refunds/:id/complete', (c) => {
     const v = new Validator(c.json());

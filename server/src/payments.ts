@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { Page, Payment, PayMethod, RefundRow } from '@daji/shared';
+import { formatPaise } from '@daji/shared';
 import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
 import { HttpError, notFound } from './errors.ts';
 import { audit, SYSTEM, type Actor } from './audit.ts';
-import { notify } from './notifications.ts';
+import { notify, pushStaffOf } from './notifications.ts';
 import { accessBooking, bookingOr404, confirmBooking, toPayment, type BookingRow } from './bookings.ts';
 import { requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
 import { getSettings } from './settings.ts';
@@ -324,11 +325,16 @@ function processWebhookEvent(ev: any, type: string): string {
     case 'order.paid': {
       const p = findByOrder(pay?.order_id ?? ev?.payload?.order?.entity?.id);
       if (!p) return 'unknown_order';
-      const amount = Number(pay?.amount);
-      if (Number.isFinite(amount) && amount !== p.amount_paise && p.status !== 'captured') {
+      // Fail closed: money is only taken in when the provider states an amount and currency that match the order. A missing or different figure is held for a person to look at.
+      const amount = pay?.amount === undefined || pay?.amount === null ? NaN : Number(pay.amount);
+      const currency = pay?.currency;
+      const wrongAmount = !Number.isInteger(amount) || amount !== p.amount_paise;
+      const wrongCurrency = currency !== undefined && currency !== null && String(currency).toUpperCase() !== 'INR';
+      if ((wrongAmount || wrongCurrency || currency === undefined) && p.status !== 'captured') {
         run('UPDATE bookings SET needs_review = 1 WHERE id = ?', p.booking_id);
-        logEvent(p.id, null, 'amount_mismatch', { expected: p.amount_paise, got: amount });
-        audit(actor, 'payment.amount_mismatch', 'payment', p.id, { expected: p.amount_paise, got: amount }, p.owner_id);
+        const detail = { expected: p.amount_paise, got: Number.isFinite(amount) ? amount : null, currency: currency ?? null };
+        logEvent(p.id, null, 'amount_mismatch', detail);
+        audit(actor, 'payment.amount_mismatch', 'payment', p.id, detail, p.owner_id);
         return 'amount_mismatch';
       }
       const r = applyCaptured(p.id, { actor, via: 'webhook', rpPaymentId: pay?.id });
@@ -344,7 +350,7 @@ function processWebhookEvent(ev: any, type: string): string {
     case 'refund.failed': {
       const rf = ev?.payload?.refund?.entity;
       const r = one<{ id: string; status: string }>('SELECT id, status FROM refunds WHERE rp_refund_id = ?', rf?.id);
-      if (!r) return 'unknown_refund';
+      if (!r) return providerRefund(type, rf, actor);
       if (type === 'refund.processed') finishRefund(r.id, actor, rf?.id ?? null, null);
       else if (r.status !== 'done') { // Razorpay could not send it: hand it to staff to pay by hand (UPI/bank) and mark done, instead of leaving it stuck
         run("UPDATE refunds SET status = 'pending', mode = 'manual', rp_refund_id = NULL WHERE id = ?", r.id);
@@ -353,9 +359,70 @@ function processWebhookEvent(ev: any, type: string): string {
       }
       return type === 'refund.processed' ? 'refund_done' : 'refund_failed';
     }
+    case 'payment.dispute.created':
+    case 'payment.dispute.under_review':
+    case 'payment.dispute.action_required':
+    case 'payment.dispute.won':
+    case 'payment.dispute.lost':
+    case 'payment.dispute.closed':
+      return recordDispute(type, ev?.payload?.dispute?.entity, actor);
     default:
       return 'ignored';
   }
+}
+
+/**
+ * A refund the provider reports that Daji did not start (someone refunded from the provider's dashboard). It is taken into the books as a finished refund on that payment,
+ * so the figures match the provider, and the booking is flagged for staff. A refund that Daji did start but whose provider id is not saved yet is left to be delivered again.
+ */
+function providerRefund(type: string, rf: any, actor: Actor): string {
+  const p = rf?.payment_id ? one<PaymentRow>('SELECT * FROM payments WHERE rp_payment_id = ?', rf.payment_id) : undefined;
+  if (!p) return 'unknown_refund';
+  if (one("SELECT 1 FROM refunds WHERE payment_id = ? AND mode = 'gateway' AND rp_refund_id IS NULL AND status IN ('pending','processing')", p.id)) return 'unknown_refund'; // ours, id not saved yet
+  if (type !== 'refund.processed') return 'ignored_provider_refund';
+  const amount = Number(rf?.amount);
+  if (!Number.isInteger(amount) || amount <= 0) { audit(actor, 'refund.provider_unreadable', 'payment', p.id, { refund: rf?.id ?? null }, p.owner_id); return 'provider_refund_unreadable'; }
+  const refundable = p.amount_paise - p.refunded_paise;
+  const take = Math.min(amount, Math.max(refundable, 0));
+  const id = newId('rfd');
+  const t = now();
+  if (take > 0) {
+    run("INSERT INTO refunds(id, payment_id, booking_id, owner_id, amount_paise, status, mode, reference, rp_refund_id, reason, created_at, completed_at, completed_by, on_booking, approved_at, approved_by) VALUES(?,?,?,?,?,'done','gateway',?,?,?,?,?,NULL,0,?,'provider')",
+      id, p.id, p.booking_id, p.owner_id, take, rf.id ?? null, rf.id ?? null, 'refunded at the payment provider (not started in Daji)', t, t, t);
+    const total = p.refunded_paise + take;
+    run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', total, total >= p.amount_paise ? 'refunded' : 'partially_refunded', t, p.id);
+  }
+  run('UPDATE bookings SET needs_review = 1 WHERE id = ?', p.booking_id);
+  logEvent(p.id, null, 'refund.provider_initiated', { refundId: take > 0 ? id : null, rpRefundId: rf.id ?? null, amountPaise: amount, recordedPaise: take });
+  audit(actor, 'refund.provider_initiated', 'payment', p.id, { rpRefundId: rf.id ?? null, amountPaise: amount, recordedPaise: take, exceedsPaise: amount - take }, p.owner_id);
+  pushStaffOf(p.owner_id, 'provider_refund', 'Refund made at the payment provider', `A refund of ${formatPaise(amount)} was made outside Daji on a booking payment. Open the booking to review it.`, p.booking_id);
+  return 'provider_refund_recorded';
+}
+
+/**
+ * A chargeback or dispute. Nothing is decided here: it is written on the payment's history, the booking is flagged and staff are told.
+ * When the dispute is lost the provider has taken the money back, so it is recorded as a finished refund (a controlled reversal, never an edit of the original payment).
+ */
+function recordDispute(type: string, d: any, actor: Actor): string {
+  const p = d?.payment_id ? one<PaymentRow>('SELECT * FROM payments WHERE rp_payment_id = ?', d.payment_id) : undefined;
+  if (!p) return 'unknown_order';
+  const state = type.slice('payment.dispute.'.length);
+  const amount = Number(d?.amount);
+  logEvent(p.id, null, `dispute.${state}`, { disputeId: d?.id ?? null, amountPaise: Number.isFinite(amount) ? amount : null, reason: d?.reason_code ?? null });
+  audit(actor, `payment.dispute_${state}`, 'payment', p.id, { disputeId: d?.id ?? null, amountPaise: Number.isFinite(amount) ? amount : null }, p.owner_id);
+  run('UPDATE bookings SET needs_review = 1 WHERE id = ?', p.booking_id);
+  if (state === 'created' || state === 'action_required') pushStaffOf(p.owner_id, 'payment_dispute', 'Payment disputed', `The customer's bank has disputed a payment of ${formatPaise(p.amount_paise)}. Open the booking and reply to the provider in time.`, p.booking_id);
+  if (state === 'lost' && Number.isInteger(amount) && amount > 0 && d?.id && !one("SELECT 1 FROM refunds WHERE rp_refund_id = ?", `dispute:${d.id}`)) {
+    const take = Math.min(amount, Math.max(p.amount_paise - p.refunded_paise, 0));
+    if (take > 0) {
+      const t = now();
+      run("INSERT INTO refunds(id, payment_id, booking_id, owner_id, amount_paise, status, mode, reference, rp_refund_id, reason, created_at, completed_at, completed_by, on_booking, approved_at, approved_by) VALUES(?,?,?,?,?,'done','gateway',?,?,?,?,?,NULL,0,?,'provider')",
+        newId('rfd'), p.id, p.booking_id, p.owner_id, take, d.id, `dispute:${d.id}`, 'chargeback lost: the provider took the money back', t, t, t);
+      const total = p.refunded_paise + take;
+      run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', total, total >= p.amount_paise ? 'refunded' : 'partially_refunded', t, p.id);
+    }
+  }
+  return `dispute_${state}`;
 }
 
 // ---------------------------------------------------------------- refunds

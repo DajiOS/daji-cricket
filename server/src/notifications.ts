@@ -94,6 +94,7 @@ const T: Record<string, (d: TemplateData) => { subject: string; body: string }> 
   booking_confirmed: (d) => ({ subject: `Booking confirmed — ${d.ref}`, body: `Your booking ${d.ref} at ${d.ground} on ${fmtDateTime(d.startAt!)} is confirmed. Paid so far: ${formatPaise(d.amountPaise ?? 0)}.${venueTail(d)}` }),
   booking_rescheduled: (d) => ({ subject: `Booking moved — ${d.ref}`, body: `Your booking ${d.ref} at ${d.ground} has been moved to ${fmtDateTime(d.startAt!)}.${d.extra ? ' ' + d.extra : ''}${venueTail(d)}` }),
   booking_extended: (d) => ({ subject: `Booking extended — ${d.ref}`, body: `Your booking ${d.ref} at ${d.ground} now runs longer. ${d.extra ?? ''}`.trim() }),
+  retention_update: (d) => ({ subject: `Your deposit dispute — ${d.ref}`, body: `Booking ${d.ref}: ${d.extra ?? 'there is an update on your dispute.'}` }),
   payment_pending: (d) => ({ subject: `Payment received for checking — ${d.ref}`, body: `We have your UPI reference for booking ${d.ref}. Staff will verify it shortly; your slot stays held until then.` }),
   payment_failed: (d) => ({ subject: `Payment did not go through — ${d.ref}`, body: `The payment for booking ${d.ref} failed${d.reason ? ` (${d.reason})` : ''}. Your slot is held until the deadline; you can try again.` }),
   payment_rejected: (d) => ({ subject: `Payment could not be verified — ${d.ref}`, body: `Staff could not verify the UPI payment for booking ${d.ref}${d.reason ? `: ${d.reason}` : ''}. Please check the reference and submit again before the hold ends.` }),

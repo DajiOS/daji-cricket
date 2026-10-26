@@ -14,6 +14,7 @@ import { many, one, run } from '../db.ts';
 import { now } from '../clock.ts';
 import { STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { closedDates, setClosed } from '../closures.ts';
+import { financialEvents, reconcile } from '../finevents.ts';
 import { createFestival, deleteFestival, festivalCalendar, updateFestival } from '../festivals.ts';
 import { packCalendar, updatePack } from '../packs.ts';
 import { integrationStatuses, saveIntegrationNotes, testIntegration } from '../integrations.ts';
@@ -203,6 +204,8 @@ export function adminRoutes(r: Router): void {
   }, SAO);
 
   const SUP = { auth: ['super_admin' as const] };
+  r.get('/api/admin/reconcile', (c) => ok(reconcile(c.query.get('ownerId') || null)), SUP);
+  r.get('/api/admin/financial-events', (c) => { const o = c.query.get('ownerId'); if (!o) throw new HttpError(400, 'VALIDATION_FAILED', 'ownerId is required'); return ok({ items: financialEvents(o, c.query.get('upTo') || '9999-12-31') }); }, SUP);
   r.get('/api/admin/refunds', (c) => { const st = c.query.get('status') ?? 'awaiting'; return ok({ items: st === 'awaiting' ? listRefunds(c.query.get('ownerId'), 'pending').filter((x) => !x.approvedAt) : listRefunds(c.query.get('ownerId'), st) }); }, SUP);
   r.post('/api/admin/refunds/:id/approve', (c) => ok(approveRefund(U(c), c.params.id!)), { ...SUP, idempotent: true });
   r.post('/api/admin/refunds/:id/decline', (c) => { const v = new Validator(c.json()); const reason = v.str('reason', { required: true, max: 200 }); v.done(); return ok(declineRefund(U(c), c.params.id!, reason!)); }, { ...SUP, idempotent: true });

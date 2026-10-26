@@ -1,6 +1,6 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { startHarness, grounds, hold, bookAndPay, dayFromNow, slotStart, advance, MIN, HOUR, type Harness, type GroundLite } from './helpers.ts';
+import { startHarness, grounds, hold, bookAndPay, dayFromNow, slotStart, advance, MIN, type Harness, type GroundLite } from './helpers.ts';
 import { runSweeps } from '../src/jobs.ts';
 import { many, one, run } from '../src/db.ts';
 import { register } from './register.ts';

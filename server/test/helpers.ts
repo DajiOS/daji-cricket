@@ -135,7 +135,7 @@ export async function sendWebhook(h: Harness, payload: unknown, opts: { eventId?
 
 export const capturedEvent = (orderId: string, amountPaise: number, paymentId = 'pay_wh_1') => ({
   entity: 'event', event: 'payment.captured',
-  payload: { payment: { entity: { id: paymentId, order_id: orderId, amount: amountPaise, status: 'captured' } } },
+  payload: { payment: { entity: { id: paymentId, order_id: orderId, amount: amountPaise, currency: 'INR', status: 'captured' } } },
 });
 
 export const setting = (patch: Record<string, unknown>): void => { updateSettings(patch, null); };
