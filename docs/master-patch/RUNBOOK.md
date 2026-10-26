@@ -6,7 +6,7 @@ This is for the person releasing the patch. Commands are run from `server/` unle
 
 | Setting | Live value | Why |
 |---|---|---|
-| `APP_ENV` | `live` (or `test` / `dev` for rehearsals) | **If it is not set at all the server refuses to start, in every environment.** The server states what it is. Apps and tools that expect another environment are refused with `409 ENV_MISMATCH`. |
+| `APP_ENV` | `live` (or `test` / `dev` for rehearsals) | **If it is not set at all, a server on a real domain refuses to start (a local machine defaults to `dev`).** The server states what it is. Apps and tools that expect another environment are refused with `409 ENV_MISMATCH`. |
 | `FILE_SCANNER` | `clamav` | The built-in scanner is a minimum, not a malware engine. A live server refuses to start with it. |
 | `CLAMAV_HOST` / `CLAMAV_PORT` | `clamav` / `3310` | The ClamAV service in `deploy/docker-compose.yml`. If it is down, uploads are refused (fail closed), not accepted. |
 | `DEMO_MODE` | off | Demo accounts and the fake payment gateway must not exist on a real domain. |
