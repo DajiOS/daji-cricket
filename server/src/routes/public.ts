@@ -27,7 +27,7 @@ export function publicRoutes(r: Router): void {
     let database = 'ok';
     try { one('SELECT 1 AS n'); } catch { database = 'error'; }
     const healthy = database === 'ok';
-    return ok({ ok: healthy, time: now(), database, demo: c.cfg.demoMode }, healthy ? 200 : 503);
+    return ok({ ok: healthy, time: now(), database, demo: c.cfg.demoMode, env: c.cfg.appEnv }, healthy ? 200 : 503);
   }, { rate: 'none' });
 
   // Today's festival look (India time), read by the website on every page load. ?date= shows another day and

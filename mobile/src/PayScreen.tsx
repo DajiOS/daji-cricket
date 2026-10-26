@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Linking, ScrollView, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { api } from './api';
+import { CHECKOUT_ORIGINS, isAllowedCheckoutUrl, parseCheckoutMessage } from './checkoutGuard';
 import type { Booking, HoldResponse, User } from './types';
 import { Btn, Field, KV, s } from './ui';
 import { C, inr, niceDate } from './theme';
@@ -38,9 +39,15 @@ export function PayScreen({ hold, user, onDone, onBack }: { hold: HoldResponse; 
       window.onload=function(){new Razorpay(o).open()};</script></body></html>`;
     return (
       <View style={s.screen}>
-        <WebView originWhitelist={['*']} source={{ html, baseUrl: 'https://checkout.razorpay.com' }} style={{ flex: 1, backgroundColor: C.bg }}
+        <WebView originWhitelist={CHECKOUT_ORIGINS} source={{ html, baseUrl: 'https://checkout.razorpay.com' }} style={{ flex: 1, backgroundColor: C.bg }}
+          onShouldStartLoadWithRequest={(r) => isAllowedCheckoutUrl(r.url)}
           onMessage={async (e) => {
-            try { const m = JSON.parse(e.nativeEvent.data); if (m.dismiss) { setCheckout(false); return; } if (m.ok) { setCheckout(false); await verify(m.ok); } } catch (er: any) { setErr(er.message); setCheckout(false); }
+            // what the window says is only a hint: it must be the exact expected shape for this order, and the server verifies the payment itself
+            const m = parseCheckoutMessage(e.nativeEvent.data, p.razorpay!.orderId);
+            if (!m) { setErr('The payment window sent something unexpected. Nothing was charged by this app; check your bookings before paying again.'); setCheckout(false); return; }
+            if (m.kind === 'dismiss') { setCheckout(false); return; }
+            setCheckout(false);
+            try { await verify({ orderId: m.orderId ?? p.razorpay!.orderId, paymentId: m.paymentId, signature: m.signature }); } catch (er: any) { setErr(er.message); }
           }} />
       </View>
     );

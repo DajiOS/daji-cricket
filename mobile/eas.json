@@ -7,7 +7,10 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "dev"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -19,22 +22,23 @@
         "simulator": true
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.dajicricket.com"
+        "EXPO_PUBLIC_APP_ENV": "test"
       }
     },
     "production": {
       "channel": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.dajicricket.com"
+        "EXPO_PUBLIC_API_URL": "https://api.dajicricket.com",
+        "EXPO_PUBLIC_APP_ENV": "live"
       }
     },
     "preview-customer": {
       "extends": "preview",
       "channel": "preview-customer",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.dajicricket.com",
-        "APP_VARIANT": "customer"
+        "APP_VARIANT": "customer",
+        "EXPO_PUBLIC_APP_ENV": "test"
       }
     },
     "production-customer": {
@@ -42,15 +46,16 @@
       "channel": "production-customer",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.dajicricket.com",
-        "APP_VARIANT": "customer"
+        "APP_VARIANT": "customer",
+        "EXPO_PUBLIC_APP_ENV": "live"
       }
     },
     "preview-admin": {
       "extends": "preview",
       "channel": "preview-admin",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.dajicricket.com",
-        "APP_VARIANT": "admin"
+        "APP_VARIANT": "admin",
+        "EXPO_PUBLIC_APP_ENV": "test"
       }
     },
     "production-admin": {
@@ -58,7 +63,8 @@
       "channel": "production-admin",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.dajicricket.com",
-        "APP_VARIANT": "admin"
+        "APP_VARIANT": "admin",
+        "EXPO_PUBLIC_APP_ENV": "live"
       }
     }
   },

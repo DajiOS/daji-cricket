@@ -235,6 +235,12 @@ export function createApp(cfg: Config, router: Router): Server {
       if (m === 'method') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'That method is not allowed here');
       const { route, params } = m;
 
+      // An app or tool that says which system it was built for is refused by any other system: a rehearsal build can never act on the live one, nor the reverse.
+      const claimed = req.headers['x-daji-env'];
+      if (claimed !== undefined && url.pathname !== '/api/health' && claimed !== cfg.appEnv) {
+        throw new HttpError(409, 'ENV_MISMATCH', 'This app was built for a different Daji system than the one it is talking to, so the request was not sent through.', { server: cfg.appEnv });
+      }
+
       if (cfg.rateLimit && route.opts.rate !== 'none') {
         const retry = route.opts.rate === 'auth'
           ? limited(`auth|${ip}`, 20, 60_000)
