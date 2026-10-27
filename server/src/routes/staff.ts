@@ -439,7 +439,11 @@ export function staffRoutes(r: Router): void {
     const list = listBookings({ ownerId: owner, from: today, to: today, limit, offset });
     const awaiting = owner ? one<{ n: number }>("SELECT COUNT(*) n FROM payments WHERE owner_id = ? AND status = 'submitted'", owner)!.n : one<{ n: number }>("SELECT COUNT(*) n FROM payments WHERE status = 'submitted'")!.n;
     const review = owner ? one<{ n: number }>('SELECT COUNT(*) n FROM bookings WHERE owner_id = ? AND needs_review = 1', owner)!.n : one<{ n: number }>('SELECT COUNT(*) n FROM bookings WHERE needs_review = 1')!.n;
-    return ok({ date: today, bookings: list.items.filter((b) => b.status !== 'cancelled' && b.status !== 'expired'), awaitingVerification: awaiting, needsReview: review });
+    const live = list.items.filter((b) => b.status !== 'cancelled' && b.status !== 'expired');
+    // the day's sold value and what has come in on it, worked out here once so the desk shows figures instead of adding them up itself
+    const sold = live.filter((b) => b.status === 'confirmed' || b.status === 'completed' || b.status === 'no_show');
+    const money = { soldPaise: sold.reduce((a, b) => a + b.totalPaise, 0), collectedPaise: sold.reduce((a, b) => a + b.paidPaise, 0), soldBookings: sold.length };
+    return ok({ date: today, bookings: live, awaitingVerification: awaiting, needsReview: review, money });
   }, A);
 
   const seriesBookingIds = (sid: string): string[] => many<{ id: string }>('SELECT id FROM bookings WHERE series_id = ?', sid).map((x) => x.id);

@@ -1017,8 +1017,9 @@ function openProfile() {
 }
 
 async function loadCredit() {
+  // null means the balance could not be read: no credit is offered and the page says so, rather than showing none
   try { const c = await api('/api/credits'); state.creditPaise = c.balancePaise || 0; }
-  catch { state.creditPaise = 0; }
+  catch { state.creditPaise = null; }
   renderCreditRow();
   $('#p-promo-row').hidden = false;
 }
@@ -1374,22 +1375,11 @@ function clickSlot(i) {
   renderSummary();
 }
 
-function advanceFor(total, startAt) {
-  const g = state.ground, c = state.config;
-  if (startAt - Date.now() <= c.fullPaymentWithinHours * 3600000) return { paise: total, label: `Full payment (starts within ${c.fullPaymentWithinHours} hours)` };
-  const mode = g.advanceMode || c.advanceMode, value = g.advanceValue != null && g.advanceMode ? g.advanceValue : c.advanceValue;
-  const raw = mode === 'fixed' ? value : Math.ceil((total * value) / 100);
-  return { paise: Math.min(Math.max(raw, 100), total), label: mode === 'fixed' ? 'Advance' : `Advance (${value}%)` };
-}
-
-/** The selection with any applied promo code taken off, so the advance is worked out on the price the customer will actually pay. */
+/** The selection, with the promo code the customer applied to it. What it costs (price, promo, advance or full payment, credit) comes from the server's quote. */
 function selection() {
   const s = selection0();
   if (!s) return s;
-  if (state.promo && state.promo.key === promoKey(s)) {
-    const a = advanceFor(s.total - state.promo.discountPaise, s.first.start);
-    return { ...s, ...a, discount: state.promo.discountPaise, promoCode: state.promo.code };
-  }
+  if (state.promo && state.promo.key === promoKey(s)) return { ...s, promoCode: state.promo.code };
   return s;
 }
 const promoKey = (s) => JSON.stringify([state.ground && state.ground.id, state.date, s.ruleId || s.formatId || '', s.startTime || (s.first && s.first.time), s.count, s.total]);
@@ -1403,13 +1393,13 @@ function selection0() {
     const opts = state.avail.rates;
     if (state.win) {
       const o = opts.find((x) => x.ruleId === state.win && x.state === 'available'); if (!o) return null;
-      return { first: o, last: o, total: o.pricePaise, count: 1, ruleId: o.ruleId, startTime: o.time, text: `${o.label}${o.proRated ? ' (hours left today)' : ''} · ${BALL_NAMES[o.ball]} · ${niceDate(state.date)} · ${niceHour(o.time)} – ${niceHour(o.endTime)}${o.bundleDays > 1 ? ` (${o.bundleDays} days)` : ''}`, ...advanceFor(o.pricePaise, o.start) };
+      return { first: o, last: o, total: o.pricePaise, count: 1, ruleId: o.ruleId, startTime: o.time, text: `${o.label}${o.proRated ? ' (hours left today)' : ''} · ${BALL_NAMES[o.ball]} · ${niceDate(state.date)} · ${niceHour(o.time)} – ${niceHour(o.endTime)}${o.bundleDays > 1 ? ` (${o.bundleDays} days)` : ''}` };
     }
     if (state.hr) {
       const o = opts.find((x) => x.ruleId === state.hr.ruleId); if (!o || !o.slots) return null;
       const sl = state.hr.idx.map((i) => o.slots[i]); if (!sl.length || sl.some((x) => !x || x.state !== 'available')) return null;
       const total = sl.reduce((n, x) => n + x.pricePaise, 0);
-      return { first: sl[0], last: sl[sl.length - 1], total, count: sl.length, ruleId: o.ruleId, startTime: sl[0].time, hourly: true, text: `${BALL_NAMES[o.ball]} · ${niceDate(state.date)} · ${niceHour(sl[0].time)} – ${niceHour(hhmm(sl[sl.length - 1].end))} (${sl.length} ${sl.length === 1 ? 'hour' : 'hours'})`, ...advanceFor(total, sl[0].start) };
+      return { first: sl[0], last: sl[sl.length - 1], total, count: sl.length, ruleId: o.ruleId, startTime: sl[0].time, hourly: true, text: `${BALL_NAMES[o.ball]} · ${niceDate(state.date)} · ${niceHour(sl[0].time)} – ${niceHour(hhmm(sl[sl.length - 1].end))} (${sl.length} ${sl.length === 1 ? 'hour' : 'hours'})` };
     }
     return null;
   }
@@ -1417,12 +1407,12 @@ function selection0() {
     const f = g.formats.find((x) => x.id === state.fmt), fa = state.avail && state.avail.formats.find((x) => x.formatId === state.fmt);
     const w = fa && fa.windows.find((x) => x.time === state.win && x.state === 'available');
     if (!f || !w) return null;
-    return { first: w, last: w, total: w.pricePaise, count: 1, formatId: f.id, text: `${f.label} · ${BALL_NAMES[f.ball]} · ${niceDate(state.date)} · ${w.time} – ${w.endTime}`, ...advanceFor(w.pricePaise, w.start) };
+    return { first: w, last: w, total: w.pricePaise, count: 1, formatId: f.id, text: `${f.label} · ${BALL_NAMES[f.ball]} · ${niceDate(state.date)} · ${w.time} – ${w.endTime}` };
   }
   if (!state.sel.length) return null;
   const first = state.slots[state.sel[0]], last = state.slots[state.sel[state.sel.length - 1]];
   const total = state.sel.reduce((n, i) => n + state.slots[i].pricePaise, 0);
-  return { first, last, total, count: state.sel.length, ...advanceFor(total, first.start) };
+  return { first, last, total, count: state.sel.length };
 }
 
 function renderSummary() {
@@ -1431,20 +1421,33 @@ function renderSummary() {
   $('#p-repeat-row').hidden = !s; if (!s) { $('#p-repeat').value = ''; $('#p-repeat-n').hidden = true; }
   const holdMin = state.config.razorpayEnabled ? state.config.holdMinutesOnline : state.config.holdMinutesUpi;
   if (!s) { btn.disabled = true; btn.textContent = state.ground && state.ground.rates && state.ground.rates.length ? 'Choose ball and session' : state.ground && state.ground.formats && state.ground.formats.length ? 'Choose ball, match and time' : 'Choose your slots'; renderCreditRow(); return; }
-  if (state.promo && !s.discount) { state.promo = null; $('#p-promo-msg').textContent = ''; $('#p-promo').value = ''; }
-  let due = s.paise;
-  const credit = state.useCredit ? Math.min(state.creditPaise, s.paise) : 0;
-  due = s.paise - credit;
-  sum.append(...[
-    h('div', { class: 'row' }, h('span', {}, s.text || `${s.count} ${s.count === 1 ? 'slot' : 'slots'} · ${niceDate(state.date)} · ${s.first.time} – ${hhmm(s.last.end)}`), h('b', {}, inr(s.total))),
-    h('div', { class: 'row' }, h('span', {}, s.label), h('b', {}, inr(s.paise))),
-    s.discount ? h('div', { class: 'row' }, h('span', {}, `Promo ${s.promoCode}`), h('b', {}, '− ' + inr(s.discount))) : null,
-    credit ? h('div', { class: 'row' }, h('span', {}, 'Account credit used'), h('b', {}, '− ' + inr(credit))) : null,
-    h('div', { class: 'row total' }, h('span', {}, 'Due now'), h('b', {}, inr(due))),
-    repeatSpec() ? h('div', { class: 'note' }, `Repeats ${REPEATS[repeatSpec().frequency].word}, ${repeatSpec().count} times in all. You pay for the first date now; the other ${repeatSpec().count - 1} are reserved for you and their balance is paid at the ground${state.config.autoDebitEnabled ? ' (or by auto-debit)' : ''}. Dates that are closed or already taken are left out.`) : null].filter(Boolean));
+  if (state.promo && !s.promoCode) { state.promo = null; $('#p-promo-msg').textContent = ''; $('#p-promo').value = ''; }
+  const head = h('div', { class: 'row' }, h('span', {}, s.text || `${s.count} ${s.count === 1 ? 'slot' : 'slots'} · ${niceDate(state.date)} · ${s.first.time} – ${hhmm(s.last.end)}`), h('b', { id: 'p-sum-total' }, '…'));
+  const money = h('div', { id: 'p-sum-money' }, h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Working out the price…')));
+  sum.append(head, money,
+    repeatSpec() ? h('div', { class: 'note' }, `Repeats ${REPEATS[repeatSpec().frequency].word}, ${repeatSpec().count} times in all. You pay for the first date now; the other ${repeatSpec().count - 1} are reserved for you and their balance is paid at the ground${state.config.autoDebitEnabled ? ' (or by auto-debit)' : ''}. Dates that are closed or already taken are left out.`) : null);
+  refreshQuote(s, head.lastChild, money);
   btn.disabled = false;
   btn.textContent = `${s.formatId || (s.ruleId && !s.hourly) ? 'Hold this session' : s.hourly ? 'Hold these hours' : 'Hold these slots'}  ·  ${holdMin}:00`;
   renderCreditRow();
+}
+
+/** Asks the server what holding this selection takes now and shows its figures. Only the latest request is drawn; an error is shown as an error, never as a price. */
+let quoteSeq = 0;
+async function refreshQuote(s, totalEl, box) {
+  const seq = ++quoteSeq;
+  const useCredit = !!(state.user && state.useCredit && state.creditPaise > 0);
+  let q;
+  try { q = (await api('/api/bookings/quote', { method: 'POST', body: { ...promoBody(s), ...(s.promoCode ? { promoCode: s.promoCode } : {}), ...(useCredit ? { useCredit: true } : {}) } })).quote; }
+  catch (e) { if (seq === quoteSeq) { totalEl.textContent = '—'; clear(box).append(h('div', { class: 'row err', id: 'p-quote-err' }, h('span', {}, `We could not work out the price just now: ${e.message}`))); } return; }
+  if (seq !== quoteSeq) return;
+  totalEl.textContent = inr(q.fullPricePaise);
+  const label = q.payNow === 'full' ? `Full payment (starts within ${q.fullPaymentWithinHours} hours)` : q.advancePercent != null ? `Advance (${q.advancePercent}%)` : 'Advance';
+  clear(box).append(...[
+    q.discountPaise ? h('div', { class: 'row' }, h('span', {}, `Promo ${q.promoCode}`), h('b', {}, '− ' + inr(q.discountPaise))) : null,
+    h('div', { class: 'row' }, h('span', {}, label), h('b', { id: 'p-sum-paynow' }, inr(q.payNowPaise))),
+    q.creditUsedPaise ? h('div', { class: 'row' }, h('span', {}, 'Account credit used'), h('b', {}, '− ' + inr(q.creditUsedPaise))) : null,
+    h('div', { class: 'row total' }, h('span', {}, 'Due now'), h('b', { id: 'p-sum-due' }, inr(q.dueNowPaise)))].filter(Boolean));
 }
 
 const REPEATS = { daily: { word: 'every day', def: 5, max: 60 }, weekly: { word: 'every week', def: 4, max: 52 }, monthly: { word: 'every month', def: 3, max: 12 }, yearly: { word: 'every year', def: 2, max: 3 } };
@@ -1882,7 +1885,7 @@ async function loadBookings() {
   const ex = clear($('#bk-extra')); for (const f of bookingsExtras) f(ex);
   renderMyDash(clear($('#bk-dash')));
   await loadCredit();
-  $('#bk-credit').textContent = state.creditPaise > 0 ? `Account credit: ${inr(state.creditPaise)}. It is used first on your next booking if you tick the box.` : 'Your confirmed, played and cancelled bookings.';
+  $('#bk-credit').textContent = state.creditPaise === null ? 'We could not load your account credit just now. Pull down or come back to try again.' : state.creditPaise > 0 ? `Account credit: ${inr(state.creditPaise)}. It is used first on your next booking if you tick the box.` : 'Your confirmed, played and cancelled bookings.';
   try {
     const res = await api('/api/bookings?limit=50');
     clear(list);

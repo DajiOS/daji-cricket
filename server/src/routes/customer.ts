@@ -10,7 +10,7 @@ import { run, one } from '../db.ts';
 import { now } from '../clock.ts';
 import { splitName, titleCase } from '../names.ts';
 import { accessBooking, bookingPayments, listBookings, viewBooking } from '../bookings.ts';
-import { readName, holdSlots, parseHold, planFor, paymentInstructionsFor, startDifferencePayment } from '../hold.ts';
+import { readName, holdSlots, parseHold, planFor, paymentInstructionsFor, quoteHold, startDifferencePayment } from '../hold.ts';
 import { previewReschedule, rescheduleBooking, rescheduleStatus } from '../reschedule.ts';
 import { readDeposit } from '../securityDeposit.ts';
 import { getRetentionCase, openRetentionDispute, withdrawRetentionDispute } from '../retention.ts';
@@ -153,6 +153,8 @@ export function customerRoutes(r: Router): void {
     const { promo, discountPaise } = evaluatePromo(code, getGroundOr404(req.groundId), U(c).id, plan.totalPaise);
     return ok({ code: promo.code, label: promo.label, discountPaise, totalPaise: plan.totalPaise - discountPaise, fullPricePaise: plan.totalPaise });
   }, { auth: ['customer'] });
+  // What holding this selection would take now (advance or full price, promo, account credit), from the same functions as the hold. Signed out: no promo or credit.
+  r.post('/api/bookings/quote', (c) => ok({ quote: quoteHold(c.user ?? null, c.json()) }));
   r.post('/api/bookings', async (c) => {
     const body = c.json();
     const viaOption = !!body && typeof body === 'object' && 'optionId' in (body as object);

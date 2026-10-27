@@ -1,4 +1,4 @@
-import type { BallType, Booking, HoldResponse, PaymentInstructions, PayMethod, RepeatFrequency } from '@daji/shared';
+import type { BallType, Booking, HoldQuote, HoldResponse, PaymentInstructions, PayMethod, RepeatFrequency } from '@daji/shared';
 import { many, one, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { newId, newRef } from './ids.ts';
@@ -6,7 +6,7 @@ import { HttpError } from './errors.ts';
 import { audit, type Actor } from './audit.ts';
 import { Validator, normalizePhone } from './input.ts';
 import { getSettings } from './settings.ts';
-import { MIN, DAY, addDays, istMidnight, timeOfDay } from './time.ts';
+import { MIN, HOUR, DAY, addDays, istMidnight, timeOfDay } from './time.ts';
 import { accessBooking, blockOf, advanceFor, bookingOr404, confirmBooking, loadBooking, moveDifferenceDue, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
 import { getGroundOr404, slotPrice, slotStarts, type GroundRow } from './grounds.ts';
 import { createUser, requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
@@ -175,15 +175,42 @@ export function assertDayOpen(date: string, scope: 'ground' | 'practice'): void 
 export function assertOnlineBookable(date: string, scope: 'ground' | 'practice'): void { assertOnlineWindow(date); assertDayOpen(date, scope); }
 
 /** Customer step 1: hold the slots, apply credit if asked, and say how to pay. */
-export async function holdSlots(cfg: Config, customer: UserRow, body: unknown, via: { channel?: 'guppi'; actionId?: string } = {}): Promise<HoldResponse> {
-  const req = parseHold(body);
-  const repeat = parseRepeat(body);
+/** The slots, price and promo of an online hold: the one place both the hold and the quote shown before it work them out. */
+function priceHold(req: ReturnType<typeof parseHold>, customerId: string | null) {
   assertOnlineWindow(req.date);
   const ground = getGroundOr404(req.groundId);
   const plan = planFor(ground, req, true);
   assertDayOpen(req.date, plan.format?.ball === 'practice' ? 'practice' : 'ground');
-  const promo = req.promoCode ? evaluatePromo(req.promoCode, ground, customer.id, plan.totalPaise) : null;
+  const fullPricePaise = plan.totalPaise;
+  if (req.promoCode && !customerId) throw new HttpError(401, 'UNAUTHENTICATED', 'Sign in to use a promo code.');
+  const promo = req.promoCode ? evaluatePromo(req.promoCode, ground, customerId!, plan.totalPaise) : null;
   if (promo) plan.totalPaise -= promo.discountPaise;
+  return { ground, plan, promo, fullPricePaise };
+}
+
+
+/**
+ * What a hold of this selection would cost, worked out by the same functions as the hold itself, without holding anything. The website and the app show these
+ * figures before the customer holds, so neither repeats the advance, full-payment or credit rules. Read only; the hold recalculates and its figures win.
+ */
+export function quoteHold(customer: UserRow | null, body: unknown): HoldQuote {
+  const req = parseHold(body);
+  const who = customer?.role === 'customer' ? customer : null;
+  const { ground, plan, promo, fullPricePaise } = priceHold(req, who?.id ?? null);
+  const payNowPaise = advanceFor(ground, plan.totalPaise, plan.starts[0]!);
+  const s = getSettings();
+  const mode = ground.advance_mode ?? s.advanceMode;
+  const creditUsedPaise = who && req.useCredit ? Math.min(credits.balance(who.id, ground.owner_id), payNowPaise) : 0;
+  const full = payNowPaise === plan.totalPaise && plan.starts[0]! - now() <= s.fullPaymentWithinHours * HOUR;
+  return { fullPricePaise, discountPaise: promo?.discountPaise ?? 0, promoCode: promo?.promo.code ?? null, totalPaise: plan.totalPaise,
+    payNowPaise, payNow: full ? 'full' : 'advance', advancePercent: !full && mode === 'percent' ? (ground.advance_value ?? s.advanceValue) : null, fullPaymentWithinHours: s.fullPaymentWithinHours,
+    creditUsedPaise, dueNowPaise: payNowPaise - creditUsedPaise };
+}
+
+export async function holdSlots(cfg: Config, customer: UserRow, body: unknown, via: { channel?: 'guppi'; actionId?: string } = {}): Promise<HoldResponse> {
+  const req = parseHold(body);
+  const repeat = parseRepeat(body);
+  const { ground, plan, promo } = priceHold(req, customer.id);
   const s = getSettings();
   const method: 'razorpay' | 'upi' = s.razorpayEnabled ? 'razorpay' : 'upi';
   const gw = method === 'razorpay' ? getGateway(cfg) : null;

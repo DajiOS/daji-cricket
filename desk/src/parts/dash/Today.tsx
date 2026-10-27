@@ -5,7 +5,7 @@ import { post, inr, fmtDay, useApi } from '../../lib';
 import { type Booking, type Page, BookingChip, CancelDialog, cancellable, errText, timeRange } from './common';
 import { BookingDetail } from './Detail';
 
-export interface TodayData { date: string; bookings: Booking[]; awaitingVerification: number; needsReview: number }
+export interface TodayData { date: string; bookings: Booking[]; awaitingVerification: number; needsReview: number; money?: { soldPaise: number; collectedPaise: number; soldBookings: number } }
 
 /** Sessions on today's date, in time order, each opening its booking. */
 export function Schedule({ data, err, onChanged }: { data: TodayData | null; err: string | null; onChanged: () => void }) {
