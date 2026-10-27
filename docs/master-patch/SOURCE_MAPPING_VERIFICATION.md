@@ -1,6 +1,6 @@
 # SOURCE_MAPPING_VERIFICATION
 
-Daji V2 source mapping of the 73 rows of DAJI_V2_TRACEABILITY_FOR_CLAUDE_SOURCE_MAPPING_WITH_REVIEW.csv. Daji only. Inspected at commit `d9b2242`.
+Daji V2 source mapping of the 73 rows of DAJI_V2_TRACEABILITY_FOR_CLAUDE_SOURCE_MAPPING_WITH_REVIEW.csv. Daji only. Inspected at commit `26c59ac`.
 
 Method: every file and symbol in the completed CSV was looked up in the working tree by an exact pattern (a missing one aborts the build, so none is invented); each row's required test was executed in the final run and its result is read from the evidence file it wrote (a row with no evidence record would be NOT_RUN and cannot be VERIFIED); clients were searched for competing business rules.
 
