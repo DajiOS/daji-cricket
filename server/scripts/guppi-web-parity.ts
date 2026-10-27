@@ -52,7 +52,7 @@ try {
         const before = fingerprint();
         try {
           await page.goto(h.url + '/', { waitUntil: 'domcontentloaded' });
-          await page.waitForSelector('#guppi-open', { timeout: 15000 });
+          await page.waitForSelector('#guppi-open', { timeout: 45000 }); // the home page's 3D scene keeps software-rendered Chromium busy for 10-15 s; a real device is NOT_RUN here
           await page.click('#guppi-open');
           await page.fill('#guppi-input', sc.text);
           await page.click('#guppi-send');

@@ -62,7 +62,7 @@ const SCENARIOS: { id: string; run: (c: Ctx) => Promise<boolean> }[] = [
       const date = addDays(today(), 6);
       const b = await bookAndPay(h, token, g.id, date, '09:00', 1);
       const before = bookingRow(b.id);
-      await page.reload(); await page.waitForFunction(() => document.body.innerText.includes('Your bookings'), null, { timeout: 20000 });
+      await page.reload(); await page.waitForFunction(() => document.body.innerText.includes('My Bookings'), null, { timeout: 20000 });
       await tap(page, 'Change time'); await shot('1-card');
       await text(page, 'Show times').waitFor();
       await page.getByPlaceholder('dd/mm/yyyy').fill(ddmmyyyy(date));
@@ -94,7 +94,7 @@ const SCENARIOS: { id: string; run: (c: Ctx) => Promise<boolean> }[] = [
       const b = await bookAndPay(h, token, g.id, date, '09:00', 1);
       if ((await h.post(`/api/bookings/${b.id}/reschedule`, { date, startTime: '19:00' }, token)).status !== 200) throw new Error('move failed');
       const moved = bookingRow(b.id), diff = moved.total_paise - b.totalPaise;
-      await page.reload(); await page.waitForFunction(() => document.body.innerText.includes('Your bookings'), null, { timeout: 20000 });
+      await page.reload(); await page.waitForFunction(() => document.body.innerText.includes('My Bookings'), null, { timeout: 20000 });
       row.cardText = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
       await tap(page, /^Pay .* online$/);
       await tap(page, 'Pretend the card is declined');
@@ -116,7 +116,7 @@ const SCENARIOS: { id: string; run: (c: Ctx) => Promise<boolean> }[] = [
       const b = await bookAndPay(h, token, g.id, addDays(today(), 6), '19:00', 1);
       if ((await h.call('POST', `/api/staff/bookings/${b.id}/security-deposit/collect`, { token: staff, body: { amountPaise: 100000, method: 'cash', reference: 'receipt-app-1' }, headers: { 'idempotency-key': 'app-dep-1' } })).status !== 201) throw new Error('collect failed');
       const before = bookingRow(b.id);
-      await page.reload(); await page.waitForFunction(() => document.body.innerText.includes('Your bookings'), null, { timeout: 20000 });
+      await page.reload(); await page.waitForFunction(() => document.body.innerText.includes('My Bookings'), null, { timeout: 20000 });
       await tap(page, 'Security deposit');
       await text(page, 'Security deposit held now').waitFor();
       row.screen = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
@@ -136,7 +136,7 @@ const SCENARIOS: { id: string; run: (c: Ctx) => Promise<boolean> }[] = [
         if (b) break;
       }
       if (!b) { row.skipped = 'no free slot within 24 hours found'; return false; }
-      await page.reload(); await page.waitForFunction(() => document.body.innerText.includes('Your bookings'), null, { timeout: 20000 });
+      await page.reload(); await page.waitForFunction(() => document.body.innerText.includes('My Bookings'), null, { timeout: 20000 });
       await tap(page, 'Change time');
       await text(page, /more than 24 hours remain/).waitFor();
       row.message = (await text(page, /more than 24 hours remain/).innerText()).trim(); await shot('1-too-late');
@@ -163,7 +163,7 @@ try {
     const shot = async (step: string) => { const f = `mobile_${sc.id.slice(0, 28).replace(/\W+/g, '-')}_${step}.png`; await page.screenshot({ path: join(out, f) }); ((row.screenshots ??= []) as string[]).push(f); };
     try {
       await page.goto(h.url + '/__mobile__', { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => document.body.innerText.includes('Your bookings') || document.body.innerText.includes('My dashboard'), null, { timeout: 20000 });
+      await page.waitForFunction(() => document.body.innerText.includes('My Bookings'), null, { timeout: 20000 });
       row.result = (await sc.run({ page, shot, row, token, g, staff })) ? 'PASS' : 'FAIL';
     } catch (e) { row.result = 'FAIL'; row.error = String((e as Error).message).slice(0, 500); try { await shot('error'); } catch { /* page closed */ } }
     if (row.result !== 'PASS') failures++;
