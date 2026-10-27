@@ -1,7 +1,7 @@
 import { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { startHarness, grounds, bookAndPay, checkoutSignature, DEMO, dayFromNow, slotStart, setNow, setting, advance, sendWebhook, capturedEvent, HOUR, MIN, type Harness, type GroundLite } from './helpers.ts';
+import { startHarness, grounds, bookAndPay, hold, checkoutSignature, DEMO, dayFromNow, slotStart, setNow, setting, advance, sendWebhook, capturedEvent, HOUR, MIN, type Harness, type GroundLite } from './helpers.ts';
 import { many, one, run } from '../src/db.ts';
 import { reconcile } from '../src/finevents.ts';
 import { register } from './register.ts';
@@ -350,6 +350,25 @@ rel('REL-FIX-002-005', 'on a ground with a price list the status gives the exact
   const lost = (await status(cust, id)).body.status;
   assert.equal(lost.allowed, false); assert.equal(lost.code, 'NOT_SELF_SERVICE'); assert.equal(lost.optionsRequest, null);
   ev('optionsRequest', st.optionsRequest); ev('preview', pv.body.preview); ev('unmatched', lost.code);
+});
+
+rel('REL-FIX-002-006', 'a replacement time that is free on the ground but taken on a linked net is refused by the preview and by the move, and nothing changes', async () => {
+  const nets = (await grounds(h)).find((x) => x.name === 'Practice Nets')!;
+  const owner1 = await h.login('owner1');
+  const linked = await h.call('PUT', `/api/staff/grounds/${g.id}/links`, { token: owner1, body: { includes: [{ groundId: nets.id, conflicts: true }] } });
+  assert.equal(linked.status, 200, JSON.stringify(linked.body));
+  const date = dayFromNow(5);
+  const b = await fresh(date, '10:00');
+  const other = await register(h, 'Net Customer', '9866600321');
+  const net = await hold(h, other, nets.id, date, '12:00', 1);
+  assert.equal(net.status, 201, JSON.stringify(net.body));
+  const before = { booking: row(b.id), slots: slotsOf(b.id), counts: counts() };
+  const p = await preview(cust, b.id, date, '12:00');
+  assert.equal(p.status, 409, JSON.stringify(p.body)); assert.equal(p.body.error.code, 'SLOT_TAKEN');
+  const m = await move(cust, b.id, date, '12:00');
+  assert.equal(m.status, 409); assert.equal(m.body.error.code, 'SLOT_TAKEN');
+  assert.deepEqual({ booking: row(b.id), slots: slotsOf(b.id), counts: counts() }, before, 'the original booking, its slots and the money records are untouched');
+  ev('refused', { preview: p.body.error.code, move: m.body.error.code });
 });
 
 // ------------------------------------------------------------------ boundaries of the move and deposit calls
