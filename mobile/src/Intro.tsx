@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { mode } from './theme';
 
-// The opening film, matching the website: thin brass arcs, three short lines that rise into place with one word in brass,
+// The opening film, matching the website: thin green arcs, three short lines that rise into place with one word in green,
 // a phone showing the booking screen, then the name. Eased throughout and in the app's current theme. It plays once per launch.
 let played = false;
 const FRAME = 33, END = 10400;
@@ -31,8 +31,8 @@ export function Intro({ onDone }: { onDone: () => void }) {
   if (!on) return null;
 
   const dark = mode === 'dark';
-  const bg = dark ? '#07090a' : '#fbfaf7', fg = dark ? '#f3eee3' : '#16130c', ac = dark ? '#d6b36a' : '#8c6f2a';
-  const line = dark ? 'rgba(214,179,106,.28)' : 'rgba(140,111,42,.28)', chip = dark ? '#1a1d20' : '#efeadc', scr = dark ? '#0d0f11' : '#fffdf8';
+  const bg = dark ? '#07100C' : '#F3F6F4', fg = dark ? '#E9F1EC' : '#14231B', ac = dark ? '#5FD68A' : '#1C7A3E';
+  const line = dark ? 'rgba(95,214,138,.28)' : 'rgba(28,122,62,.26)', chip = dark ? '#15221C' : '#E3ECE6', scr = dark ? '#0B1511' : '#FFFFFF';
   const u = Math.min(W, H) / 100;
 
   const arcIn = ease((t - 100) / 2600), arcOut = 1 - clamp((t - 8200) / 900);
@@ -60,9 +60,9 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const pw = Math.min(W * 0.52, H * 0.3), ph = pw * 2.0;
   const slot = t > 4000, btn = t > 4500;
   const phone = t >= 2500 && t <= 6500 ? (
-    <View pointerEvents="none" style={{ position: 'absolute', left: W / 2 - pw / 2, top: H - ph - H * 0.07 + (1 - pIn) * H * 0.6 - pOut * H * 0.14, width: pw, height: ph, borderRadius: pw * 0.15, padding: 4, backgroundColor: dark ? '#23272b' : '#d9d3c3', opacity: pIn * (1 - pOut), shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 12 }}>
+    <View pointerEvents="none" style={{ position: 'absolute', left: W / 2 - pw / 2, top: H - ph - H * 0.07 + (1 - pIn) * H * 0.6 - pOut * H * 0.14, width: pw, height: ph, borderRadius: pw * 0.15, padding: 4, backgroundColor: dark ? '#1E2A25' : '#D3DDD7', opacity: pIn * (1 - pOut), shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 12 }}>
       <View style={{ flex: 1, borderRadius: pw * 0.12, backgroundColor: scr, padding: pw * 0.07, paddingTop: pw * 0.2, gap: pw * 0.05, overflow: 'hidden' }}>
-        <Text style={{ fontSize: pw * 0.05, letterSpacing: 1.4, color: ac, fontWeight: '700' }}>RESERVE</Text>
+        <Text style={{ fontSize: pw * 0.055, color: ac, fontWeight: '700' }}>Book a ground</Text>
         <Text style={{ fontSize: pw * 0.1, fontWeight: '700', color: fg, lineHeight: pw * 0.115 }}>Pick a day{'\n'}and a time</Text>
         <View style={{ flexDirection: 'row', gap: pw * 0.03 }}>
           {['13', '14', '15'].map((d, i) => <View key={d} style={{ flex: 1, borderRadius: 8, paddingVertical: pw * 0.03, alignItems: 'center', backgroundColor: i === 1 ? ac : chip }}><Text style={{ fontWeight: '700', fontSize: pw * 0.075, color: i === 1 ? bg : fg }}>{d}</Text></View>)}
@@ -78,9 +78,9 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const lg = inOut((t - 8100) / 1400), logoOut = 1 - clamp((t - 9800) / 600);
   const logo = t >= 8100 ? (
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', opacity: lg * logoOut, transform: [{ scale: 0.94 + 0.06 * lg }] }}>
-      <Text style={{ fontFamily: 'serif', fontStyle: 'italic', fontSize: Math.min(W * 0.26, 110), color: ac }}>Daji</Text>
+      <Text style={{ fontWeight: '800', letterSpacing: -2, fontSize: Math.min(W * 0.24, 100), color: ac }}>Daji</Text>
       <Text style={{ fontWeight: '800', letterSpacing: 2, fontSize: Math.min(W * 0.075, 30), color: ac }}>CRICKET GROUND</Text>
-      <Text style={{ marginTop: 10, fontWeight: '700', letterSpacing: 3, fontSize: 10, color: dark ? '#9b9484' : '#7a7260' }}>PROJECT BY DAJI PARIVAR</Text>
+      <Text style={{ marginTop: 10, fontWeight: '700', letterSpacing: 3, fontSize: 10, color: dark ? '#A7B8AF' : '#5B6A62' }}>PROJECT BY DAJI PARIVAR</Text>
     </View>
   ) : null;
 

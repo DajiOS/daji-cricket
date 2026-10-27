@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { api } from './api';
+import { Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { api, API_URL } from './api';
 import type { AppConfig, Availability, Ball, Ground, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
-import { Btn, Chip, Field, Loading, MonthBar, s } from './ui';
+import { Btn, Chip, Field, GuppiMark, Loading, MonthBar, Steps, s } from './ui';
 import { C, inr, MON } from './theme';
 import { GuppiBookScreen } from './GuppiBookScreen';
 
@@ -12,6 +12,30 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const BALLS: Record<Ball, string> = { leather: 'Leather ball', tennis: 'Tennis ball', practice: 'Practice nets' };
 const REPEATS: Record<RepeatFrequency, { word: string; def: number; max: number }> = { daily: { word: 'every day', def: 5, max: 60 }, weekly: { word: 'every week', def: 4, max: 52 }, monthly: { word: 'every month', def: 3, max: 12 }, yearly: { word: 'every year', def: 2, max: 3 } };
 const hm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
+
+interface LibItem { kind: 'image' | 'video'; tag: string; url: string; thumb?: string | null; poster?: string | null }
+/** The opening band: the ground's own photo (the first hero or gallery picture, or a drone video's still, uploaded in the desk), or plain green when there is none. */
+function Hero() {
+  const [pic, setPic] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ items: LibItem[] }>('/api/library/public').then((r) => {
+      const it = ['hero', 'gallery'].flatMap((tag) => r.items.filter((x) => x.tag === tag).reverse()).map((x) => (x.kind === 'video' ? x.poster || x.thumb : x.url)).find(Boolean);
+      if (it) setPic(/^https:\/\//.test(it) ? it : API_URL + it);
+    }).catch(() => { /* the green band is enough */ });
+  }, []);
+  return (
+    <View style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: '#123D24', padding: 20, paddingTop: 64, marginBottom: 4 }}>
+      {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} />}
+      <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: pic ? 'rgba(6,22,13,.52)' : 'transparent' }} />
+      <View style={{ zIndex: 1 }}>
+        <Text style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, fontWeight: '700', marginBottom: 6 }}>Daji Cricket Ground · Surat</Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 34, lineHeight: 38, fontWeight: '800', letterSpacing: -0.8 }}>Play.{'\n'}Practice.{'\n'}<Text style={{ color: '#5FD68A' }}>Grow.</Text></Text>
+        <Text style={{ color: 'rgba(255,255,255,.88)', fontSize: 14, lineHeight: 20, marginTop: 8 }}>Floodlit ground and practice nets. Pick a free slot, pay a small advance and the time is yours.</Text>
+      </View>
+    </View>
+  );
+}
+const Label = ({ children }: { children: React.ReactNode }) => <Text style={{ color: C.text, fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>{children}</Text>;
 
 /** A month at a time. Only the days in `open` can be picked. */
 function DayPicker({ open, value, onPick }: { open: string[]; value: string; onPick: (d: string) => void }) {
@@ -134,9 +158,8 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   };
 
   if (!cfg) return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>
-      <Text style={s.eyebrow}>Reserve</Text>
-      <Text style={s.h1}>Book the ground</Text>
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 52 }]}>
+      <Hero />
       {err ? (<><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={() => void loadGrounds()} style={{ marginTop: 16 }} /></>) : (<><Loading /><Text style={[s.muted, { textAlign: 'center' }]}>Loading today's slots…</Text></>)}
     </ScrollView>
   );
@@ -147,22 +170,30 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const days = Array.from({ length: Math.min(cfg?.maxDaysAhead ?? 30, 366) }, (_, i) => addDays(first, i)).filter((d) => !(cfg?.bookingsCloseFrom && d >= cfg.bookingsCloseFrom) && !shut.has(d));
   const fixed = opts.filter((o) => o.mode === 'fixed'), hourly = opts.filter((o) => o.mode === 'hourly');
   return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>
-      <Text style={s.eyebrow}>Reserve</Text>
-      <Text style={s.h1}>Book the ground</Text>
-      {!!cfg.guppiBookingEnabled && <Chip label="Book with Guppi · ગુજરાતી · हिन्दी · English" onPress={() => setGuppi(true)} />}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 }}>{grounds.map((g) => <Chip key={g.id} label={g.name} on={g.id === gid} onPress={() => setGid(g.id)} />)}</View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 52 }]}>
+      <Hero />
+      <Steps at={body ? 2 : 1} />
+      {!!cfg.guppiBookingEnabled && (
+        <Pressable accessibilityRole="button" onPress={() => setGuppi(true)} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 4 }]}>
+          <GuppiMark />
+          <View style={{ flex: 1 }}><Text style={[s.text, { fontWeight: '700' }]}>Book with Guppi</Text><Text style={s.muted}>Just say it · ગુજરાતી · हिन्दी · English</Text></View>
+          <Text style={{ color: C.gold, fontSize: 22 }}>›</Text>
+        </Pressable>
+      )}
+      <Label>Ground</Label>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{grounds.map((g) => <Chip key={g.id} label={g.name} on={g.id === gid} onPress={() => setGid(g.id)} />)}</View>
+      <Label>Day</Label>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
         {days.slice(0, 14).map((d) => { const dt = new Date(d + 'T00:00:00Z'); return <Chip key={d} on={d === date} onPress={() => setDate(d)} label={`${DOW[dt.getUTCDay()]} ${dt.getUTCDate()} ${MON[dt.getUTCMonth()]}`} />; })}
         <Chip label={cal ? 'Hide calendar' : 'More dates…'} on={cal} onPress={() => setCal(!cal)} />
       </ScrollView>
       {cal && <DayPicker open={days} value={date} onPick={(d) => { setDate(d); setCal(false); }} />}
 
       {av === null ? <Loading /> : av.closed ? <Text style={s.muted}>The ground is closed on this day. Please pick another day.</Text> : hasRates ? (<>
-        <Text style={[s.muted, { marginBottom: 6 }]}>Play with</Text>
+        <Label>Play with</Label>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{balls.map((b) => <Chip key={b} label={BALLS[b]} on={b === ball} onPress={() => { setBall(b); setWin(null); setHr(null); }} />)}</View>
         {!ball ? <Text style={s.muted}>Choose the ball you want to play with.</Text> : !opts.length ? <Text style={s.muted}>Nothing is on sale for this ball on this day. Pick another day, or call us.</Text> : (<>
-          {fixed.length > 0 && <Text style={[s.muted, { marginVertical: 6 }]}>Sessions</Text>}
+          {fixed.length > 0 && <Label>Sessions</Label>}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {fixed.map((o) => <Chip key={o.ruleId} label={`${o.label}\n${o.time} – ${o.endTime}\n${o.state === 'available' ? inr(o.pricePaise) : o.state}${o.proRated ? '\n(part session)' : ''}`} on={win === o.ruleId} disabled={o.state !== 'available'} onPress={() => { setWin(o.ruleId); setHr(null); }} />)}
           </View>
@@ -177,6 +208,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
         </>)}
         {!!ground?.ratesNote && <Text style={s.muted}>{ground.ratesNote}</Text>}
       </>) : (<>
+        <Label>Time</Label>
         <Text style={[s.muted, { marginBottom: 10 }]}>Choose up to {maxSlots} slots in a row.</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {av.slots.map((sl) => (
@@ -187,7 +219,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       </>)}
 
       {!!body && (<>
-        <Text style={[s.muted, { marginTop: 14, marginBottom: 6 }]}>Repeat this booking</Text>
+        <Label>Repeat this booking</Label>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           <Chip label="Does not repeat" on={!rep} onPress={() => setRep(null)} />
           {(Object.keys(REPEATS) as RepeatFrequency[]).map((f) => <Chip key={f} label={f[0]!.toUpperCase() + f.slice(1)} on={rep?.f === f} onPress={() => setRep({ f, n: REPEATS[f].def })} />)}

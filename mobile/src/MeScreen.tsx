@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { AppConfig, Booking, Child, Dashboard, User } from './types';
-import { Btn, Chip, KV, Loading, s } from './ui';
+import { Badge, Btn, Chip, KV, Loading, s } from './ui';
 import { AutoDebit } from './AutoDebit';
 import { PayScreen } from './PayScreen';
 import { DepositScreen, RescheduleScreen, differenceAsHold } from './ManageBooking';
@@ -10,12 +10,18 @@ import type { HoldResponse } from './types';
 import { C, inr, MON, niceDate } from './theme';
 
 const label = (st: Booking['status']): string => ({ confirmed: 'Confirmed', held: 'Held', cancelled: 'Cancelled', expired: 'Expired', no_show: 'No show', completed: 'Played' }[st]);
+const tone = (st: Booking['status']) => (st === 'confirmed' || st === 'completed' ? 'ok' : st === 'held' ? 'warn' : st === 'no_show' ? 'danger' : 'muted') as 'ok' | 'warn' | 'danger' | 'muted';
+type Kind = 'upcoming' | 'completed' | 'cancelled' | 'all';
+/** Which tab a booking sits under: still to come, played (or missed), or called off. */
+const kindOf = (b: Booking): Exclude<Kind, 'all'> => (b.status === 'cancelled' || b.status === 'expired' ? 'cancelled' : (b.status === 'confirmed' || b.status === 'held') && b.endAt > Date.now() ? 'upcoming' : 'completed');
+const KINDS: [Kind, string][] = [['upcoming', 'Upcoming'], ['completed', 'Completed'], ['cancelled', 'Cancelled'], ['all', 'All']];
 
 export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: User }) {
   const [view, setView] = useState<'ground' | 'academy'>('ground');
   const [dash, setDash] = useState<Dashboard | null>(null); const [books, setBooks] = useState<Booking[]>([]); const [kids, setKids] = useState<Child[]>([]);
   const [flags, setFlags] = useState<{ deposit: boolean; reschedule: boolean }>({ deposit: false, reschedule: false });
   const [manage, setManage] = useState<{ kind: 'reschedule' | 'deposit'; b: Booking } | null>(null); const [payDiff, setPayDiff] = useState<HoldResponse | null>(null);
+  const [show, setShow] = useState<Kind>('upcoming');
   const [kid, setKid] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [note, setNote] = useState('');
 
   const load = useCallback(async () => {
@@ -23,7 +29,7 @@ export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: Use
     try {
       const [d, b, k, cfg] = await Promise.all([api<Dashboard>('/api/my/dashboard'), api<{ items: Booking[] }>('/api/bookings?limit=50'), api<{ items: Child[] }>('/api/me/children'), api<AppConfig>('/api/config')]);
       setFlags({ deposit: !!cfg.securityDepositEnabled, reschedule: !!cfg.customerRescheduleEnabled });
-      setDash(d); setBooks(b.items); setKids(k.items); setKid((cur) => cur || k.items[0]?.id || '');
+      setDash(d); setBooks(b.items); if (!b.items.some((x) => kindOf(x) === 'upcoming')) setShow((cur) => (cur === 'upcoming' ? 'all' : cur)); setKids(k.items); setKid((cur) => cur || k.items[0]?.id || '');
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -56,14 +62,37 @@ export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: Use
   if (manage?.kind === 'deposit') return <DepositScreen booking={manage.b} onBack={() => setManage(null)} />;
   if (!dash) return err ? <View style={[s.screen, s.pad, { paddingTop: 60 }]}><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={load} /></View> : <Loading />;
   const child = kids.find((c) => c.id === kid);
+  const shown = show === 'all' ? books : books.filter((b) => kindOf(b) === show);
   const maxM = Math.max(1, ...dash.byMonth.map((m) => m.spentPaise));
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>My dashboard</Text>
+      <Text style={s.eyebrow}>Your games at Daji</Text>
+      <Text style={s.h1}>My Bookings</Text>
       {kids.length > 0 && (<View style={{ flexDirection: 'row', marginBottom: 10 }}><Chip label="Ground" on={view === 'ground'} onPress={() => setView('ground')} /><Chip label="Academy" on={view === 'academy'} onPress={() => setView('academy')} /></View>)}
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
 
       {view === 'ground' && (<>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6, marginBottom: 4 }}>
+          {KINDS.map(([k, name]) => { const n = k === 'all' ? books.length : books.filter((b) => kindOf(b) === k).length; return <Chip key={k} label={`${name} (${n})`} on={show === k} onPress={() => setShow(k)} />; })}
+        </ScrollView>
+        {confirm && (<View style={[s.card, { borderColor: C.gold }]}><Text style={s.text}>{confirm.message}</Text><View style={{ height: 12 }} /><Btn label="Cancel this booking" onPress={doCancel} /><Btn kind="ghost" label="Keep it" onPress={() => setConfirm(null)} /></View>)}
+        {books.length === 0 ? <Text style={[s.muted, { marginBottom: 14 }]}>No bookings yet.</Text> : !shown.length && <Text style={[s.muted, { marginBottom: 14 }]}>Nothing here.</Text>}
+        {shown.map((b) => (
+          <View key={b.id} style={s.card}>
+            <View style={s.row}><Text style={[s.text, { fontWeight: '800', fontSize: 16, flex: 1 }]}>{b.groundName}</Text><Badge label={kindOf(b) === 'upcoming' && b.status === 'confirmed' ? 'Upcoming' : label(b.status)} tone={tone(b.status)} /></View>
+            <Text style={s.text}>{niceDate(b.date)} · {new Date(b.startAt + 330 * 60000).toISOString().slice(11, 16)} – {new Date(b.endAt + 330 * 60000).toISOString().slice(11, 16)}</Text>
+            <Text style={s.muted}>{b.slotCount} slot{b.slotCount > 1 ? 's' : ''} · {inr(b.totalPaise)} · Ref {b.ref}</Text>
+            {b.seriesId ? <Text style={s.muted}>Repeat booking · date {(b.seriesIndex ?? 0) + 1}</Text> : null}
+            {b.balancePaise > 0 && b.status === 'confirmed' && <Text style={s.muted}>Balance at the ground: {inr(b.balancePaise)}</Text>}
+            {(b.moveDifferenceDuePaise ?? 0) > 0 && <Text style={s.muted}>{inr(b.moveDifferenceDuePaise!)} of it is for your move and can be paid online.</Text>}
+            {(b.moveDifferenceDuePaise ?? 0) > 0 && <Btn label={`Pay ${inr(b.moveDifferenceDuePaise!)} online`} onPress={() => startDifference(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
+            {flags.reschedule && b.status === 'confirmed' && b.startAt > Date.now() && !b.seriesId && <Btn kind="outline" label="Change time" onPress={() => setManage({ kind: 'reschedule', b })} style={{ marginTop: 10, marginBottom: 0 }} />}
+            {flags.deposit && ['confirmed', 'completed', 'no_show'].includes(b.status) && <Btn kind="ghost" label="Security deposit" onPress={() => setManage({ kind: 'deposit', b })} style={{ marginBottom: 0 }} />}
+            {((b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now()) && <Btn kind="outline" label="Cancel" onPress={() => cancel(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
+            {b.seriesId && (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() && <Btn kind="ghost" label="Cancel unpaid repeats" onPress={() => cancelRepeats(b)} style={{ marginBottom: 0 }} />}
+          </View>
+        ))}
+        <Text style={[s.h2, { marginTop: 10 }]}>Your cricket</Text>
         <View style={s.card}>
           <KV k="Spent at the ground" v={inr(dash.spentPaise)} bold /><KV k="Sessions played" v={String(dash.sessions)} /><KV k="Upcoming" v={String(dash.upcoming)} />
           {dash.paidAheadPaise > 0 && <KV k="Paid ahead" v={inr(dash.paidAheadPaise)} />}{dash.creditPaise > 0 && <KV k="Account credit" v={inr(dash.creditPaise)} />}
@@ -75,23 +104,6 @@ export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: Use
         </View>
         {dash.byGround.length > 0 && <View style={s.card}>{dash.byGround.map((g) => <KV key={g.groundId} k={`${g.groundName} · ${g.sessions} sessions`} v={inr(g.spentPaise)} />)}</View>}
         <AutoDebit user={user} />
-        <Text style={s.h2}>Your bookings</Text>
-        {confirm && (<View style={[s.card, { borderColor: C.gold }]}><Text style={s.text}>{confirm.message}</Text><View style={{ height: 12 }} /><Btn label="Cancel this booking" onPress={doCancel} /><Btn kind="ghost" label="Keep it" onPress={() => setConfirm(null)} /></View>)}
-        {books.length === 0 && <Text style={s.muted}>No bookings yet.</Text>}
-        {books.map((b) => (
-          <View key={b.id} style={s.card}>
-            <View style={s.row}><Text style={s.text}>{b.groundName}</Text><Text style={[s.muted, { color: b.status === 'confirmed' ? C.ok : C.muted }]}>{label(b.status)}</Text></View>
-            <Text style={s.muted}>{niceDate(b.date)} · {new Date(b.startAt + 330 * 60000).toISOString().slice(11, 16)} · {b.slotCount} slot{b.slotCount > 1 ? 's' : ''} · {inr(b.totalPaise)}</Text>
-            {b.seriesId ? <Text style={s.muted}>Repeat booking · date {(b.seriesIndex ?? 0) + 1}</Text> : null}
-            {b.balancePaise > 0 && b.status === 'confirmed' && <Text style={s.muted}>Balance at the ground: {inr(b.balancePaise)}</Text>}
-            {(b.moveDifferenceDuePaise ?? 0) > 0 && <Text style={s.muted}>{inr(b.moveDifferenceDuePaise!)} of it is for your move and can be paid online.</Text>}
-            {(b.moveDifferenceDuePaise ?? 0) > 0 && <Btn label={`Pay ${inr(b.moveDifferenceDuePaise!)} online`} onPress={() => startDifference(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
-            {flags.reschedule && b.status === 'confirmed' && b.startAt > Date.now() && !b.seriesId && <Btn kind="outline" label="Change time" onPress={() => setManage({ kind: 'reschedule', b })} style={{ marginTop: 10, marginBottom: 0 }} />}
-            {flags.deposit && ['confirmed', 'completed', 'no_show'].includes(b.status) && <Btn kind="ghost" label="Security deposit" onPress={() => setManage({ kind: 'deposit', b })} style={{ marginBottom: 0 }} />}
-            {((b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now()) && <Btn kind="outline" label="Cancel" onPress={() => cancel(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
-            {b.seriesId && (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() && <Btn kind="ghost" label="Cancel unpaid repeats" onPress={() => cancelRepeats(b)} style={{ marginBottom: 0 }} />}
-          </View>
-        ))}
       </>)}
 
       {view === 'academy' && (<>

@@ -26,19 +26,19 @@ import { CostsScreen } from './src/CostsScreen';
 import { RemindersScreen } from './src/RemindersScreen';
 import { CardsScreen } from './src/CardsScreen';
 import { SettingsScreen } from './src/SettingsScreen';
-import { Avatar, Btn, Chip, Loading, Section, s, refreshStyles } from './src/ui';
+import { Avatar, Btn, Chip, Loading, Section, Steps, s, refreshStyles } from './src/ui';
 import * as SecureStore from 'expo-secure-store';
 import { Intro } from './src/Intro';
 import { ThemeButton } from './src/ThemeButton';
 import { registerForPush, unregisterPush, onNotificationTap } from './src/push';
-import { C, inr, mode, setMode, type Mode } from './src/theme';
+import { C, inr, mode, niceDate, setMode, type Mode } from './src/theme';
 import { ADMIN_APP } from './src/variant';
 import { useWake } from './src/fresh';
 import { lockOn, setLockOn, useLock } from './src/lock';
 import { LockScreen } from './src/LockScreen';
 
 // One app for everyone. What each person sees depends on who signed in:
-//   customer     Book, Mine (bookings and academy), Ask AI, Profile
+//   customer     Book, Bookings (My Bookings and academy), Ask AI, Profile
 //   staff        Bookings, Tasks, Books, More, each only if their permissions allow it
 //   coach        (staff with manage_academy / manage_matches) Academy and Matches under More
 //   messages     (staff with send_broadcasts / view_customers) WhatsApp reminders and Business cards under More
@@ -46,6 +46,21 @@ import { LockScreen } from './src/LockScreen';
 //   super admin  the same as the owner, working inside the owner chosen under More, plus Refunds and Software costs
 type Tab = 'book' | 'me' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'accounts' | 'more';
 type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings';
+
+/** The bar of tabs along the bottom. The open tab sits on a green pill. */
+function TabBar({ tabs, on, onPick, bottom }: { tabs: [string, string][]; on: string; onPick: (id: string) => void; bottom: number }) {
+  return (
+    <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingHorizontal: 8, paddingTop: 8, paddingBottom: Math.max(14, bottom) }}>
+      {tabs.map(([id, name]) => (
+        <Pressable key={id} accessibilityRole="tab" accessibilityState={{ selected: on === id }} onPress={() => onPick(id)} style={{ flex: 1, alignItems: 'center' }}>
+          <View style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: on === id ? C.soft : 'transparent' }}>
+            <Text style={{ color: on === id ? C.gold : C.muted, fontSize: 12.5, fontWeight: on === id ? '800' : '600' }}>{name}</Text>
+          </View>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
 
 function AppInner({ theme }: { theme: Mode }) {
   const insets = useSafeAreaInsets(); // Android draws behind the system bars now, so the tab bar clears the gesture or button bar itself
@@ -90,13 +105,7 @@ function AppInner({ theme }: { theme: Mode }) {
         <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
         <View style={{ flex: 1, display: signin ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
         {signin && <AuthScreen onUser={(u) => { setSignin(false); setUser(u); }} onBack={() => setSignin(false)} note="Sign in to hold your slot. Your day and time stay as you left them." />}
-        <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: Math.max(18, insets.bottom) }}>
-          {([['book', 'Book'], ['signin', 'Sign in']] as [string, string][]).map(([id, name]) => (
-            <Pressable key={id} onPress={() => (id === 'signin' ? ask() : setSignin(false))} style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}>
-              <Text style={{ color: (signin ? 'signin' : 'book') === id ? C.gold : C.muted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>{name}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <TabBar tabs={[['book', 'Book'], ['signin', 'Sign in']]} on={signin ? 'signin' : 'book'} onPick={(id) => (id === 'signin' ? ask() : setSignin(false))} bottom={insets.bottom} />
       </View>
     );
   }
@@ -171,10 +180,14 @@ function AppInner({ theme }: { theme: Mode }) {
   } else if (done) {
     body = (
       <View style={[s.screen, s.pad, { paddingTop: 90 }]}>
+        <Steps at={4} />
+        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: done.paid && done.b.status === 'confirmed' ? C.strong : C.soft, alignItems: 'center', justifyContent: 'center', marginTop: 18, marginBottom: 14 }}>
+          <Text style={{ color: done.paid && done.b.status === 'confirmed' ? C.onStrong : C.gold, fontSize: 30, fontWeight: '800' }}>{done.paid && done.b.status === 'confirmed' ? '✓' : '…'}</Text>
+        </View>
         <Text style={s.eyebrow}>{done.paid && done.b.status === 'confirmed' ? 'Confirmed' : done.paid ? 'Payment received' : 'Reference sent'}</Text>
         <Text style={s.h1}>{done.paid && done.b.status === 'confirmed' ? "You're booked" : 'Thank you'}</Text>
-        <Text style={[s.muted, { marginBottom: 18 }]}>{done.paid ? `${done.b.groundName}, ${done.b.date}. Paid ${inr(done.b.paidPaise)}${done.b.balancePaise > 0 ? `, balance ${inr(done.b.balancePaise)} at the ground` : ''}.` : 'We will confirm the booking once the payment is checked. You will see it under My dashboard.'}</Text>
-        <Btn label="My dashboard" onPress={() => { setDone(null); setTab('me'); }} /><Btn kind="outline" label="Book another" onPress={() => { setDone(null); setTab('book'); }} />
+        <Text style={[s.muted, { marginBottom: 18 }]}>{done.paid ? `${done.b.groundName}, ${niceDate(done.b.date)}. Paid ${inr(done.b.paidPaise)}${done.b.balancePaise > 0 ? `, balance ${inr(done.b.balancePaise)} at the ground` : ''}.` : 'We will confirm the booking once the payment is checked. You will see it under My Bookings.'}</Text>
+        <Btn label="My Bookings" onPress={() => { setDone(null); setTab('me'); }} /><Btn kind="outline" label="Book another" onPress={() => { setDone(null); setTab('book'); }} />
       </View>
     );
   } else if (hold) body = <PayScreen hold={hold} user={user} onBack={() => setHold(null)} onDone={(b, paid) => { setHold(null); setDone({ b, paid }); }} />;
@@ -184,21 +197,13 @@ function AppInner({ theme }: { theme: Mode }) {
   else body = <AskScreen />;
 
   const tabs: [Tab, string][] = customer
-    ? [['book', 'Book'], ['me', 'Mine'], ['ask', 'Ask AI'], ['profile', 'Profile']]
+    ? [['book', 'Book'], ['me', 'Bookings'], ['ask', 'Ask AI'], ['profile', 'Profile']]
     : [...(bookingsOk ? [['bookings', 'Bookings'] as [Tab, string]] : []), ['tasks', 'Tasks'], ...(accountsOk ? [['accounts', 'Books'] as [Tab, string]] : []), ['more', 'More']];
   return (
     <View style={s.screen}>
       <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
       <View key={wake} style={{ flex: 1 }}>{body}</View>
-      {!hold && (
-        <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingBottom: Math.max(18, insets.bottom) }}>
-          {tabs.map(([id, name]) => (
-            <Pressable key={id} onPress={() => { setDone(null); setMore(null); setTab(id); }} style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}>
-              <Text style={{ color: tab === id ? C.gold : C.muted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>{name}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      {!hold && <TabBar tabs={tabs} on={tab} onPick={(id) => { setDone(null); setMore(null); setTab(id as Tab); }} bottom={insets.bottom} />}
       {locked && <LockScreen name={user.name} onUnlock={unlocked} onSignOut={signOut} />}
     </View>
   );

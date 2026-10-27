@@ -88,7 +88,7 @@ function SendOne({ templates, onOpen, onLogged }: { templates: Template[]; onOpe
       <Field label="Date" value={f.date} onChangeText={set('date')} placeholder="Sat 17 Oct" autoCapitalize="sentences" />
       <Field label="Time" value={f.time} onChangeText={set('time')} placeholder="9:00 am" />
       <Field label="Amount" value={f.amount} onChangeText={set('amount')} placeholder="₹1,500" />
-      <Text style={[s.muted, { textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11, marginBottom: 4 }]}>Message</Text>
+      <Text style={[s.muted, { fontSize: 12, fontWeight: '600', marginBottom: 4 }]}>Message</Text>
       <View style={{ backgroundColor: C.bg, borderRadius: 12, padding: 12, marginBottom: 12 }}><Text style={[s.text, { fontSize: 14 }]}>{pre?.message || 'Fill in the details to see the message.'}</Text></View>
       {!!err && <Text style={s.err}>{err}</Text>}
       <Btn label="Open WhatsApp" disabled={!pre?.link} onPress={() => pre?.link && onOpen(pre.link)} />

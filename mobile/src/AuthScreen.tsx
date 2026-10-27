@@ -3,7 +3,7 @@ import { Image, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'r
 import { api, setToken } from './api';
 import type { User } from './types';
 import { Btn, Field, PhoneField, s, NameFields, splitName } from './ui';
-import { C } from './theme';
+import { C, mode as look } from './theme';
 
 export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) => void; admin?: boolean; onBack?: () => void; note?: string }) {
   const [mode, setMode] = useState<'in' | 'up'>('in');
@@ -26,7 +26,7 @@ export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) 
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={[s.pad, { paddingTop: 70 }]} keyboardShouldPersistTaps="handled">
-        <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 240, height: 82, marginBottom: 18, marginLeft: -6 }} />
+        <Image source={look === 'light' ? require('../assets/logo-green.png') : require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 240, height: 82, marginBottom: 18, marginLeft: -6 }} />
         <Text style={s.h1}>{mode === 'in' ? 'Sign in' : 'Create your account'}</Text>
         <Text style={[s.muted, { marginBottom: 22 }]}>{note ?? (admin ? 'For the ground team and owners.' : 'Book the ground, see what you have played and spent, and follow your child at the academy.')}</Text>
         {mode === 'up' && (<><NameFields value={f.name} onChange={set('name')} /><PhoneField code={f.countryCode} number={f.phone} onCode={set('countryCode')} onNumber={set('phone')} /></>)}

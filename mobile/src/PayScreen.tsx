@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import { api } from './api';
 import { CHECKOUT_ORIGINS, isAllowedCheckoutUrl, parseCheckoutMessage } from './checkoutGuard';
 import type { Booking, HoldResponse, User } from './types';
-import { Btn, Field, KV, s } from './ui';
+import { Badge, Btn, Field, KV, Steps, s } from './ui';
 import { C, inr, niceDate } from './theme';
 
 /** Payment for a held booking: Razorpay (a demo card on a demo server, real Checkout otherwise) or UPI with the reference number. */
@@ -34,7 +34,7 @@ export function PayScreen({ hold, user, onDone, onBack, balance }: { hold: HoldR
   };
 
   if (checkout && p.razorpay && !p.razorpay.demo) {
-    const cfg = JSON.stringify({ key: p.razorpay.keyId, order_id: p.razorpay.orderId, amount: p.amountPaise, currency: 'INR', name: 'Daji Cricket Ground', description: `Booking ${b.ref}`, prefill: { name: user.name, email: user.email, contact: user.phone }, theme: { color: '#c9a96b' } }).replace(/</g, '\\u003c');
+    const cfg = JSON.stringify({ key: p.razorpay.keyId, order_id: p.razorpay.orderId, amount: p.amountPaise, currency: 'INR', name: 'Daji Cricket Ground', description: `Booking ${b.ref}`, prefill: { name: user.name, email: user.email, contact: user.phone }, theme: { color: '#1c7a3e' } }).replace(/</g, '\\u003c');
     const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="background:#0a0c0b"><script src="https://checkout.razorpay.com/v1/checkout.js"></script><script>
       var o=${cfg}; o.handler=function(r){window.ReactNativeWebView.postMessage(JSON.stringify({ok:{orderId:r.razorpay_order_id,paymentId:r.razorpay_payment_id,signature:r.razorpay_signature}}))};
       o.modal={ondismiss:function(){window.ReactNativeWebView.postMessage(JSON.stringify({dismiss:true}))}};
@@ -56,10 +56,15 @@ export function PayScreen({ hold, user, onDone, onBack, balance }: { hold: HoldR
   }
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} keyboardShouldPersistTaps="handled">
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: balance ? 60 : 90 }]} keyboardShouldPersistTaps="handled">
+      {!balance && <Steps at={3} />}
       <Text style={s.eyebrow}>{balance ? 'Moved booking' : 'Slots held'}</Text>
       <Text style={s.h1}>{balance ? 'Pay the difference' : 'Complete your payment'}</Text>
       <Text style={[s.muted, { marginBottom: 16 }]}>{balance ? 'Your new time costs more. This is only the difference. What you paid before stays on the booking. The rest of the balance is paid at the ground as usual.' : `Held for ${mm}:${ss}. They are released if payment does not arrive in time.`}</Text>
+      <View style={[s.card, { backgroundColor: C.soft, borderColor: C.soft }]}>
+        <Text style={s.muted}>{balance ? 'Difference to pay now' : 'Amount to pay now'}</Text>
+        <Text style={{ color: C.text, fontSize: 32, fontWeight: '800', letterSpacing: -0.5 }}>{inr(p.amountPaise)}</Text>
+      </View>
       <View style={s.card}>
         <KV k="Ground" v={b.groundName} /><KV k="Date" v={niceDate(b.date)} /><KV k="Slots" v={String(b.slotCount)} />
         <KV k="Total" v={inr(b.totalPaise)} /><KV k={balance ? 'Difference to pay now' : 'Pay now'} v={inr(p.amountPaise)} bold />
@@ -76,6 +81,7 @@ export function PayScreen({ hold, user, onDone, onBack, balance }: { hold: HoldR
       </>)}
       {p.mode === 'razorpay' && p.razorpay && !p.razorpay.demo && <Btn label={`Pay ${inr(p.amountPaise)}`} onPress={() => setCheckout(true)} disabled={expired} />}
       {p.mode === 'upi' && p.upi && (<>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}><Text style={[s.h2, { marginBottom: 0, marginRight: 8 }]}>Pay by UPI</Text><Badge label="Recommended" tone="ok" /></View>
         <View style={s.card}><KV k="Pay to UPI ID" v={p.upi.upiId} bold /><KV k="Name" v={p.upi.payee} /><KV k="Amount" v={inr(p.amountPaise)} /></View>
         <Btn kind="outline" label="Open my UPI app" onPress={() => { Linking.openURL(p.upi!.uri).catch(() => setErr('No UPI app was found. Pay to the UPI ID shown, then enter the reference below.')); }} />
         <Field label="After paying, the UPI reference (UTR)" value={utr} onChangeText={setUtr} keyboardType="number-pad" maxLength={30} />
@@ -83,6 +89,7 @@ export function PayScreen({ hold, user, onDone, onBack, balance }: { hold: HoldR
       </>)}
       {p.mode === 'none' && <Text style={s.muted}>Nothing to pay: your account credit covers this booking.</Text>}
       {!!err && <Text style={s.err}>{err}</Text>}
+      {p.mode !== 'none' && <Text style={[s.muted, { textAlign: 'center', marginVertical: 6 }]}>🔒 Secure, encrypted payment</Text>}
       <Btn kind="ghost" label="Back" onPress={onBack} />
     </ScrollView>
   );

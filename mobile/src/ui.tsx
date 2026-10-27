@@ -1,21 +1,18 @@
 import React from 'react';
-import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
-import { C } from './theme';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { C, tint } from './theme';
 import { API_URL } from './api';
-
-/** Headings use a serif, like the desk. */
-export const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia, serif' });
 
 const build = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   pad: { padding: 18, paddingBottom: 40 },
-  eyebrow: { color: C.gold, fontSize: 11, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 8 },
-  h1: { color: C.text, fontSize: 32, fontWeight: '500', fontFamily: SERIF, marginBottom: 6 },
-  h2: { color: C.text, fontSize: 19, fontWeight: '600', marginBottom: 10 },
+  eyebrow: { color: C.gold, fontSize: 13, fontWeight: '700', marginBottom: 6 },
+  h1: { color: C.text, fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginBottom: 6 },
+  h2: { color: C.text, fontSize: 18, fontWeight: '700', marginBottom: 10 },
   text: { color: C.text, fontSize: 15 },
   muted: { color: C.muted, fontSize: 13, lineHeight: 19 },
   err: { color: C.danger, fontSize: 13, marginVertical: 6 },
-  card: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 14 },
+  card: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 14 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, gap: 10 },
   input: { backgroundColor: C.bg, borderColor: C.line, borderWidth: 1, borderRadius: 12, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
 });
@@ -27,21 +24,21 @@ export function Btn({ label, onPress, kind = 'primary', disabled, busy, style }:
   const p = kind === 'primary';
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled || busy}
-      style={[{ backgroundColor: p ? C.strong : 'transparent', borderColor: kind === 'ghost' ? 'transparent' : p ? C.strong : C.line, borderWidth: 1, borderRadius: 999, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', opacity: disabled ? 0.45 : 1, marginBottom: 10 }, style]}>
-      {busy ? <ActivityIndicator color={p ? C.onStrong : C.gold} /> : <Text style={{ color: p ? C.onStrong : kind === 'ghost' ? C.gold : C.text, fontWeight: '600', fontSize: 15 }}>{label}</Text>}
+      style={[{ backgroundColor: p ? C.strong : 'transparent', borderColor: kind === 'ghost' ? 'transparent' : p ? C.strong : C.line, borderWidth: 1, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', opacity: disabled ? 0.45 : 1, marginBottom: 10 }, style]}>
+      {busy ? <ActivityIndicator color={p ? C.onStrong : C.gold} /> : <Text style={{ color: p ? C.onStrong : kind === 'ghost' ? C.gold : C.text, fontWeight: '700', fontSize: 15 }}>{label}</Text>}
     </Pressable>
   );
 }
 
 export function Field({ label, ...rest }: { label: string } & TextInputProps) {
-  return (<View><Text style={[s.muted, { marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11 }]}>{label}</Text><TextInput placeholderTextColor={C.muted} autoCapitalize="none" style={s.input} {...rest} /></View>);
+  return (<View><Text style={[s.muted, { marginBottom: 4, fontSize: 12, fontWeight: '600' }]}>{label}</Text><TextInput placeholderTextColor={C.muted} autoCapitalize="none" style={s.input} {...rest} /></View>);
 }
 
 /** A mobile number with its country code in front (+91 unless changed). Indian numbers are saved as 10 digits, others as +E.164. */
 export function PhoneField({ label = 'Mobile number', code, number, onCode, onNumber }: { label?: string; code: string; number: string; onCode: (v: string) => void; onNumber: (v: string) => void }) {
   return (
     <View>
-      <Text style={[s.muted, { marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11 }]}>{label}</Text>
+      <Text style={[s.muted, { marginBottom: 4, fontSize: 12, fontWeight: '600' }]}>{label}</Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <TextInput accessibilityLabel="Country code" placeholderTextColor={C.muted} keyboardType="phone-pad" maxLength={4} value={code} onChangeText={(v) => onCode(v.startsWith('+') ? v : `+${v.replace(/\D/g, '')}`)} style={[s.input, { width: 72, textAlign: 'center' }]} />
         <TextInput placeholder="98765 43210" placeholderTextColor={C.muted} keyboardType="phone-pad" autoComplete="tel" value={number} onChangeText={onNumber} style={[s.input, { flex: 1 }]} />
@@ -75,8 +72,8 @@ export function NameFields({ value, onChange, firstLabel = 'First name', lastLab
 
 export function Chip({ label, on, onPress, disabled }: { label: string; on?: boolean; onPress?: () => void; disabled?: boolean }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={{ borderColor: on ? C.gold : C.line, backgroundColor: on ? 'rgba(201,169,107,.14)' : 'transparent', borderWidth: 1, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14, marginRight: 8, marginBottom: 8, opacity: disabled ? 0.35 : 1 }}>
-      <Text style={{ color: on ? C.gold : C.text, fontSize: 13 }}>{label}</Text>
+    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected: !!on, disabled: !!disabled }} style={{ borderColor: on ? C.strong : C.line, backgroundColor: on ? C.strong : C.panel, borderWidth: 1, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14, marginRight: 8, marginBottom: 8, opacity: disabled ? 0.35 : 1 }}>
+      <Text style={{ color: on ? C.onStrong : C.text, fontSize: 13, fontWeight: on ? '700' : '500' }}>{label}</Text>
     </Pressable>
   );
 }
@@ -84,12 +81,49 @@ export function Chip({ label, on, onPress, disabled }: { label: string; on?: boo
 export const Loading = () => <View style={{ padding: 40 }}><ActivityIndicator color={C.gold} /></View>;
 export const KV = ({ k, v, bold }: { k: string; v: string; bold?: boolean }) => (<View style={s.row}><Text style={s.muted}>{k}</Text><Text style={[s.text, bold ? { fontWeight: '700' } : null]}>{v}</Text></View>);
 
-export const Badge = ({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 'gold' | 'ok' | 'danger' }) => {
-  const col = tone === 'gold' ? C.gold : tone === 'ok' ? C.ok : tone === 'danger' ? C.danger : C.muted;
-  return <View style={{ borderColor: col, borderWidth: 1, borderRadius: 6, paddingVertical: 2, paddingHorizontal: 7, marginRight: 6, marginBottom: 4 }}><Text style={{ color: col, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' }}>{label}</Text></View>;
+export const Badge = ({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 'gold' | 'ok' | 'danger' | 'warn' }) => {
+  const col = tone === 'gold' ? C.gold : tone === 'ok' ? C.ok : tone === 'danger' ? C.danger : tone === 'warn' ? C.warn : C.muted;
+  return <View style={{ backgroundColor: tint(col, 0.13), borderRadius: 999, paddingVertical: 3, paddingHorizontal: 10, marginRight: 6, marginBottom: 4 }}><Text style={{ color: col, fontSize: 11, fontWeight: '700' }}>{label}</Text></View>;
 };
 
-/** The person's picture, or their initial on a gold disc. */
+/** Where the customer is in booking: Select, Review, Pay, Confirm. at is the current step, 1 to 4. */
+export function Steps({ at }: { at: number }) {
+  return (
+    <View accessibilityLabel={`Step ${at} of 4`} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
+      {['Select', 'Review', 'Pay', 'Confirm'].map((name, i) => {
+        const n = i + 1, done = n < at, on = n === at;
+        return (
+          <React.Fragment key={name}>
+            {i > 0 && <View style={{ flex: 1, height: 2, marginHorizontal: 6, borderRadius: 1, backgroundColor: n <= at ? C.gold : C.line }} />}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: done || on ? C.strong : 'transparent', borderWidth: 1.5, borderColor: done || on ? C.strong : C.line }}>
+                <Text style={{ color: done || on ? C.onStrong : C.muted, fontSize: 12, fontWeight: '700' }}>{done ? '✓' : n}</Text>
+              </View>
+              {on && <Text style={{ color: C.text, fontSize: 13, fontWeight: '700', marginLeft: 6 }}>{name}</Text>}
+            </View>
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Guppi's face: a small robot on a green tile, drawn with plain views so it needs no picture or icon library. */
+export const GuppiMark = ({ size = 36 }: { size?: number }) => {
+  const u = size / 36;
+  return (
+    <View style={{ width: size, height: size, borderRadius: 10 * u, backgroundColor: C.strong, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ position: 'absolute', top: 5 * u, width: 2 * u, height: 5 * u, backgroundColor: C.onStrong, borderRadius: u }} />
+      <View style={{ position: 'absolute', top: 3 * u, width: 5 * u, height: 5 * u, borderRadius: 3 * u, backgroundColor: C.onStrong }} />
+      <View style={{ marginTop: 5 * u, width: 22 * u, height: 15 * u, borderRadius: 5 * u, backgroundColor: C.onStrong, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' }}>
+        <View style={{ width: 4 * u, height: 4 * u, borderRadius: 2 * u, backgroundColor: C.strong }} />
+        <View style={{ width: 4 * u, height: 4 * u, borderRadius: 2 * u, backgroundColor: C.strong }} />
+      </View>
+    </View>
+  );
+};
+
+/** The person's picture, or their initial on a green disc. */
 export const Avatar = ({ name, url, size = 40 }: { name: string; url?: string | null; size?: number }) => (
   <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
     {url ? <Image source={{ uri: /^(https?:|data:)/.test(url) ? url : API_URL + url }} style={{ width: size, height: size }} /> : <Text style={{ color: C.bg, fontWeight: '700', fontSize: size * 0.44 }}>{(name.trim()[0] || '?').toUpperCase()}</Text>}
@@ -116,7 +150,7 @@ export function DateField({ label, value, onChange, placeholder }: { label: stri
 /** One figure with its label and a line under it, two to a row on the money screens. */
 export const Stat = ({ label, value, foot, tone }: { label: string; value: string; foot?: string; tone?: 'danger' | 'ok' }) => (
   <View style={[s.card, { flexBasis: '47%', flexGrow: 1, marginBottom: 10, padding: 14 }]}>
-    <Text style={[s.muted, { fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' }]}>{label}</Text>
+    <Text style={[s.muted, { fontSize: 12, fontWeight: '600' }]}>{label}</Text>
     <Text style={[s.text, { fontSize: 21, fontWeight: '700', marginVertical: 4 }, tone ? { color: tone === 'danger' ? C.danger : C.ok } : null]}>{value}</Text>
     {!!foot && <Text style={[s.muted, { fontSize: 12 }]}>{foot}</Text>}
   </View>
