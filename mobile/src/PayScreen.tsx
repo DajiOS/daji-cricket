@@ -8,12 +8,14 @@ import { Btn, Field, KV, s } from './ui';
 import { C, inr, niceDate } from './theme';
 
 /** Payment for a held booking: Razorpay (a demo card on a demo server, real Checkout otherwise) or UPI with the reference number. */
-export function PayScreen({ hold, user, onDone, onBack }: { hold: HoldResponse; user: User; onDone: (b: Booking, paid: boolean) => void; onBack: () => void }) {
+/** With balance set this pays the exact difference a dearer move added to a confirmed booking: the same payment path, with no hold timer. */
+export function PayScreen({ hold, user, onDone, onBack, balance }: { hold: HoldResponse; user: User; onDone: (b: Booking, paid: boolean) => void; onBack: () => void; balance?: boolean }) {
   const { booking: b, payment: p } = hold;
   const [left, setLeft] = useState(() => Math.max(0, (b.holdExpiresAt ?? 0) - Date.now()));
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const [utr, setUtr] = useState(''); const [checkout, setCheckout] = useState(false);
   useEffect(() => { const t = setInterval(() => setLeft(Math.max(0, (b.holdExpiresAt ?? 0) - Date.now())), 1000); return () => clearInterval(t); }, [b.holdExpiresAt]);
+  const expired = !balance && left === 0;
   const mm = String(Math.floor(left / 60000)).padStart(2, '0'), ss = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
 
   const verify = async (r: { orderId: string; paymentId: string; signature: string }) => {
@@ -55,29 +57,29 @@ export function PayScreen({ hold, user, onDone, onBack }: { hold: HoldResponse; 
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} keyboardShouldPersistTaps="handled">
-      <Text style={s.eyebrow}>Slots held</Text>
-      <Text style={s.h1}>Complete your payment</Text>
-      <Text style={[s.muted, { marginBottom: 16 }]}>Held for {mm}:{ss}. They are released if payment does not arrive in time.</Text>
+      <Text style={s.eyebrow}>{balance ? 'Moved booking' : 'Slots held'}</Text>
+      <Text style={s.h1}>{balance ? 'Pay the difference' : 'Complete your payment'}</Text>
+      <Text style={[s.muted, { marginBottom: 16 }]}>{balance ? 'Your new time costs more. This is only the difference. What you paid before stays on the booking. The rest of the balance is paid at the ground as usual.' : `Held for ${mm}:${ss}. They are released if payment does not arrive in time.`}</Text>
       <View style={s.card}>
         <KV k="Ground" v={b.groundName} /><KV k="Date" v={niceDate(b.date)} /><KV k="Slots" v={String(b.slotCount)} />
-        <KV k="Total" v={inr(b.totalPaise)} /><KV k="Pay now" v={inr(p.amountPaise)} bold />
-        {hold.creditAppliedPaise > 0 && <KV k="Account credit used" v={inr(hold.creditAppliedPaise)} />}
+        <KV k="Total" v={inr(b.totalPaise)} /><KV k={balance ? 'Difference to pay now' : 'Pay now'} v={inr(p.amountPaise)} bold />
+        {!balance && hold.creditAppliedPaise > 0 && <KV k="Account credit used" v={inr(hold.creditAppliedPaise)} />}
       </View>
       {hold.series && (<View style={s.card}><Text style={s.text}>Repeat booking: {hold.series.created} dates reserved.</Text>
         {hold.series.skipped.length > 0 && <Text style={s.muted}>Left out: {hold.series.skipped.map((x) => x.date).join(', ')}.</Text>}
         <Text style={s.muted}>The other dates are confirmed once this payment is done.</Text></View>)}
-      {left === 0 && <Text style={s.err}>The hold has run out. Go back and choose the slots again.</Text>}
+      {expired && <Text style={s.err}>The hold has run out. Go back and choose the slots again.</Text>}
       {p.mode === 'razorpay' && p.razorpay?.demo && (<>
         <Text style={[s.muted, { marginBottom: 10 }]}>Demo server: no real money moves.</Text>
-        <Btn label={`Pay ${inr(p.amountPaise)} with the demo card`} onPress={() => demo('success')} busy={busy} disabled={left === 0} />
+        <Btn label={`Pay ${inr(p.amountPaise)} with the demo card`} onPress={() => demo('success')} busy={busy} disabled={expired} />
         <Btn kind="outline" label="Pretend the card is declined" onPress={() => demo('failure')} disabled={busy} />
       </>)}
-      {p.mode === 'razorpay' && p.razorpay && !p.razorpay.demo && <Btn label={`Pay ${inr(p.amountPaise)}`} onPress={() => setCheckout(true)} disabled={left === 0} />}
+      {p.mode === 'razorpay' && p.razorpay && !p.razorpay.demo && <Btn label={`Pay ${inr(p.amountPaise)}`} onPress={() => setCheckout(true)} disabled={expired} />}
       {p.mode === 'upi' && p.upi && (<>
         <View style={s.card}><KV k="Pay to UPI ID" v={p.upi.upiId} bold /><KV k="Name" v={p.upi.payee} /><KV k="Amount" v={inr(p.amountPaise)} /></View>
         <Btn kind="outline" label="Open my UPI app" onPress={() => { Linking.openURL(p.upi!.uri).catch(() => setErr('No UPI app was found. Pay to the UPI ID shown, then enter the reference below.')); }} />
         <Field label="After paying, the UPI reference (UTR)" value={utr} onChangeText={setUtr} keyboardType="number-pad" maxLength={30} />
-        <Btn label="I have paid" onPress={sendUtr} busy={busy} disabled={utr.trim().length < 6 || left === 0} />
+        <Btn label="I have paid" onPress={sendUtr} busy={busy} disabled={utr.trim().length < 6 || expired} />
       </>)}
       {p.mode === 'none' && <Text style={s.muted}>Nothing to pay: your account credit covers this booking.</Text>}
       {!!err && <Text style={s.err}>{err}</Text>}

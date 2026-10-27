@@ -10,7 +10,7 @@ import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/sha
 import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
 import { reconcile } from '../finevents.ts';
 import { approveRetentionRelease, getRetentionCase, listRetentionCases, proposeRetentionRelease, rejectRetentionRelease } from '../retention.ts';
-import { cancelGroundDay, extendBooking, rescheduleBooking } from '../reschedule.ts';
+import { cancelGroundDay, extendBooking, previewReschedule, rescheduleBooking } from '../reschedule.ts';
 import { cancelBlock, settleBlock, settleForCustomer } from '../cancellation.ts';
 import { tournamentForBlock } from '../tournaments.ts';
 import { lookupCustomer, readName, createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, recordBlockPayment } from '../hold.ts';
@@ -144,6 +144,7 @@ export function staffRoutes(r: Router): void {
     return ok({ booking: viewBooking(b.id) });
   }, A);
 
+  r.post('/api/staff/bookings/:id/reschedule-preview', (c) => ok({ preview: previewReschedule(c.cfg, U(c), c.params.id!, c.json()) }), A);
   r.post('/api/staff/bookings/:id/reschedule', (c) => ok(rescheduleBooking(c.cfg, U(c), c.params.id!, c.json())), { ...A, idempotent: true });
   r.post('/api/staff/bookings/:id/extend', (c) => ok(extendBooking(U(c), c.params.id!, c.json())), { ...A, idempotent: true });
   r.post('/api/staff/grounds/:groundId/cancel-day', (c) => {

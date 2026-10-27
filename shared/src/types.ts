@@ -246,6 +246,8 @@ export interface Booking {
   advancePaise: number;
   paidPaise: number;
   balancePaise: number;
+  /** What the customer still owes, payable online, because the booking was moved to a dearer time (calculated by the server; 0 otherwise). */
+  moveDifferenceDuePaise?: number;
   holdExpiresAt: number | null;
   needsReview: boolean;
   cancelKind: 'free' | 'credit' | 'none' | null;
@@ -464,6 +466,10 @@ export interface PublicConfig {
   mediaBase?: string | null;
   /** The Guppi booking assistant (any language) is switched on. Clients show its screen only when this is true. */
   guppiBookingEnabled?: boolean;
+  /** The owner has switched the refundable security deposit on: screens show it separately from the booking advance. */
+  securityDepositEnabled?: boolean;
+  /** Customers may move their own bookings (switched on and both policy numbers set). */
+  customerRescheduleEnabled?: boolean;
 }
 
 /** A professional coach shown on the website's academy section. */

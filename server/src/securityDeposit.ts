@@ -36,7 +36,7 @@ CREATE TRIGGER trg_ao_security_deposit_entries_delete BEFORE DELETE ON security_
 `);
 
 export interface DepositEntry { id: string; kind: 'collect' | 'deduct' | 'refund' | 'reverse'; amountPaise: number; method: string | null; reason: string | null; reference: string | null; reversesId: string | null; actorRole: string; createdAt: number }
-export interface DepositView { bookingId: string; collectedPaise: number; deductedPaise: number; reversedPaise: number; refundedPaise: number; heldPaise: number; entries: DepositEntry[] }
+export interface DepositView { bookingId: string; collectedPaise: number; deductedPaise: number; reversedPaise: number; keptPaise: number; refundedPaise: number; heldPaise: number; entries: DepositEntry[] }
 
 const rows = (bookingId: string) => many<{ id: string; kind: DepositEntry['kind']; amount_paise: number; method: string | null; reason: string | null; reference: string | null; reverses_id: string | null; actor_role: string; created_at: number }>(
   'SELECT id, kind, amount_paise, method, reason, reference, reverses_id, actor_role, created_at FROM security_deposit_entries WHERE booking_id = ? ORDER BY created_at, rowid', bookingId);
@@ -45,7 +45,7 @@ export function depositView(bookingId: string): DepositView {
   const es = rows(bookingId);
   const sum = (k: string) => es.filter((e) => e.kind === k).reduce((s, e) => s + e.amount_paise, 0);
   const collected = sum('collect'), deducted = sum('deduct'), reversed = sum('reverse'), refunded = sum('refund');
-  return { bookingId, collectedPaise: collected, deductedPaise: deducted, reversedPaise: reversed, refundedPaise: refunded, heldPaise: collected - deducted + reversed - refunded,
+  return { bookingId, collectedPaise: collected, deductedPaise: deducted, reversedPaise: reversed, keptPaise: deducted - reversed, refundedPaise: refunded, heldPaise: collected - deducted + reversed - refunded,
     entries: es.map((e) => ({ id: e.id, kind: e.kind, amountPaise: e.amount_paise, method: e.method, reason: e.reason, reference: e.reference, reversesId: e.reverses_id, actorRole: e.actor_role, createdAt: e.created_at })) };
 }
 

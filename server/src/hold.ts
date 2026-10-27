@@ -7,10 +7,10 @@ import { audit, type Actor } from './audit.ts';
 import { Validator, normalizePhone } from './input.ts';
 import { getSettings } from './settings.ts';
 import { MIN, DAY, addDays, istMidnight, timeOfDay } from './time.ts';
-import { accessBooking, blockOf, advanceFor, bookingOr404, confirmBooking, loadBooking, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
+import { accessBooking, blockOf, advanceFor, bookingOr404, confirmBooking, loadBooking, moveDifferenceDue, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
 import { getGroundOr404, slotPrice, slotStarts, type GroundRow } from './grounds.ts';
 import { createUser, requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
-import { insertPayment, logEvent, recordOffline, type PaymentRow } from './payments.ts';
+import { closeDifferenceSessions, DIFFERENCE_NOTE, insertPayment, logEvent, markDifferenceSession, recordOffline, type PaymentRow } from './payments.ts';
 import { getGateway } from './gateway.ts';
 import { findFormat, formatPrice, formatWindows, groundFormats } from './formats.ts';
 import { findRule, fixedShare, groundRates, hourlySlotPrice, isClosedOn, ruleWindow } from './rates.ts';
@@ -137,10 +137,10 @@ export function upiDetails(ownerId: string): { upiId: string; payee: string } | 
   return { upiId, payee: o?.upi_id ? (o.business_name || o.name) : s.upiPayee };
 }
 
-function upiInstructions(b: BookingRow, amountPaise: number, paymentId: string): PaymentInstructions {
+function upiInstructions(b: BookingRow, amountPaise: number, paymentId: string, deadline: number | null = b.hold_expires_at): PaymentInstructions {
   const d = upiDetails(b.owner_id)!;
   const uri = `upi://pay?pa=${encodeURIComponent(d.upiId)}&pn=${encodeURIComponent(d.payee)}&am=${(amountPaise / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(b.ref)}`;
-  return { mode: 'upi', amountPaise, paymentId, upi: { upiId: d.upiId, payee: d.payee, uri, note: `Put ${b.ref} in the payment remarks`, deadline: b.hold_expires_at! } };
+  return { mode: 'upi', amountPaise, paymentId, upi: { upiId: d.upiId, payee: d.payee, uri, note: `Put ${b.ref} in the payment remarks`, deadline: deadline! } };
 }
 
 export function parseHold(body: unknown) {
@@ -570,6 +570,8 @@ export function recordBlockPayment(staff: UserRow, seriesId: string, input: { me
  */
 export function paymentInstructionsFor(cfg: Config, customer: UserRow, bookingId: string): PaymentInstructions {
   const b = accessBooking(customer, bookingId);
+  // a confirmed booking has something to pay online only when it was moved to a dearer time (the difference); the session is read back, never created here
+  if (b.status === 'confirmed') return openDifferenceSession(cfg, b);
   if (b.status !== 'held') throw new HttpError(409, 'BAD_STATE', `This booking is ${b.status}, so there is nothing to pay now`);
   const p = one<{ id: string; method: string; amount_paise: number; rp_order_id: string | null }>("SELECT id, method, amount_paise, rp_order_id FROM payments WHERE booking_id = ? AND status IN ('created','pending') ORDER BY created_at DESC, rowid DESC LIMIT 1", b.id);
   if (!p) return { mode: 'none', amountPaise: 0, paymentId: null };
@@ -577,4 +579,70 @@ export function paymentInstructionsFor(cfg: Config, customer: UserRow, bookingId
   const gw = getGateway(cfg);
   if (!gw || !p.rp_order_id) throw new HttpError(503, 'PAYMENTS_UNAVAILABLE', 'Online payments are not available for this booking right now. Please try again later.');
   return { mode: 'razorpay', amountPaise: p.amount_paise, paymentId: p.id, razorpay: { keyId: gw.keyId, orderId: p.rp_order_id, demo: gw.demo } };
+}
+
+// ---------------------------------------------------------------- paying the difference of a dearer move, online
+
+interface OpenSession { id: string; method: string; status: string; amount_paise: number; rp_order_id: string | null; created_at: number }
+const openSession = (bookingId: string) => one<OpenSession>("SELECT id, method, status, amount_paise, rp_order_id, created_at FROM payments WHERE booking_id = ? AND purpose = 'balance' AND status IN ('created','pending') AND proof_note = ? ORDER BY created_at DESC, rowid DESC LIMIT 1", bookingId, DIFFERENCE_NOTE);
+
+function sessionInstructions(cfg: Config, b: BookingRow, p: OpenSession): PaymentInstructions {
+  if (p.method === 'upi') return upiInstructions(b, p.amount_paise, p.id, p.created_at + getSettings().verifyMinutesUpi * MIN);
+  const gw = getGateway(cfg);
+  if (!gw || !p.rp_order_id) throw new HttpError(503, 'PAYMENTS_UNAVAILABLE', 'Online payments are not available right now. Please try again later.');
+  return { mode: 'razorpay', amountPaise: p.amount_paise, paymentId: p.id, razorpay: { keyId: gw.keyId, orderId: p.rp_order_id, demo: gw.demo } };
+}
+
+/** The online session already open for the difference, if its amount is still what the booking owes. */
+function openDifferenceSession(cfg: Config, b: BookingRow): PaymentInstructions {
+  const due = moveDifferenceDue(b), p = openSession(b.id);
+  if (!p || due <= 0 || p.amount_paise !== due) return { mode: 'none', amountPaise: 0, paymentId: null };
+  return sessionInstructions(cfg, b, p);
+}
+
+/**
+ * The customer pays, online, exactly what a dearer move added to the booking. It goes through the same payment records and the same provider as every other payment:
+ * a 'balance' payment on the confirmed booking, captured only when the provider (webhook or signed checkout result) says so, by the one function that books captured money.
+ * Asking again returns the session that is open (no second charge); if the amount owed has changed since, the old session is closed and a new one opened. Until the provider
+ * confirms, the difference stays an outstanding balance. Guppi has no route here.
+ */
+export async function startDifferencePayment(cfg: Config, customer: UserRow, bookingId: string): Promise<{ payment: PaymentInstructions; differencePaise: number; booking: Booking }> {
+  const b0 = accessBooking(customer, bookingId);
+  if (customer.role !== 'customer') throw new HttpError(403, 'FORBIDDEN', 'Only the customer pays this online');
+  if (b0.status !== 'confirmed') throw new HttpError(409, 'BAD_STATE', `This booking is ${b0.status}, so there is nothing to pay now`);
+  const due0 = moveDifferenceDue(b0);
+  if (due0 <= 0) throw new HttpError(409, 'NOTHING_DUE', 'Nothing is due online on this booking. Any balance is paid at the ground.');
+  const method: 'razorpay' | 'upi' = getSettings().razorpayEnabled ? 'razorpay' : 'upi';
+  const gw = method === 'razorpay' ? getGateway(cfg) : null;
+  if (method === 'razorpay' && !gw) throw new HttpError(503, 'PAYMENTS_UNAVAILABLE', 'Online payments are not set up yet. Please pay at the ground.');
+  if (method === 'upi' && !upiDetails(b0.owner_id)) throw new HttpError(503, 'UPI_NOT_CONFIGURED', 'This ground has no UPI ID set up yet. Please pay at the ground.');
+  const opened = tx(() => {
+    const b = bookingOr404(b0.id);
+    const due = moveDifferenceDue(b);
+    if (b.status !== 'confirmed' || due <= 0) throw new HttpError(409, 'NOTHING_DUE', 'Nothing is due online on this booking. Any balance is paid at the ground.');
+    if (one("SELECT 1 FROM payments WHERE booking_id = ? AND purpose = 'balance' AND status = 'submitted'", b.id)) throw new HttpError(409, 'ALREADY_SUBMITTED', 'A payment reference for this booking is already waiting to be checked by the ground');
+    // another unfinished balance payment (an auto-debit order, say) is not ours to close: wait for it to settle rather than risk charging the customer twice
+    if (one("SELECT 1 FROM payments WHERE booking_id = ? AND purpose = 'balance' AND status IN ('created','pending') AND COALESCE(proof_note,'') <> ?", b.id, DIFFERENCE_NOTE)) throw new HttpError(409, 'PAYMENT_IN_FLIGHT', 'Another payment on this booking is still being confirmed. Try again once it has settled.');
+    const cur = openSession(b.id);
+    if (cur && cur.amount_paise === due && cur.method === method && (method === 'upi' || cur.rp_order_id)) return { b, due, reuse: cur, payId: null as string | null };
+    if (cur) closeDifferenceSessions(b.id, 'replaced by a new amount'); // the amount owed changed or the earlier attempt never got an order: only one session is ever open
+    const payId = insertPayment(b, { method, status: 'created', purpose: 'balance', amountPaise: due });
+    markDifferenceSession(payId);
+    audit({ id: customer.id, role: customer.role }, 'booking.difference_payment_started', 'booking', b.id, { amountPaise: due, method, paymentId: payId }, b.owner_id);
+    return { b, due, reuse: null as OpenSession | null, payId };
+  });
+  let payment: PaymentInstructions;
+  if (opened.reuse) payment = sessionInstructions(cfg, opened.b, opened.reuse);
+  else if (method === 'razorpay') {
+    try {
+      const order = await gw!.createOrder(opened.due, opened.b.ref, { booking: opened.b.id, ref: opened.b.ref, purpose: 'balance' });
+      run('UPDATE payments SET rp_order_id = ?, updated_at = ? WHERE id = ?', order.id, now(), opened.payId!);
+      logEvent(opened.payId!, null, 'order.created', { orderId: order.id });
+      payment = { mode: 'razorpay', amountPaise: opened.due, paymentId: opened.payId, razorpay: { keyId: gw!.keyId, orderId: order.id, demo: gw!.demo } };
+    } catch (e) {
+      run("UPDATE payments SET status = 'failed', reject_reason = 'could not start payment', updated_at = ? WHERE id = ?", now(), opened.payId!);
+      throw e;
+    }
+  } else payment = upiInstructions(opened.b, opened.due, opened.payId!, now() + getSettings().verifyMinutesUpi * MIN);
+  return { payment, differencePaise: opened.due, booking: viewBooking(opened.b.id) };
 }

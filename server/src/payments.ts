@@ -67,6 +67,16 @@ ALTER TABLE refunds ADD COLUMN on_booking INTEGER NOT NULL DEFAULT 0;
 UPDATE refunds SET on_booking = 1 WHERE reason = 'free cancellation' OR reason LIKE 'cancelled: %' OR reason LIKE 'cancelled by the ground:%';
 `);
 
+/** Marks a payment session that was opened for the difference of a dearer move (see hold.ts startDifferencePayment). Only these may be closed when the booking is moved again. */
+export const DIFFERENCE_NOTE = 'difference-session';
+export function markDifferenceSession(paymentId: string): void { run('UPDATE payments SET proof_note = ? WHERE id = ?', DIFFERENCE_NOTE, paymentId); }
+/** Closes the unpaid difference sessions of a booking (the amount owed changed). Money already captured is never touched. */
+export function closeDifferenceSessions(bookingId: string, reason: string): number {
+  const rows = many<{ id: string }>("SELECT id FROM payments WHERE booking_id = ? AND status = 'created' AND proof_note = ?", bookingId, DIFFERENCE_NOTE);
+  for (const r of rows) { run("UPDATE payments SET status = 'failed', reject_reason = ?, updated_at = ? WHERE id = ?", reason, now(), r.id); logEvent(r.id, null, 'closed', { reason }); }
+  return rows.length;
+}
+
 export type CaptureOutcome = 'confirmed' | 'partial' | 'already' | 'extra_refunded' | 'late_reconfirmed' | 'late_refunded' | 'cancelled_refunded' | 'paid_extra';
 
 /** The one place a payment becomes money received. Idempotent; safe to call from webhook, client callback and staff verification. */
@@ -187,18 +197,22 @@ export function submitUpiReference(user: UserRow, bookingId: string, input: { ut
   const b = accessBooking(user, bookingId);
   if (user.role !== 'customer') throw new HttpError(403, 'FORBIDDEN', 'Only the customer submits a UPI reference');
   const late = b.status === 'expired' && b.pay_method === 'upi';
-  if (b.status !== 'held' && !late) throw new HttpError(409, 'BAD_STATE', `This booking is ${b.status}, so a payment reference cannot be added`);
-  if (b.pay_method !== 'upi') throw new HttpError(409, 'WRONG_METHOD', 'This booking is being paid through Razorpay, not UPI');
+  // a confirmed booking that was moved to a dearer time has a waiting UPI session for the difference; the reference is for that session
+  const forDifference = b.status === 'confirmed' && !!one("SELECT 1 FROM payments WHERE booking_id = ? AND method = 'upi' AND purpose = 'balance' AND status = 'created'", b.id);
+  if (b.status !== 'held' && !late && !forDifference) throw new HttpError(409, 'BAD_STATE', `This booking is ${b.status}, so a payment reference cannot be added`);
+  if (b.pay_method !== 'upi' && !forDifference) throw new HttpError(409, 'WRONG_METHOD', 'This booking is being paid through Razorpay, not UPI');
   if (!UTR_RE.test(input.utr)) throw new HttpError(400, 'VALIDATION_FAILED', 'The UPI reference must be 12 digits', { fields: [{ field: 'utr', message: 'Must be the 12-digit UPI reference (UTR)' }] });
   return tx(() => {
     const t = now();
     // after expiry the waiting payment was marked failed; it still holds the amount the customer was asked to send
-    let p = late
+    let p = forDifference
+      ? one<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method = 'upi' AND purpose = 'balance' AND status = 'created' ORDER BY created_at DESC LIMIT 1", b.id)
+      : late
       ? one<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'failed' AND reference IS NULL ORDER BY created_at DESC LIMIT 1", b.id)
       : one<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'created' ORDER BY created_at DESC LIMIT 1", b.id);
     if (late && one("SELECT 1 FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'submitted'", b.id)) throw new HttpError(409, 'ALREADY_SUBMITTED', 'A payment reference for this booking is already waiting to be checked');
     // after expiry paid_paise is back to 0 and any credit used went back to the wallet, so ask for what the customer was told to send
-    const due = late ? (one<{ a: number }>("SELECT amount_paise a FROM payments WHERE booking_id = ? AND method = 'upi' ORDER BY created_at DESC, rowid DESC LIMIT 1", b.id)?.a ?? amountDue(b)) : amountDue(b);
+    const due = forDifference ? (p?.amount_paise ?? 0) : late ? (one<{ a: number }>("SELECT amount_paise a FROM payments WHERE booking_id = ? AND method = 'upi' ORDER BY created_at DESC, rowid DESC LIMIT 1", b.id)?.a ?? amountDue(b)) : amountDue(b);
     if (!p) {
       if (due <= 0) throw new HttpError(409, 'NOTHING_DUE', 'Nothing is due on this booking');
       const id = insertPayment(b, { method: 'upi', status: 'created', purpose: b.advance_paise === b.total_paise ? 'full' : 'advance', amountPaise: due });
@@ -212,7 +226,7 @@ export function submitUpiReference(user: UserRow, bookingId: string, input: { ut
     }
     logEvent(p.id, user.id, 'submitted', { utr: input.utr, ...(late ? { afterExpiry: true } : {}) });
     if (late) run('UPDATE bookings SET needs_review = 1, updated_at = ? WHERE id = ?', t, b.id); // staff see that money may have arrived for a released booking
-    else {
+    else if (!forDifference) {
       const deadline = t + getSettings().verifyMinutesUpi * MIN;
       run('UPDATE bookings SET hold_expires_at = MAX(COALESCE(hold_expires_at, 0), ?), updated_at = ? WHERE id = ?', deadline, t, b.id);
     }

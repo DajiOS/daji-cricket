@@ -8,7 +8,7 @@ import { DESIGN_PACES } from './design.ts';
 
 export const DEFAULT_SETTINGS: GlobalSettings = {
   razorpayEnabled: true,
-  /** Every online booking waits for the owner's approval after the deposit is paid; the slot stays held meanwhile. */
+  /** Every online booking waits for the owner's approval after the advance is paid; the slot stays held meanwhile. */
   requireApproval: true,
   /** Customers may let the ground charge the balance of a booking from their bank (UPI AutoPay) shortly before it starts. Off until the Razorpay account supports it. */
   autoDebitEnabled: false,
