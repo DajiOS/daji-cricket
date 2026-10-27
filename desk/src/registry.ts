@@ -181,6 +181,40 @@ export const RAIL: RailItem[] = [
   { key: 'money', label: 'Finance', short: 'Finance', icon: 'accounts', section: 'money', hub: true, eyebrow: 'Purchase → invoice → pay → books', desc: 'One section for the whole money flow, in the order it happens.' },
   { key: 'settings', label: 'Settings', short: 'Settings', icon: 'settings', section: 'settings', eyebrow: 'Admin', desc: 'Set-up screens most people rarely open, kept out of the daily menu.' },
 ];
+/** The left sidebar: each entry opens its first page this login can see; the pages under it show beneath it while it is open.
+ *  Every menu page sits under exactly one entry, so nothing in NAV becomes unreachable. */
+export interface SideItem { key: string; label: string; icon: string; to?: string; pages?: string[]; action?: 'ask'; anyPerm?: string[]; count?: 'approvals' }
+export const SIDE: SideItem[] = [
+  { key: 'home', label: 'Dashboard', icon: 'dashboard', to: '/' },
+  { key: 'bookings', label: 'Bookings', icon: 'calendar', pages: ['/bookings', '/bookings/day', '/bookings/approvals', '/memberships', '/promos'] },
+  { key: 'grounds', label: 'Grounds & Nets', icon: 'ball', pages: ['/grounds', '/grounds/layout', '/health', '/cameras'] },
+  { key: 'customers', label: 'Customers', icon: 'users', pages: ['/contacts', '/cards', '/explore'] },
+  { key: 'academy', label: 'Academy', icon: 'grad', pages: ['/academy', '/academy/attendance', '/academy/fees', '/academy/coaches'] },
+  { key: 'events', label: 'Tournaments', icon: 'trophy', pages: ['/tournaments', '/matches'] },
+  { key: 'payments', label: 'Payments', icon: 'payments', pages: ['/bookings/payments', '/money', '/transactions', '/bank', '/accounting/reconcile'] },
+  { key: 'accounts', label: 'Accounts', icon: 'billing', pages: ['/accounting', '/bills', '/bills/vendors', '/pipeline', '/accounting/budget', '/accounting/gst', '/accounting/review', '/close'] },
+  { key: 'staff', label: 'Staff', icon: 'shield', pages: ['/team', '/tasks', '/payroll/attendance', '/payroll'] },
+  { key: 'schedule', label: 'Schedule & Blocks', icon: 'clock', pages: ['/calendar', '/activity'] },
+  { key: 'approvals', label: 'Approvals', icon: 'check', to: '/approvals', anyPerm: ['manage_accounting', 'manage_bookings'], count: 'approvals' },
+  { key: 'messages', label: 'Messages', icon: 'chat', pages: ['/reminders'] },
+  { key: 'ai', label: 'Guppi AI', icon: 'ai', action: 'ask' },
+  { key: 'reports', label: 'Reports', icon: 'accounts', pages: ['/accounting/reports', '/compare'] },
+  { key: 'settings', label: 'Settings', icon: 'settings', pages: ['/settings', '/settings/booking', '/settings/payments', '/settings/website', '/settings/festivals', '/settings/people', '/settings/connections', '/settings/services', '/media', '/compliance', '/settings/golive', '/settings/backups', '/platform'] },
+];
+const HUB_SIDE: Record<string, string> = { ground: 'bookings', people: 'customers', money: 'accounts', settings: 'settings' };
+/** The sidebar entry an address belongs to: a direct page (Dashboard, Approvals), else the entry holding its menu item. */
+export const sideOf = (route: string): SideItem | undefined => {
+  const r = route || '/';
+  const hub = r.match(/^\/hub\/(\w+)/)?.[1];
+  if (hub) return SIDE.find((x) => x.key === HUB_SIDE[hub]);
+  const direct = SIDE.find((x) => x.to && (x.to === '/' ? r === '/' : r === x.to || r.startsWith(x.to + '/')));
+  if (direct) return direct;
+  const it = itemFor(r, NAV.flatMap((g) => g.items));
+  return it ? SIDE.find((x) => x.pages?.includes(it.to)) : undefined;
+};
+/** The menu item for a sidebar page address. */
+export const navItem = (to: string): NavItem | undefined => NAV.flatMap((g) => g.items).find((i) => i.to === to);
+
 /** One line under each job in the rail's panel. */
 export const BLURBS: Record<string, string> = {
   'Take bookings': 'Every booking, the day view and what is waiting on you.',

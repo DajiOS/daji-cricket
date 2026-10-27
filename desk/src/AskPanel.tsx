@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { api, useApi } from './lib';
 import { Icon } from './ui';
 
-// Ask AI: a panel on the right that the top-bar button, the Home question box and the search all open. Each answer comes from the
+// Guppi, the staff assistant: a panel on the right that the top-bar button, the Home question box and the search all open. Each answer comes from the
 // desk's own reports through read-only tools on the server, limited to what this login may see. The key lives on the server only.
 interface Answer { question: string; answer: string; understood: string; details: { label: string; text: string }[]; notes: string[]; suggestions: string[]; source: 'builtin' | 'claude'; verified: boolean }
 interface Turn { q: string; a?: Answer; err?: string }
@@ -40,13 +40,13 @@ export function AskPanel() {
 
   return createPortal(
     <div className="ai-wrap" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
-      <aside className="ai-panel" role="dialog" aria-modal="true" aria-label="Ask AI">
+      <aside className="ai-panel" role="dialog" aria-modal="true" aria-label="Guppi">
         <header className="ai-head">
-          <div><span className="eyebrow">Ask AI</span><h2>What would you like to know?</h2></div>
+          <div><span className="eyebrow">Guppi</span><h2>What would you like to know?</h2></div>
           <button type="button" className="dround" onClick={() => setOpen(false)} aria-label="Close"><Icon name="x" size={16} /></button>
         </header>
         <div className="ai-body">
-          {ex && !ex.claudeEnabled && <p className="ai-note">Ask AI is answering from the built-in reports, which cover bookings, money and customers. To let it answer anything, the owner adds the AI key on the server (see deploy/.env).</p>}
+          {ex && !ex.claudeEnabled && <p className="ai-note">Guppi is answering from the built-in reports, which cover bookings, money and customers. To let it answer anything, the owner adds the AI key on the server (see deploy/.env).</p>}
           {!turns.length && <>
             <p className="muted" style={{ margin: 0 }}>Ask about bookings, money, jobs or the team. It only reads your own data and only what your login may see.</p>
             <div className="ai-ex">{(ex?.items ?? []).slice(0, 6).map((x) => <button key={x} type="button" onClick={() => send(x)}>{x}</button>)}</div>

@@ -2,5 +2,5 @@
 try {
   var d = document.documentElement, t = localStorage.getItem('daji.desk.theme'), p = localStorage.getItem('daji.desk.pal');
   if (t === 'dark') d.setAttribute('data-theme', 'dark');
-  d.setAttribute('data-pal', /^(forest|onyx|sand|navy|sage|plum|copper|pearl|burgundy|slate)$/.test(p) ? p : 'forest');
+  d.setAttribute('data-pal', /^(field|forest|onyx|sand|navy|sage|plum|copper|pearl|burgundy|slate)$/.test(p) ? p : 'field');
 } catch (e) { /* storage blocked: the default theme stays */ }

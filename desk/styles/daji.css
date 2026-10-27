@@ -1,45 +1,9 @@
-/* The Daji desk shell: slim rail with flyout task groups, top bar, Home, Calendar, the section hubs and the Approvals stage board.
+/* The Daji desk shell pieces: top bar, Home, Calendar, the section hubs and the Approvals stage board (the sidebar itself is in look.css).
    The design's colour names map onto the desk's own palette tokens here. */
 :root { --fg: var(--ink); --fg-2: var(--ink2); --fg-3: var(--muted); --gold: var(--accent); }
 .serif { font-family: var(--serif); }
 
 .dapp { display: flex; align-items: stretch; min-height: 100vh; }
-.drail { flex: 0 0 96px; width: 96px; background: var(--rail); color: #EDE6D8; color-scheme: dark; padding: 20px 8px; display: flex; flex-direction: column; align-items: center; gap: 14px;
-  position: sticky; top: 0; height: 100vh; overflow-y: auto; scrollbar-width: none; z-index: 40; }
-.drail::-webkit-scrollbar { display: none; }
-.drail :focus-visible { outline-color: var(--gold); }
-.drail-mark { font: italic 400 30px/1 var(--serif); color: #EDE6D8; text-decoration: none !important; }
-.drail-mark img { display: block; max-width: 72px; max-height: 40px; }
-.drail-items { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.drail-item { position: relative; display: flex; flex-direction: column; width: 80px; }
-.drail-sep { display: block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #9E9886; text-align: center; padding: 8px 0 4px; }
-.drail-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; border-radius: 14px; padding: 8px 4px; min-height: 60px;
-  font-size: 11.5px; line-height: 1.15; text-align: center; color: #D8D0BF; font-weight: 400; background: transparent; text-decoration: none !important; }
-.drail-btn:hover, .drail-btn[aria-expanded="true"] { background: rgba(255,255,255,.05); color: #FFFFFF; }
-.drail-btn.on { background: rgba(255,255,255,.09); color: #FFFFFF; font-weight: 500; box-shadow: inset 2px 0 0 var(--gold); }
-.drail-fly { position: fixed; left: 96px; z-index: 60; padding-left: 14px; }
-.drail-panel { width: 340px; max-width: calc(100vw - 120px); max-height: 86vh; overflow-y: auto; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 20px;
-  box-shadow: 0 18px 50px rgba(20,36,31,.22); padding: 14px; display: flex; flex-direction: column; gap: 8px; color-scheme: light; }
-html[data-theme="dark"] .drail-panel { color-scheme: dark; }
-.drail-title { font: 400 26px/1 var(--serif); padding: 2px 4px 4px; }
-.drail-grp { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line2); }
-.drail-grp.on { background: var(--soft); border-color: var(--gold); }
-.drail-gname { display: flex; flex-direction: column; gap: 2px; color: var(--fg); text-decoration: none !important; font-weight: 400; }
-.drail-gname b { font-size: 15.5px; font-weight: 600; }
-.drail-gname span { font-size: 13px; color: var(--fg-3); }
-.drail-gname.soon b { color: var(--fg-3); }
-.drail-pages { display: flex; flex-wrap: wrap; gap: 6px; }
-.drail-page { display: inline-flex; align-items: center; border-radius: 999px; min-height: 32px; padding: 0 12px; font-size: 13px; font-weight: 400; background: var(--soft); color: var(--fg); text-decoration: none !important; }
-.drail-page:hover { background: color-mix(in srgb, var(--soft) 80%, var(--fg)); }
-.drail-page.on { background: var(--strong); color: var(--on-strong); }
-.drail-page.soon { opacity: .5; cursor: default; }
-.drail-page.soon::after { content: " · soon"; font-size: 11px; margin-left: 3px; }
-.drail-foot { position: relative; margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 4px; border-top: 1px solid rgba(237,230,216,.12); padding-top: 14px; text-align: center; width: 100%; }
-.drail-me { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--gold); color: var(--gold); background: transparent; display: grid; place-items: center; font-size: 13px; cursor: pointer; padding: 0; }
-.drail-venue { font-size: 10.5px; color: #B5AD9C; max-width: 80px; overflow-wrap: anywhere; }
-.drail-mepop { position: fixed; left: 104px; bottom: 16px; z-index: 60; width: 260px; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 18px 48px rgba(0,0,0,.18);
-  padding: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; color-scheme: light; font-size: 14px; }
-html[data-theme="dark"] .drail-mepop { color-scheme: dark; }
 .dmain { flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; }
 .dtop { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px clamp(16px, 3vw, 40px); border-bottom: 1px solid var(--line); background: var(--surface2); position: relative; z-index: 20; }
 .dsearch { flex: 1 1 320px; position: relative; min-width: 0; }
@@ -69,12 +33,10 @@ html[data-theme="dark"] .drail-mepop { color-scheme: dark; }
 .dcrumb { font-size: 13.5px; color: var(--link); font-weight: 500; white-space: pre; }
 .dtabs { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 900px) {
-  .drail { position: fixed; left: 0; top: 0; bottom: 0; height: auto; transform: translateX(-100%); transition: transform .2s; box-shadow: 8px 0 30px rgba(20,36,31,.25); }
-  .drail.open { transform: none; }
   .dburger { display: grid; }
   .dsearch { order: 9; flex-basis: 100%; }
   }
-@media print { .drail, .dtop, .dsection { display: none !important; } }
+@media print { .dside, .dtop, .dsection, .dtabs { display: none !important; } }
 
 /* ---------- Home, as in the design ---------- */
 .dhome { display: flex; flex-direction: column; gap: 26px; }
@@ -237,15 +199,11 @@ html[data-theme="dark"] .dap-mark.now { color: var(--on-strong); }
 .dap-open { margin-left: auto; font-size: 13.5px; }
 
 /* ---------- Daji additions to the design's shell ---------- */
-.drail-btn { position: relative; }
-.drail-n { position: absolute; top: 4px; right: 10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--gold); color: #14241F; font-size: 11px; font-weight: 600; display: grid; place-items: center; }
 .dsearch-btn { display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 0 14px; color: var(--fg-3); font-size: 14px; cursor: pointer; text-align: left; }
 .dsearch-btn span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dsearch-btn kbd { font: inherit; font-size: 11px; border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
-.drail-mepop a, .drail-mepop .link { color: var(--fg); font-weight: 400; background: none; border: 0; padding: 0; cursor: pointer; font-size: 14px; }
 .scrim { position: fixed; inset: 0; background: rgba(20,36,31,.4); z-index: 35; }
 .dtop .gpick { display: block; }
-.drail .crest, .drail-mark svg, .drail-mark img { display: block; }
 .dhero h1 { color: #EDE6D8; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .dtop .gpick .gpick-btn { height: 44px; }
