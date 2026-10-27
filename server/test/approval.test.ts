@@ -32,7 +32,7 @@ test('a paid online booking waits for approval, holds the slot, and the owner is
   assert.ok(templates.includes('booking_pending')); assert.ok(!templates.includes('booking_confirmed'));
   const p = pushRows('booking_needs_approval');
   assert.equal(p.length, 1); assert.equal(p[0]!.user_id, userId('owner1@daji.test'));
-  assert.match(p[0]!.body, /deposit/);
+  assert.match(p[0]!.body, /paid ₹/);
 });
 
 test('approving confirms it for the customer; customers cannot approve and other owners cannot see it', async () => {
