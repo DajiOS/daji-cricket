@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 800" preserveAspectRatio="xMidYMid slice">
+  <!-- Cricket green hero, used until the ground has a photo: a floodlit ground at dusk, drawn for Daji -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1a24"/>
+      <stop offset=".45" stop-color="#1c3646"/>
+      <stop offset=".62" stop-color="#5d6b62"/>
+      <stop offset=".7" stop-color="#d99a58"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fff8e0" stop-opacity=".95"/>
+      <stop offset=".25" stop-color="#ffe9b0" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#ffe9b0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f7d3f"/>
+      <stop offset="1" stop-color="#17532a"/>
+    </linearGradient>
+    <linearGradient id="pitch" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c9b483"/>
+      <stop offset="1" stop-color="#b39a62"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff4cf" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#fff4cf" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="800" fill="url(#sky)"/>
+  <!-- light beams -->
+  <path d="M250 150 L120 560 L520 560 Z" fill="url(#beam)"/>
+  <path d="M1350 150 L1080 560 L1480 560 Z" fill="url(#beam)"/>
+  <!-- stands -->
+  <path d="M0 470 Q400 430 800 432 Q1200 430 1600 470 L1600 540 L0 540 Z" fill="#14202a"/>
+  <g stroke="#22313c" stroke-width="3">
+    <path d="M0 488 Q400 452 800 454 Q1200 452 1600 488" fill="none"/>
+    <path d="M0 506 Q400 472 800 474 Q1200 472 1600 506" fill="none"/>
+  </g>
+  <!-- floodlight towers -->
+  <g fill="#0e171e">
+    <rect x="246" y="150" width="8" height="330"/>
+    <rect x="1346" y="150" width="8" height="330"/>
+    <rect x="598" y="250" width="5" height="200"/>
+    <rect x="997" y="250" width="5" height="200"/>
+  </g>
+  <circle cx="250" cy="140" r="150" fill="url(#glow)"/>
+  <circle cx="1350" cy="140" r="150" fill="url(#glow)"/>
+  <circle cx="600" cy="244" r="80" fill="url(#glow)"/>
+  <circle cx="1000" cy="244" r="80" fill="url(#glow)"/>
+  <g fill="#fffbe9">
+    <rect x="210" y="118" width="80" height="40" rx="3"/>
+    <rect x="1310" y="118" width="80" height="40" rx="3"/>
+    <rect x="582" y="234" width="38" height="20" rx="2"/>
+    <rect x="981" y="234" width="38" height="20" rx="2"/>
+  </g>
+  <g stroke="#e9dfb8" stroke-width="2">
+    <path d="M210 131h80M210 145h80M230 118v40M250 118v40M270 118v40"/>
+    <path d="M1310 131h80M1310 145h80M1330 118v40M1350 118v40M1370 118v40"/>
+  </g>
+  <!-- outfield with mowing stripes -->
+  <path d="M0 540 Q800 500 1600 540 L1600 800 L0 800 Z" fill="url(#grass)"/>
+  <g fill="#ffffff" opacity=".06">
+    <path d="M560 520 L660 517 L360 800 L120 800 Z"/>
+    <path d="M760 515 L840 515 L900 800 L700 800 Z"/>
+    <path d="M940 517 L1040 520 L1480 800 L1240 800 Z"/>
+  </g>
+  <!-- boundary rope -->
+  <path d="M-20 600 Q800 540 1620 600" fill="none" stroke="#ffffff" stroke-opacity=".75" stroke-width="3"/>
+  <!-- pitch -->
+  <path d="M770 556 L830 556 L880 790 L720 790 Z" fill="url(#pitch)"/>
+  <g stroke="#ffffff" stroke-width="3" opacity=".9">
+    <path d="M762 572 L838 572"/>
+    <path d="M730 760 L870 760"/>
+  </g>
+  <g stroke="#f5efe0" stroke-width="3">
+    <path d="M795 572 V552 M800 572 V552 M805 572 V552"/>
+    <path d="M790 760 V722 M800 760 V722 M810 760 V722"/>
+  </g>
+</svg>

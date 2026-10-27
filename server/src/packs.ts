@@ -49,8 +49,9 @@ export const PACKS: PackDef[] = [
 
 /** Every designer theme in any pack, live or archived. */
 export const ALL_DESIGNS: string[] = [...new Set(PACKS.flatMap((p) => p.bands.flatMap((b) => b.designs)))];
-/** What the owner can choose for the website: rotate, one design from any pack, or the plain light or dark look. */
-export const SITE_DESIGN_CHOICES: readonly string[] = ['rotate', ...ALL_DESIGNS, 'ivory', 'obsidian'];
+/** What the owner can choose for the website: rotate, one design from any pack, Cricket green (the sports look with the booking
+ *  bar), or the plain light or dark look. */
+export const SITE_DESIGN_CHOICES: readonly string[] = ['rotate', ...ALL_DESIGNS, 'field', 'ivory', 'obsidian'];
 
 registerSchema('design-packs-1', `CREATE TABLE design_packs (
   id TEXT PRIMARY KEY,
