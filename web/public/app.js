@@ -1714,7 +1714,7 @@ async function loadBookings() {
             + (b.status === 'held' && b.holdExpiresAt ? `  ·  Hold ends ${hhmm(b.holdExpiresAt)}` : '')
             + (b.cancelKind === 'credit' && b.creditPaise ? `  ·  ${inr(b.creditPaise)} returned as credit` : '') + (b.refundPaise ? `  ·  ${inr(b.refundPaise)} refunded` : '')),
           b.seriesId ? h('div', { class: 'meta' }, `Repeat booking, date ${b.seriesIndex + 1}`, (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() ? h('a', { href: '#', style: 'margin-left:8px', onclick: (e) => { e.preventDefault(); cancelSeriesOf(b); } }, 'Cancel unpaid repeats') : null) : null,
-          pending ? h('div', { class: 'meta' }, 'Your deposit is holding the slot. The ground will approve it shortly and you will get a message.') : null,
+          pending ? h('div', { class: 'meta' }, 'Your advance is holding the slot. The ground will approve it shortly and you will get a message.') : null,
           b.status === 'cancelled' && b.cancelledByOwner ? cancelledByGround(b) : null),
         h('div', { class: 'acts' }, h('span', { class: 'st ' + cls }, label), canCancel ? h('button', { class: 'btn outline sm', type: 'button', onclick: () => openCancel(b) }, 'Cancel') : null)));
     }

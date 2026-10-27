@@ -1,11 +1,13 @@
 import { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { startHarness, grounds, hold, bookAndPay, dayFromNow, slotStart, setNow, setting, HOUR, type Harness, type GroundLite } from './helpers.ts';
+import { startHarness, grounds, hold, bookAndPay, dayFromNow, slotStart, setNow, setting, advance, HOUR, MIN, type Harness, type GroundLite } from './helpers.ts';
 import { many, one } from '../src/db.ts';
 import { runSweeps } from '../src/jobs.ts';
 import { createUser } from '../src/auth.ts';
 import { reconcile } from '../src/finevents.ts';
 import { ledgerLines, sumBy } from '../src/accounting/ledger.ts';
+import { readFileSync } from 'node:fs';
+import { say } from '../src/guppiText.ts';
 import { register } from './register.ts';
 import { rel, ev } from './rel.ts';
 
@@ -385,4 +387,42 @@ rel('REL-BIZ-UD03-011', 'the 24-hour cutoff is decided on the booking\'s own sta
   const gm = o.body.exact ? await h.call('POST', '/api/guppi/reschedule', { token: tok, body: { bookingId: b.id, optionId: o.body.exact.optionId, actionId: 'act-boundary-01', context: { bookingId: b.id } }, headers: { 'idempotency-key': 'act-boundary-01' } }) : { status: 0, body: {} as any };
   assert.equal(gm.status, 409); assert.equal(gm.body.error.code, 'RESCHEDULE_TOO_LATE', 'Guppi reports the same rule from the same service');
   ev('comparison', 'reschedule.ts rescheduleBooking: b.start_at - now() <= cutoffHours * HOUR is refused (strictly more than the cutoff is allowed)'); ev('authoritativeTimestamp', 'bookings.start_at (server) and clock.now()'); ev('cases', results); ev('guppiAtExactly24h', gm.body.error.code);
+});
+
+// ------------------------------------------------------------------ UD-02 extra: the second place a slot is written (a payment that arrives after its hold expired)
+
+rel('REL-BIZ-UD02-004', 'extra: a late payment cannot take back a slot that the whole ground (or the net inside it) has since been booked for; it is refunded, not double-booked', async () => {
+  setting({ razorpayEnabled: false });
+  const date = dayFromNow(4);
+  assert.equal((await link(owner, g, [{ groundId: nets.id, conflicts: true }])).status, 200);
+  const held = await tryHold(cust, nets, date, '19:00'); assert.equal(held.status, 201);
+  const id = held.body.booking.id, asked = held.body.payment.amountPaise;
+  advance(16 * MIN);
+  await runSweeps(h.cfg);
+  assert.equal(bookingRow(id).status, 'expired');
+  const whole = await h.post('/api/staff/bookings', { groundId: g.id, date, startTime: '19:00', slots: 1, customer: { name: 'Whole Ground', phone: '9866600888' }, payment: { method: 'cash', amountPaise: await priceOf(g, date, '19:00') } }, staff);
+  assert.equal(whole.status, 201, JSON.stringify(whole.body));
+  const sub = await h.post(`/api/bookings/${id}/upi-reference`, { utr: '200000000777' }, cust); assert.equal(sub.status, 200, JSON.stringify(sub.body));
+  const v = await h.post(`/api/staff/payments/${sub.body.payment.id}/verify`, { approve: true }, staff);
+  assert.equal(v.body.outcome, 'late_refunded', JSON.stringify(v.body));
+  assert.equal(many("SELECT 1 FROM booking_slots WHERE booking_id = ?", id).length, 0, 'the net did not get its slot back');
+  assert.equal(one<{ amount_paise: number }>('SELECT amount_paise FROM refunds WHERE payment_id = ?', sub.body.payment.id)?.amount_paise, asked);
+  ev('configuration', { wholeGround: g.name, includedResources: [nets.name], conflicts: true }); ev('attempted', 'late payment for an expired net hold after the whole ground was booked'); ev('conflictResponse', v.body.outcome);
+});
+
+// ------------------------------------------------------------------ UD-01 extra: customer wording
+
+rel('REL-BIZ-UD01-004', 'extra: Guppi and the website call the booking advance "advance" and never "deposit", and Guppi\'s answer says a security deposit is separate and handled by the ground', async () => {
+  const langs = ['en', 'gu', 'hi', 'gu-Latn', 'hi-Latn'] as const;
+  const seen: Record<string, string> = {};
+  for (const l of langs) {
+    const t = { deposit: say(l, 'deposit', { advance: '{advance}', total: '{total}' }), selected: say(l, 'selected', { ground: 'G', when: 'W', dur: 'D', total: '{total}', advance: '{advance}' }) };
+    assert.ok(!/\((deposit|ડિપોઝિટ|डिपॉज़िट|डिपॉजिट)\)/i.test(t.deposit + t.selected), `${l}: the advance is not labelled "(deposit)"`);
+    assert.ok(/security/i.test(t.deposit) || /સિક્યોરિટી/.test(t.deposit) || /सिक्योरिटी/.test(t.deposit), `${l}: the answer separates the security deposit`);
+    assert.ok(t.deposit.includes('{advance}') && t.deposit.includes('{total}'), `${l}: the figures still come from the booking system`);
+    seen[l] = t.deposit;
+  }
+  const app = readFileSync(new URL('../../web/public/app.js', import.meta.url), 'utf8');
+  assert.ok(!/Your deposit is holding/.test(app), 'the website does not call the advance a deposit');
+  ev('guppiAnswers', seen);
 });
