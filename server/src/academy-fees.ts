@@ -83,8 +83,8 @@ export function raiseFees(actor: Actor, ownerId: string, src: unknown): { create
   tx(() => {
     const kids = many<{ id: string }>(`SELECT id FROM academy_students WHERE owner_id = ? AND status = 'active'`, ownerId).filter((k) => !studentIds || studentIds.includes(k.id));
     for (const k of kids) {
-      if (one('SELECT 1 FROM academy_fees WHERE student_id = ? AND month = ?', k.id, month)) continue;
-      run('INSERT INTO academy_fees(id, owner_id, student_id, month, amount_paise, due_on, created_at) VALUES(?,?,?,?,?,?,?)', newId('fee'), ownerId, k.id, month, amount, due, now());
+      if (one('SELECT 1 FROM academy_fees WHERE student_id = ? AND month = ?', k.id, month!)) continue;
+      run('INSERT INTO academy_fees(id, owner_id, student_id, month, amount_paise, due_on, created_at) VALUES(?,?,?,?,?,?,?)', newId('fee'), ownerId, k.id, month!, amount!, due, now());
       n++;
     }
   });
@@ -105,7 +105,7 @@ export function recordPayment(actor: Actor, ownerId: string, feeId: string, src:
   if (paid + amount! > fee.amount_paise) throw new HttpError(409, 'OVERPAID', 'That is more than is due on this fee.');
   checkCashSingle(mode ?? 'cash', amount!);
   run('INSERT INTO academy_fee_payments(id, owner_id, fee_id, amount_paise, mode, received_on, note, created_by, created_at) VALUES(?,?,?,?,?,?,?,?,?)',
-    newId('fpy'), ownerId, feeId, amount, mode ?? 'cash', receivedOn ?? istDate(now()), note ?? null, actor.id, now());
+    newId('fpy'), ownerId, feeId, amount!, mode ?? 'cash', receivedOn ?? istDate(now()), note ?? null, actor.id, now());
   audit(actor, 'academy.fee_payment', 'academy_fee', feeId, { amountPaise: amount, mode: mode ?? 'cash' }, ownerId);
   return feeRows(ownerId, fee.month).find((r) => r.id === feeId)!;
 }

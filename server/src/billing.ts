@@ -1,7 +1,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { many, one, registerSchema, run, tx } from './db.ts';
+import { many, one, registerSchema, run } from './db.ts';
 import { now } from './clock.ts';
 import { storeUpload } from './intake.ts';
 import { audit, type Actor } from './audit.ts';
@@ -89,7 +89,6 @@ export const CATALOG: { name: string; vendor: string; category: (typeof CATEGORI
 // ------------------------------------------------------------------ settings (keys are kept encrypted; they never go back to the browser)
 
 const KEYS = ['anthropicAdminKey', 'awsAccessKeyId', 'awsSecretAccessKey'] as const;
-const PLAIN = ['usdInr'] as const;
 
 function setting(name: string): string {
   const r = one<{ value: string }>('SELECT value FROM sw_settings WHERE name = ?', name);
@@ -206,7 +205,7 @@ const toInv = (r: InvRow): InvoiceOut => ({ id: r.id, serviceId: r.service_id, s
 const INV_SELECT = `SELECT i.*, s.name sname, s.category FROM sw_invoices i JOIN sw_services s ON s.id = i.service_id WHERE i.deleted_at IS NULL`;
 
 export function listInvoices(q: { serviceId?: string; from?: string; to?: string; status?: string } = {}, limit = 300): InvoiceOut[] {
-  const where: string[] = [], p: unknown[] = [];
+  const where: string[] = [], p: string[] = [];
   if (q.serviceId) { where.push('i.service_id = ?'); p.push(q.serviceId); }
   if (q.from) { where.push('i.invoice_date >= ?'); p.push(q.from); }
   if (q.to) { where.push('i.invoice_date <= ?'); p.push(q.to); }

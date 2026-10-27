@@ -1,11 +1,9 @@
-import { test, before, after, beforeEach } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { startHarness, grounds, bookAndPay, dayFromNow, slotStart, setNow, DEMO_ACCOUNTS, MIN, HOUR, type Harness } from './helpers.ts';
-import { one } from '../src/db.ts';
+import { startHarness, grounds, bookAndPay, slotStart, setNow, type Harness } from './helpers.ts';
 import { signOffMonth } from '../src/accounting/store.ts';
 import { profitAndLoss } from '../src/accounting/statements.ts';
 import { ensureBuiltinCategories } from '../src/accounting/schema.ts';
-import { register } from './register.ts';
 let h: Harness;
 before(async () => { h = await startHarness(); });
 after(async () => { await h.close(); });

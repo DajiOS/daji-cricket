@@ -184,7 +184,7 @@ export function providerFor(cfg: Config, f: Fetcher = fetch): FeedProvider | nul
 
 interface FeedAccount { id: string; name: string; holds: string; providerRef: string | null; source: string; lastSyncAt: number | null; lastOk: boolean | null; lastMessage: string | null; bankBalancePaise: number | null; bankBalanceAt: number | null; bookBalancePaise: number }
 
-export function feedStatus(cfg: Config, ownerId: string): { provider: 'yodlee' | 'demo' | null; accounts: FeedAccount[] } {
+export function feedStatus(cfg: Config, ownerId: string): { provider: 'yodlee' | 'demo' | 'setu' | 'finvu' | null; accounts: FeedAccount[] } {
   const rows = many<{ id: string; name: string; holds: string; provider_ref: string | null; source: string; last_sync_at: number | null; last_ok: number | null; last_message: string | null; bb: number | null; bba: number | null; book: number }>(
     `SELECT a.id, a.name, a.holds, a.provider_ref, a.source, s.last_sync_at, s.last_ok, s.last_message, s.bank_balance_paise bb, s.bank_balance_at bba,
        a.opening_paise + (SELECT COALESCE(SUM(t.amount_paise), 0) FROM acct_transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL) book

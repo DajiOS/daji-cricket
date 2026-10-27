@@ -5,7 +5,7 @@ import { audit, type Actor } from '../audit.ts';
 import { HttpError, conflict, notFound } from '../errors.ts';
 import { newId } from '../ids.ts';
 import { Validator } from '../input.ts';
-import { addDays, istDate, isValidDate } from '../time.ts';
+import { addDays, istDate } from '../time.ts';
 import { statutory, STATUTORY_RULES_CHECKED } from './statutory.ts';
 import { postToLedger, removeFromLedger, type LedgerRef } from './autopost.ts';
 import { pendingFor, startRequest, withdrawRequest } from '../approvals.ts';
