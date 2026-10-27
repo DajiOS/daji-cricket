@@ -1,3 +1,4 @@
+import { PageHead } from '../ui';
 import { useSession } from '../App';
 import { sectionOf } from '../parts/admin/common';
 import Prices from '../parts/admin/Prices';
@@ -21,7 +22,7 @@ export default function Settings({ sub }: { sub: string }) {
   const tab = sectionOf(sub, tabs.map(([k]) => k));
   return (
     <div className="stack">
-      {/* the Settings heading and its tabs come from the department bar above the page (App.tsx), so the page adds none */}
+      <PageHead eyebrow="Settings" title={tabs.find(([k]) => k === tab)?.[1] ?? 'Settings'} />
       {tab === 'prices' && <Prices />}
       {tab === 'booking' && <Booking />}
       {tab === 'payments' && <Payments />}

@@ -113,6 +113,27 @@ export const Empty = ({ children }: { children: ReactNode }) => (
   <div className="empty"><div className="crest"><Crest size={40} /></div>{children}</div>
 );
 export const Loading = ({ h = 220 }: { h?: number }) => <div className="shimmer" style={{ height: h }} aria-label="Loading" />;
+
+/**
+ * One block of data in its five states, the same way on every workspace: loading, could not load (with Try again), not allowed for this
+ * login, nothing there yet, and ready. A failure is never drawn as an empty list or a zero. `data-state` lets the browser tests read it.
+ */
+export function Load<T>({ data, error, status, retry, isEmpty, empty, h = 160, children }: {
+  data: T | null; error: string | null; status?: number | null; retry?: () => void;
+  isEmpty?: (d: T) => boolean; empty?: ReactNode; h?: number; children: (d: T) => ReactNode;
+}) {
+  if (error && status === 403) return <div className="state state-denied" data-state="denied" role="alert"><b>Your role does not include this.</b><span className="small muted">Ask the owner if you need it.</span></div>;
+  if (error) return (
+    <div className="state state-failed" data-state="failed" role="alert">
+      <b>This could not be loaded.</b><span className="small">{error}</span>
+      {retry && <button type="button" className="btn sm" onClick={retry}>Try again</button>}
+    </div>);
+  if (data == null) return <div data-state="loading" aria-busy="true"><Loading h={h} /></div>;
+  if (isEmpty?.(data)) return <div data-state="empty"><Empty>{empty ?? 'Nothing here yet.'}</Empty></div>;
+  return <div data-state="ready" style={{ display: 'contents' }}>{children(data)}</div>;
+}
+/** A note that part of a page is missing because one of its sources failed, so the rest is not read as the whole picture. */
+export const Partial = ({ what }: { what: string }) => <div className="state state-partial" data-state="partial" role="status"><b>Some of this is missing.</b><span className="small">{what}</span></div>;
 /** The reason something could not be done. It scrolls itself into view, so a message is never left below the screen. */
 export function ErrorBox({ msg }: { msg: string | null }) {
   const box = useRef<HTMLDivElement>(null);

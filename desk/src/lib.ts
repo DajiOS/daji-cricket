@@ -85,14 +85,16 @@ export async function download(path: string, filename: string): Promise<void> {
 export function useApi<T = any>(path: string | null, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!path) return;
-    let live = true; setError(null);
-    api<T>(path).then((d) => live && setData(d)).catch((e) => live && setError(e.message));
+    let live = true; setError(null); setStatus(null);
+    api<T>(path).then((d) => live && setData(d)).catch((e) => { if (live) { setError(e.message); setStatus(e instanceof ApiError ? e.status : 0); } });
     return () => { live = false; };
   }, [path, tick, ...deps]);
-  return [data, error, useCallback(() => setTick((t) => t + 1), [])] as const;
+  // the fourth value is the HTTP status of a failure (403: this login may not see it; 0: the server could not be reached)
+  return [data, error, useCallback(() => setTick((t) => t + 1), []), status] as const;
 }
 
 // ---------- formatting ----------

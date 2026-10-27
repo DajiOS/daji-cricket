@@ -3,7 +3,9 @@ import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, 
 import { Icon, ToastHost, Loading, Crest, ErrorBox } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
-import { HOME, NAV, PAGES, SIDE, sideOf, navItem, itemFor, navVisible, type NavItem } from './registry';
+import { HOME, PAGES, SIDE, sideOf, navItem, itemFor, navVisible, hrefOf, type NavItem } from './registry';
+import { resolveRoute } from './routes';
+import { NotBuilt } from './parts/NotBuilt';
 import { CommandSearch, askAssistant } from './CommandSearch';
 import { AskPanel } from './AskPanel';
 import { GroundPicker } from './GroundPicker';
@@ -35,16 +37,18 @@ function Shell({ route }: { route: string }) {
   }, []);
   const visible = (i: NavItem) => navVisible(s.me, i);
   // the one menu item for this address (the longest match), and the sidebar entry it sits under
-  const active = itemFor(route, NAV.flatMap((g) => g.items));
+  const active = itemFor(route);
   const here = sideOf(route);
   const side = SIDE.map((x) => {
     const pages = (x.pages ?? []).map(navItem).filter((i): i is NavItem => !!i && visible(i));
-    return { ...x, list: pages, first: x.to ?? pages[0]?.to };
+    return { ...x, list: pages, first: x.to ?? (pages[0] ? hrefOf(pages[0]) : undefined) };
   }).filter((x) => x.action || (x.to ? (!x.anyPerm || x.anyPerm.some((p) => can(s.me, p))) : x.list.length > 0));
 
-  const hit = PAGES.find((p) => route === p.path || route.startsWith(p.path + '/'));
+  // a register address (/finance/gst) opens the page that serves it (/accounting/gst) and keeps its own address in the bar
+  const res = resolveRoute(route);
+  const hit = PAGES.find((p) => res.path === p.path || res.path.startsWith(p.path + '/'));
   const Page = hit ? hit.page : HOME;
-  const sub = hit ? route.slice(hit.path.length + 1) : '';
+  const sub = hit ? res.path.slice(hit.path.length + 1) : '';
 
   const [counts, , reloadCounts] = useApi<{ count: number }>(can(s.me, 'manage_accounting') && s.ownerId ? '/api/accounting/approvals/count' : null, [route, s.ownerId]);
   const [today, , reloadToday] = useApi<{ awaitingVerification: number; needsReview: number }>(can(s.me, 'manage_bookings') && s.ownerId ? '/api/staff/today' : null, [s.ownerId]);
@@ -77,7 +81,7 @@ function Shell({ route }: { route: string }) {
                 </a>
                 {on && x.list.length > 1 && (
                   <div className="dside-subs">
-                    {x.list.map((i) => <a key={i.to} href={`#${i.to}`} className={`dside-sub${active === i ? ' on' : ''}`} aria-current={active === i ? 'page' : undefined}>{i.label}</a>)}
+                    {x.list.map((i) => <a key={hrefOf(i)} href={`#${hrefOf(i)}`} className={`dside-sub${active === i ? ' on' : ''}`} aria-current={active === i ? 'page' : undefined}>{i.label}</a>)}
                   </div>)}
               </div>);
           })}
@@ -116,9 +120,9 @@ function Shell({ route }: { route: string }) {
         <main className="main dcontent">
           {siblings.length > 1 && (
             <div role="tablist" aria-label={here!.label} className="dtabs no-print">
-              {siblings.map((p) => <a key={p.to} role="tab" aria-selected={active === p} href={`#${p.to}`} className={`dchip${active === p ? ' on' : ''}`}>{p.label}</a>)}
+              {siblings.map((p) => <a key={hrefOf(p)} role="tab" aria-selected={active === p} href={`#${hrefOf(p)}`} className={`dchip${active === p ? ' on' : ''}`}>{p.label}</a>)}
             </div>)}
-          <div className="page" key={route}><Suspense fallback={<p className="muted" style={{ padding: 24 }}>Loading…</p>}><Page sub={sub} /></Suspense></div>
+          <div className="page" key={route}><Suspense fallback={<p className="muted" style={{ padding: 24 }}>Loading…</p>}>{res.unserved ? <NotBuilt row={res.unserved} /> : <Page sub={sub} />}</Suspense></div>
         </main>
       </div>
     </div>

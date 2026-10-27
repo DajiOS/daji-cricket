@@ -1,6 +1,6 @@
 // One booking: who, when, money, payments, and everything staff can do to it.
 import { useState } from 'react';
-import { Modal, Chip, Loading, ErrorBox, Field, Status, Table, Confirm, useToast } from '../../ui';
+import { Modal, Chip, Loading, ErrorBox, Field, Status, Table, Confirm, Load, useToast } from '../../ui';
 import { useApi, post, api, go, inr, toPaise, rupees, fmtDay, fmtDateTime, formatPhone, can } from '../../lib';
 import { useSession } from '../../App';
 import { DepositPanel } from './Deposit';
@@ -12,7 +12,12 @@ interface Detail { booking: Booking; block: Block | null; payments: Pay[]; refun
 
 const ACTION_LABEL = (a: string) => a.replace(/^booking\./, '').replace(/[._]/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
-export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; asDay?: boolean; onClose: () => void; onChanged: () => void }) {
+/** The workspace tabs of one booking. Each has its own address, /bookings/<id>/<tab>, so a link opens the booking on that tab. */
+export const BOOKING_TABS: [string, string][] = [['summary', 'Summary'], ['customer', 'Customer'], ['money', 'Money'], ['match', 'Match'], ['messages', 'Messages'], ['documents', 'Documents'], ['timeline', 'Timeline']];
+
+export function BookingDetail({ id, asDay, tab: tabIn, onClose, onChanged }: { id: string; asDay?: boolean; tab?: string; onClose: () => void; onChanged: () => void }) {
+  // opened from its own address (the Bookings page passes the tab), a tab change also updates the address so a reload or a copied link lands on it
+  const linked = tabIn !== undefined;
   const { me } = useSession();
   const toast = useToast();
   const [d, err, reload] = useApi<Detail>(`/api/staff/bookings/${encodeURIComponent(id)}`);
@@ -20,7 +25,8 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
   const [inv, setInv] = useState<Invoice | null>(null);
   const [cancel, setCancel] = useState(false);
   const [disc, setDisc] = useState(false);
-  const [move, setMove] = useState(false);
+  const [move, setMove] = useState(tabIn === 'move');
+  const [tab, setTab] = useState(BOOKING_TABS.some(([k]) => k === tabIn) ? tabIn! : 'summary');
   const [refundOf, setRefundOf] = useState<Pay | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const changed = () => { reload(); onChanged(); };
@@ -38,6 +44,7 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
   const b = d.booking;
   const canPay = can(me, 'record_payments') && (b.status === 'confirmed' || b.status === 'held' || b.status === 'completed') && b.balancePaise > 0;
   const started = b.startAt <= Date.now();
+  const canMove = can(me, 'manage_bookings') && b.status === 'confirmed' && !started && !b.seriesId;
   return (
     <>
     <Modal title={`Booking ${b.ref}`} onClose={onClose} wide
@@ -47,7 +54,7 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
         {(b.status === 'confirmed' || b.status === 'completed') && b.paidPaise > 0 && <button className="btn" onClick={async () => { try { setInv(await api<Invoice>(`/api/bookings/${encodeURIComponent(b.id)}/invoice`)); } catch (e) { toast(errText(e)); } }}>Invoice</button>}
         {canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}
         {can(me, 'manage_bookings') && (b.status === 'confirmed' || b.status === 'completed') && b.balancePaise > 0 && <button className="btn" onClick={() => setDisc(true)}>Give a discount</button>}
-        {can(me, 'manage_bookings') && b.status === 'confirmed' && !started && !b.seriesId && <button className="btn" id="move-booking" onClick={() => setMove(true)}>Move booking</button>}
+        {canMove && <button className="btn" id="move-booking" onClick={() => setMove(true)}>Move booking</button>}
         {b.status === 'confirmed' && started && <Confirm label="Mark no-show" ask="No refund, no credit?" onYes={() => act('no-show', {}, 'Marked as a no-show.')} />}
         {cancellable(b) && <button className="btn danger" onClick={() => setCancel(true)}>Cancel booking</button>}
         <button className="btn ghost" onClick={onClose}>Close</button>
@@ -55,7 +62,16 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
       <div className="stack" style={{ gap: 18 }}>
         <div className="row"><BookingChip b={b} />{b.needsReview && <Chip tone="warn">Needs review</Chip>}<Chip tone="mute">{SOURCE_LABEL[b.source] || b.source}</Chip>
           {b.status === 'held' && b.holdExpiresAt && <span className="small muted">Hold ends {fmtDateTime(b.holdExpiresAt)}</span>}</div>
+        <div role="tablist" aria-label="Booking workspace" className="dtabs ws-tabs">
+          {BOOKING_TABS.map(([k, l]) => {
+            const href = `#/bookings/${encodeURIComponent(b.id)}${k === 'summary' ? '' : '/' + k}`;
+            return <a key={k} role="tab" aria-selected={tab === k} className={`dchip${tab === k ? ' on' : ''}`} href={href}
+              onClick={(e) => { e.preventDefault(); setTab(k); if (linked) history.replaceState(null, '', href); }}>{l}</a>;
+          })}
+        </div>
         <ErrorBox msg={msg} />
+        {tabIn === 'move' && !canMove && <div className="state state-denied" data-state="denied" role="alert"><b>This booking cannot be moved.</b><span className="small">Only a confirmed single booking that has not started can be moved{can(me, 'manage_bookings') ? '' : ', by someone who manages bookings'}.</span></div>}
+        {tab === 'summary' && <>
         {b.status === 'cancelled' && b.resolution === 'awaiting' && can(me, 'manage_bookings') && (
           <div className="card card-pad stack" style={{ gap: 8 }}>
             <div><b>Waiting for the customer to choose.</b> <span className="muted small">{inr(b.paidPaise)} is still held. If they have agreed with you, settle it now.</span></div>
@@ -75,16 +91,28 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
         </div>
         {b.notes && <div className="muted small">Note: {b.notes}</div>}
         {b.status === 'cancelled' && b.cancelReason && <div className="muted small">Cancelled: {b.cancelReason}{b.refundPaise ? ` · ${inr(b.refundPaise)} refunded` : ''}{b.creditPaise ? ` · ${inr(b.creditPaise)} as credit` : ''}{b.resolution === 'awaiting' ? ' · waiting for the customer to choose' : ''}</div>}
+        </>}
 
-        <div className="grid g3">
+        {(tab === 'summary' || tab === 'money') && <div className="grid g3">
           <div className="miniStat"><span>Total</span><b>{inr(b.totalPaise)}</b></div>
           <div className="miniStat"><span>Paid</span><b className="gold">{inr(b.status === 'cancelled' && b.resolution !== 'awaiting' ? Math.max(b.paidPaise - b.refundPaise - b.creditPaise, 0) : b.paidPaise)}</b></div>
           <div className="miniStat"><span>Balance</span><b style={b.status === 'confirmed' && b.balancePaise > 0 ? { color: 'var(--warn)' } : undefined}>{inr(b.status === 'cancelled' || b.status === 'expired' ? 0 : b.balancePaise)}</b></div>
-        </div>
+        </div>}
 
+        {tab === 'customer' && (
+          <div className="stack" style={{ gap: 10 }}>
+            <div className="facts">
+              <div><span>Name</span><b>{b.customerName}</b></div>
+              <div><span>Phone</span><b>{b.customerPhone ? formatPhone(b.customerPhone) : '—'}</b></div>
+            </div>
+            {can(me, 'view_customers') ? <div><a className="btn sm" href={`#/customers/${encodeURIComponent(b.customerId)}`}>Open the customer's workspace</a></div>
+              : <div className="small muted">Their other bookings and payments are in the customer workspace, which needs the "view customers" permission.</div>}
+          </div>)}
+
+        {tab === 'money' && <>
         <div>
           <div className="eyebrow">Payments</div>
-          <div className="card"><Table rows={d.payments} empty="No payments yet." cols={[
+          <div className="card"><Table rows={d.payments} rowKey={(p) => p.id} empty="No payments yet." cols={[
             { head: 'When', cell: (p) => fmtDateTime(p.createdAt) },
             { head: 'Method', cell: (p) => <>{METHOD_LABEL[p.method] || p.method}{p.reference && <div className="small muted">{p.reference}</div>}</> },
             { head: 'Status', cell: (p) => <><Status s={p.status} map={PAY_STATUS} />{p.rejectReason && <div className="small muted">{p.rejectReason}</div>}</> },
@@ -97,20 +125,31 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
         <DepositPanel b={b} />
 
         <RefundList refunds={d.refunds} canPay={can(me, 'record_payments')} onChanged={changed} />
+        </>}
 
-        {d.audit.length > 0 && (
-          <details>
-            <summary className="small muted" style={{ cursor: 'pointer' }}>History ({d.audit.length})</summary>
-            <div className="stack" style={{ gap: 4, marginTop: 8 }}>{d.audit.map((a) => <div key={a.id} className="small"><span className="muted">{fmtDateTime(a.at)}</span> · {ACTION_LABEL(a.action)}</div>)}</div>
-          </details>
-        )}
+        {tab === 'match' && (d.block?.tournament
+          ? <div className="stack" style={{ gap: 8 }}><div>Part of the tournament <b>{d.block.tournament.name}</b>.</div><div><a className="btn sm" href={`#/tournaments/${encodeURIComponent(d.block.tournament.id)}`}>Open the tournament</a></div></div>
+          : <div data-state="empty" className="small muted">This booking is not linked to a match or tournament. Matches are created on the Fixtures page and tournaments with a multi-day booking.</div>)}
+
+        {tab === 'messages' && <BookingMessages id={b.id} />}
+
+        {tab === 'documents' && (
+          <div className="stack" style={{ gap: 8 }}>
+            {(b.status === 'confirmed' || b.status === 'completed') && b.paidPaise > 0
+              ? <div><button className="btn sm" onClick={async () => { try { setInv(await api<Invoice>(`/api/bookings/${encodeURIComponent(b.id)}/invoice`)); } catch (e) { toast(errText(e)); } }}>Open the invoice</button></div>
+              : <div data-state="empty" className="small muted">An invoice is issued once a confirmed booking has a payment.</div>}
+          </div>)}
+
+        {tab === 'timeline' && (d.audit.length > 0
+          ? <ol className="timeline">{d.audit.map((a) => <li key={a.id} className="small"><span className="muted">{fmtDateTime(a.at)}</span> · {ACTION_LABEL(a.action)}{a.actorRole ? <span className="muted"> · {a.actorRole.replace('_', ' ')}</span> : null}</li>)}</ol>
+          : <div data-state="empty" className="small muted">Nothing has happened to this booking since it was made.</div>)}
       </div>
     </Modal>
     {inv && <InvoiceView i={inv} onClose={() => setInv(null)} />}
     {pay && <RecordPayment b={b} onClose={() => setPay(false)} onDone={() => { setPay(false); toast('Payment recorded.'); changed(); }} />}
     {refundOf && <RefundRequest p={refundOf} onClose={() => setRefundOf(null)} onDone={() => { setRefundOf(null); toast('Refund requested. It waits for the owner or the general manager.'); changed(); }} />}
     {disc && <DiscountDialog b={b} onClose={() => setDisc(false)} onDone={(waiting) => { setDisc(false); toast(waiting ? 'Sent for sign-off. The discount is given once it is approved.' : 'Discount given.'); changed(); }} />}
-    {move && <MoveBookingDialog b={b} onClose={() => setMove(false)} onDone={() => { setMove(false); changed(); }} />}
+    {move && canMove && <MoveBookingDialog b={b} onClose={() => { setMove(false); if (tabIn === 'move') go(`/bookings/${b.id}`); }} onDone={() => { setMove(false); changed(); if (tabIn === 'move') go(`/bookings/${b.id}`); }} />}
     {cancel && <CancelDialog b={b} onClose={() => setCancel(false)} onDone={() => { setCancel(false); toast('Cancelled. The customer has been told.'); changed(); }} />}
     </>
   );
@@ -338,4 +377,18 @@ function CancelBlock({ k, b, onClose, onDone }: { k: Block; b: Booking; onClose:
       </div>
     </Modal>
   );
+}
+
+interface Msg { id: string; channel: string; category: string | null; template: string | null; subject: string | null; status: string; skipReason: string | null; createdAt: number; sentAt: number | null }
+const MSG_STATUS: Record<string, ['good' | 'warn' | 'bad' | 'mute', string]> = { sent: ['good', 'Sent'], queued: ['warn', 'Waiting'], failed: ['bad', 'Failed'], skipped: ['mute', 'Not sent'] };
+/** What the customer was sent about this booking, from the server's notification log. */
+function BookingMessages({ id }: { id: string }) {
+  const [d, err, reload, status] = useApi<{ items: Msg[] }>(`/api/staff/bookings/${encodeURIComponent(id)}/messages`);
+  return <Load data={d} error={err} status={status} retry={reload} isEmpty={(x) => !x.items.length} empty="Nothing has been sent about this booking.">{(x) => (
+    <div className="card"><Table rows={x.items} rowKey={(m) => m.id} cols={[
+      { head: 'When', cell: (m) => fmtDateTime(m.sentAt ?? m.createdAt) },
+      { head: 'Channel', cell: (m) => ({ email: 'Email', whatsapp: 'WhatsApp', sms: 'Text', push: 'App' } as Record<string, string>)[m.channel] || m.channel },
+      { head: 'What', cell: (m) => m.subject || (m.template ?? m.category ?? '').replace(/[._]/g, ' ') },
+      { head: 'Status', cell: (m) => <><Status s={m.status} map={MSG_STATUS} />{m.skipReason && <div className="small muted">{m.skipReason}</div>}</> },
+    ]} /></div>)}</Load>;
 }
