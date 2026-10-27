@@ -17,7 +17,7 @@ export const DESIGN_NAMES: Record<string, string> = {
   mango: 'Mango Grove', dusk: 'Golden Hour', scoreboard: 'Scoreboard', aurora: 'Winter Night', ember: 'Ember Night',
   kulfi: 'Kulfi Cream', camp: 'Summer Camp', neem: 'Neem Shade', heatwave: 'Heatwave', gola: 'Ice Gola',
   khus: 'Khus Cool', powerplay: 'Powerplay', thunder: 'Pre-monsoon Sky', firefly: 'Firefly Night', jamun: 'Jamun Night',
-  ivory: 'Plain light', obsidian: 'Plain dark',
+  field: 'Cricket green', ivory: 'Plain light', obsidian: 'Plain dark',
 };
 /** Page colour and accent of each design, for the little swatches. */
 const SWATCH: Record<string, [string, string]> = {
@@ -26,7 +26,7 @@ const SWATCH: Record<string, [string, string]> = {
   mist: ['#eef2f4', '#2f6f8f'], scorebook: ['#f6f1e4', '#2446a8'], sunrise: ['#fff4ec', '#d44d33'], azure: ['#f3f8fd', '#0a6fd6'], terracotta: ['#f5e9dc', '#b14e2b'],
   mango: ['#0f2117', '#ffbf3c'], dusk: ['#1a1022', '#ffa84a'], scoreboard: ['#0a0a0a', '#ffb000'], aurora: ['#070b1a', '#6ef0c8'], ember: ['#0e0806', '#ff6a2b'],
   kulfi: ['#fbf6ea', '#2f8f6b'], camp: ['#f2f9ff', '#d45816'], neem: ['#eef3e6', '#3c6b2f'], heatwave: ['#fbefd9', '#d2381c'], gola: ['#f4fbfd', '#e0245e'],
-  khus: ['#0c1a15', '#9fe3b8'], powerplay: ['#0d0a1f', '#c6ff3d'], thunder: ['#0e1820', '#ffd23f'], firefly: ['#06110c', '#e4ff6e'], jamun: ['#150a1f', '#c9a7ff'],
+  field: ['#F3F6F4', '#1C7A3E'], khus: ['#0c1a15', '#9fe3b8'], powerplay: ['#0d0a1f', '#c6ff3d'], thunder: ['#0e1820', '#ffd23f'], firefly: ['#06110c', '#e4ff6e'], jamun: ['#150a1f', '#c9a7ff'],
 };
 const nameOf = (d: string) => DESIGN_NAMES[d] || d.charAt(0).toUpperCase() + d.slice(1);
 const hourText = (h: number) => (h === 0 ? 'midnight' : h === 12 ? 'noon' : h < 12 ? `${h} am` : `${h - 12} pm`);
@@ -110,7 +110,7 @@ function Design({ cal }: { cal: PackCalendar }) {
     try { await put('/api/admin/settings', { designPace: v }); toast(v === 'daily' ? 'The design now changes once a day.' : v === 'weekly' ? 'The design now changes once a week.' : 'The design now changes four times a day.'); reload(); setNow(null); } catch (e) { toast(errText(e)); }
     setBusy(false);
   }
-  const all = [...new Set(cal.packs.flatMap((p) => p.designs)), 'ivory', 'obsidian'];
+  const all = ['field', ...new Set(cal.packs.flatMap((p) => p.designs)), 'ivory', 'obsidian'];
   return (
     <Panel title="Website design" note="Visitors cannot choose a design; the website shows the one set here. Every design has a day version (6 am to 6 pm) and a night version, and visitors can flip between the two with the sun and moon switch. Festival days still come first.">
       <div className="form-grid">

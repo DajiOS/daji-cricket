@@ -1,0 +1,213 @@
+/* ===== Cricket green: the sports look from the owner's mock-up (white top bar, photo hero, booking card, feature row, photo cards).
+   app.js sets data-theme="field" and data-layout="field" when the owner chooses it in Settings, Website, so the shared designer
+   layout rules in site.css (booking card in four columns, cards, the other screens) apply and this file only adds the look.
+   It has a day version (6 am to 6 pm) and a night version like the designer themes. Nothing here shows in any other look. ===== */
+.fx-steps,.fx-feats,.fx-pic{display:none}
+
+:root[data-theme="field"]{color-scheme:light;--bg:#f3f6f4;--bg-raised:#ffffff;--surface:#ffffff;--surface-high:#eef3f0;--surface-top:#e2ebe5;--line:rgba(16,40,28,.12);--line-strong:rgba(16,40,28,.26);--text:#14231b;--text-muted:#52615a;--text-faint:#6f7d76;--gold:#1c7a3e;--gold-bright:#2ea45a;--gold-deep:#14602f;--on-gold:#ffffff;--ok:#1c8a45;--warn:#b86a00;--danger:#c93a32;--info:#2f6fd0;--glow:rgba(46,164,90,.18);--scrim:rgba(10,24,16,.55);--shadow-card:0 1px 2px rgba(16,40,28,.06),0 8px 24px -12px rgba(16,40,28,.18);--shadow-lift:0 18px 40px -20px rgba(16,40,28,.35);--gradient-gold:#1c7a3e;--gradient-gold-hover:#2ea45a;--gradient-canvas:none;--font-display:'Inter',system-ui,sans-serif;--font-body:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--font-script:'Inter',system-ui,sans-serif;
+  --d-r:12px;--d-fw:800;--d-ls:-.025em;--d-tt:none;--d-es:normal;--d-h1:clamp(44px,6vw,92px);--fx-hero-ink:#ffffff;--fx-hero-accent:#5fd68a}
+:root[data-theme="field"][data-mode="night"]{color-scheme:dark;--bg:#0a1310;--bg-raised:#111c18;--surface:#111c18;--surface-high:#16241f;--surface-top:#1d2e27;--line:rgba(220,240,228,.12);--line-strong:rgba(220,240,228,.26);--text:#e9f1ec;--text-muted:#a7b8af;--text-faint:#82938a;--gold:#2ea45a;--gold-bright:#5fd68a;--gold-deep:#1c7a3e;--on-gold:#ffffff;--ok:#5fd68a;--warn:#f0b54a;--danger:#f07a6e;--info:#7fb0f5;--scrim:rgba(0,0,0,.6);--shadow-card:0 10px 30px -16px rgba(0,0,0,.6);--shadow-lift:0 24px 50px -24px rgba(0,0,0,.7)}
+html[data-theme="field"]:not([data-embed]):not([data-embed-section]) #view-home{--font-display:'Inter',system-ui,sans-serif;--lux-line:var(--line);--radius-sm:10px;--radius-md:12px;--radius-lg:16px;--d-pr:16px}
+html[data-theme="field"] body{background:var(--bg);background-image:none;font-weight:400;font-feature-settings:normal}
+html[data-theme="field"] body::before{display:none}
+
+/* ---- top bar: white, full width, plain words, a green Book button ---- */
+html[data-theme="field"]:not([data-embed]) :is(#view-home,#view-academy,#view-bookings,#view-login,#view-platform) > .wrap > nav{height:84px;background:var(--surface);box-shadow:0 0 0 100vmax var(--surface),0 1px 0 100vmax var(--line);clip-path:inset(0 -100vmax -1px);border-bottom:0;margin-bottom:0}
+html[data-theme="field"]:not([data-embed]) .wm-nav{height:54px!important}
+html[data-theme="field"]:not([data-embed]) .links{font:500 15px var(--font-body);letter-spacing:0;text-transform:none;color:var(--text);gap:28px}
+html[data-theme="field"]:not([data-embed]) .links a:hover{color:var(--gold)}
+@media (min-width:901px){
+  html[data-theme="field"]:not([data-embed]) .links [data-reserve]{display:inline-flex!important;align-items:center;height:44px;padding:0 22px;background:var(--gold);color:#fff!important;border-radius:10px;font-weight:700}
+  html[data-theme="field"]:not([data-embed]) .links [data-reserve]:hover{background:var(--gold-bright)}
+}
+
+/* ---- buttons and type everywhere ---- */
+html[data-theme="field"] .btn{border-radius:10px;text-transform:none;letter-spacing:0;font:700 15px var(--font-body)}
+html[data-theme="field"] .btn.sm{font-size:14px}
+html[data-theme="field"] .btn.primary{background:var(--gold);color:#fff;box-shadow:none}
+html[data-theme="field"] .btn.primary:hover{background:var(--gold-bright);transform:none;box-shadow:none}
+html[data-theme="field"] .btn.outline{border-color:var(--line-strong);color:var(--text);background:var(--surface)}
+html[data-theme="field"] .btn.outline:hover{border-color:var(--gold);color:var(--gold)}
+html[data-theme="field"] .eyebrow{font:700 13px/1.4 var(--font-body);letter-spacing:.02em;text-transform:none;color:var(--gold)}
+html[data-theme="field"] .display{font-family:var(--font-display);font-weight:800;letter-spacing:-.025em;text-transform:none}
+html[data-theme="field"] .display em{font-family:inherit;font-style:normal;color:var(--gold);padding:0}
+html[data-theme="field"]:not([data-embed]):not([data-embed-section]) #view-home .head .eyebrow{display:block}
+html[data-theme="field"]:not([data-embed]):not([data-embed-section]) #view-home .head h2{font-size:clamp(30px,3.2vw,46px)!important}
+
+/* ---- hero: a photo band under the top bar with the words on the left, the booking card overlapping its foot ---- */
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero{grid-template-columns:minmax(0,1fr);grid-template-areas:"copy" "book";gap:0;padding:0 0 clamp(24px,3vw,40px)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero > div:first-child{margin-inline:calc(50% - 50vw);padding:clamp(56px,9vw,128px) calc(50vw - 50% + 0px) clamp(120px,12vw,170px);
+  background:linear-gradient(90deg,rgba(6,20,12,.86) 0%,rgba(6,20,12,.62) 38%,rgba(6,20,12,.15) 72%,rgba(6,20,12,0) 100%),var(--hero-photo,url("assets/field-hero.svg")) center/cover no-repeat;color:var(--fx-hero-ink);gap:20px}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero > div:first-child > *{max-width:640px}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .hero-eyebrow{color:var(--fx-hero-accent);letter-spacing:.04em;text-transform:none;font-size:14px}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero h1{color:#fff;font-family:var(--font-display);line-height:1}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero h1 .ln{display:block}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero h1 em{color:var(--fx-hero-accent)!important}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero p.lead{color:rgba(255,255,255,.88)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero .cta .btn{height:52px;border-radius:10px}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero .cta .btn.outline{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.6);color:#fff}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero .cta .btn.outline:hover{background:rgba(255,255,255,.16)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .facts strong{color:#fff}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .facts span{color:rgba(255,255,255,.75)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .facts div::before{background:var(--fx-hero-accent)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .hero-decor{display:none}
+
+/* the booking card */
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{margin-top:calc(-1 * clamp(84px,9vw,120px));background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:16px!important;box-shadow:0 24px 60px -28px rgba(10,30,18,.45)!important}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book::before{display:none}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .fx-steps{display:flex;grid-column:1/-1}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book h3{font:800 24px/1.15 var(--font-body);letter-spacing:-.01em;text-transform:none}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .step{font:700 14px var(--font-body);letter-spacing:0;text-transform:none;color:var(--text)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .step i{background:var(--gold);color:#fff;border-color:var(--gold);font-style:normal}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book :is(.tab,.tabs > *){border-radius:999px!important;font:600 13.5px var(--font-body);letter-spacing:0;text-transform:none;padding:9px 16px;color:var(--text);border-color:var(--line-strong);background:var(--surface)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book :is(.tab.on,.tabs > .on){background:var(--gold);border-color:var(--gold);color:#fff}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .day{border-radius:12px;font:600 11.5px var(--font-body);letter-spacing:.04em;color:var(--text-muted);background:var(--surface)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .day b{font:800 22px/1.2 var(--font-body);color:var(--text)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .day.on{background:var(--gold);border-color:var(--gold);color:rgba(255,255,255,.85)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .day.on b{color:#fff}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .slot{border-radius:12px;background:var(--surface);font:700 15px var(--font-body);color:var(--text)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .slot small{font:600 12px var(--font-body);letter-spacing:0;color:var(--gold)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .slot.av:hover{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 6%,var(--surface))}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .slot.sel{background:var(--gold);border-color:var(--gold);color:#fff}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .slot.sel small{color:rgba(255,255,255,.9)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book :is(.slot.booked,.slot.blocked,.slot.past){background:var(--surface-high);color:var(--text-faint)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book :is(.slot.booked,.slot.blocked,.slot.past) small{color:var(--text-faint)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .legend i.s{background:var(--gold);border-color:var(--gold)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book #p-hold{height:52px;border-radius:10px;font:700 16px var(--font-body);letter-spacing:0;text-transform:none;background:var(--gold);color:#fff}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book #p-hold:disabled{background:var(--surface-top);color:var(--text-faint)}
+
+/* the four steps (booking card and the payment windows) */
+html[data-theme="field"] .fx-steps{display:flex;list-style:none;margin:0 0 6px;padding:0;gap:0;counter-reset:none;align-items:center}
+html[data-theme="field"] .fx-steps li{display:flex;align-items:center;gap:8px;font:600 14px var(--font-body);color:var(--text-faint);flex:1 1 0;min-width:0;white-space:nowrap}
+html[data-theme="field"] .fx-steps li + li::before{content:"";flex:1 1 auto;height:2px;background:var(--line);margin:0 10px 0 0;min-width:12px}
+html[data-theme="field"] .fx-steps li b{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;flex:none;font:700 13px var(--font-body);border:2px solid var(--line-strong);color:var(--text-faint);background:var(--surface)}
+html[data-theme="field"] .fx-steps li.on{color:var(--text)}
+html[data-theme="field"] .fx-steps li.on b{background:var(--gold);border-color:var(--gold);color:#fff}
+html[data-theme="field"] .fx-steps li.done{color:var(--gold)}
+html[data-theme="field"] .fx-steps li.done b{background:color-mix(in srgb,var(--gold) 14%,var(--surface));border-color:var(--gold);color:var(--gold)}
+html[data-theme="field"] .fx-steps li.done + li::before,html[data-theme="field"] .fx-steps li.on + li::before{background:var(--line)}
+html[data-theme="field"] .fx-steps li.done + li.done::before,html[data-theme="field"] .fx-steps li.done + li.on::before{background:var(--gold)}
+html[data-theme="field"] .sheet .fx-steps{margin:0 36px 18px 0}
+
+/* ---- the feature row under the hero ---- */
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home section.fx-feats{display:block;padding:8px 0 clamp(28px,4vw,48px)!important;border-top:0}
+html[data-theme="field"] .fx-feats ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+html[data-theme="field"] .fx-feats li{display:grid;grid-template-columns:48px 1fr;grid-template-rows:auto auto;column-gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow-card)}
+html[data-theme="field"] .fx-feats svg{grid-row:1/3;width:48px;height:48px;padding:11px;border-radius:12px;background:color-mix(in srgb,var(--gold) 12%,var(--surface));stroke:var(--gold);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;box-sizing:border-box}
+html[data-theme="field"] .fx-feats b{font:700 15px var(--font-body);color:var(--text)}
+html[data-theme="field"] .fx-feats span{font-size:13px;line-height:1.4;color:var(--text-muted)}
+
+/* ---- sections and ground cards ---- */
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home section{border-top:0}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .grounds .card{background:var(--surface);border-radius:16px;box-shadow:var(--shadow-card);overflow:hidden}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .grounds .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lift)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .grounds .card .body > h4{font:800 24px/1.15 var(--font-body)!important;letter-spacing:-.01em!important;text-transform:none!important}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .grounds .card .chip{font:500 12.5px var(--font-body);letter-spacing:0;text-transform:none;border-radius:999px;padding:5px 11px;background:var(--surface-high);border-color:transparent;color:var(--text-muted)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .grounds .card .price b{font:800 28px var(--font-body);color:var(--text)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .grounds .card .arrow{display:inline-flex;align-items:center;height:42px;padding:0 20px;border-radius:10px;background:var(--gold);color:#fff;font:700 14px var(--font-body);letter-spacing:0;text-transform:none}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .grounds .card .arrow:hover{background:var(--gold-bright)}
+/* the card picture: the ground's photo, or drawn turf (mowing stripes and a pitch) or nets */
+html[data-theme="field"] .fx-pic{display:block;height:180px;background-color:#2a7a3f;background-image:linear-gradient(90deg,transparent 46%,#c9b483 46% 54%,transparent 54%),repeating-linear-gradient(90deg,#2c7f41 0 48px,#26743a 48px 96px);background-size:cover;background-position:center}
+html[data-theme="field"] .fx-pic.nets{background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.18) 0 2px,transparent 2px 22px),repeating-linear-gradient(90deg,rgba(255,255,255,.18) 0 2px,transparent 2px 22px),linear-gradient(90deg,#2c7f41 0 30%,#c9b483 30% 70%,#2c7f41 70%)}
+html[data-theme="field"] .fx-pic[style]{background-size:cover}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .grounds .card.wide .fx-pic{height:220px}
+
+/* contact boxes, gallery, academy and the closing logo */
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home :is(.visit .box,.academy .mp){background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-card);padding:24px}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .visit .big{font:800 24px var(--font-body);letter-spacing:-.01em}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .visit h5{font:700 13px var(--font-body);letter-spacing:0;text-transform:none;color:var(--gold)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home .gallery button{border-radius:14px;overflow:hidden}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) .resbar{background:var(--gold)!important;color:#fff!important;border-radius:12px;font-weight:700}
+html[data-theme="field"] footer{font:500 13px var(--font-body);letter-spacing:0;text-transform:none}
+
+/* ---- My bookings: tabs, a picture on each card, the status as a chip ---- */
+html[data-theme="field"] #view-bookings .head p{color:var(--text-muted)}
+.bk-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+.bk-filter{display:flex;gap:8px;flex-wrap:wrap}
+.bk-cards{display:grid;gap:14px}
+html[data-theme="field"] .bk-filter .tab{border-radius:999px;font:600 14px var(--font-body);letter-spacing:0;text-transform:none;padding:9px 16px;color:var(--text);border-color:var(--line-strong);background:var(--surface)}
+html[data-theme="field"] .bk-filter .tab.on{background:var(--gold);border-color:var(--gold);color:#fff}
+html[data-theme="field"] .bk-guppi{gap:8px}
+html[data-theme="field"] .bk-guppi::before{content:"";width:18px;height:18px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z'/%3E%3C/svg%3E") center/contain no-repeat}
+html[data-theme="field"] #view-bookings .bk{grid-template-columns:150px minmax(0,1fr) auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-card);padding:14px 20px 14px 14px;gap:10px 20px}
+html[data-theme="field"] #view-bookings .bk .fx-pic{height:100%;min-height:104px;border-radius:12px}
+html[data-theme="field"] #view-bookings .bk h4{font:800 19px var(--font-body);letter-spacing:-.01em;text-transform:none}
+html[data-theme="field"] #view-bookings .bk .meta{font-size:14px}
+html[data-theme="field"] .st{border:0;border-radius:999px;padding:6px 12px;font:600 13px var(--font-body);letter-spacing:0;text-transform:none;background:color-mix(in srgb,currentColor 12%,transparent)}
+html[data-theme="field"] .st.ok{color:var(--ok)}
+html[data-theme="field"] .st.info{color:var(--info)}
+
+/* ---- windows and forms ---- */
+html[data-theme="field"] .sheet{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 30px 80px -30px rgba(10,30,18,.5)}
+html[data-theme="field"] .sheet h3{font:800 26px/1.15 var(--font-body);letter-spacing:-.01em;text-transform:none}
+html[data-theme="field"] :is(input,select,textarea){border-radius:10px}
+html[data-theme="field"] .sheet .kv .row b{font-weight:700}
+
+/* ---- phones and tablets ---- */
+@media (max-width:1100px){html[data-theme="field"] .fx-feats ul{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:760px){
+  html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero{grid-template-areas:"copy" "book"}
+  html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero > div:first-child{padding:40px calc(50vw - 50%) 110px;background:linear-gradient(180deg,rgba(6,20,12,.55),rgba(6,20,12,.85)),var(--hero-photo,url("assets/field-hero.svg")) center/cover no-repeat}
+  html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero h1{font-size:clamp(40px,12vw,60px)!important}
+  html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{margin-top:-80px}
+  html[data-theme="field"] .fx-feats ul{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  html[data-theme="field"] .fx-feats li{grid-template-columns:1fr;row-gap:8px;padding:14px}
+  html[data-theme="field"] .fx-feats svg{grid-row:auto}
+  html[data-theme="field"] .fx-steps li{font-size:12.5px;gap:6px}
+  html[data-theme="field"] .fx-steps li + li::before{margin-right:6px;min-width:6px}
+  html[data-theme="field"] .fx-steps li b{width:24px;height:24px;font-size:12px}
+  html[data-theme="field"] #view-bookings .bk{grid-template-columns:96px minmax(0,1fr)}
+  html[data-theme="field"] #view-bookings .bk .acts{grid-column:1/-1}
+}
+@media (max-width:900px){
+  html[data-theme="field"]:not([data-embed]) :is(#view-home,#view-academy,#view-bookings,#view-login,#view-platform) > .wrap > nav{height:72px}
+  html[data-theme="field"]:not([data-embed]) .wm-nav{height:46px!important}
+}
+
+/* ---- type fixes over the home page's own faces (the editorial look sets light weights and italics on #view-home) ---- */
+html[data-theme="field"]:not([data-embed]):not([data-embed-section]) #view-home .display{font-family:var(--font-display);font-weight:800;letter-spacing:-.025em;text-transform:none}
+html[data-theme="field"]:not([data-embed]):not([data-embed-section]) #view-home .display em,
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero h1 em{font-family:inherit;font-style:normal;font-weight:inherit;padding:0;font-size:1em}
+html[data-theme="field"]:not([data-embed]):not([data-embed-section]) #view-home .gallery .none{font-style:normal;font-size:20px;color:var(--text-muted)}
+html[data-theme="field"]:not([data-embed]) nav .links :is(a,button,.who a,.who b,.linkbtn):not([data-reserve]){font:500 15px var(--font-body)!important;letter-spacing:0!important;text-transform:none!important;color:var(--text)}
+html[data-theme="field"]:not([data-embed]) nav .links :is(a,button,.who a,.linkbtn):not([data-reserve]):hover{color:var(--gold)}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home section#grounds{padding-top:clamp(24px,3vw,40px)}
+
+/* ---- the account screens (my bookings, academy, sign in, for ground owners) ---- */
+html[data-theme="field"]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .eyebrow{font:700 13px/1.4 var(--font-body);letter-spacing:.02em;text-transform:none;color:var(--gold)}
+html[data-theme="field"]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .display{font-weight:800;letter-spacing:-.025em}
+html[data-theme="field"]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .head h2.display{font-size:clamp(32px,3.4vw,48px)}
+html[data-theme="field"]:not([data-embed]) :is(#view-academy,#view-bookings,#view-login,#view-platform) .display em{color:var(--gold);font-style:normal}
+html[data-theme="field"] .kpis{background:var(--surface);border-radius:16px;box-shadow:var(--shadow-card);overflow:hidden}
+html[data-theme="field"] .kpi span{font:600 13px var(--font-body);letter-spacing:0;text-transform:none;color:var(--text-muted)}
+html[data-theme="field"] .kpi b{font:800 28px/1.2 var(--font-body);letter-spacing:-.01em}
+html[data-theme="field"] .kpi:last-child{background:color-mix(in srgb,var(--gold) 6%,var(--surface))}
+html[data-theme="field"] .kpi:last-child b{color:var(--gold)}
+html[data-theme="field"] .avatar{background:var(--gold)!important;color:#fff!important}
+html[data-theme="field"]:not([data-embed]) nav .links [data-reserve]{font:700 15px var(--font-body)!important;letter-spacing:0!important;text-transform:none!important}
+html[data-theme="field"] .fx-steps li + li::before{margin-left:10px}
+@media (max-width:560px){
+  html[data-theme="field"] .fx-steps li:not(.on){flex:0 0 auto;font-size:0;gap:0}
+  html[data-theme="field"] .fx-steps li:not(.on) b{font-size:12px}
+  html[data-theme="field"] .fx-steps li.on{flex:0 0 auto}
+  html[data-theme="field"] .fx-steps li + li::before{flex:1 1 auto;min-width:10px}
+  html[data-theme="field"] .fx-steps{justify-content:space-between}
+  html[data-theme="field"] .fx-steps li{flex:1 1 auto}
+  html[data-theme="field"] .fx-steps li:first-child{flex:0 0 auto}
+}
+/* the calendar symbol beside the days, in green */
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book .datepick{border:1px solid var(--line-strong);background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231c7a3e' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M3 10h18M8 3v4M16 3v4'/%3E%3C/svg%3E") center/32px no-repeat;border-radius:12px}
+/* steps take the width their words need, so a line never runs through a word */
+html[data-theme="field"] .fx-steps li{flex:1 1 auto}
+html[data-theme="field"] .fx-steps li:first-child{flex:0 0 auto}
+html[data-theme="field"] .sheet .fx-steps li{font-size:13.5px}
+/* between tablet and wide desktop the booking card uses two columns, so days and times keep their size */
+@media (min-width:1021px) and (max-width:1240px){
+  html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home aside.panel#book{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)!important}
+  html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #book :is(.pc-head,.pc-go){grid-column:1/-1}
+}
+/* an uploaded top-banner photo or drone video fills the hero band behind the words */
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero > div:first-child{position:relative;isolation:isolate}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home #hero-media{position:absolute;inset:0;margin:0;border-radius:0;max-height:none;max-width:none;aspect-ratio:auto;z-index:-2;background:#0b1a12}
+html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero > div:first-child:has(#hero-media)::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(90deg,rgba(6,20,12,.86) 0%,rgba(6,20,12,.62) 38%,rgba(6,20,12,.15) 72%,rgba(6,20,12,0) 100%)}
+@media (max-width:760px){html[data-layout="field"]:not([data-embed]):not([data-embed-section]) #view-home header.hero > div:first-child:has(#hero-media)::before{background:linear-gradient(180deg,rgba(6,20,12,.55),rgba(6,20,12,.85))}}

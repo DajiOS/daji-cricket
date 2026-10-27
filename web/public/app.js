@@ -14,7 +14,7 @@ const store = {
 
 // colour theme: the theme button at the top right, ?theme= in the address or the admin picker; remembered in this browser.
 // On a festival day the server's festival calendar (/api/festival) switches the look by itself; see loadFestival().
-const THEMES = [['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', 'Pitch green & gold', '#0b2e23', '#d3b26a'], ['navy', 'Navy & brass', '#0e192d', '#c8a96b'], ['ivory', 'Ivory & emerald', '#f6f2e9', '#0f3d2e'], ['pearl', 'White, red & green', '#ffffff', '#b3261e'], ['rose-onyx', 'Onyx & rose gold', '#0b0909', '#d9a08e'], ['rose-plum', 'Plum & rose gold', '#150d14', '#e0a9a0'], ['rose-wine', 'Wine & rose gold', '#1c0a10', '#e8b09c'], ['rose-slate', 'Slate & rose gold', '#101417', '#dfa592'], ['slate-gold', 'Slate & gold', '#101417', '#c9a96b'], ['slate-black', 'Slate-black & gold', '#0a0d0f', '#c9a96b'], ['onyx-slate', 'Onyx & gold (slate glow)', '#0a0c0b', '#c9a96b'],
+const THEMES = [['field', 'Cricket green', '#f3f6f4', '#1c7a3e'], ['obsidian', 'Onyx & gold', '#0a0c0b', '#c9a96b'], ['emerald', 'Pitch green & gold', '#0b2e23', '#d3b26a'], ['navy', 'Navy & brass', '#0e192d', '#c8a96b'], ['ivory', 'Ivory & emerald', '#f6f2e9', '#0f3d2e'], ['pearl', 'White, red & green', '#ffffff', '#b3261e'], ['rose-onyx', 'Onyx & rose gold', '#0b0909', '#d9a08e'], ['rose-plum', 'Plum & rose gold', '#150d14', '#e0a9a0'], ['rose-wine', 'Wine & rose gold', '#1c0a10', '#e8b09c'], ['rose-slate', 'Slate & rose gold', '#101417', '#dfa592'], ['slate-gold', 'Slate & gold', '#101417', '#c9a96b'], ['slate-black', 'Slate-black & gold', '#0a0d0f', '#c9a96b'], ['onyx-slate', 'Onyx & gold (slate glow)', '#0a0c0b', '#c9a96b'],
   // designer themes
   ['noir', 'Floodlight Noir', '#07090a', '#d6b36a'], ['pavilion', 'Emerald Pavilion', '#0b2a20', '#dcc289'], ['whites', 'Test Whites', '#fbfbf8', '#b3261e'], ['pinkball', 'Pink Ball Night', '#0b0c22', '#ff7ab6'], ['monsoon', 'Monsoon Glass', '#0d1a1e', '#7fd6c3'], ['maroon', 'Royal Maroon', '#260a10', '#e4bb6a'], ['carbon', 'Carbon T20', '#0c0e11', '#9fd8ff'], ['champagne', 'Champagne Minimal', '#ffffff', '#9a7a3e'], ['stadium', 'Stadium Royal Blue', '#06184a', '#ffcb3d'], ['willow', 'Willow & Leather', '#1c120b', '#dca66b'],
   // designer themes, Jan to Mar 2027 pack
@@ -38,6 +38,7 @@ const FEST_ICON = {
 };
 /** Faces the newer themes use, fetched from Google Fonts only when that theme is shown. */
 const THEME_FONTS = {
+  field: 'Inter:wght@400;500;600;700;800',
   noir: 'Bodoni+Moda:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700', pavilion: 'Manrope:wght@400;500;600;700', whites: 'DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600',
   pinkball: 'Unbounded:wght@400;500;700&family=Sora:wght@400;500;600', monsoon: 'Syne:wght@500;600;700&family=Manrope:wght@400;500;600;700', maroon: 'Marcellus&family=Mulish:wght@400;500;600;700',
   carbon: 'Barlow+Condensed:ital,wght@0,400;0,600;0,800;1,800&family=Barlow:wght@400;500;600', champagne: 'Italiana&family=Jost:wght@300;400;500;600', stadium: 'Big+Shoulders+Display:wght@400;700;900&family=Figtree:wght@400;500;600;700',
@@ -174,6 +175,8 @@ function syncDesign() {
   const d = !root.hasAttribute('data-embed') && !root.hasAttribute('data-embed-section') ? DESIGNS[t] : null;
   const h1 = hero.querySelector('h1'), lead = hero.querySelector('p.lead'), eye = document.getElementById('hero-eyebrow'), box = document.getElementById('hero-3d');
   if (!heroOrig) heroOrig = { h1: h1.innerHTML, lead: lead.textContent };
+  if (t === 'field' && !root.hasAttribute('data-embed') && !root.hasAttribute('data-embed-section')) { fieldHero(root, h1, lead, eye, box); return; }
+  if (root.getAttribute('data-layout') === 'field') { root.removeAttribute('data-layout'); hero.style.removeProperty('--hero-photo'); }
   if (!d) {
     if (!root.hasAttribute('data-layout')) return;
     root.removeAttribute('data-layout'); root.removeAttribute('data-decor');
@@ -190,6 +193,51 @@ function syncDesign() {
     ? { ...d.g, day: true, exp: Math.max(d.g.exp || 1, 1.12), parts: d.g.parts === 'stars' || d.g.parts === 'rain' ? d.g.parts === 'rain' ? 'rain' : 'none' : d.g.parts, grass: ['#5d9a45', '#68a64e'] }
     : { ...d.g, day: false, exp: 1.05, parts: d.g.parts === 'none' ? 'dust' : d.g.parts, pc: '#fff3d8', grass: ['#163a24', '#1b4529'] };
   if (window.DajiScene) window.DajiScene.mount(box, g); else window.DajiScenePending = { el: box, p: g };
+}
+/** Cricket green: a photo hero (the first gallery or ground photo, else a drawn floodlit ground) with the booking card below it,
+ *  as in the owner's mock-up. No 3D scene and no background film. */
+function fieldHero(root, h1, lead, eye, box) {
+  root.setAttribute('data-layout', 'field'); root.removeAttribute('data-decor');
+  eye.textContent = 'Daji Cricket Ground · Surat'; eye.hidden = false;
+  h1.innerHTML = '<span class="ln"><span>Play.</span></span> <span class="ln"><span>Practice.</span></span> <span class="ln"><span><em>Grow.</em></span></span>';
+  lead.textContent = 'Book the floodlit ground and the practice nets at Daji Cricket Ground. See every free slot, pay a small advance and the time is yours.';
+  box.hidden = true;
+  if (window.DajiScene) window.DajiScene.unmount(); else window.DajiScenePending = null;
+  fieldPhoto();
+}
+function fieldPhoto() {
+  const hero = document.querySelector('#view-home header.hero');
+  let cfg = null; try { cfg = state.config; } catch { /* the page is still starting; fillStatic calls this again */ }
+  if (!hero || !cfg) return;
+  const u = realPics()[0];
+  if (u) hero.style.setProperty('--hero-photo', `url("${u}")`); else hero.style.removeProperty('--hero-photo');
+}
+/** The ground's own pictures, best first: the top-banner photo or the still of its video, the gallery photos and the stills of the
+ *  drone videos uploaded in the desk (Photos and videos), then the website gallery and the grounds' photos. */
+function realPics() {
+  let cfg = null, lib = [], grounds = [];
+  try { cfg = state.config; lib = state.library || []; grounds = state.grounds || []; } catch { return []; }
+  const still = (it) => (it.kind === 'video' ? it.poster || it.thumb : it.url);
+  const fromLib = ['hero', 'gallery'].flatMap((t) => lib.filter((i) => i.tag === t).reverse()).map(still).filter(Boolean).map((u) => mediaUrl(u));
+  const other = [...((cfg && cfg.gallery) || []), ...grounds.flatMap((g) => g.images || [])].filter((x) => /^(https:\/\/|\/api\/media\/)/.test(x)).map(photoSrc);
+  return [...new Set([...fromLib, ...other])];
+}
+/** A picture for a ground's card: its own photo, else one of the ground's other real pictures (a different one per ground). */
+function groundPic(g) {
+  const own = g && (g.images || []).find((x) => /^(https:\/\/|\/api\/media\/)/.test(x));
+  if (own) return photoSrc(own);
+  const all = realPics(); if (!all.length) return null;
+  const i = Math.max(0, (state.grounds || []).findIndex((x) => g && x.id === g.id));
+  return all[(i + 1) % all.length];
+}
+/** Fills every card picture (.fx-pic[data-gid]) once the pictures are known; until then the drawn turf shows. */
+function paintPics() {
+  for (const el of $$('.fx-pic[data-gid]')) { const u = groundPic(state.grounds.find((x) => x.id === el.dataset.gid)); if (u) el.style.backgroundImage = `url("${u}")`; }
+  if (document.documentElement.getAttribute('data-layout') === 'field') fieldPhoto();
+}
+/** The four booking steps (Select, Review, Pay, Confirm) shown along the top of the booking card and the payment windows in Cricket green. */
+function stepsEl(n) {
+  return h('ol', { class: 'fx-steps', 'aria-label': `Step ${n} of 4` }, ['Select', 'Review', 'Pay', 'Confirm'].map((x, i) => h('li', { class: i + 1 < n ? 'done' : i + 1 === n ? 'on' : null }, h('b', {}, i + 1 < n ? '✓' : String(i + 1)), x)));
 }
 /** What the 3D opening film needs to know about the look on screen: its colours, day or night, its scene and any festival. */
 window.dajiIntroLook = function introLook() {
@@ -212,9 +260,9 @@ const nextFlip = () => { const { h, midnight } = istParts(); return midnight + (
 function currentMode() { try { const s = JSON.parse(store.get('daji.mode') || 'null'); if (s && s.until > Date.now() && (s.m === 'day' || s.m === 'night')) return s.m; } catch { /* none saved */ } return autoMode(); }
 const isDesign = (t) => DESIGNER_THEMES.includes(t);
 const PLAIN_DARK = THEMES.filter((t) => { const h = t[2].slice(1); return (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000 < 110; }).map((t) => t[0]);
-const toneOf = (t, m) => (isDesign(t) ? (m === 'day' ? 'light' : 'dark') : PLAIN_DARK.includes(t) ? 'dark' : 'light');
+const toneOf = (t, m) => (isDesign(t) || t === 'field' ? (m === 'day' ? 'light' : 'dark') : PLAIN_DARK.includes(t) ? 'dark' : 'light');
 /** Light pages use the brass logo; the dark ones keep the gold. */
-function swapLogos() { const light = document.documentElement.getAttribute('data-tone') === 'light'; for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? 'assets/logo-brass.svg' : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
+function swapLogos() { const root = document.documentElement, light = root.getAttribute('data-tone') === 'light', field = root.getAttribute('data-theme') === 'field'; for (const i of document.querySelectorAll('img.wm-nav, .wmbox img')) { const want = light ? (field ? 'assets/logo-emerald.svg' : 'assets/logo-brass.svg') : 'assets/logo.svg'; if (i.getAttribute('src') !== want) i.setAttribute('src', want); } }
 try { matchMedia('(min-width:1021px)').addEventListener('change', swapLogos); } catch { /* older browser: logo stays as loaded */ }
 /** Puts a look on the page in the current day or night version. The plain looks are Light by day and Dark by night. */
 function applyTheme(t) {
@@ -1076,6 +1124,7 @@ async function fillLibrary() {
   let items = [];
   try { const r = await fetch(API + '/api/library/public'); if (r.ok) items = (await r.json()).items || []; } catch { return; }
   if (!items.length) return;
+  state.library = items; paintPics();
   const src = (it) => mediaUrl(it.url);
   const hero = items.filter((i) => i.tag === 'hero').reverse()[0];
   const lead = $('#top .lead');
@@ -1149,7 +1198,7 @@ function fillStatic() {
   if (!gs.length) list.append(h('div', { class: 'empty' }, 'No grounds are open for booking yet.'));
   for (const g of gs) {
     list.append(h('div', { class: 'card' + (g.rates && g.rates.length ? ' wide' : '') },
-      null,
+      h('div', { class: 'fx-pic' + (/net/i.test(g.name) ? ' nets' : ''), 'data-gid': g.id, 'aria-hidden': 'true' }),
       h('div', { class: 'body' },
         h('h4', {}, g.name),
         h('div', { class: 'chips' }, (g.facilities || []).map((f) => h('span', { class: 'chip' }, f))),
@@ -1158,6 +1207,7 @@ function fillStatic() {
         h('div', { class: 'price' }, g.rates && g.rates.length ? h('div', {}, h('span', {}, 'From '), h('b', {}, inr(fromPrice(g).paise)), h('span', {}, fromPrice(g).unit)) : g.formats && g.formats.length ? h('div', {}, h('span', {}, 'From '), h('b', {}, inr(Math.min(...g.formats.map((f) => f.pricePaise)))), h('span', {}, ' / session')) : h('div', {}, h('b', {}, inr(g.pricePaise)), h('span', {}, ' / hour')),
           h('button', { class: 'arrow', type: 'button', onclick: () => { pickGround(g.id); jump('book'); } }, 'Book →')))));
   }
+  paintPics();
 }
 function formatPhone(p) { const d = String(p).replace(/\D/g, '').slice(-10); return d.length === 10 ? `+91 ${d.slice(0, 5)} ${d.slice(5)}` : p; }
 
@@ -1490,7 +1540,7 @@ function openPay(res) {
   const extra = [];
   if (res.creditAppliedPaise) extra.push(h('div', { class: 'row' }, h('span', {}, 'Paid from account credit'), h('b', {}, inr(res.creditAppliedPaise))));
   extra.push(h('div', { class: 'row' }, h('span', {}, 'Due now'), h('b', { style: 'color:var(--gold-bright);font-size:20px' }, inr(p.amountPaise))));
-  const content = [h('div', { class: 'eyebrow' }, 'Slots held'), h('h3', {}, 'Complete your payment'),
+  const content = [stepsEl(3), h('div', { class: 'eyebrow' }, 'Slots held'), h('h3', {}, 'Complete your payment'),
     h('p', { class: 'hint' }, 'Your slots are held for ', timer, '. They are released if payment does not arrive in time.'),
     bookingRows(b, extra), actions, status];
 
@@ -1638,7 +1688,7 @@ function showConfirmed(b) {
     return;
   }
   openModal([
-    h('div', { class: 'eyebrow' }, 'Confirmed'), h('h3', {}, "You're booked"),
+    stepsEl(4), h('div', { class: 'eyebrow' }, 'Confirmed'), h('h3', {}, "You're booked"),
     bookingRows(b, [
       h('div', { class: 'row' }, h('span', {}, 'Paid'), h('b', {}, inr(b.paidPaise))),
       b.balancePaise > 0 ? h('div', { class: 'row' }, h('span', {}, 'Balance at the ground'), h('b', {}, inr(b.balancePaise))) : null]),
@@ -1837,12 +1887,27 @@ async function loadBookings() {
     const res = await api('/api/bookings?limit=50');
     clear(list);
     if (!res.items.length) { list.append(h('div', { class: 'empty' }, 'No bookings yet. Pick a ground and a time to get started.')); return; }
-    for (const b of res.items) {
+    // Upcoming, Completed and Cancelled tabs over the same list (sorted by the server); nothing is fetched again
+    const now = Date.now(), kindOf = (b) => (['cancelled', 'expired'].includes(b.status) ? 'cancelled' : ['confirmed', 'held'].includes(b.status) && b.endAt > now ? 'upcoming' : 'completed');
+    const tabs = [['upcoming', 'Upcoming'], ['completed', 'Completed'], ['cancelled', 'Cancelled'], ['all', 'All']];
+    const count = (k) => (k === 'all' ? res.items.length : res.items.filter((b) => kindOf(b) === k).length);
+    if (!state.bkFilter || !count(state.bkFilter)) state.bkFilter = count('upcoming') ? 'upcoming' : 'all';
+    const bar = h('div', { class: 'bk-filter', role: 'tablist' }), cards = h('div', { class: 'bk-cards' });
+    const paintBar = () => { clear(bar); for (const [k, label] of tabs) bar.append(h('button', { type: 'button', role: 'tab', class: 'tab' + (state.bkFilter === k ? ' on' : ''), 'aria-selected': state.bkFilter === k ? 'true' : 'false', onclick: () => { state.bkFilter = k; paintBar(); paintCards(); } }, `${label} (${count(k)})`)); };
+    const guppi = state.config && state.config.guppiBookingEnabled ? h('button', { class: 'btn outline sm bk-guppi', type: 'button', onclick: () => openGuppi() }, 'Chat with Guppi') : null;
+    list.append(h('div', { class: 'bk-top' }, bar, guppi), cards);
+    paintBar();
+    function paintCards() {
+    clear(cards);
+    const shown = res.items.filter((b) => state.bkFilter === 'all' || kindOf(b) === state.bkFilter);
+    if (!shown.length) cards.append(h('div', { class: 'empty' }, 'Nothing here.'));
+    for (const b of shown) {
       const pending = b.status === 'confirmed' && b.approval === 'pending';
       const [cls, label] = pending ? ['warn', 'Pending approval'] : b.status === 'cancelled' && b.cancelledByOwner ? ['danger', 'Cancelled by the ground'] : (STATUS[b.status] || ['mute', b.status]);
       const canCancel = (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now();
       const choosing = b.status === 'cancelled' && b.cancelledByOwner && b.resolution === 'awaiting';
-      list.append(h('div', { class: 'bk' + (choosing ? ' needs' : '') },
+      cards.append(h('div', { class: 'bk' + (choosing ? ' needs' : '') },
+        h('div', { class: 'fx-pic' + (/net/i.test(b.groundName || '') ? ' nets' : ''), 'data-gid': b.groundId, 'aria-hidden': 'true' }),
         h('div', {},
           h('h4', {}, b.groundName),
           h('div', { class: 'meta' }, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${b.formatLabel ? b.formatLabel + ' (' + b.ball + ' ball)' : b.slotCount + (b.slotCount === 1 ? ' slot' : ' slots')}  ·  `, h('span', { class: 'mono' }, b.ref)),
@@ -1855,6 +1920,9 @@ async function loadBookings() {
           b.status === 'cancelled' && b.cancelledByOwner ? cancelledByGround(b) : null),
         h('div', { class: 'acts' }, h('span', { class: 'st ' + cls }, label), ...manageButtons(b), canCancel ? h('button', { class: 'btn outline sm', type: 'button', onclick: () => openCancel(b) }, 'Cancel') : null)));
     }
+    paintPics();
+    }
+    paintCards();
   } catch (e) { clear(list); list.append(h('div', { class: 'empty' }, e.message)); }
 }
 
