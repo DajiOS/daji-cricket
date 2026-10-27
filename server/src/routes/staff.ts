@@ -61,6 +61,14 @@ export function staffRoutes(r: Router): void {
     return ok({ booking: viewBooking(b.id), block: b.series_id ? blockOf(b.series_id) : null, payments, refunds: listRefunds(b.owner_id).filter((x) => x.bookingId === b.id || (b.series_id && seriesBookingIds(b.series_id).includes(x.bookingId))), audit: listAudit({ entity: 'booking', entityId: b.id, limit: 100 }).items });
   }, A);
 
+  // What the customer was sent about this booking (confirmations, reminders, receipts), as the notification log recorded it. Read only.
+  r.get('/api/staff/bookings/:id/messages', (c) => {
+    const b = accessBooking(U(c), c.params.id!, 'manage_bookings');
+    const items = many<any>('SELECT id, channel, category, template, subject, status, skip_reason, created_at, sent_at FROM notifications WHERE booking_id = ? ORDER BY created_at DESC, id DESC LIMIT 100', b.id)
+      .map((n) => ({ id: n.id, channel: n.channel, category: n.category, template: n.template, subject: n.subject, status: n.status, skipReason: n.skip_reason, createdAt: n.created_at, sentAt: n.sent_at }));
+    return ok({ items });
+  }, A);
+
   r.post('/api/staff/bookings', (c) => created({ booking: createStaffBooking(U(c), parseWalkIn(c.json())) }), { ...A, idempotent: true });
 
   // One booking per day for a run of days at one agreed total (camps, tournaments, shoots)
@@ -439,7 +447,11 @@ export function staffRoutes(r: Router): void {
     const list = listBookings({ ownerId: owner, from: today, to: today, limit, offset });
     const awaiting = owner ? one<{ n: number }>("SELECT COUNT(*) n FROM payments WHERE owner_id = ? AND status = 'submitted'", owner)!.n : one<{ n: number }>("SELECT COUNT(*) n FROM payments WHERE status = 'submitted'")!.n;
     const review = owner ? one<{ n: number }>('SELECT COUNT(*) n FROM bookings WHERE owner_id = ? AND needs_review = 1', owner)!.n : one<{ n: number }>('SELECT COUNT(*) n FROM bookings WHERE needs_review = 1')!.n;
-    return ok({ date: today, bookings: list.items.filter((b) => b.status !== 'cancelled' && b.status !== 'expired'), awaitingVerification: awaiting, needsReview: review });
+    const live = list.items.filter((b) => b.status !== 'cancelled' && b.status !== 'expired');
+    // the day's sold value and what has come in on it, worked out here once so the desk shows figures instead of adding them up itself
+    const sold = live.filter((b) => b.status === 'confirmed' || b.status === 'completed' || b.status === 'no_show');
+    const money = { soldPaise: sold.reduce((a, b) => a + b.totalPaise, 0), collectedPaise: sold.reduce((a, b) => a + b.paidPaise, 0), soldBookings: sold.length };
+    return ok({ date: today, bookings: live, awaitingVerification: awaiting, needsReview: review, money });
   }, A);
 
   const seriesBookingIds = (sid: string): string[] => many<{ id: string }>('SELECT id FROM bookings WHERE series_id = ?', sid).map((x) => x.id);

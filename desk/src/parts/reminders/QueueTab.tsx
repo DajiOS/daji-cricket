@@ -21,7 +21,7 @@ export default function QueueTab({ queue, reload }: { queue: Queue; reload: () =
   return (
     <div className="card">
       <div className="card-head"><div><h3>Who to remind</h3><div className="small muted">Open WhatsApp, press send in the chat, then come back and mark it sent.</div></div><Tabs value={f} onChange={setF} items={tabs} label="Filter" /></div>
-      <Table rows={rows} key={(r) => r.kind + r.key} empty={f === 'pending' ? 'Everyone is reminded for now.' : 'Nothing in this list.'} cols={[
+      <Table rows={rows} rowKey={(r) => r.kind + r.key} empty={f === 'pending' ? 'Everyone is reminded for now.' : 'Nothing in this list.'} cols={[
         { head: 'Type', cell: (r) => <Chip tone={KIND_TONE[r.kind]}>{KIND_LABEL[r.kind]}</Chip> },
         { head: 'Who', cell: (r) => <div><div className="strong">{r.name}</div><div className="small muted">{r.phone ? formatPhone(r.phone) : 'No phone number'}</div></div> },
         { head: 'Details', cell: (r) => <span className="small">{r.summary}</span> },

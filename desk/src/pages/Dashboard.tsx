@@ -53,14 +53,14 @@ export default function Dashboard({ sub }: { sub: string }) {
   const canPeople = can(me, 'view_customers');
   const day = todayISO();
 
-  const [today] = useApi<TodayData>(canBookings ? '/api/staff/today' : null, [version, ownerId]);
-  const [cancelled] = useApi<Page<Booking>>(canBookings ? `/api/staff/bookings?from=${day}&to=${day}&status=cancelled&limit=50` : null, [version, ownerId]);
-  const [pending] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?approval=pending&limit=1' : null, [version, ownerId]);
-  const [grounds] = useApi<{ items: Ground[] }>(canBookings ? '/api/staff/grounds' : null, [ownerId]);
-  const [people] = useApi<{ total: number }>(canPeople && ownerId ? '/api/staff/customers?limit=1' : null, [ownerId]);
-  const [appr] = useApi<{ count: number }>(can(me, 'manage_accounting') ? '/api/accounting/approvals/count' : null, [ownerId]);
-  const [pays] = useApi<Page<Pay>>(canPay ? '/api/staff/payments?limit=5' : null, [version, ownerId]);
-  const [feed] = useApi<{ items: Feed[] }>(ownerId ? '/api/desk/activity?limit=6' : null, [version, ownerId]);
+  const [today, todayErr] = useApi<TodayData>(canBookings ? '/api/staff/today' : null, [version, ownerId]);
+  const [cancelled, cancelledErr] = useApi<Page<Booking>>(canBookings ? `/api/staff/bookings?from=${day}&to=${day}&status=cancelled&limit=50` : null, [version, ownerId]);
+  const [pending, pendingErr] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?approval=pending&limit=1' : null, [version, ownerId]);
+  const [grounds, groundsErr] = useApi<{ items: Ground[] }>(canBookings ? '/api/staff/grounds' : null, [ownerId]);
+  const [people, peopleErr] = useApi<{ total: number }>(canPeople && ownerId ? '/api/staff/customers?limit=1' : null, [ownerId]);
+  const [appr, apprErr] = useApi<{ count: number }>(can(me, 'manage_accounting') ? '/api/accounting/approvals/count' : null, [ownerId]);
+  const [pays, paysErr] = useApi<Page<Pay>>(canPay ? '/api/staff/payments?limit=5' : null, [version, ownerId]);
+  const [feed, feedErr] = useApi<{ items: Feed[] }>(ownerId ? '/api/desk/activity?limit=6' : null, [version, ownerId]);
   const [ex] = useApi<{ items: string[] }>('/api/staff/ask/examples');
   const [packs] = useApi<{ reminder: string | null }>(me.role === 'owner' || me.role === 'super_admin' ? '/api/admin/design-packs' : null);
 
@@ -84,10 +84,14 @@ export default function Dashboard({ sub }: { sub: string }) {
   const rows = tab === 'all' ? all : all.filter((b) => phase(b, t) === tab);
   const live = all.filter((b) => phase(b, t) !== 'cancelled');
   const upcoming = live.filter((b) => phase(b, t) === 'upcoming').length;
-  const sold = live.filter((b) => b.status === 'confirmed' || b.status === 'completed' || b.status === 'no_show');
-  const value = sold.reduce((a, b) => a + b.totalPaise, 0), collected = sold.reduce((a, b) => a + b.paidPaise, 0);
   const waitingBookings = pending?.total ?? 0;
+  // the approvals count is a number only when every source it needs has answered; a failed or pending source is never shown as "0, nothing waiting"
+  const needAppr = can(me, 'manage_accounting');
+  const waitingKnown = (!canBookings || !!pending) && (!needAppr || !!appr);
+  const waitingFailed = !!(pendingErr || apprErr);
   const waiting = waitingBookings + (appr?.count ?? 0);
+  // anything the alerts list depends on that did not load: the list then says so instead of "Nothing needs you right now"
+  const alertGaps = [todayErr && 'today', pendingErr && 'approvals', apprErr && 'accounting approvals', feedErr && 'activity'].filter(Boolean) as string[];
   const active = (grounds?.items ?? []).filter((g) => g.active);
   const busyNow = new Set(live.filter((b) => phase(b, t) === 'ongoing').map((b) => b.groundId));
 
@@ -105,6 +109,7 @@ export default function Dashboard({ sub }: { sub: string }) {
 
   type Alert = { tone: string; mark: string; title: string; detail: string; when: string; href: string };
   const alerts: Alert[] = [];
+  if (alertGaps.length) alerts.push({ tone: '#E5484D', mark: '!', title: 'Some alerts could not be loaded', detail: `Could not load: ${alertGaps.join(', ')}. Refresh the page to try again.`, when: 'Now', href: '#/' });
   if (waitingBookings) alerts.push({ tone: '#E5484D', mark: '!', title: `${waitingBookings} booking${waitingBookings === 1 ? '' : 's'} need${waitingBookings === 1 ? 's' : ''} approval`, detail: 'Paid online, waiting for your decision', when: 'Now', href: '#/bookings/approvals' });
   if (today?.awaitingVerification) alerts.push({ tone: '#F28C18', mark: '!', title: 'Payment verification pending', detail: `${today.awaitingVerification} UPI payment${today.awaitingVerification === 1 ? '' : 's'} to match with the bank`, when: 'Now', href: '#/bookings/payments' });
   if (today?.needsReview) alerts.push({ tone: '#F28C18', mark: '!', title: `${today.needsReview} booking${today.needsReview === 1 ? '' : 's'} to review`, detail: 'Late payment, extended hold or amount mismatch', when: 'Now', href: '#/bookings/review' });
@@ -142,11 +147,11 @@ export default function Dashboard({ sub }: { sub: string }) {
       </div>
 
       <div className="xstats">
-        {canBookings && <StatCard icon="calendar" tone="blue" label="Today's bookings" value={today ? live.length : '…'} foot={today ? `${upcoming} upcoming` : ' '} href="#/bookings/day" />}
-        {canMoney && canBookings && <StatCard icon="payroll" tone="green" label="Today's revenue" value={today ? inr(value) : '…'} foot={today ? `${inr(collected)} collected so far` : ' '} href="#/accounting/reports" />}
-        {canPeople && <StatCard icon="users" tone="violet" label="Customers" value={people ? people.total : '…'} foot="on your customer list" href="#/contacts" />}
-        {(canBookings || can(me, 'manage_accounting')) && <StatCard icon="clock" tone="orange" label="Pending approvals" value={waiting} foot={waiting ? 'require action' : 'nothing waiting'} alert={waiting > 0} href={waitingBookings || !can(me, 'manage_accounting') ? '#/bookings/approvals' : '#/approvals'} />}
-        {canBookings && <StatCard icon="ball" tone="green" label="Grounds in use" value={grounds ? `${busyNow.size} / ${active.length}` : '…'} foot="right now" href="#/grounds" />}
+        {canBookings && <StatCard icon="calendar" tone="blue" label="Today's bookings" value={today ? live.length : todayErr ? '—' : '…'} foot={today ? `${upcoming} upcoming` : todayErr ? 'could not load' : ' '} href="#/bookings/day" />}
+        {canMoney && canBookings && <StatCard icon="payroll" tone="green" label="Today's revenue" value={today?.money ? inr(today.money.soldPaise) : todayErr ? '—' : '…'} foot={today?.money ? `${inr(today.money.collectedPaise)} collected so far` : todayErr ? 'could not load' : ' '} href="#/accounting/reports" />}
+        {canPeople && <StatCard icon="users" tone="violet" label="Customers" value={people ? people.total : peopleErr ? '—' : '…'} foot={peopleErr ? 'could not load' : 'on your customer list'} href="#/contacts" />}
+        {(canBookings || can(me, 'manage_accounting')) && <StatCard icon="clock" tone="orange" label="Pending approvals" value={waitingFailed ? '—' : waitingKnown ? waiting : '…'} foot={waitingFailed ? 'could not load' : !waitingKnown ? ' ' : waiting ? 'require action' : 'nothing waiting'} alert={waitingFailed || (waitingKnown && waiting > 0)} href={waitingBookings || !can(me, 'manage_accounting') ? '#/bookings/approvals' : '#/approvals'} />}
+        {canBookings && <StatCard icon="ball" tone="green" label="Grounds in use" value={grounds && today ? `${busyNow.size} / ${active.length}` : groundsErr || todayErr ? '—' : '…'} foot="right now" href="#/grounds" />}
       </div>
 
       <div className="xgrid">
@@ -155,7 +160,7 @@ export default function Dashboard({ sub }: { sub: string }) {
             <section className="xpanel" aria-label="Today's bookings">
               <div className="xpanel-hd"><h2>Today's bookings <small>{fmtDay(day)}</small></h2><a href="#/bookings/day">View all bookings →</a></div>
               <div className="xtabs" role="tablist">{tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l} ({count(k)})</button>)}</div>
-              {!today ? <p className="xempty">Loading today…</p> : !rows.length ? <p className="xempty">{tab === 'all' ? 'No bookings today yet.' : `Nothing ${tab} today.`}</p> : (
+              {todayErr || cancelledErr ? <p className="xempty err" role="alert">Today's bookings could not be loaded: {todayErr || cancelledErr}</p> : !today || !cancelled ? <p className="xempty">Loading today…</p> : !rows.length ? <p className="xempty">{tab === 'all' ? 'No bookings today yet.' : `Nothing ${tab} today.`}</p> : (
                 <div className="tbl-wrap"><table className="xtbl">
                   <thead><tr><th>Time</th><th>Customer</th><th>Ground / Net</th><th>Type</th>{canMoney && <th className="r">Amount</th>}<th>Status</th><th>Actions</th></tr></thead>
                   <tbody>{rows.map((b) => {
@@ -179,7 +184,7 @@ export default function Dashboard({ sub }: { sub: string }) {
             {canPay && (
               <section className="xpanel" aria-label="Recent payments">
                 <div className="xpanel-hd"><h2>Recent payments</h2><a href={can(me, 'verify_payments') || can(me, 'record_payments') ? '#/bookings/payments' : '#/money'}>View all →</a></div>
-                {!pays ? <p className="xempty">Loading…</p> : !pays.items.length ? <p className="xempty">No payments yet.</p> : (
+                {paysErr ? <p className="xempty err" role="alert">Payments could not be loaded: {paysErr}</p> : !pays ? <p className="xempty">Loading…</p> : !pays.items.length ? <p className="xempty">No payments yet.</p> : (
                   <div className="tbl-wrap"><table className="xtbl">
                     <thead><tr><th>Time</th><th>Customer</th><th className="r">Amount</th><th>Status</th></tr></thead>
                     <tbody>{pays.items.map((p) => {
@@ -223,7 +228,7 @@ export default function Dashboard({ sub }: { sub: string }) {
           {canBookings && (
             <section className="xpanel" aria-label="Ground and net status">
               <div className="xpanel-hd"><h2>Ground &amp; net status</h2><a href="#/grounds">View all →</a></div>
-              {!grounds ? <p className="xempty">Loading…</p> : !status.length ? <p className="xempty">No grounds set up yet.</p> : (
+              {groundsErr || todayErr ? <p className="xempty err" role="alert">Ground status could not be loaded: {groundsErr || todayErr}</p> : !grounds || !today ? <p className="xempty">Loading…</p> : !status.length ? <p className="xempty">No grounds set up yet.</p> : (
                 <div className="xground">{status.map((s) => [
                   <div key={s.g.id + 'n'}><b>{s.g.name}</b><span>{s.when}</span></div>, <span key={s.g.id + 's'} className={`xdot ${s.cls}`}>{s.word}</span>,
                 ])}</div>)}

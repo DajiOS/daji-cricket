@@ -43,7 +43,7 @@ function Rules({ reg, reload }: { reg: Reg; reload: () => void }) {
       </div>
       <div className="card-pad small muted">A check runs on the 1st and 16th of every month and flags any rule past its review date. Before you tick "Reviewed", look up the current rule on the official source and note any change in the log.{reg.checks[0] && ` Last check: ${fmtDate(reg.checks[0].ranOn)}.`}</div>
       {err && <div className="card-pad"><ErrorBox msg={err} /></div>}
-      <Table rows={reg.items} key={(i) => i.code} cols={[
+      <Table rows={reg.items} rowKey={(i) => i.code} cols={[
         { head: 'Rule', cell: (i) => <><span className="strong">{i.title}</span><div className="small muted">{i.authority}</div><div className="small">{i.rule}</div></> },
         { head: 'Enforced as', cell: (i) => <><div>{i.currentValue}</div><div className="small muted">{i.enforcedIn}</div></> },
         { head: 'Last reviewed', cell: (i) => fmtDate(i.lastReviewedOn) },
@@ -60,7 +60,7 @@ function Changes({ reg, reload }: { reg: Reg; reload: () => void }) {
   return (
     <div className="card">
       <div className="card-head"><h3>Law-change log</h3><button className="btn sm primary" onClick={() => setOpen(true)}>Record a change</button></div>
-      <Table rows={reg.changes} key={(c) => c.id} empty="No changes recorded yet. When a limit or rate changes, record it here and update the figure in the software."
+      <Table rows={reg.changes} rowKey={(c) => c.id} empty="No changes recorded yet. When a limit or rate changes, record it here and update the figure in the software."
         cols={[
           { head: 'Date', cell: (c) => fmtDate(c.changedOn) },
           { head: 'Rule', cell: (c) => name(c.code) },
@@ -121,7 +121,7 @@ function GstForm({ p, inv, onSaved }: { p: Profile; inv: Inv[]; onSaved: () => v
       </div>
       <div className="card">
         <div className="card-head"><h3>Invoices issued</h3></div>
-        <Table rows={inv} key={(i) => i.id} empty="No invoices yet. One is made the first time a confirmed, paid booking's invoice is opened."
+        <Table rows={inv} rowKey={(i) => i.id} empty="No invoices yet. One is made the first time a confirmed, paid booking's invoice is opened."
           cols={[
             { head: 'Number', cell: (i) => <span className="strong">{i.number}</span> },
             { head: 'Date', cell: (i) => fmtDate(i.issuedOn) },
@@ -145,7 +145,7 @@ function Terms() {
     <div className="card">
       <div className="card-head"><h3>Team terms, version {d.version}</h3>{waiting > 0 ? <Chip tone="warn">{waiting} yet to accept</Chip> : <Chip tone="good">Everyone has accepted</Chip>}</div>
       <div className="card-pad small muted">Each acceptance keeps a fingerprint (SHA-256) of the exact wording, the time and the IP address. Fingerprint of this version: <code>{d.sha256.slice(0, 16)}…</code></div>
-      <Table rows={d.items} key={(i) => i.userId} empty="You have no team members yet." cols={[
+      <Table rows={d.items} rowKey={(i) => i.userId} empty="You have no team members yet." cols={[
         { head: 'Team member', cell: (i) => <span className="strong">{i.name}</span> },
         { head: 'Accepted', cell: (i) => i.acceptedAt ? fmtDateTime(i.acceptedAt) : <Chip tone="warn">Not yet</Chip> },
         { head: 'IP address', cell: (i) => i.ip ?? '-' },

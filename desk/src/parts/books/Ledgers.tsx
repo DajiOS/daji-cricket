@@ -138,8 +138,8 @@ function CoaPanel({ onChange }: { onChange: () => void }) {
       const items = d.items.filter((x) => showOff || x.active);
       const label = (x: any) => edit?.id === x.id
         ? <span className="row" style={{ gap: 6 }}>
-            <input className="inp" autoFocus value={edit.name} onChange={(e) => setEdit({ id: x.id, name: e.target.value })} style={{ width: 220 }} />
-            <button className="btn sm primary" onClick={async () => { if (await act(() => patch('/api/accounting/coa/' + x.id, { name: edit.name }), () => 'Renamed')) { setEdit(null); done(); } }}>Save</button>
+            <input className="inp" autoFocus value={edit!.name} onChange={(e) => setEdit({ id: x.id, name: e.target.value })} style={{ width: 220 }} />
+            <button className="btn sm primary" onClick={async () => { if (await act(() => patch('/api/accounting/coa/' + x.id, { name: edit!.name }), () => 'Renamed')) { setEdit(null); done(); } }}>Save</button>
             <button className="btn sm ghost" onClick={() => setEdit(null)}>Cancel</button></span>
         : <span>{x.name}{x.active ? '' : ' (Inactive)'}</span>;
       return (

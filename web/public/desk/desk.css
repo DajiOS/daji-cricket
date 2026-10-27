@@ -1672,3 +1672,36 @@ a.xstat:hover { border-color: color-mix(in srgb, var(--strong) 35%, var(--line))
   .xtile { width: 40px; height: 40px; border-radius: 10px; }
   .xstat-txt > span:first-child { white-space: normal; }
 }
+
+/* The club look from the Daji Admin brief: dark forest green, champagne gold and black glass. data-pal="club" (the default) in light and dark.
+   Then the shared states every workspace uses (loading, failed, denied, partial, not built) and the workspace tab strip. */
+html[data-pal="club"]{--bg:#F3F1EA;--surface:#FFFDF8;--surface2:#FAF7EF;--soft:#ECE7DB;--soft2:#F4ECDA;--line:#E2DACB;--line2:#ECE6DA;--ink:#0D1F18;--ink2:#25392F;--muted:#5C5A50;--link:#7B6230;--strong:#0F2A1F;--on-strong:#F3EBD8;--deep:#0F2A1F;--rail:#0B1F17;--accent:#CDB27A;color-scheme:light}
+html[data-pal="club"][data-theme="dark"]{--bg:#07110D;--surface:rgba(18,32,26,.86);--surface2:#0C1813;--soft:#13221B;--soft2:#221F15;--line:rgba(205,178,122,.16);--line2:rgba(205,178,122,.10);--ink:#F1EADB;--ink2:#D6CDB9;--muted:#A49D8B;--link:#D9C08A;--strong:#D9C08A;--on-strong:#0B1A13;--deep:#040A07;--rail:#040A07;--accent:#D9C08A;color-scheme:dark}
+html[data-pal="club"][data-theme="dark"] body { background: radial-gradient(1200px 600px at 80% -10%, rgba(217,192,138,.07), transparent 60%), linear-gradient(180deg, #08130E 0%, #050B08 100%); background-attachment: fixed; }
+html[data-pal="club"][data-theme="dark"] .card { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 32px rgba(0,0,0,.35); }
+html[data-pal="club"] .eyebrow { color: color-mix(in srgb, var(--accent) 70%, var(--ink)); letter-spacing: .14em; }
+html[data-pal="club"][data-theme="dark"] .eyebrow { color: var(--accent); }
+
+.state { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.state b { font-weight: 600; }
+.state-failed { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); background: color-mix(in srgb, var(--bad) 7%, var(--surface)); }
+.state-failed b { color: var(--bad); }
+.state-denied { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn) 8%, var(--surface)); }
+.state-partial { border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); border-style: dashed; }
+.state-missing { border-style: dashed; border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+
+/* workspace tabs (a booking, a customer, Guppi): always shown, even where the page-level chips hide on a wide screen; they scroll on a phone */
+.ws-tabs { display: flex !important; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+.ws-tabs .dchip { flex: 0 0 auto; }
+
+.timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.timeline li { position: relative; }
+.timeline li::before { content: ""; position: absolute; left: -20px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+@media (max-width: 560px) { .state { padding: 12px 14px; } }
+
+/* the left panel in the club look: the open section in champagne on black glass, its pages beneath with a gold rule */
+html[data-pal="club"] .dside { background: linear-gradient(180deg, #0B1D15 0%, #06110C 100%); }
+html[data-pal="club"] .dside-item.on { background: linear-gradient(135deg, #E2CB97 0%, #C9AD72 100%); color: #10231A; box-shadow: 0 8px 22px -12px rgba(217,192,138,.55); }
+html[data-pal="club"] .dside-sub.on { color: #F1E3BF; background: rgba(217,192,138,.10); box-shadow: inset 2px 0 0 #D9C08A; }
+@media (min-width: 901px) { html[data-pal="club"] .dapp { background: linear-gradient(90deg, #06110C 236px, transparent 236px); } }

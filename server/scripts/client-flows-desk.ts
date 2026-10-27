@@ -35,7 +35,8 @@ const deposit = (id: string) => many<any>('SELECT kind, amount_paise, method, re
 const held = (id: string) => deposit(id).reduce((s: number, e: any) => s + (e.kind === 'collect' || e.kind === 'reverse' ? e.amount_paise : -e.amount_paise), 0);
 
 type Ctx = { page: any; shot: (s: string) => Promise<void>; row: Record<string, unknown>; g: GroundLite; cust: string };
-const open = async (page: any, id: string) => { await page.goto(h.url + `/desk.html#/bookings/${id}`, { waitUntil: 'domcontentloaded' }); await page.waitForSelector('[aria-label^="Booking"]', { timeout: 20000 }); };
+// a booking opens on its Summary tab; the deposit panel sits on its Money tab (/bookings/<id>/money)
+const open = async (page: any, id: string, tab = '') => { await page.goto(h.url + `/desk.html#/bookings/${id}${tab ? '/' + tab : ''}`, { waitUntil: 'domcontentloaded' }); await page.waitForSelector('[role="dialog"][aria-label^="Booking"]', { timeout: 20000 }); };
 
 const SCENARIOS: { id: string; as: 'owner1' | 'staff1'; run: (c: Ctx) => Promise<boolean> }[] = [
   {
@@ -44,7 +45,7 @@ const SCENARIOS: { id: string; as: 'owner1' | 'staff1'; run: (c: Ctx) => Promise
     run: async ({ page, shot, row, g, cust }) => {
       const b = await bookAndPay(h, cust, g.id, addDays(today(), 6), '19:00', 1);
       const before = bookingRow(b.id);
-      await open(page, b.id);
+      await open(page, b.id, 'money');
       await page.waitForSelector('#deposit-panel [data-act="collect"]');
       await shot('1-panel-empty');
       const dialog = async (act: string, fill: Record<string, string>) => {
@@ -88,7 +89,7 @@ const SCENARIOS: { id: string; as: 'owner1' | 'staff1'; run: (c: Ctx) => Promise
     as: 'staff1',
     run: async ({ page, shot, row, g, cust }) => {
       const b = await bookAndPay(h, cust, g.id, addDays(today(), 6), '19:00', 1);
-      await open(page, b.id);
+      await open(page, b.id, 'money');
       await page.waitForSelector('#deposit-panel [data-act="collect"]');
       row.offered = await page.locator('#deposit-panel [data-act]').evaluateAll((els: any[]) => els.map((e) => e.getAttribute('data-act')));
       row.ownerOnlyNote = (await page.locator('#deposit-panel').innerText()).includes("owner's decision");

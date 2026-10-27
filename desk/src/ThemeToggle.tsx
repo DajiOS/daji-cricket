@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Colour themes: Cricket green (the default) and the starter kit's ten palettes, each in light and dark. The choice is remembered on this device
+// Colour themes: the club look (forest green and champagne, the default), Cricket green and the starter kit's ten palettes, each in light and dark. The choice is remembered on this device
 // and desk.html applies it before the first paint, so the page never flashes the wrong colours.
 const MODE_KEY = 'daji.desk.theme';
 const PAL_KEY = 'daji.desk.pal';
 
 /** key, name, then the swatch colours: light background, light strong, dark background, dark surface, accent. */
 export const PALETTES = [
+  { key: 'club', name: 'Club: forest & champagne', l: '#F3F1EA', ls: '#0F2A1F', d: '#07110D', ds: '#12201A', acc: '#D9C08A' },
   { key: 'field', name: 'Cricket green', l: '#F3F6F4', ls: '#1C7A3E', d: '#0A1310', ds: '#111C18', acc: '#2EA45A' },
   { key: 'forest', name: 'Forest & brass', l: '#F5F2EC', ls: '#14241F', d: '#0E1916', ds: '#16231F', acc: '#C9A66B' },
   { key: 'onyx', name: 'Ivory & onyx', l: '#F7F6F3', ls: '#111111', d: '#0B0B0B', ds: '#151515', acc: '#D4B474' },
@@ -23,7 +24,7 @@ type Mode = 'light' | 'dark';
 
 const root = document.documentElement;
 const readMode = (): Mode => (root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-const readPal = (): string => { const p = root.getAttribute('data-pal'); return PALETTES.some((x) => x.key === p) ? p! : 'field'; };
+const readPal = (): string => { const p = root.getAttribute('data-pal'); return PALETTES.some((x) => x.key === p) ? p! : 'club'; };
 const save = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private window: the choice lasts until the page closes */ } };
 
 /** The colour dot at the far right of the top bar. It opens the colour theme menu: light or dark, then one of ten palettes. */

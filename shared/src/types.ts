@@ -312,6 +312,14 @@ export interface HoldRequest {
   notes?: string;
 }
 
+/** What holding a selection would take now, from POST /api/bookings/quote (the same functions as the hold; the hold's own figures win). */
+export interface HoldQuote {
+  fullPricePaise: number; discountPaise: number; promoCode: string | null; totalPaise: number;
+  /** The advance, or the full price when the start is within the full-payment window. */
+  payNowPaise: number; payNow: 'advance' | 'full'; advancePercent: number | null; fullPaymentWithinHours: number;
+  /** Account credit the hold would use, and what is left to pay online. */
+  creditUsedPaise: number; dueNowPaise: number;
+}
 export interface HoldResponse {
   booking: Booking;
   payment: PaymentInstructions;

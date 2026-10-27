@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { api, API_URL } from './api';
-import type { AppConfig, Availability, Ball, Ground, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
-import { Btn, Chip, Field, GuppiMark, Loading, MonthBar, Steps, s } from './ui';
+import type { AppConfig, Availability, Ball, Ground, HoldQuote, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
+import { Btn, Chip, Field, GuppiMark, KV, Loading, MonthBar, Steps, s } from './ui';
 import { C, inr, MON } from './theme';
 import { GuppiBookScreen } from './GuppiBookScreen';
 
@@ -99,7 +99,8 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const loadSlots = useCallback(async () => {
     if (!gid) return;
     setAv(null); setPick([]); setWin(null); setHr(null); setErr('');
-    try { setAv(await api<Availability>(`/api/grounds/${gid}/availability?date=${date}`)); } catch (e: any) { setErr(e.message); setAv({ slots: [] }); }
+    // a failed load stays an error with a way to retry; it is never drawn as a day with no slots
+    try { setAv(await api<Availability>(`/api/grounds/${gid}/availability?date=${date}`)); } catch (e: any) { setErr(e.message); setAv(null); }
   }, [gid, date]);
   useEffect(() => { void loadSlots(); }, [loadSlots]);
 
@@ -107,20 +108,35 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   useEffect(() => { if (hasRates && (!ball || !balls.includes(ball))) setBall(balls.length === 1 ? balls[0]! : null); }, [gid, hasRates]);
 
   // what the customer has chosen, in one shape for both kinds of ground
-  let chosenText = '', total = 0, body: Record<string, unknown> | null = null;
+  let chosenText = '', body: Record<string, unknown> | null = null;
   const opts: RateOption[] = (av?.rates ?? []).filter((o) => o.ball === ball);
   if (hasRates) {
     if (win) {
       const o = opts.find((x) => x.ruleId === win && x.state === 'available');
-      if (o) { total = o.pricePaise; chosenText = `${o.label} · ${o.time} – ${o.endTime}`; body = { ruleId: o.ruleId, startTime: o.time }; }
+      if (o) { chosenText = `${o.label} · ${o.time} – ${o.endTime}`; body = { ruleId: o.ruleId, startTime: o.time }; }
     } else if (hr) {
       const o = opts.find((x) => x.ruleId === hr.ruleId); const sl = hr.idx.map((i) => o?.slots?.[i]).filter(Boolean) as Slot[];
-      if (o && sl.length && sl.every((x) => x.state === 'available')) { total = sl.reduce((t, x) => t + x.pricePaise, 0); chosenText = `${sl.length} hour${sl.length > 1 ? 's' : ''} · ${sl[0]!.time} – ${hm(sl[sl.length - 1]!.end)}`; body = { ruleId: o.ruleId, startTime: sl[0]!.time, slots: sl.length }; }
+      if (o && sl.length && sl.every((x) => x.state === 'available')) { chosenText = `${sl.length} hour${sl.length > 1 ? 's' : ''} · ${sl[0]!.time} – ${hm(sl[sl.length - 1]!.end)}`; body = { ruleId: o.ruleId, startTime: sl[0]!.time, slots: sl.length }; }
     }
   } else {
     const chosen = (av?.slots ?? []).filter((x) => pick.includes(x.start));
-    if (chosen.length) { total = chosen.reduce((t, x) => t + x.pricePaise, 0); chosenText = `${chosen.length} slot${chosen.length > 1 ? 's' : ''}`; body = { startTime: chosen[0]!.time, slots: chosen.length }; }
+    if (chosen.length) { chosenText = `${chosen.length} slot${chosen.length > 1 ? 's' : ''}`; body = { startTime: chosen[0]!.time, slots: chosen.length }; }
   }
+
+  // what holding this costs now (price, promo, advance or full payment, credit), from the server; the app repeats none of those rules
+  const [quote, setQuote] = useState<HoldQuote | null>(null); const [quoteErr, setQuoteErr] = useState('');
+  const quoteKey = body ? JSON.stringify({ groundId: gid, date, ...body, useCredit: useCredit && credit > 0, promoCode: promo.trim() }) : '';
+  useEffect(() => {
+    setQuote(null); setQuoteErr('');
+    if (!quoteKey) return;
+    let live = true;
+    const t = setTimeout(() => {
+      const q = JSON.parse(quoteKey) as Record<string, unknown>;
+      if (!q.promoCode) delete q.promoCode; if (!q.useCredit) delete q.useCredit;
+      api<{ quote: HoldQuote }>('/api/bookings/quote', { method: 'POST', body: q }).then((r) => { if (live) setQuote(r.quote); }).catch((e: any) => { if (live) setQuoteErr(e.message); });
+    }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [quoteKey]);
 
   const isRun = (starts: number[]): boolean => !!av && starts.every((st, i) => i === 0 || av.slots.find((x) => x.start === starts[i - 1])?.end === st);
   const toggleSlot = (sl: Slot) => {
@@ -189,7 +205,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       </ScrollView>
       {cal && <DayPicker open={days} value={date} onPick={(d) => { setDate(d); setCal(false); }} />}
 
-      {av === null ? <Loading /> : av.closed ? <Text style={s.muted}>The ground is closed on this day. Please pick another day.</Text> : hasRates ? (<>
+      {av === null ? (err ? <Btn kind="outline" label="Try again" onPress={() => void loadSlots()} /> : <Loading />) : av.closed ? <Text style={s.muted}>The ground is closed on this day. Please pick another day.</Text> : hasRates ? (<>
         <Label>Play with</Label>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{balls.map((b) => <Chip key={b} label={BALLS[b]} on={b === ball} onPress={() => { setBall(b); setWin(null); setHr(null); }} />)}</View>
         {!ball ? <Text style={s.muted}>Choose the ball you want to play with.</Text> : !opts.length ? <Text style={s.muted}>Nothing is on sale for this ball on this day. Pick another day, or call us.</Text> : (<>
@@ -236,8 +252,19 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       <Field label="Promo code" value={promo} onChangeText={setPromo} autoCapitalize="characters" placeholder="Have a code?" />
       {credit > 0 && <Chip label={`${useCredit ? '✓ ' : ''}Use my ${inr(credit)} account credit`} on={useCredit} onPress={() => setUseCredit(!useCredit)} />}
       {!!err && <Text style={s.err}>{err}</Text>}
-      <Btn label={body ? `Hold · ${chosenText} · ${inr(total)}` : hasRates ? 'Choose ball and session' : 'Choose your slots'} onPress={hold} disabled={!body} busy={busy} style={{ marginTop: 16 }} />
-      <Text style={[s.muted, { textAlign: 'center', color: C.muted }]}>Free cancellation more than {cfg?.freeCancelHours ?? 24} hours before the start.</Text>
+      {!!body && (
+        <View style={s.card}>
+          {quote ? (<>
+            <KV k="Price" v={inr(quote.fullPricePaise)} />
+            {quote.discountPaise > 0 && <KV k={`Promo ${quote.promoCode}`} v={`− ${inr(quote.discountPaise)}`} />}
+            <KV k={quote.payNow === 'full' ? `Full payment (starts within ${quote.fullPaymentWithinHours} hours)` : quote.advancePercent != null ? `Advance (${quote.advancePercent}%)` : 'Advance'} v={inr(quote.payNowPaise)} />
+            {quote.creditUsedPaise > 0 && <KV k="Account credit used" v={`− ${inr(quote.creditUsedPaise)}`} />}
+            <KV k="Due now" v={inr(quote.dueNowPaise)} bold />
+          </>) : quoteErr ? <Text style={s.err}>We could not work out the price just now: {quoteErr}</Text> : <Text style={s.muted}>Working out the price…</Text>}
+        </View>
+      )}
+      <Btn label={body ? `Hold · ${chosenText}${quote ? ` · ${inr(quote.fullPricePaise)}` : ''}` : hasRates ? 'Choose ball and session' : 'Choose your slots'} onPress={hold} disabled={!body} busy={busy} style={{ marginTop: 16 }} />
+      {!!cfg && <Text style={[s.muted, { textAlign: 'center', color: C.muted }]}>Free cancellation more than {cfg.freeCancelHours} hours before the start.</Text>}
     </ScrollView>
   );
 }

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Chip, Field, PageHead, Stat, Table, useToast } from '../ui';
-import { addDaysISO, can, download, fmtDate, fmtDateTime, getViewOwner, inr, qs, todayISO, useApi } from '../lib';
+import { addDaysISO, can, download, go, fmtDate, fmtDateTime, getViewOwner, inr, qs, todayISO, useApi } from '../lib';
 import { useSession } from '../App';
 import { Async, FilterBar, Select, errMsg, useDebounced } from '../parts/club/common';
 import Composer, { loadTemplates } from '../parts/club/Composer';
+import { CustomerWorkspace } from '../parts/customers/Workspace';
 
 interface Contact { id: string; name: string; phone: string | null; email: string | null; timesPlayed: number; lastPlayedAt: number; paidPaise: number | null; reachable: { email: boolean; whatsapp: boolean; sms: boolean } }
 interface Result { items: Contact[]; total: number; summary: { total: number; reachableEmail: number; reachableWhatsapp: number; reachableSms: number } }
@@ -11,8 +12,14 @@ interface Broadcast { id: string; createdAt: number; channel: string; subject?: 
 const LIMIT = 50;
 const CHAN: Record<string, string> = { whatsapp: 'WhatsApp', email: 'Email', sms: 'Text' };
 
+/** The customer directory. /customers/<id> (or /contacts/<id>) opens one customer's workspace, with its tab after the id. */
 export default function Contacts({ sub }: { sub: string }) {
-  void sub;
+  const [id, tab] = sub.split('/');
+  if (id) return <CustomerWorkspace key={id} id={decodeURIComponent(id)} tab={tab} />;
+  return <Directory />;
+}
+
+function Directory() {
   const { me } = useSession(); const toast = useToast();
   const [who, setWho] = useState('booked'); const [ground, setGround] = useState(''); const [inactive, setInactive] = useState(''); const [min, setMin] = useState(''); const [q, setQ] = useState(''); const [offset, setOffset] = useState(0);
   const [templates, setTemplates] = useState<Awaited<ReturnType<typeof loadTemplates>> | null>(null); const [sent, setSent] = useState(0);
@@ -54,8 +61,8 @@ export default function Contacts({ sub }: { sub: string }) {
         </div>
         <Async data={data} error={error}>{(d) => (
           <>
-            <Table rows={d.items} empty="Nobody matches yet." cols={[
-              { head: 'Person', cell: (c) => <><span className="strong">{c.name}</span><div className="muted small">{[c.phone, c.email].filter(Boolean).join(' · ')}</div></> },
+            <Table rows={d.items} rowKey={(c) => c.id} onRow={(c) => go(`/customers/${encodeURIComponent(c.id)}`)} empty="Nobody matches yet." cols={[
+              { head: 'Person', cell: (c) => <><a className="strong" href={`#/customers/${encodeURIComponent(c.id)}`} onClick={(e) => e.stopPropagation()}>{c.name}</a><div className="muted small">{[c.phone, c.email].filter(Boolean).join(' · ')}</div></> },
               { head: 'Times', num: true, cell: (c) => c.timesPlayed },
               { head: 'Last played', cell: (c) => fmtDate(new Date(c.lastPlayedAt + 330 * 60000).toISOString().slice(0, 10)) },
               { head: 'Paid', num: true, cell: (c) => (c.paidPaise == null ? '—' : inr(c.paidPaise)) },

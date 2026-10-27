@@ -113,6 +113,27 @@ export const Empty = ({ children }: { children: ReactNode }) => (
   <div className="empty"><div className="crest"><Crest size={40} /></div>{children}</div>
 );
 export const Loading = ({ h = 220 }: { h?: number }) => <div className="shimmer" style={{ height: h }} aria-label="Loading" />;
+
+/**
+ * One block of data in its five states, the same way on every workspace: loading, could not load (with Try again), not allowed for this
+ * login, nothing there yet, and ready. A failure is never drawn as an empty list or a zero. `data-state` lets the browser tests read it.
+ */
+export function Load<T>({ data, error, status, retry, isEmpty, empty, h = 160, children }: {
+  data: T | null; error: string | null; status?: number | null; retry?: () => void;
+  isEmpty?: (d: T) => boolean; empty?: ReactNode; h?: number; children: (d: T) => ReactNode;
+}) {
+  if (error && status === 403) return <div className="state state-denied" data-state="denied" role="alert"><b>Your role does not include this.</b><span className="small muted">Ask the owner if you need it.</span></div>;
+  if (error) return (
+    <div className="state state-failed" data-state="failed" role="alert">
+      <b>This could not be loaded.</b><span className="small">{error}</span>
+      {retry && <button type="button" className="btn sm" onClick={retry}>Try again</button>}
+    </div>);
+  if (data == null) return <div data-state="loading" aria-busy="true"><Loading h={h} /></div>;
+  if (isEmpty?.(data)) return <div data-state="empty"><Empty>{empty ?? 'Nothing here yet.'}</Empty></div>;
+  return <div data-state="ready" style={{ display: 'contents' }}>{children(data)}</div>;
+}
+/** A note that part of a page is missing because one of its sources failed, so the rest is not read as the whole picture. */
+export const Partial = ({ what }: { what: string }) => <div className="state state-partial" data-state="partial" role="status"><b>Some of this is missing.</b><span className="small">{what}</span></div>;
 /** The reason something could not be done. It scrolls itself into view, so a message is never left below the screen. */
 export function ErrorBox({ msg }: { msg: string | null }) {
   const box = useRef<HTMLDivElement>(null);
@@ -240,20 +261,21 @@ export const useToast = () => useContext(ToastCtx);
 /** Simple form state helper. */
 export function useForm<T extends Record<string, any>>(initial: T) {
   const [v, setV] = useState<T>(initial);
-  const bind = (k: keyof T) => ({ value: v[k] ?? '', onChange: (e: any) => setV((s) => ({ ...s, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })) });
+  const bind = <K extends keyof T>(k: K) => ({ value: (v[k] ?? '') as Exclude<T[K], null | undefined | boolean> | '', onChange: (e: any) => setV((s) => ({ ...s, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })) });
   return { v, setV, bind };
 }
 
 // ---------- tables and tabs ----------
 export interface Col<T> { head: string; cell: (row: T) => ReactNode; num?: boolean; width?: number | string }
 /** The standard table: sticky header, optional row click, empty message. */
-export function Table<T>({ rows, cols, onRow, empty, key }: { rows: T[]; cols: Col<T>[]; onRow?: (r: T) => void; empty?: ReactNode; key?: (r: T, i: number) => string | number }) {
+/** rowKey, not key: React keeps `key` for itself and never passes it to the component, so the rows were keyed by position. */
+export function Table<T>({ rows, cols, onRow, empty, rowKey }: { rows: T[]; cols: Col<T>[]; onRow?: (r: T) => void; empty?: ReactNode; rowKey?: (r: T, i: number) => string | number }) {
   if (!rows.length) return <Empty>{empty ?? 'Nothing here yet.'}</Empty>;
   return (
     <div className="tbl-wrap"><table className="tbl">
       <thead><tr>{cols.map((c, i) => <th key={i} className={c.num ? 'num right' : ''} style={c.width ? { width: c.width } : undefined}>{c.head}</th>)}</tr></thead>
       <tbody>{rows.map((r, i) => (
-        <tr key={key ? key(r, i) : i} className={onRow ? 'click' : ''} onClick={onRow ? () => onRow(r) : undefined}>
+        <tr key={rowKey ? rowKey(r, i) : i} className={onRow ? 'click' : ''} onClick={onRow ? () => onRow(r) : undefined}>
           {cols.map((c, j) => <td key={j} className={c.num ? 'num right' : ''}>{c.cell(r)}</td>)}
         </tr>))}</tbody>
     </table></div>

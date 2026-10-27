@@ -43,7 +43,7 @@ export default function Bookings({ sub }: { sub: string }) {
       {tab === 'approvals' && <Approvals version={version} onChanged={bump} />}
       {tab === 'refunds' && <RefundApprovals />}
       {tab === 'payments' && <UpiQueue version={version} onChanged={bump} />}
-      {openId && <BookingDetail id={openId} asDay={asDay} onClose={toList} onChanged={bump} />}
+      {openId && <BookingDetail key={openId} id={openId} asDay={asDay} tab={sub.split('/')[1]} onClose={toList} onChanged={bump} />}
       {showAdd && (
         <Modal title="Add booking" onClose={toList}>
           <div className="stack" style={{ gap: 10 }}>

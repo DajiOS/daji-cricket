@@ -172,6 +172,37 @@ const SCENARIOS: { id: string; run: (c: Ctx) => Promise<boolean> }[] = [
       return row.direction !== 'x' && /credit/i.test(String(row.verdict)) && lots.length === 1 && lots[0].source === 'restore' && rep.unexplained === 0;
     },
   },
+  {
+    id: 'the booking panel shows the server quote before a hold, the hold takes exactly that, and a failed quote is shown as a failure',
+    run: async ({ page, shot, row }) => {
+      await page.goto(h.url + '/#book', { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#p-slots .slot.av', { timeout: 20000 });
+      await page.locator('#p-slots .slot.av').nth(3).click();
+      await page.waitForSelector('#p-sum-due', { timeout: 15000 });
+      row.summary = (await page.locator('#p-sum').innerText()).replace(/\s+/g, ' ');
+      const shownDue = Number((await page.locator('#p-sum-due').innerText()).replace(/[^\d]/g, '')) * 100;
+      const shownNow = Number((await page.locator('#p-sum-paynow').innerText()).replace(/[^\d]/g, '')) * 100;
+      await shot('1-quote');
+      const n0 = one<{ n: number }>('SELECT COUNT(*) n FROM bookings')!.n;
+      await page.click('#p-hold');
+      await page.waitForFunction(() => document.querySelector('#modal.open'), null, { timeout: 15000 });
+      await shot('2-held');
+      const held = one<any>('SELECT id, total_paise, advance_paise FROM bookings ORDER BY created_at DESC, rowid DESC LIMIT 1')!;
+      const pay = one<any>("SELECT amount_paise FROM payments WHERE booking_id = ? AND status = 'created'", held.id);
+      row.shown = { payNowPaise: shownNow, dueNowPaise: shownDue }; row.held = { advancePaise: held.advance_paise, dueOnlinePaise: pay?.amount_paise ?? null };
+      const matches = one<{ n: number }>('SELECT COUNT(*) n FROM bookings')!.n === n0 + 1 && held.advance_paise === shownNow && pay?.amount_paise === shownDue;
+      // the quote service fails: the panel says so and shows no amount
+      await page.route('**/api/bookings/quote', (r: any) => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAVAILABLE', message: 'Service unavailable' } }) }));
+      await page.reload({ waitUntil: 'domcontentloaded' }); // a fresh page: the held booking's payment window is not open any more
+      await page.waitForSelector('#p-slots .slot.av', { timeout: 20000 });
+      await page.locator('#p-slots .slot.av').nth(6).click();
+      await page.waitForSelector('#p-quote-err', { timeout: 15000 });
+      row.failureShown = (await page.locator('#p-quote-err').innerText()).trim();
+      const noAmount = (await page.locator('#p-sum-due').count()) === 0 && (await page.locator('#p-sum-total').innerText()).trim() === '—';
+      await shot('3-quote-failed');
+      return matches && noAmount;
+    },
+  },
 ];
 
 const browser = await chromium.launch();

@@ -40,7 +40,7 @@ export function RunTab({ month, run, reload, onSlip }: { month: string; run: Run
         {waiting && <div className="card-pad small muted pr-note">Your approval rules for staff pay need a sign-off before the month locks. If the figures change while it waits, the sign-off is refused until it is sent again.</div>}
         {warn.map((w) => <div key={w} className="card-pad small pr-warn">{w}</div>)}
         {err && <div className="card-pad"><ErrorBox msg={err} /></div>}
-        <Table rows={run.lines} key={(l) => l.staffId} empty="Nobody is on the payroll for this month yet."
+        <Table rows={run.lines} rowKey={(l) => l.staffId} empty="Nobody is on the payroll for this month yet."
           cols={[
             { head: 'Staff', cell: (l) => <><span className="strong">{l.staffName}</span><div className="small muted">{l.staffRole}, {inr(l.ratePaise)} {l.payType === 'monthly' ? 'a month' : 'a day'}</div></> },
             { head: 'Days paid', num: true, cell: (l) => <>{days(l.paidDays)}{l.payType === 'monthly' && <span className="muted small"> / {l.daysInMonth}</span>}{!final && l.unmarked > 0 && <div className="small pr-warn-t">{l.unmarked} unmarked</div>}</> },
