@@ -14,7 +14,6 @@ import { many, one, run } from '../db.ts';
 import { now } from '../clock.ts';
 import { STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { closedDates, setClosed } from '../closures.ts';
-import { financialEvents, reconcile } from '../finevents.ts';
 import { createFestival, deleteFestival, festivalCalendar, updateFestival } from '../festivals.ts';
 import { packCalendar, updatePack } from '../packs.ts';
 import { integrationStatuses, saveIntegrationNotes, testIntegration } from '../integrations.ts';
@@ -69,7 +68,7 @@ export function adminRoutes(r: Router): void {
   r.put('/api/admin/yodlee', (c) => ok(saveYodleeSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);
   r.post('/api/admin/yodlee/subscribe', async (c) => { const res = await subscribeYodleeWebhooks(c.cfg); audit({ id: U(c).id, role: U(c).role }, 'yodlee.subscribe', 'yodlee', null, { ok: res.ok }); return ok(res); }, { ...SA, rate: 'auth' });
   // ---- software billing: what the platform costs to build and run (software owner only)
-  const SAFILE = { auth: ['super_admin' as const], maxBody: MAX_ATTACHMENT_BYTES + 1024, upload: 'invoice' };
+  const SAFILE = { auth: ['super_admin' as const], maxBody: MAX_ATTACHMENT_BYTES + 1024 };
   const qv = (c: Ctx, k: string): string | undefined => c.query.get(k) ?? undefined;
   r.get('/api/admin/aa', (c) => ok(viewAaSettings(c.cfg)), SA);
   r.put('/api/admin/aa', (c) => ok(saveAaSettings(c.cfg, { id: U(c).id, role: U(c).role }, c.json())), SA);
@@ -204,11 +203,9 @@ export function adminRoutes(r: Router): void {
   }, SAO);
 
   const SUP = { auth: ['super_admin' as const] };
-  r.get('/api/admin/reconcile', (c) => ok(reconcile(c.query.get('ownerId') || null)), SUP);
-  r.get('/api/admin/financial-events', (c) => { const o = c.query.get('ownerId'); if (!o) throw new HttpError(400, 'VALIDATION_FAILED', 'ownerId is required'); return ok({ items: financialEvents(o, c.query.get('upTo') || '9999-12-31') }); }, SUP);
   r.get('/api/admin/refunds', (c) => { const st = c.query.get('status') ?? 'awaiting'; return ok({ items: st === 'awaiting' ? listRefunds(c.query.get('ownerId'), 'pending').filter((x) => !x.approvedAt) : listRefunds(c.query.get('ownerId'), st) }); }, SUP);
-  r.post('/api/admin/refunds/:id/approve', (c) => ok(approveRefund(U(c), c.params.id!)), { ...SUP, idempotent: true });
-  r.post('/api/admin/refunds/:id/decline', (c) => { const v = new Validator(c.json()); const reason = v.str('reason', { required: true, max: 200 }); v.done(); return ok(declineRefund(U(c), c.params.id!, reason!)); }, { ...SUP, idempotent: true });
+  r.post('/api/admin/refunds/:id/approve', (c) => ok(approveRefund(U(c), c.params.id!)), SUP);
+  r.post('/api/admin/refunds/:id/decline', (c) => { const v = new Validator(c.json()); const reason = v.str('reason', { required: true, max: 200 }); v.done(); return ok(declineRefund(U(c), c.params.id!, reason!)); }, SUP);
   r.get('/api/admin/audit', (c) => {
     const { limit, offset } = page(c, 50);
     return ok(listAudit({ ownerId: c.query.get('ownerId'), entity: c.query.get('entity') ?? undefined, entityId: c.query.get('entityId') ?? undefined, action: c.query.get('action') ?? undefined, limit, offset }));

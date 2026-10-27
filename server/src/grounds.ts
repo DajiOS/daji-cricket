@@ -5,8 +5,7 @@ import { newId } from './ids.ts';
 import { HttpError, notFound } from './errors.ts';
 import { hoursOn, shortestDay } from './hours.ts';
 import { cleanClosedDays, cleanRates, closedDaysOf, groundRates, isClosedOn, rateOptions, rateSpan } from './rates.ts';
-import { MIN, addDays, isWeekend, istMidnight, minutesOf, timeOfDay } from './time.ts';
-import { linkedBusy } from './groundLinks.ts';
+import { MIN, isWeekend, istMidnight, minutesOf, timeOfDay } from './time.ts';
 import { Validator } from './input.ts';
 import { availabilityByFormat, cleanFormats, groundFormats } from './formats.ts';
 
@@ -108,8 +107,6 @@ export function availability(g: GroundRow, date: string): AvailabilityResponse {
     `SELECT bs.slot_start, bs.kind, b.status FROM booking_slots bs LEFT JOIN bookings b ON b.id = bs.booking_id
      WHERE bs.ground_id = ? AND bs.slot_start >= ? AND bs.slot_start < ?`, g.id, from, to);
   const taken = new Map(rows.map((r) => [r.slot_start, r]));
-  // time held by a linked booking (a whole ground and its nets share time): shown as booked, the same as the booking engine will treat it
-  for (const s of linkedBusy(g, starts).keys()) if (!taken.has(s)) taken.set(s, { slot_start: s, kind: 'booking', status: 'confirmed' });
   const t = now();
   const slots: SlotView[] = starts.map((s) => {
     const r = taken.get(s);
@@ -126,9 +123,7 @@ export function availability(g: GroundRow, date: string): AvailabilityResponse {
     const span = rateSpan(date);
     const rr = many<{ slot_start: number; kind: string; status: string | null }>(
       `SELECT bs.slot_start, bs.kind, b.status FROM booking_slots bs LEFT JOIN bookings b ON b.id = bs.booking_id WHERE bs.ground_id = ? AND bs.slot_start >= ? AND bs.slot_start < ?`, g.id, span.from, span.to);
-    const rmap = new Map(rr.map((r) => [r.slot_start, r]));
-    for (const s of linkedBusy(g, [...slotStarts(g, date), ...slotStarts(g, addDays(date, 1))]).keys()) if (!rmap.has(s)) rmap.set(s, { slot_start: s, kind: 'booking', status: 'confirmed' });
-    rates = rateOptions(g, date, rmap, t);
+    rates = rateOptions(g, date, new Map(rr.map((r) => [r.slot_start, r])), t);
   }
   return { groundId: g.id, date, slots, formats: availabilityByFormat(g, date, stateOfSlot, t), ...(rates ? { rates } : {}), ...(isClosedOn(g, date) ? { closed: true } : {}) };
 }

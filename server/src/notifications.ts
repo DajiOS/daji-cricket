@@ -6,7 +6,6 @@ import { formatPaise } from '@daji/shared';
 import { fmtDateTime } from './time.ts';
 import { getSettings } from './settings.ts';
 import { directionsUrl, groundRow } from './grounds.ts';
-import { permissionList } from './auth.ts';
 
 registerSchema('push-1', `CREATE TABLE IF NOT EXISTS push_tokens (
   token TEXT PRIMARY KEY,
@@ -92,14 +91,11 @@ function venueTail(d: TemplateData): string {
 
 const T: Record<string, (d: TemplateData) => { subject: string; body: string }> = {
   booking_confirmed: (d) => ({ subject: `Booking confirmed — ${d.ref}`, body: `Your booking ${d.ref} at ${d.ground} on ${fmtDateTime(d.startAt!)} is confirmed. Paid so far: ${formatPaise(d.amountPaise ?? 0)}.${venueTail(d)}` }),
-  booking_rescheduled: (d) => ({ subject: `Booking moved — ${d.ref}`, body: `Your booking ${d.ref} at ${d.ground} has been moved to ${fmtDateTime(d.startAt!)}.${d.extra ? ' ' + d.extra : ''}${venueTail(d)}` }),
-  booking_extended: (d) => ({ subject: `Booking extended — ${d.ref}`, body: `Your booking ${d.ref} at ${d.ground} now runs longer. ${d.extra ?? ''}`.trim() }),
-  retention_update: (d) => ({ subject: `Your deposit dispute — ${d.ref}`, body: `Booking ${d.ref}: ${d.extra ?? 'there is an update on your dispute.'}` }),
   payment_pending: (d) => ({ subject: `Payment received for checking — ${d.ref}`, body: `We have your UPI reference for booking ${d.ref}. Staff will verify it shortly; your slot stays held until then.` }),
   payment_failed: (d) => ({ subject: `Payment did not go through — ${d.ref}`, body: `The payment for booking ${d.ref} failed${d.reason ? ` (${d.reason})` : ''}. Your slot is held until the deadline; you can try again.` }),
   payment_rejected: (d) => ({ subject: `Payment could not be verified — ${d.ref}`, body: `Staff could not verify the UPI payment for booking ${d.ref}${d.reason ? `: ${d.reason}` : ''}. Please check the reference and submit again before the hold ends.` }),
   hold_expired: (d) => ({ subject: `Slot released — ${d.ref}`, body: `We did not receive payment for booking ${d.ref} in time, so the slot at ${d.ground} on ${fmtDateTime(d.startAt!)} has been released.` }),
-  booking_pending: (d) => ({ subject: `Booking received, waiting for approval — ${d.ref}`, body: `We have your advance of ${formatPaise(d.amountPaise ?? 0)} for booking ${d.ref} at ${d.ground} on ${fmtDateTime(d.startAt!)}. Your slot is held while the ground owner approves it. We will message you as soon as it is approved.${venueTail(d)}` }),
+  booking_pending: (d) => ({ subject: `Booking received, waiting for approval — ${d.ref}`, body: `We have your deposit of ${formatPaise(d.amountPaise ?? 0)} for booking ${d.ref} at ${d.ground} on ${fmtDateTime(d.startAt!)}. Your slot is held while the ground owner approves it. We will message you as soon as it is approved.${venueTail(d)}` }),
   booking_cancelled_owner: (d) => ({ subject: `Your booking was cancelled by the ground — ${d.ref}`, body: `Booking ${d.ref} at ${d.ground} on ${fmtDateTime(d.startAt!)} has been cancelled by the ground owner. Reason: ${d.reason}. You paid ${formatPaise(d.amountPaise ?? 0)}. Open My bookings and choose from the options the ground has offered (see Terms and conditions).${venueTail(d)}` }),
   booking_resolved: (d) => ({ subject: `Your choice is recorded — ${d.ref}`, body: `For cancelled booking ${d.ref}: ${d.extra}` }),
   booking_cancelled_free: (d) => ({ subject: `Booking cancelled — ${d.ref}`, body: `Booking ${d.ref} is cancelled with no charge.${d.refundPaise ? ` A refund of ${formatPaise(d.refundPaise)} is on its way.` : ''}${d.creditPaise ? ` ${formatPaise(d.creditPaise)} has been returned to your account credit.` : ''}` }),
@@ -164,7 +160,7 @@ export function pushNotify(userId: string, template: string, title: string, body
 export function pushStaffOf(ownerId: string, template: string, title: string, body: string, bookingId: string | null = null): void {
   const rows = many<{ id: string; permissions: string }>("SELECT id, permissions FROM users WHERE active = 1 AND (id = ? OR (role = 'staff' AND owner_id = ?))", ownerId, ownerId);
   for (const r of rows) {
-    if (r.id !== ownerId && !permissionList(r.permissions).includes('manage_bookings')) continue;
+    if (r.id !== ownerId && !(JSON.parse(r.permissions || '[]') as string[]).includes('manage_bookings')) continue;
     pushNotify(r.id, template, title, body, bookingId);
   }
 }

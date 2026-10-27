@@ -6,7 +6,7 @@ import { hasPermission } from '../auth.ts';
 import { addPhoto, listPhotos, readPhoto, removePhoto, MAX_PHOTO_BYTES } from '../media.ts';
 
 const STAFF: ('owner' | 'staff' | 'super_admin')[] = ['owner', 'staff', 'super_admin'];
-const FILE = { auth: STAFF, maxBody: MAX_PHOTO_BYTES + 1024, upload: 'media' };
+const FILE = { auth: STAFF, maxBody: MAX_PHOTO_BYTES + 1024 };
 
 export function mediaRoutes(r: Router): void {
   const who = (c: Ctx) => {

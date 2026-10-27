@@ -1,9 +1,8 @@
 import { createHash, createHmac } from 'node:crypto';
-import { readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { many, one, registerSchema, run } from './db.ts';
+import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
-import { storeUpload } from './intake.ts';
 import { audit, type Actor } from './audit.ts';
 import { seal, unseal } from './vault.ts';
 import { HttpError, conflict, notFound } from './errors.ts';
@@ -89,6 +88,7 @@ export const CATALOG: { name: string; vendor: string; category: (typeof CATEGORI
 // ------------------------------------------------------------------ settings (keys are kept encrypted; they never go back to the browser)
 
 const KEYS = ['anthropicAdminKey', 'awsAccessKeyId', 'awsSecretAccessKey'] as const;
+const PLAIN = ['usdInr'] as const;
 
 function setting(name: string): string {
   const r = one<{ value: string }>('SELECT value FROM sw_settings WHERE name = ?', name);
@@ -205,7 +205,7 @@ const toInv = (r: InvRow): InvoiceOut => ({ id: r.id, serviceId: r.service_id, s
 const INV_SELECT = `SELECT i.*, s.name sname, s.category FROM sw_invoices i JOIN sw_services s ON s.id = i.service_id WHERE i.deleted_at IS NULL`;
 
 export function listInvoices(q: { serviceId?: string; from?: string; to?: string; status?: string } = {}, limit = 300): InvoiceOut[] {
-  const where: string[] = [], p: string[] = [];
+  const where: string[] = [], p: unknown[] = [];
   if (q.serviceId) { where.push('i.service_id = ?'); p.push(q.serviceId); }
   if (q.from) { where.push('i.invoice_date >= ?'); p.push(q.from); }
   if (q.to) { where.push('i.invoice_date <= ?'); p.push(q.to); }
@@ -272,15 +272,12 @@ export function attachInvoiceFile(dataDir: string, actor: Actor, id: string, fil
   if (buf.length > MAX_ATTACHMENT_BYTES) throw new HttpError(413, 'FILE_TOO_LARGE', 'Files can be at most 5 MB.');
   const kind = sniff(buf);
   if (!kind) throw new HttpError(415, 'FILE_TYPE_NOT_ALLOWED', 'Only PDF, PNG, JPEG and WebP files can be attached.');
+  mkdirSync(join(dataDir, 'uploads', '_software'), { recursive: true });
+  writeFileSync(filePath(dataDir, id), buf, { mode: 0o600 });
   const base = filename.replace(/[\\/]/g, '_').replace(/[^\w .()\-]/g, '_').slice(0, 80).trim() || 'invoice';
   const name = /\.(pdf|png|jpe?g|webp)$/i.test(base) ? base : `${base}.${kind.ext}`;
-  storeUpload({
-    dataDir, buf, finalPath: filePath(dataDir, id), purpose: 'invoice', actor, versioned: true,
-    writeMetadata: () => {
-      run('UPDATE sw_invoices SET file_name = ?, file_mime = ?, updated_at = ? WHERE id = ?', name, kind.mime, now(), id);
-      audit(actor, 'billing.invoice.file', 'sw_invoice', id, { bytes: buf.length });
-    },
-  });
+  run('UPDATE sw_invoices SET file_name = ?, file_mime = ?, updated_at = ? WHERE id = ?', name, kind.mime, now(), id);
+  audit(actor, 'billing.invoice.file', 'sw_invoice', id, { bytes: buf.length });
   return toInv(one<InvRow>(`${INV_SELECT} AND i.id = ?`, id)!);
 }
 

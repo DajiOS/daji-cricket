@@ -462,7 +462,55 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .cal-count { font-size: 10.5px; font-weight: 700; color: var(--gold-hi); white-space: nowrap; }
 @media (max-width: 700px) { .cal-count { font-size: 0; } .cal-chip { height: 6px; border-left-width: 0; } }
 
-/* The Daji desk shell: slim rail with flyout task groups, top bar, Home, Calendar, the section hubs and the Approvals stage board.
+/* Settings, Team, Platform and Promos */
+.tabs-scroll { width: 0; min-width: 100%; overflow-x: auto; max-width: 100%; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+.tabs-scroll .seg { flex-wrap: nowrap; }
+.tabs-scroll .seg button { white-space: nowrap; }
+.pill { height: 30px; min-width: 44px; padding: 0 11px; border-radius: 20px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--muted); font: 600 12.5px var(--sans); cursor: pointer; }
+.pill:hover { color: var(--ivory); }
+.pill.on { background: var(--panel-3); color: var(--gold-hi); border-color: var(--gold); }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ad-sub { font: 700 11px var(--sans); letter-spacing: 1.4px; text-transform: uppercase; color: var(--gold); margin: 22px 0 8px; }
+
+.ad-line { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.ad-line:last-child { border-bottom: 0; }
+.ad-line > :first-child { min-width: 0; flex: 1 1 220px; }
+.ad-line .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px 16px; align-items: end; }
+.ad-ground { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.rate { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; background: color-mix(in srgb, var(--ink) 1.5%, transparent); }
+.rate-top { display: grid; grid-template-columns: minmax(140px, 1.3fr) minmax(170px, 1.2fr) minmax(130px, .8fr); gap: 10px; }
+.rate-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.rate-row .lbl { font-size: 12px; color: var(--faint); min-width: 38px; }
+.rate-row .inp { width: auto; min-width: 110px; }
+.glance { overflow-x: auto; }
+.glance table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 480px; }
+.glance th, .glance td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.glance th { color: var(--muted); font-weight: 600; }
+.glance td.cl { color: var(--faint); }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; max-width: 420px; }
+.cal-h { text-align: center; font-size: 11px; color: var(--faint); padding: 4px 0; }
+.cal-d { height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ivory); font: 600 13px var(--sans); cursor: pointer; }
+.cal-d.off { background: color-mix(in srgb, var(--bad) 16%, transparent); border-color: color-mix(in srgb, var(--bad) 55%, transparent); color: var(--bad); }
+.cal-d.part { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); color: var(--gold-hi); }
+.cal-d.out { opacity: .35; cursor: default; }
+.cal-key { display: inline-block; width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--line-strong); vertical-align: -1px; }
+.cal-key.off { background: color-mix(in srgb, var(--bad) 40%, transparent); } .cal-key.part { background: color-mix(in srgb, var(--accent) 40%, transparent); } .cal-key.out { opacity: .4; }
+.ad-person { display: grid; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.ad-person:last-child { border-bottom: 0; }
+.ad-person .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.perm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 14px; margin: 10px 0; }
+.codes { white-space: pre-wrap; user-select: all; margin: 8px 0 0; font: 600 16px var(--mono, ui-monospace, monospace); letter-spacing: .06em; color: var(--gold-hi); }
+.ok-text { color: var(--good); font-size: 12.5px; }
+.err-text { color: var(--bad); font-size: 12.5px; }
+@media (max-width: 720px) {
+  .rate-top { grid-template-columns: 1fr; }
+  .rate-row .inp { flex: 1 1 120px; }
+  .form-grid { grid-template-columns: 1fr; }
+}
+
+/* The approved Akea suite design, copied as is from akea-platform (web/src/styles.css) so the desk looks the same:
+   slim rail with flyout task groups, top bar, Home, Calendar, the section hubs and the Approvals stage board.
    The design's colour names map onto the desk's own palette tokens here. */
 :root { --fg: var(--ink); --fg-2: var(--ink2); --fg-3: var(--muted); --gold: var(--accent); }
 .serif { font-family: var(--serif); }
@@ -500,7 +548,7 @@ html[data-theme="dark"] .drail-panel { color-scheme: dark; }
 .drail-page.soon::after { content: " · soon"; font-size: 11px; margin-left: 3px; }
 .drail-foot { position: relative; margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 4px; border-top: 1px solid rgba(237,230,216,.12); padding-top: 14px; text-align: center; width: 100%; }
 .drail-me { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--gold); color: var(--gold); background: transparent; display: grid; place-items: center; font-size: 13px; cursor: pointer; padding: 0; }
-.drail-venue { font-size: 10.5px; color: #B5AD9C; max-width: 80px; overflow-wrap: anywhere; }
+.drail-hotel { font-size: 10.5px; color: #B5AD9C; max-width: 80px; overflow-wrap: anywhere; }
 .drail-mepop { position: fixed; left: 104px; bottom: 16px; z-index: 60; width: 260px; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 18px 48px rgba(0,0,0,.18);
   padding: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; color-scheme: light; font-size: 14px; }
 html[data-theme="dark"] .drail-mepop { color-scheme: dark; }
@@ -518,7 +566,7 @@ html[data-theme="dark"] .drail-mepop { color-scheme: dark; }
 .dchip { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 13.5px; font-weight: 400; color: var(--fg); cursor: pointer; text-decoration: none !important; white-space: nowrap; }
 .dchip:disabled { cursor: default; }
 .dchip.on, .dchip[aria-selected="true"] { background: var(--strong); color: var(--on-strong); border-color: var(--strong); }
-.dvenue { position: relative; }
+.dhotel { position: relative; }
 .dpop { position: absolute; right: 0; top: 52px; z-index: 40; min-width: 240px; max-height: 60vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 18px 48px rgba(0,0,0,.18); padding: 8px; display: flex; flex-direction: column; }
 .dpop a { padding: 10px 12px; border-radius: 10px; color: var(--fg); font-weight: 400; } .dpop a:hover { background: var(--soft); text-decoration: none; }
 .dround { position: relative; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; padding: 0; color: var(--fg); cursor: pointer; }
@@ -753,53 +801,6 @@ html[data-theme="dark"] .dap-mark.now { color: var(--on-strong); }
 .ai-form input { flex: 1; height: 46px; border-radius: 12px; }
 .ai-form button { width: 46px; height: 46px; border-radius: 12px; border: 0; background: var(--gold); color: #14241F; display: grid; place-items: center; cursor: pointer; }
 .ai-form button:disabled { opacity: .5; cursor: default; }
-
-/* Settings, Team, Platform and Promos */
-.tabs-scroll { width: 0; min-width: 100%; overflow-x: auto; max-width: 100%; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
-.tabs-scroll .seg { flex-wrap: nowrap; }
-.tabs-scroll .seg button { white-space: nowrap; }
-.pill { height: 30px; min-width: 44px; padding: 0 11px; border-radius: 20px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--muted); font: 600 12.5px var(--sans); cursor: pointer; }
-.pill:hover { color: var(--ivory); }
-.pill.on { background: var(--panel-3); color: var(--gold-hi); border-color: var(--gold); }
-.pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.ad-sub { font: 700 11px var(--sans); letter-spacing: 1.4px; text-transform: uppercase; color: var(--gold); margin: 22px 0 8px; }
-
-.ad-line { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.ad-line:last-child { border-bottom: 0; }
-.ad-line > :first-child { min-width: 0; flex: 1 1 220px; }
-.ad-line .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.ad-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px 16px; align-items: end; }
-.ad-ground { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
-.rate { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; background: color-mix(in srgb, var(--ink) 1.5%, transparent); }
-.rate-top { display: grid; grid-template-columns: minmax(140px, 1.3fr) minmax(170px, 1.2fr) minmax(130px, .8fr); gap: 10px; }
-.rate-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
-.rate-row .lbl { font-size: 12px; color: var(--faint); min-width: 38px; }
-.rate-row .inp { width: auto; min-width: 110px; }
-.glance { overflow-x: auto; }
-.glance table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 480px; }
-.glance th, .glance td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
-.glance th { color: var(--muted); font-weight: 600; }
-.glance td.cl { color: var(--faint); }
-.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; max-width: 420px; }
-.cal-h { text-align: center; font-size: 11px; color: var(--faint); padding: 4px 0; }
-.cal-d { height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ivory); font: 600 13px var(--sans); cursor: pointer; }
-.cal-d.off { background: color-mix(in srgb, var(--bad) 16%, transparent); border-color: color-mix(in srgb, var(--bad) 55%, transparent); color: var(--bad); }
-.cal-d.part { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); color: var(--gold-hi); }
-.cal-d.out { opacity: .35; cursor: default; }
-.cal-key { display: inline-block; width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--line-strong); vertical-align: -1px; }
-.cal-key.off { background: color-mix(in srgb, var(--bad) 40%, transparent); } .cal-key.part { background: color-mix(in srgb, var(--accent) 40%, transparent); } .cal-key.out { opacity: .4; }
-.ad-person { display: grid; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
-.ad-person:last-child { border-bottom: 0; }
-.ad-person .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
-.perm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 14px; margin: 10px 0; }
-.codes { white-space: pre-wrap; user-select: all; margin: 8px 0 0; font: 600 16px var(--mono, ui-monospace, monospace); letter-spacing: .06em; color: var(--gold-hi); }
-.ok-text { color: var(--good); font-size: 12.5px; }
-.err-text { color: var(--bad); font-size: 12.5px; }
-@media (max-width: 720px) {
-  .rate-top { grid-template-columns: 1fr; }
-  .rate-row .inp { flex: 1 1 120px; }
-  .form-grid { grid-template-columns: 1fr; }
-}
 
 /* Approval rules builder (/approvals/rules) and the history drawer on the Approvals board. */
 .apr-edit { flex: 999 1 560px; min-width: 0; gap: 14px; }

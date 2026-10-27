@@ -38,7 +38,6 @@ export const SYSTEM_ACCOUNTS: AcctInfo[] = [
 
   L('customer_advances', 'Customer advances for sessions not yet played', 'Current liabilities', 10, { derivedOnly: true }),
   L('customer_credits', 'Account credit owed to customers', 'Current liabilities', 20, { derivedOnly: true }),
-  L('security_deposits_held', 'Security deposits held for customers (refundable)', 'Current liabilities', 15, { derivedOnly: true }),
   L('refunds_payable', 'Refunds owed to customers', 'Current liabilities', 30),
   L('gst_payable', 'GST payable', 'Current liabilities', 40),
   L('payables', 'Bills and expenses owed', 'Current liabilities', 50),
@@ -50,7 +49,6 @@ export const SYSTEM_ACCOUNTS: AcctInfo[] = [
 
   { code: 'booking_income', name: 'Booking income (sessions played)', type: 'income', group: 'Bookings', sort: 10, derivedOnly: true },
   { code: 'forfeited_income', name: 'Advances kept: no-shows, late cancellations, expired credit', type: 'income', group: 'Bookings', sort: 20, derivedOnly: true },
-  { code: 'deposit_deductions', name: 'Security deposit kept for damage or extras', type: 'income', group: 'Bookings', sort: 30, derivedOnly: true },
   { code: 'exp:goodwill', name: 'Goodwill credits given', type: 'expense', group: 'Other', sort: 80, derivedOnly: true },
   { code: 'exp:depreciation', name: 'Depreciation', type: 'expense', group: 'Other', sort: 85 },
 ];

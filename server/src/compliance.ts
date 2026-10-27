@@ -7,7 +7,7 @@ import { Validator } from './input.ts';
 import { addDays, istDate } from './time.ts';
 import { CASH_LIMITS, LIMIT_DEFAULTS, limitOf, type LimitCode } from './taxrules.ts';
 import { MAX_INVOICE_NO, DEFAULT_SAC } from './invoices.ts';
-import { ESI, GUJARAT_PT, STATUTORY_RULES_CHECKED } from './accounting/statutory.ts';
+import { PF, ESI, GUJARAT_PT, STATUTORY_RULES_CHECKED } from './accounting/statutory.ts';
 
 // The compliance register: every legal rule the software enforces, where it is enforced, when it was last looked at and when
 // it must be looked at next. The law-change log records each time a rule changed and what we changed in response. The
@@ -119,7 +119,7 @@ export function logChange(actor: Actor, body: unknown): ChangeEntry {
   const changedOn = v.date('changedOn') ?? istDate(now());
   const oldValue = v.str('oldValue', { max: 200 }), newValue = v.str('newValue', { max: 200 }), source = v.str('source', { max: 300 });
   v.done();
-  if (!one('SELECT 1 FROM compliance_items WHERE code = ?', code!)) throw new HttpError(400, 'VALIDATION_FAILED', 'No such rule in the register', { fields: [{ field: 'code', message: 'Unknown rule code' }] });
+  if (!one('SELECT 1 FROM compliance_items WHERE code = ?', code)) throw new HttpError(400, 'VALIDATION_FAILED', 'No such rule in the register', { fields: [{ field: 'code', message: 'Unknown rule code' }] });
   const id = newId('lcl');
   run('INSERT INTO compliance_changes(id, code, changed_on, summary, old_value, new_value, source, recorded_by, created_at) VALUES(?,?,?,?,?,?,?,?,?)', id, code!, changedOn, summary!, oldValue ?? null, newValue ?? null, source ?? null, actor.id, now());
   audit(actor, 'compliance.change', 'compliance_item', code!, { summary, oldValue: oldValue ?? null, newValue: newValue ?? null });

@@ -7,7 +7,7 @@ The app is built with Expo (iOS and Android from one codebase). This repo is set
 ## 1. One-time setup (about 20 minutes)
 1. Create a free account at expo.dev. Install the tools on your computer: `npm install -g eas-cli`, then `eas login`.
 2. In the `mobile` folder run `eas init`. It creates the Expo project and writes its id into `app.json` (commit that change).
-3. In expo.dev, Account settings, Access tokens: create a token. In the `daji-cricket` repository on GitHub, Settings, Secrets and variables, Actions: add it as `EXPO_TOKEN`. From then on every pull request touching `mobile/` gets a preview update link, and main publishes to the production channel (`.github/workflows/mobile.yml`).
+3. In expo.dev, Account settings, Access tokens: create a token. In GitHub (akeahms/daji-cricket) Settings, Secrets and variables, Actions: add it as `EXPO_TOKEN`. From then on every pull request touching `mobile/` gets a preview update link, and main publishes to the production channel (`.github/workflows/mobile.yml`).
 4. Push notifications use the same project id, so `eas init` also switches them on. Upload your Apple push key and Android FCM key when `eas credentials` asks.
 
 ## 2. Try it yourself first

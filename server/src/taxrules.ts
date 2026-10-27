@@ -53,6 +53,7 @@ export function checkCashLoanDeposit(amountPaise: number, what: string): void {
     `${what} of ${inr(amountPaise)} cannot be taken or repaid in cash; the limit is ${inr(CASH_LIMITS.loanDepositPaise)}`);
 }
 
+function istMidnight(date: string): number { return Date.parse(`${date}T00:00:00+05:30`); }
 export { istDate };
 
 // Indexes for the reports and dashboards that filter by owner and date.

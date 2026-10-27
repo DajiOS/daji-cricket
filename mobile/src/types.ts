@@ -11,7 +11,7 @@ export interface Slot { start: number; end: number; time: string; pricePaise: nu
 export interface Booking {
   id: string; ref: string; groundId: string; groundName: string; date: string; startAt: number; endAt: number; slotCount: number;
   status: 'held' | 'confirmed' | 'cancelled' | 'expired' | 'no_show' | 'completed';
-  totalPaise: number; advancePaise?: number; paidPaise: number; balancePaise: number; moveDifferenceDuePaise?: number; holdExpiresAt: number | null; refundPaise: number; creditPaise: number; cancelKind: string | null; seriesId?: string | null; seriesIndex?: number | null; block?: { tournament?: { id: string; name: string } | null; seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number } | null;
+  totalPaise: number; paidPaise: number; balancePaise: number; holdExpiresAt: number | null; refundPaise: number; creditPaise: number; cancelKind: string | null; seriesId?: string | null; seriesIndex?: number | null; block?: { tournament?: { id: string; name: string } | null; seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number } | null;
 }
 export interface PaymentInstructions {
   mode: 'razorpay' | 'upi' | 'none'; amountPaise: number; paymentId: string | null;
@@ -19,7 +19,7 @@ export interface PaymentInstructions {
   upi?: { upiId: string; payee: string; uri: string; note: string; deadline: number };
 }
 export interface HoldResponse { booking: Booking; payment: PaymentInstructions; creditAppliedPaise: number; series?: { id: string; frequency: RepeatFrequency; created: number; skipped: { date: string; reason: string }[] } }
-export interface AppConfig { freeCancelHours: number; maxDaysAhead: number; contact: { name: string; phone: string }; demoMode: boolean; bookingsOpenFrom?: string; bookingsCloseFrom?: string; closedDates?: { ground: string[]; practice: string[]; academy: string[] }; autoDebitEnabled?: boolean; autoDebitHoursBefore?: number; guppiBookingEnabled?: boolean; securityDepositEnabled?: boolean; customerRescheduleEnabled?: boolean }
+export interface AppConfig { freeCancelHours: number; maxDaysAhead: number; contact: { name: string; phone: string }; demoMode: boolean; bookingsOpenFrom?: string; bookingsCloseFrom?: string; closedDates?: { ground: string[]; practice: string[]; academy: string[] }; autoDebitEnabled?: boolean; autoDebitHoursBefore?: number }
 export interface Dashboard {
   spentPaise: number; sessions: number; slots: number; cancelled: number; noShows: number; paidAheadPaise: number; upcoming: number; creditPaise: number; firstPlayed: string | null;
   byGround: { groundId: string; groundName: string; sessions: number; spentPaise: number }[]; byMonth: { month: string; sessions: number; spentPaise: number }[];
@@ -47,11 +47,3 @@ export interface ProgressCard { id: string; month: string; ratings: { skill: str
 export interface MatchRow { id: string; title: string; teamA: string; teamB: string; overs: number; status: string; result: string | null; isPublic: boolean }
 export interface Innings { number: 1 | 2; team: string; runs: number; wickets: number; overs: string; closed: boolean; target: number | null; recent: string[]; batting: { name: string; runs: number; balls: number; out: string | null }[]; bowling: { name: string; overs: string; runs: number; wickets: number }[] }
 export interface Scorecard { match: MatchRow; innings: Innings[] }
-
-/** Change-of-time read-models (see server/src/reschedule.ts). The server decides; the app only shows. */
-export interface RescheduleStatus { enabled: boolean; allowed: boolean; code: string | null; message: string | null; movesDone: number; maxMoves: number | null; movesLeft: number | null; cutoffHours: number | null; differenceDuePaise: number; cheaperTreatment: 'credit' | 'refund_request'; optionsRequest: { groundId: string; slots?: number; formatId?: string; ruleId?: string } | null }
-export interface BookingOption { optionId?: string; groundId: string; date: string; startTime: string; endTime: string; slots: number; label: string | null; totalPaise: number; advancePaise: number }
-export interface ReschedulePreview { fromStartAt: number; fromEndAt: number; fromTotalPaise: number; toDate: string; toStartAt: number; toEndAt: number; toTotalPaise: number; direction: 'dearer' | 'cheaper' | 'same_price'; differencePaise: number; settlement: { treatment: 'credit' | 'refund_request'; paiseSettled: number } | null; balanceAfterPaise: number; movesLeftAfter: number | null }
-export interface RescheduleOutcome { booking: Booking; fromStartAt: number; toStartAt: number; fromTotalPaise: number; toTotalPaise: number; balancePaise: number; settlement?: { treatment: 'credit' | 'refund_request'; paiseSettled: number; creditPaise?: number; refundRequestedPaise?: number } }
-export interface DepositEntry { id: string; kind: 'collect' | 'deduct' | 'refund' | 'reverse'; amountPaise: number; method: string | null; reason: string | null; reference: string | null; reversesId: string | null; actorRole: string; createdAt: number }
-export interface DepositView { bookingId: string; collectedPaise: number; deductedPaise: number; reversedPaise: number; keptPaise: number; refundedPaise: number; heldPaise: number; entries: DepositEntry[] }

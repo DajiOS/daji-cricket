@@ -531,7 +531,7 @@ const serverTrouble = (status) => status === 429 ? 'Too many tries in a short ti
 const OWNER_SCOPED = ['/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask'];
 async function api(path, opts = {}) {
   if (state.user && state.user.role === 'super_admin' && state.viewOwner && OWNER_SCOPED.some((p) => path.startsWith(p)) && !/[?&]ownerId=/.test(path)) path += (path.includes('?') ? '&' : '?') + 'ownerId=' + encodeURIComponent(state.viewOwner);
-  const headers = { ...(opts.headers || {}) };
+  const headers = {};
   if (state.token) headers.authorization = 'Bearer ' + state.token;
   let body;
   if (opts.body !== undefined) { headers['content-type'] = 'application/json'; body = JSON.stringify(opts.body); }
@@ -1520,93 +1520,18 @@ function openPay(res) {
   tick(); stopHoldTimer(); holdTimer = setInterval(tick, 1000);
 }
 
-// ------------------------------------------------------------------ Guppi booking (any language)
-
-// This chat only shows what the server's booking conversation returns (/api/guppi/understand) and sends back the customer's words, choices and taps. It has no booking rules
-// of its own: the date, time, price, advance and availability it shows are the booking system's. It stops at the normal secure payment window (openPay) and never
-// takes, confirms or marks a payment. The same endpoint serves the iPad site and the iOS and Android apps.
-const GUPPI_FIRST = { title: 'Guppi booking assistant', placeholder: 'Tell Guppi what you need, in any language', send: 'Send', option: 'Option', total: 'Total', advance: 'Advance', hold: 'Hold and go to secure payment', change: 'Change', secure: 'Guppi never takes payment. Payment happens only on the secure payment screen.', reset: 'Start over', signIn: 'Sign in to book with Guppi.', example: 'Example: Sunday 7 PM for 3 hours' };
-
-function guppiButton() {
-  const head = $('#book .pc-head');
-  if (!head || $('#guppi-open') || !(state.config && state.config.guppiBookingEnabled)) return;
-  head.append(h('button', { class: 'btn outline', id: 'guppi-open', type: 'button', onclick: () => openGuppi() }, 'Book with Guppi · ગુજરાતી · हिन्दी · English'));
-}
-
-function openGuppi() {
-  if (!state.user) return openAuth({ note: GUPPI_FIRST.signIn, after: openGuppi });
-  const g = { reply: null, draft: {}, action: null, busy: false };
-  const log = h('div', { id: 'guppi-log', class: 'gp-log', 'aria-live': 'polite' });
-  const offersBox = h('div', { id: 'guppi-offers' });
-  const needsBox = h('div', { id: 'guppi-needs', class: 'gp-needs' });
-  const err = h('div', { class: 'hint err', id: 'guppi-err' });
-  const input = h('textarea', { id: 'guppi-input', rows: '2', maxlength: '400', autocomplete: 'off' });
-  const sendBtn = h('button', { class: 'btn primary block', id: 'guppi-send', type: 'button' }, GUPPI_FIRST.send);
-  const note = h('p', { class: 'hint', id: 'guppi-secure' }, GUPPI_FIRST.secure);
-  const head = h('h3', { id: 'guppi-title' }, GUPPI_FIRST.title);
-  const example = h('p', { class: 'hint', id: 'guppi-example' }, GUPPI_FIRST.example);
-  const L = () => (g.reply && g.reply.labels) || GUPPI_FIRST;
-  const say = (who, text) => log.append(h('div', { class: 'gp-msg ' + who }, text)); // text only: a customer's words can never become markup
-  const relabel = () => { const l = L(); head.textContent = l.title; input.placeholder = l.placeholder; sendBtn.textContent = l.send; note.textContent = l.secure; example.textContent = g.reply ? '' : l.example; };
-
-  const holdIt = async (optionId) => {
-    if (!g.action || g.action.optionId !== optionId) g.action = { optionId, id: 'guppi-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10) };
-    const id = g.action.id; // the same tap repeated reuses one action id, so a retry cannot hold twice
-    const hold = await api('/api/guppi/hold', { method: 'POST', body: { optionId, actionId: id }, headers: { 'idempotency-key': id } });
-    const pay = await api('/api/bookings/' + encodeURIComponent(hold.hold.id) + '/payment-instructions');
-    g.draft = { ...g.draft, holdBookingId: hold.hold.id };
-    state.sel = [];
-    openPay({ booking: hold.hold, payment: pay.payment, creditAppliedPaise: hold.creditAppliedPaise });
-    loadSlots(); loadCredit();
-  };
-
-  const draw = () => {
-    clear(offersBox); clear(needsBox); relabel();
-    const r = g.reply, l = L();
-    if (!r) return;
-    for (const n of r.needs || []) for (const c of n.choices || []) needsBox.append(h('button', { class: 'btn outline sm', type: 'button', 'data-patch': JSON.stringify(c.patch), onclick: () => turn({ patch: c.patch }, c.label) }, c.label));
-    if (r.status === 'options' || r.status === 'selected') {
-      (r.offers || []).forEach((o, i) => offersBox.append(h('div', { class: 'gp-offer', id: 'guppi-offer-' + (i + 1), 'data-option-id': o.optionId || '' },
-        h('div', {}, h('b', {}, l.option + ' ' + (i + 1)), ' ', o.text),
-        h('button', { class: 'btn outline sm', type: 'button', onclick: () => turn({ text: '#' + (i + 1) }, l.option + ' ' + (i + 1)) }, l.option + ' ' + (i + 1)))));
-    }
-    if (r.status === 'selected' && r.option) {
-      offersBox.append(h('div', { class: 'gp-offer pick', id: 'guppi-selected' },
-        h('div', {}, r.option.text), h('div', { class: 'hint' }, l.total + ' ' + inr(r.option.totalPaise) + ' · ' + l.advance + ' ' + inr(r.option.advancePaise)),
-        h('button', { class: 'btn primary block', id: 'guppi-hold', type: 'button', onclick: async (e) => { e.currentTarget.disabled = true; err.textContent = ''; try { await holdIt(r.option.optionId); } catch (x) { err.textContent = x.message; e.currentTarget.disabled = false; } } }, l.hold)));
-    }
-  };
-
-  const turn = async (body, shown) => {
-    if (g.busy) return;
-    g.busy = true; err.textContent = ''; sendBtn.disabled = true;
-    try {
-      const r = await api('/api/guppi/understand', { method: 'POST', body: { ...body, draft: g.draft, offers: ((g.reply && g.reply.offers) || []).map((o) => o.optionId).filter(Boolean) } });
-      if (shown || body.text) say('me', shown || body.text);
-      say('guppi', r.message);
-      g.reply = r; g.draft = r.draft; draw();
-      if (r.status === 'ready_to_hold' && r.next) await holdIt(r.next.optionId);
-    } catch (x) { err.textContent = x.message; } finally { g.busy = false; sendBtn.disabled = false; }
-  };
-  const send = () => { const t = input.value.trim(); if (!t) return; input.value = ''; turn({ text: t }); };
-  sendBtn.addEventListener('click', send);
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
-  openModal([head, example, log, needsBox, offersBox, err, input, sendBtn, note], { wide: true });
-  relabel();
-}
-
-async function payDemo(p, b, btn, status, outcome, done) {
+async function payDemo(p, b, btn, status, outcome) {
   btn.disabled = true; status.className = 'hint'; status.textContent = outcome === 'success' ? 'Paying…' : 'Trying the card…';
   try {
     const r = await api('/api/gateway/demo/pay', { method: 'POST', body: { orderId: p.razorpay.orderId, outcome } });
     const v = await api('/api/payments/razorpay/verify', { method: 'POST', body: { orderId: r.orderId, paymentId: r.paymentId, signature: r.signature } });
     stopHoldTimer();
-    (done || showConfirmed)(v.booking);
+    showConfirmed(v.booking);
   } catch (e) { status.className = 'hint err'; status.textContent = e.message; btn.disabled = false; }
 }
 
 /** Real Razorpay Checkout. Not exercised here: it needs live or test keys and the public webhook. */
-function payRazorpay(p, b, btn, status, done) {
+function payRazorpay(p, b, btn, status) {
   btn.disabled = true; status.className = 'hint'; status.textContent = 'Opening the payment window…';
   const open = () => {
     const u = state.user || {};
@@ -1616,7 +1541,7 @@ function payRazorpay(p, b, btn, status, done) {
       handler: async (r) => {
         try {
           const v = await api('/api/payments/razorpay/verify', { method: 'POST', body: { orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature } });
-          stopHoldTimer(); (done || showConfirmed)(v.booking);
+          stopHoldTimer(); showConfirmed(v.booking);
         } catch (e) { status.className = 'hint err'; status.textContent = e.message; btn.disabled = false; }
       },
       modal: { ondismiss: () => { btn.disabled = false; status.textContent = ''; } },
@@ -1691,142 +1616,6 @@ const STATUS = {
   no_show: ['danger', 'No-show'], completed: ['info', 'Played'],
 };
 
-
-// ------------------------------------------------------------------ Manage a booking: change the time, pay a move's difference online, see the security deposit
-// Everything on these screens is read from the server and sent back to it: whether a booking may be moved and why not (GET /api/bookings/:id/reschedule), the replacement options and
-// their prices (POST /api/availability/options), what a move would do (POST .../reschedule-preview), the move itself (POST .../reschedule), the amount still owed online after a
-// dearer move (booking.moveDifferenceDuePaise, POST .../pay-difference) and the security deposit (GET .../security-deposit). There is no cut-off, price or refund calculation here.
-
-const DEPOSIT_KINDS = { collect: 'Collected', deduct: 'Kept by the ground', refund: 'Returned to you', reverse: 'Deduction reversed' };
-
-async function payDifference(b, btn) {
-  if (btn) btn.disabled = true;
-  try { openDifferencePay(await api(`/api/bookings/${encodeURIComponent(b.id)}/pay-difference`, { method: 'POST', body: {} })); }
-  catch (e) { toast(e.message, true); loadBookings(); }
-  finally { if (btn) btn.disabled = false; }
-}
-
-/** The secure payment window for the amount a dearer move added: the same Razorpay or UPI handlers as a new booking, with no hold timer. */
-function openDifferencePay(res) {
-  const b = res.booking, p = res.payment;
-  const status = h('div', { class: 'hint', id: 'diff-status', style: 'margin:8px 0 0' });
-  const actions = h('div', { class: 'diff-actions', style: 'display:grid;gap:10px;margin-top:6px' });
-  const done = () => { closeModal(); toast('Payment received. Thank you.'); };
-  if (p.mode === 'razorpay' && p.razorpay.demo) {
-    actions.append(
-      h('button', { class: 'btn primary block', id: 'diff-pay', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'success', done) }, `Pay ${inr(p.amountPaise)} with the demo card`),
-      h('button', { class: 'btn ghost', id: 'diff-decline', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'failure', done) }, 'Pretend the card is declined'));
-    status.textContent = 'Demo payment: no real money moves. It is signed the same way Razorpay signs a real one.';
-  } else if (p.mode === 'razorpay') {
-    actions.append(h('button', { class: 'btn primary block', id: 'diff-pay', type: 'button', onclick: (e) => payRazorpay(p, b, e.currentTarget, status, done) }, `Pay ${inr(p.amountPaise)}`));
-  } else if (p.mode === 'upi') {
-    const utr = h('input', { type: 'text', inputmode: 'numeric', maxlength: '30', placeholder: '12-digit UPI reference (UTR)', autocomplete: 'off', id: 'diff-utr' });
-    actions.append(
-      h('div', { class: 'kv', style: 'margin:0' },
-        h('div', { class: 'row' }, h('span', {}, 'Pay to UPI ID'), h('b', { class: 'mono' }, p.upi.upiId)),
-        h('div', { class: 'row' }, h('span', {}, 'Name'), h('b', {}, p.upi.payee)),
-        h('div', { class: 'row' }, h('span', {}, 'Amount'), h('b', {}, inr(p.amountPaise)))),
-      h('a', { class: 'btn outline block', href: p.upi.uri }, 'Open my UPI app'),
-      field('After paying, enter the UPI reference', utr),
-      h('button', { class: 'btn primary block', id: 'diff-sent', type: 'button', onclick: async (e) => {
-        const btn = e.currentTarget; btn.disabled = true; status.className = 'hint'; status.textContent = 'Sending…';
-        try { await api(`/api/bookings/${encodeURIComponent(b.id)}/upi-reference`, { method: 'POST', body: { utr: utr.value.trim() } }); clear(actions); status.className = 'hint'; status.textContent = 'Thank you. The ground will check this against the bank and confirm. It stays on your booking as still to pay until then.'; }
-        catch (err) { status.className = 'hint err'; status.textContent = err.message; btn.disabled = false; }
-      } }, 'I have paid'));
-  } else status.textContent = 'Nothing to pay online.';
-  openModal([h('div', { class: 'eyebrow' }, 'Moved booking'), h('h3', {}, 'Pay the difference'),
-    h('p', { class: 'hint' }, 'Your new time costs more. This is only the difference. What you paid before stays on the booking. The rest of the balance is paid at the ground as usual.'),
-    bookingRows(b, [h('div', { class: 'row' }, h('span', {}, 'Difference to pay now'), h('b', { id: 'diff-amount', style: 'color:var(--gold-bright);font-size:20px' }, inr(res.differencePaise)))]), actions, status],
-    { onClose: () => { loadBookings(); } });
-}
-
-async function openDepositView(b) {
-  let d;
-  try { d = (await api(`/api/bookings/${encodeURIComponent(b.id)}/security-deposit`)).deposit; } catch (e) { return toast(e.message, true); }
-  const rows = d.entries.map((e) => h('div', { class: 'row', 'data-kind': e.kind },
-    h('span', {}, `${DEPOSIT_KINDS[e.kind] || e.kind} · ${niceDateTime(e.createdAt)}` + (e.reason ? ` · ${e.reason}` : '')), h('b', {}, inr(e.amountPaise))));
-  openModal([h('div', { class: 'eyebrow' }, 'Booking ' + b.ref), h('h3', {}, 'Security deposit'),
-    h('p', { class: 'hint', id: 'dep-explain' }, 'Your booking advance is part of the price of the booking. A security deposit is a separate amount the ground may hold against damage. It is returned to you, less anything kept with a reason you can see here.'),
-    h('div', { class: 'kv', id: 'dep-booking' },
-      h('div', { class: 'row' }, h('span', {}, 'Booking advance (part of the price)'), h('b', {}, inr(b.advancePaise))),
-      h('div', { class: 'row' }, h('span', {}, 'Paid towards the booking so far'), h('b', {}, inr(b.paidPaise)))),
-    d.collectedPaise === 0 && !d.entries.length ? h('p', { class: 'hint', id: 'dep-none' }, 'No security deposit has been taken for this booking.') : h('div', { class: 'kv', id: 'dep-held' },
-      h('div', { class: 'row' }, h('span', {}, 'Security deposit held now'), h('b', { id: 'dep-held-amount' }, inr(d.heldPaise))),
-      h('div', { class: 'row' }, h('span', {}, 'Collected'), h('b', {}, inr(d.collectedPaise))),
-      d.deductedPaise ? h('div', { class: 'row' }, h('span', {}, 'Kept by the ground'), h('b', {}, inr(d.keptPaise))) : null,
-      d.refundedPaise ? h('div', { class: 'row' }, h('span', {}, 'Returned to you'), h('b', {}, inr(d.refundedPaise))) : null),
-    rows.length ? h('div', { class: 'kv', id: 'dep-history' }, ...rows) : null,
-    h('p', { class: 'hint' }, 'Only the ground can change the security deposit. You can view it here.')]);
-}
-
-/** Change a booking's time: eligibility from the server, options from the server, a preview of the effect, then the move. */
-async function openReschedule(b) {
-  let st;
-  try { st = (await api(`/api/bookings/${encodeURIComponent(b.id)}/reschedule`)).status; } catch (e) { return toast(e.message, true); }
-  const body = h('div', { id: 'rs-body' });
-  const facts = [
-    h('div', { class: 'row' }, h('span', {}, 'Now'), h('b', {}, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}`)),
-    st.maxMoves != null ? h('div', { class: 'row' }, h('span', {}, 'Moves left'), h('b', { id: 'rs-left' }, `${st.movesLeft} of ${st.maxMoves}`)) : null,
-    st.cutoffHours != null ? h('div', { class: 'row' }, h('span', {}, 'Allowed until'), h('b', {}, `${st.cutoffHours} hours before the start`)) : null];
-  openModal([h('div', { class: 'eyebrow' }, 'Booking ' + b.ref), h('h3', {}, 'Change the time'), h('div', { class: 'kv' }, ...facts), body], { wide: true });
-  if (!st.allowed) { body.append(h('p', { class: 'hint err', id: 'rs-blocked', 'data-code': st.code }, st.message || 'This booking cannot be changed online.')); return; }
-  const date = h('input', { type: 'date', id: 'rs-date', value: b.date, min: todayIst() });
-  const time = h('input', { type: 'time', id: 'rs-time', value: hhmm(b.startAt), step: '3600' });
-  const err = h('div', { class: 'hint err', id: 'rs-err' }), list = h('div', { id: 'rs-options', style: 'display:grid;gap:8px;margin-top:10px' }), review = h('div', { id: 'rs-review' });
-  const show = async () => {
-    clear(list); clear(review); err.textContent = '';
-    try {
-      const r = await api('/api/availability/options', { method: 'POST', body: { ...st.optionsRequest, date: date.value, startTime: time.value } });
-      const offers = [r.exact, ...r.alternatives].filter(Boolean);
-      if (!offers.length) { err.textContent = r.reason || 'Nothing is free then. Try another day or time.'; return; }
-      if (!r.exact) list.append(h('p', { class: 'hint' }, (r.reason || 'That time is not free.') + ' Nearest times that are:'));
-      for (const o of offers) list.append(h('button', { class: 'btn outline', type: 'button', 'data-option-id': o.optionId, onclick: () => preview(o) },
-        `${niceDate(o.date)}, ${o.startTime} – ${o.endTime}${o.label ? ' · ' + o.label : ''} · ${inr(o.totalPaise)}`));
-    } catch (e) { err.textContent = e.message; }
-  };
-  const preview = async (o) => {
-    clear(review); err.textContent = '';
-    try {
-      const pv = (await api(`/api/bookings/${encodeURIComponent(b.id)}/reschedule-preview`, { method: 'POST', body: { optionId: o.optionId } })).preview;
-      const verdict = pv.direction === 'dearer' ? `This time costs ${inr(pv.differencePaise)} more. You can pay that difference online right after you confirm.`
-        : pv.direction === 'cheaper' ? (pv.settlement ? (pv.settlement.treatment === 'credit' ? `This time costs less. ${inr(pv.settlement.paiseSettled)} that you already paid comes back as account credit.` : `This time costs less. A refund request for ${inr(pv.settlement.paiseSettled)} that you already paid goes to the ground for approval.`) : 'This time costs less. You have not paid more than the new price, so nothing needs returning.')
-        : 'This time costs the same.';
-      const confirm = h('button', { class: 'btn primary block', id: 'rs-confirm', type: 'button' }, 'Confirm the move');
-      confirm.addEventListener('click', async () => {
-        confirm.disabled = true; err.textContent = '';
-        try { done(await api(`/api/bookings/${encodeURIComponent(b.id)}/reschedule`, { method: 'POST', body: { optionId: o.optionId }, headers: { 'idempotency-key': 'rs-' + b.id + '-' + o.optionId.slice(-24) } })); }
-        catch (e) { err.textContent = e.message; confirm.disabled = false; }
-      });
-      review.append(h('div', { class: 'kv', id: 'rs-summary' },
-        h('div', { class: 'row' }, h('span', {}, 'From'), h('b', {}, `${niceDateTime(pv.fromStartAt)} · ${inr(pv.fromTotalPaise)}`)),
-        h('div', { class: 'row' }, h('span', {}, 'To'), h('b', {}, `${niceDateTime(pv.toStartAt)} · ${inr(pv.toTotalPaise)}`)),
-        h('div', { class: 'row' }, h('span', {}, 'Left to pay on this booking after the move'), h('b', {}, inr(pv.balanceAfterPaise))),
-        pv.movesLeftAfter != null ? h('div', { class: 'row' }, h('span', {}, 'Moves left after this one'), h('b', {}, String(pv.movesLeftAfter))) : null),
-        h('p', { class: 'hint', id: 'rs-verdict', 'data-direction': pv.direction }, verdict), confirm);
-    } catch (e) { err.textContent = e.message; }
-  };
-  const done = (r) => {
-    clear(body); clear(review);
-    const owed = r.booking.moveDifferenceDuePaise || 0;
-    body.append(h('p', { id: 'rs-done', class: 'hint' }, `Moved to ${niceDateTime(r.toStartAt)}.`),
-      r.settlement ? h('p', { class: 'hint', id: 'rs-settled' }, r.settlement.treatment === 'credit' ? `${inr(r.settlement.creditPaise)} was added to your account credit.` : `A refund request for ${inr(r.settlement.refundRequestedPaise)} was sent to the ground.`) : null,
-      owed > 0 ? h('button', { class: 'btn primary block', id: 'rs-pay', type: 'button', onclick: () => { closeModal(); payDifference(r.booking); } }, `Pay the ${inr(owed)} difference online`) : null,
-      h('button', { class: 'btn ghost', type: 'button', onclick: () => closeModal() }, 'Close'));
-    loadBookings();
-  };
-  body.append(field('New date', date), field('Preferred start time', time), h('button', { class: 'btn primary block', id: 'rs-find', type: 'button', onclick: show }, 'Show times'), err, list, review);
-}
-
-/** The buttons a booking card offers, from what the server says about this booking. */
-function manageButtons(b) {
-  const cfg = state.config || {}, out = [];
-  const upcoming = b.status === 'confirmed' && b.startAt > Date.now();
-  if (b.moveDifferenceDuePaise > 0) out.push(h('button', { class: 'btn primary sm pay-diff', type: 'button', onclick: (e) => payDifference(b, e.currentTarget) }, `Pay ${inr(b.moveDifferenceDuePaise)} online`));
-  if (cfg.customerRescheduleEnabled && upcoming && !b.seriesId) out.push(h('button', { class: 'btn outline sm change-time', type: 'button', onclick: () => openReschedule(b) }, 'Change time'));
-  if (cfg.securityDepositEnabled && ['confirmed', 'completed', 'no_show'].includes(b.status)) out.push(h('button', { class: 'btn ghost sm view-deposit', type: 'button', onclick: () => openDepositView(b) }, 'Security deposit'));
-  return out;
-}
-
 async function loadBookings() {
   const list = clear($('#bk-list')); list.append(h('div', { class: 'skeleton' }, 'Loading…'));
   const ex = clear($('#bk-extra')); for (const f of bookingsExtras) f(ex);
@@ -1847,13 +1636,12 @@ async function loadBookings() {
           h('h4', {}, b.groundName),
           h('div', { class: 'meta' }, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${b.formatLabel ? b.formatLabel + ' (' + b.ball + ' ball)' : b.slotCount + (b.slotCount === 1 ? ' slot' : ' slots')}  ·  `, h('span', { class: 'mono' }, b.ref)),
           h('div', { class: 'meta' }, `Total ${inr(b.totalPaise)}  ·  Paid ${inr(b.paidPaise)}` + (b.status === 'confirmed' && b.balancePaise > 0 ? `  ·  Balance ${inr(b.balancePaise)}` : '')
-            + (b.moveDifferenceDuePaise > 0 ? `  ·  ${inr(b.moveDifferenceDuePaise)} of it is for your move and can be paid online` : '')
             + (b.status === 'held' && b.holdExpiresAt ? `  ·  Hold ends ${hhmm(b.holdExpiresAt)}` : '')
             + (b.cancelKind === 'credit' && b.creditPaise ? `  ·  ${inr(b.creditPaise)} returned as credit` : '') + (b.refundPaise ? `  ·  ${inr(b.refundPaise)} refunded` : '')),
           b.seriesId ? h('div', { class: 'meta' }, `Repeat booking, date ${b.seriesIndex + 1}`, (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() ? h('a', { href: '#', style: 'margin-left:8px', onclick: (e) => { e.preventDefault(); cancelSeriesOf(b); } }, 'Cancel unpaid repeats') : null) : null,
-          pending ? h('div', { class: 'meta' }, 'Your advance is holding the slot. The ground will approve it shortly and you will get a message.') : null,
+          pending ? h('div', { class: 'meta' }, 'Your deposit is holding the slot. The ground will approve it shortly and you will get a message.') : null,
           b.status === 'cancelled' && b.cancelledByOwner ? cancelledByGround(b) : null),
-        h('div', { class: 'acts' }, h('span', { class: 'st ' + cls }, label), ...manageButtons(b), canCancel ? h('button', { class: 'btn outline sm', type: 'button', onclick: () => openCancel(b) }, 'Cancel') : null)));
+        h('div', { class: 'acts' }, h('span', { class: 'st ' + cls }, label), canCancel ? h('button', { class: 'btn outline sm', type: 'button', onclick: () => openCancel(b) }, 'Cancel') : null)));
     }
   } catch (e) { clear(list); list.append(h('div', { class: 'empty' }, e.message)); }
 }
@@ -2504,7 +2292,7 @@ function renderTodayParts(body, parts) {
       const act = h('span', { class: 'acts' },
         h('button', { class: 'btn primary sm', type: 'button', onclick: async (e) => { e.target.disabled = true; try { await api(`/api/staff/bookings/${encodeURIComponent(b.id)}/approve`, { method: 'POST', body: {} }); toast('Approved. The customer has been told.'); loadApprovals(); } catch (er) { toast(er.message, true); e.target.disabled = false; } } }, 'Approve'),
         h('button', { class: 'btn ghost sm', type: 'button', onclick: () => openStaffCancel(b, loadApprovals) }, 'Decline…'));
-      approvals.append(h('div', { class: 'li apr' }, h('span', {}, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${b.groundName}  ·  ${b.customerName}${b.formatLabel ? '  ·  ' + b.formatLabel : ''}  ·  paid ${inr(b.paidPaise)} of ${inr(b.totalPaise)}`), act));
+      approvals.append(h('div', { class: 'li apr' }, h('span', {}, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${b.groundName}  ·  ${b.customerName}${b.formatLabel ? '  ·  ' + b.formatLabel : ''}  ·  deposit ${inr(b.paidPaise)} of ${inr(b.totalPaise)}`), act));
     }
   }).catch((e) => { clear(approvals); approvals.append(h('div', { class: 'empty' }, e.status === 403 ? 'Your role does not include bookings.' : e.message)); });
   if (has('approvals')) loadApprovals();
@@ -2894,7 +2682,6 @@ async function start() {
   try {
     const [config, gs] = await Promise.all([api('/api/config'), api('/api/grounds')]);
     state.config = config; state.grounds = gs.items;
-    guppiButton();
   } catch (e) {
     $('#p-name').textContent = 'The server is not reachable';
     $('#p-sub').textContent = e.message;

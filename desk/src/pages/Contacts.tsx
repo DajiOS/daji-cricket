@@ -5,7 +5,7 @@ import { useSession } from '../App';
 import { Async, FilterBar, Select, errMsg, useDebounced } from '../parts/club/common';
 import Composer, { loadTemplates } from '../parts/club/Composer';
 
-interface Contact { id: string; name: string; phone: string | null; email: string | null; timesPlayed: number; lastPlayedAt: number; paidPaise: number | null; reachable: { email: boolean; whatsapp: boolean; sms: boolean } }
+interface Contact { id: string; name: string; phone: string | null; email: string | null; timesPlayed: number; lastPlayedAt: number; paidPaise: number; reachable: { email: boolean; whatsapp: boolean; sms: boolean } }
 interface Result { items: Contact[]; total: number; summary: { total: number; reachableEmail: number; reachableWhatsapp: number; reachableSms: number } }
 interface Broadcast { id: string; createdAt: number; channel: string; subject?: string | null; body: string; sent: number; queued: number }
 const LIMIT = 50;
@@ -58,7 +58,7 @@ export default function Contacts({ sub }: { sub: string }) {
               { head: 'Person', cell: (c) => <><span className="strong">{c.name}</span><div className="muted small">{[c.phone, c.email].filter(Boolean).join(' · ')}</div></> },
               { head: 'Times', num: true, cell: (c) => c.timesPlayed },
               { head: 'Last played', cell: (c) => fmtDate(new Date(c.lastPlayedAt + 330 * 60000).toISOString().slice(0, 10)) },
-              { head: 'Paid', num: true, cell: (c) => (c.paidPaise == null ? '—' : inr(c.paidPaise)) },
+              { head: 'Paid', num: true, cell: (c) => inr(c.paidPaise) },
               { head: 'Can reach on', cell: (c) => <div className="row" style={{ gap: 6 }}>{(['email', 'whatsapp', 'sms'] as const).map((k) => <Chip key={k} tone={c.reachable[k] ? 'good' : 'mute'}>{k === 'sms' ? 'SMS' : k === 'email' ? 'Email' : 'WhatsApp'}</Chip>)}</div> },
             ]} />
             <div className="card-pad row" style={{ justifyContent: 'space-between' }}>

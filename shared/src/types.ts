@@ -246,8 +246,6 @@ export interface Booking {
   advancePaise: number;
   paidPaise: number;
   balancePaise: number;
-  /** What the customer still owes, payable online, because the booking was moved to a dearer time (calculated by the server; 0 otherwise). */
-  moveDifferenceDuePaise?: number;
   holdExpiresAt: number | null;
   needsReview: boolean;
   cancelKind: 'free' | 'credit' | 'none' | null;
@@ -464,12 +462,6 @@ export interface PublicConfig {
   publicUrl: string;
   /** Where photos, videos and the background films load from when a CDN is set up (MEDIA_CDN); null = this server. */
   mediaBase?: string | null;
-  /** The Guppi booking assistant (any language) is switched on. Clients show its screen only when this is true. */
-  guppiBookingEnabled?: boolean;
-  /** The owner has switched the refundable security deposit on: screens show it separately from the booking advance. */
-  securityDepositEnabled?: boolean;
-  /** Customers may move their own bookings (switched on and both policy numbers set). */
-  customerRescheduleEnabled?: boolean;
 }
 
 /** A professional coach shown on the website's academy section. */
@@ -512,16 +504,6 @@ export interface GlobalSettings {
   noShowGraceMinutes: number;
   /** On a festival day the festival look applies to every visitor, even one who picked a theme. */
   festivalForEveryone: boolean;
-  /** Release switches for the newer ways to change a booking. Off puts that way back to "call the ground"; the standard booking flow is never affected. */
-  guppiAssistEnabled: boolean;
-  customerRescheduleEnabled: boolean;
-  retentionDisputesEnabled: boolean;
-  /** Customer rescheduling policy (decided by the owner): the cut-off in hours before the start (exactly this many hours or fewer is blocked), the number of completed customer moves allowed, and what happens to money when the new time is cheaper. null cut-off or limit = not configured = customers cannot move a booking. */
-  rescheduleCutoffHours: number | null;
-  rescheduleMaxMoves: number | null;
-  rescheduleCheaperTreatment: 'credit' | 'refund_request';
-  /** Off in this release: the separate refundable security (damage) deposit. The advance is never a security deposit. */
-  securityDepositEnabled: boolean;
   /** 'rotate' (the design changes through the day) or one fixed design id. */
   siteDesign: string;
   /** How often the rotating design changes: daypart (four times a day), daily or weekly. */
@@ -592,8 +574,7 @@ export interface Contact {
   slotsPlayed: number;
   firstPlayedAt: number;
   lastPlayedAt: number;
-  /** Total paid by this person. Null when the viewer may not see revenue. */
-  paidPaise: number | null;
+  paidPaise: number;
   groundIds: string[];
   consent: { email: boolean; sms: boolean; whatsapp: boolean };
   /** Can we message them on this channel right now: has the address, said yes, account not disabled. */

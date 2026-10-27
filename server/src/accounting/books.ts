@@ -1,9 +1,8 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { many, one, registerSchema, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
-import { storeUpload } from '../intake.ts';
 import { audit, type Actor } from '../audit.ts';
 import { HttpError, conflict, notFound } from '../errors.ts';
 import { newId } from '../ids.ts';
@@ -93,15 +92,13 @@ export function addAttachment(dataDir: string, ownerId: string, actor: Actor, en
   const n = one<{ c: number }>('SELECT COUNT(*) c FROM acct_attachments WHERE owner_id = ? AND entity = ? AND entity_id = ? AND deleted_at IS NULL', ownerId, entity, entityId)!.c;
   if (n >= MAX_PER_ENTITY) throw conflict('TOO_MANY_FILES', `At most ${MAX_PER_ENTITY} files per entry.`);
   const id = newId('att'), t = now();
+  const dir = join(dataDir, 'uploads', ownerId);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, id), buf, { mode: 0o600 });
   const name = cleanName(filename, kind.ext);
-  storeUpload({
-    dataDir, buf, finalPath: join(dataDir, 'uploads', ownerId, id), purpose: 'accounting_attachment', actor, ownerId,
-    writeMetadata: () => {
-      run('INSERT INTO acct_attachments(id, owner_id, entity, entity_id, filename, mime, size_bytes, sha256, created_at, created_by) VALUES(?,?,?,?,?,?,?,?,?,?)',
-        id, ownerId, entity, entityId, name, kind.mime, buf.length, createHash('sha256').update(buf).digest('hex'), t, actor.id);
-      audit(actor, 'acct.attachment.add', 'acct_attachment', id, { entity, entityId, filename: name, bytes: buf.length }, ownerId);
-    },
-  });
+  run('INSERT INTO acct_attachments(id, owner_id, entity, entity_id, filename, mime, size_bytes, sha256, created_at, created_by) VALUES(?,?,?,?,?,?,?,?,?,?)',
+    id, ownerId, entity, entityId, name, kind.mime, buf.length, createHash('sha256').update(buf).digest('hex'), t, actor.id);
+  audit(actor, 'acct.attachment.add', 'acct_attachment', id, { entity, entityId, filename: name, bytes: buf.length }, ownerId);
   return toAtt(one(`SELECT * FROM acct_attachments WHERE id = ?`, id)!);
 }
 

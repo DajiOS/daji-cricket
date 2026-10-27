@@ -73,7 +73,7 @@ test('the stream sends a multipart picture to a viewer', async () => {
   const watching = await h.get('/api/cameras', owner);
   assert.equal(watching.body.items.find((x: any) => x.id === c.body.id).watchers, 1);
   const r = await put(c.body.id, c.body.ingestToken, jpeg(60));
-  assert.equal(((await r.json()) as any).watchers, 1, 'the bridge learns someone is watching');
+  assert.equal((await r.json()).watchers, 1, 'the bridge learns someone is watching');
   ac.abort();
 });
 

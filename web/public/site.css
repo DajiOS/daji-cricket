@@ -2003,13 +2003,3 @@ html[data-tone="light"][data-decor="berries"] #view-home .hero-decor,html[data-t
 .btn[aria-busy="true"]{cursor:progress;opacity:.85}
 /* between phone and wide desktop the list column is narrow: only the lit item shows its line, so the list always fits the stage */
 @media(min-width:861px) and (max-width:1280px){.an-list li{grid-template-columns:minmax(0,7.5em) minmax(0,1fr);gap:14px}.an-list li:not(.on) span{display:none}.an-list li:not(.on){padding:11px 0}}
-
-/* Guppi booking chat */
-.gp-log{max-height:34vh;overflow:auto;display:grid;gap:8px;margin:8px 0}
-.gp-msg{max-width:88%;padding:9px 12px;border:1px solid var(--line);border-radius:14px;font-size:14px;line-height:1.4;white-space:pre-wrap}
-.gp-msg.me{justify-self:end;background:rgba(201,169,107,.14)}
-.gp-needs{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
-.gp-offer{display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:8px 0;font-size:14px}
-.gp-offer.pick{display:block;border-color:var(--gold)}
-#guppi-input{width:100%;margin:8px 0;padding:10px;border-radius:12px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text);font:inherit}
-#guppi-open{margin-top:8px}

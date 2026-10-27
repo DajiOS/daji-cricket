@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { api } from './api';
-import { CHECKOUT_ORIGINS, isAllowedCheckoutUrl, parseCheckoutMessage } from './checkoutGuard';
 import type { Mandate, User } from './types';
 import { Btn, Chip, s } from './ui';
 import { C, inr } from './theme';
@@ -35,14 +34,12 @@ export function AutoDebit({ user }: { user: User }) {
 
   if (co) return (
     <View style={{ height: 520, marginBottom: 14 }}>
-      <WebView originWhitelist={CHECKOUT_ORIGINS} source={{ html: co.html, baseUrl: 'https://checkout.razorpay.com' }} style={{ flex: 1, backgroundColor: C.bg }}
-        onShouldStartLoadWithRequest={(r) => isAllowedCheckoutUrl(r.url)}
+      <WebView originWhitelist={['*']} source={{ html: co.html, baseUrl: 'https://checkout.razorpay.com' }} style={{ flex: 1, backgroundColor: C.bg }}
         onMessage={async (e) => {
-          const id = co.mandateId; setCo(null);
-          const r = parseCheckoutMessage(e.nativeEvent.data);
-          if (!r) { setErr('The approval window sent something unexpected, so nothing was changed.'); return; }
-          if (r.kind === 'dismiss') return;
-          try { setM(await api<Mandate>('/api/autodebit/confirm', { method: 'POST', body: { mandateId: id, paymentId: r.paymentId, signature: r.signature } })); } catch (er: any) { setErr(er.message); }
+          try {
+            const r = JSON.parse(e.nativeEvent.data); const id = co.mandateId; setCo(null);
+            if (r.ok) setM(await api<Mandate>('/api/autodebit/confirm', { method: 'POST', body: { mandateId: id, ...r.ok } }));
+          } catch (er: any) { setErr(er.message); setCo(null); }
         }} />
     </View>
   );

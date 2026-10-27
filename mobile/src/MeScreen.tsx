@@ -1,12 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
-import type { AppConfig, Booking, Child, Dashboard, User } from './types';
+import type { Booking, Child, Dashboard, User } from './types';
 import { Btn, Chip, KV, Loading, s } from './ui';
 import { AutoDebit } from './AutoDebit';
-import { PayScreen } from './PayScreen';
-import { DepositScreen, RescheduleScreen, differenceAsHold } from './ManageBooking';
-import type { HoldResponse } from './types';
 import { C, inr, MON, niceDate } from './theme';
 
 const label = (st: Booking['status']): string => ({ confirmed: 'Confirmed', held: 'Held', cancelled: 'Cancelled', expired: 'Expired', no_show: 'No show', completed: 'Played' }[st]);
@@ -14,15 +11,12 @@ const label = (st: Booking['status']): string => ({ confirmed: 'Confirmed', held
 export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: User }) {
   const [view, setView] = useState<'ground' | 'academy'>('ground');
   const [dash, setDash] = useState<Dashboard | null>(null); const [books, setBooks] = useState<Booking[]>([]); const [kids, setKids] = useState<Child[]>([]);
-  const [flags, setFlags] = useState<{ deposit: boolean; reschedule: boolean }>({ deposit: false, reschedule: false });
-  const [manage, setManage] = useState<{ kind: 'reschedule' | 'deposit'; b: Booking } | null>(null); const [payDiff, setPayDiff] = useState<HoldResponse | null>(null);
   const [kid, setKid] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [note, setNote] = useState('');
 
   const load = useCallback(async () => {
     setErr(''); setBusy(true);
     try {
-      const [d, b, k, cfg] = await Promise.all([api<Dashboard>('/api/my/dashboard'), api<{ items: Booking[] }>('/api/bookings?limit=50'), api<{ items: Child[] }>('/api/me/children'), api<AppConfig>('/api/config')]);
-      setFlags({ deposit: !!cfg.securityDepositEnabled, reschedule: !!cfg.customerRescheduleEnabled });
+      const [d, b, k] = await Promise.all([api<Dashboard>('/api/my/dashboard'), api<{ items: Booking[] }>('/api/bookings?limit=50'), api<{ items: Child[] }>('/api/me/children')]);
       setDash(d); setBooks(b.items); setKids(k.items); setKid((cur) => cur || k.items[0]?.id || '');
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }, []);
@@ -45,15 +39,6 @@ export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: Use
     try { await api(`/api/bookings/${confirm.b.id}/cancel`, { method: 'POST', body: {} }); setNote('Booking cancelled.'); setConfirm(null); void load(); } catch (e: any) { setErr(e.message); setConfirm(null); }
   };
 
-  /** Pays the exact amount a dearer move added, through the same payment path as a new booking. The server's state is read again when the person comes back. */
-  const startDifference = async (b: Booking) => {
-    setErr(''); setNote('');
-    try { const r = await api<{ payment: HoldResponse['payment']; booking: Booking }>(`/api/bookings/${b.id}/pay-difference`, { method: 'POST', body: {} }); setManage(null); setPayDiff(differenceAsHold(r)); }
-    catch (e: any) { setErr(e.message); void load(); }
-  };
-  if (payDiff) return <PayScreen balance hold={payDiff} user={user} onBack={() => { setPayDiff(null); void load(); }} onDone={(_b, paid) => { setPayDiff(null); setNote(paid ? 'Payment received. Thank you.' : 'Reference sent. The ground will check it and confirm.'); void load(); }} />;
-  if (manage?.kind === 'reschedule') return <RescheduleScreen booking={manage.b} onBack={() => { setManage(null); void load(); }} onPayDifference={startDifference} />;
-  if (manage?.kind === 'deposit') return <DepositScreen booking={manage.b} onBack={() => setManage(null)} />;
   if (!dash) return err ? <View style={[s.screen, s.pad, { paddingTop: 60 }]}><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={load} /></View> : <Loading />;
   const child = kids.find((c) => c.id === kid);
   const maxM = Math.max(1, ...dash.byMonth.map((m) => m.spentPaise));
@@ -84,10 +69,6 @@ export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: Use
             <Text style={s.muted}>{niceDate(b.date)} · {new Date(b.startAt + 330 * 60000).toISOString().slice(11, 16)} · {b.slotCount} slot{b.slotCount > 1 ? 's' : ''} · {inr(b.totalPaise)}</Text>
             {b.seriesId ? <Text style={s.muted}>Repeat booking · date {(b.seriesIndex ?? 0) + 1}</Text> : null}
             {b.balancePaise > 0 && b.status === 'confirmed' && <Text style={s.muted}>Balance at the ground: {inr(b.balancePaise)}</Text>}
-            {(b.moveDifferenceDuePaise ?? 0) > 0 && <Text style={s.muted}>{inr(b.moveDifferenceDuePaise!)} of it is for your move and can be paid online.</Text>}
-            {(b.moveDifferenceDuePaise ?? 0) > 0 && <Btn label={`Pay ${inr(b.moveDifferenceDuePaise!)} online`} onPress={() => startDifference(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
-            {flags.reschedule && b.status === 'confirmed' && b.startAt > Date.now() && !b.seriesId && <Btn kind="outline" label="Change time" onPress={() => setManage({ kind: 'reschedule', b })} style={{ marginTop: 10, marginBottom: 0 }} />}
-            {flags.deposit && ['confirmed', 'completed', 'no_show'].includes(b.status) && <Btn kind="ghost" label="Security deposit" onPress={() => setManage({ kind: 'deposit', b })} style={{ marginBottom: 0 }} />}
             {((b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now()) && <Btn kind="outline" label="Cancel" onPress={() => cancel(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
             {b.seriesId && (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() && <Btn kind="ghost" label="Cancel unpaid repeats" onPress={() => cancelRepeats(b)} style={{ marginBottom: 0 }} />}
           </View>

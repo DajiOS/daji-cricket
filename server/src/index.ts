@@ -1,4 +1,4 @@
-import { loadConfig, configWarnings, fatalConfigProblems } from './config.ts';
+import { loadConfig, configWarnings } from './config.ts';
 import { openDb, closeDb } from './db.ts';
 import { buildServer } from './app.ts';
 import { backfillThumbs, setLibraryRoot } from './library.ts';
@@ -11,12 +11,6 @@ import { gmailProvider } from './gmail.ts';
 import { applyYodleeSettings } from './yodleeSettings.ts';
 
 const cfg = loadConfig();
-const fatal = fatalConfigProblems(cfg);
-if (fatal.length) {
-  for (const f of fatal) console.error(`FATAL: ${f}`);
-  console.error('The server will not start with this configuration.');
-  process.exit(1);
-}
 openDb(cfg.dbPath);
 applyYodleeSettings(cfg);
 for (const w of configWarnings(cfg)) console.warn(`WARNING: ${w}`);

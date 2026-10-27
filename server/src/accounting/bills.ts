@@ -1,10 +1,9 @@
 import { checkCashExpense } from '../taxrules.ts';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { many, one, registerSchema, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
-import { storeUpload } from '../intake.ts';
 import { audit, listAudit, type Actor } from '../audit.ts';
 import { HttpError, conflict, forbidden, notFound } from '../errors.ts';
 import { newId } from '../ids.ts';
@@ -401,16 +400,14 @@ export function addBillFile(dataDir: string, ownerId: string, actor: Actor, bill
   if (!kind) throw new HttpError(415, 'FILE_TYPE_NOT_ALLOWED', 'Only PDF, PNG, JPEG and WebP files can be attached.');
   if (one<{ n: number }>('SELECT COUNT(*) n FROM acct_bill_files WHERE bill_id = ? AND deleted_at IS NULL', billId)!.n >= 5) throw conflict('TOO_MANY_FILES', 'At most 5 files per bill.');
   const id = newId('bfl'), t = now();
+  const dir = join(dataDir, 'uploads', ownerId);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, id), buf, { mode: 0o600 });
   const base = filename.replace(/[\\/]/g, '_').replace(/[^\w .()\-]/g, '_').replace(/\.+$/, '').slice(0, 80).trim() || 'bill';
   const name = /\.(pdf|png|jpe?g|webp)$/i.test(base) ? base : `${base}.${kind.ext}`;
-  storeUpload({
-    dataDir, buf, finalPath: join(dataDir, 'uploads', ownerId, id), purpose: 'bill_file', actor, ownerId,
-    writeMetadata: () => {
-      run('INSERT INTO acct_bill_files(id, owner_id, bill_id, filename, mime, size_bytes, sha256, created_at, created_by) VALUES(?,?,?,?,?,?,?,?,?)',
-        id, ownerId, billId, name, kind.mime, buf.length, createHash('sha256').update(buf).digest('hex'), t, actor.id);
-      audit(actor, 'bill.file.add', 'acct_bill', billId, { filename: name, bytes: buf.length }, ownerId);
-    },
-  });
+  run('INSERT INTO acct_bill_files(id, owner_id, bill_id, filename, mime, size_bytes, sha256, created_at, created_by) VALUES(?,?,?,?,?,?,?,?,?)',
+    id, ownerId, billId, name, kind.mime, buf.length, createHash('sha256').update(buf).digest('hex'), t, actor.id);
+  audit(actor, 'bill.file.add', 'acct_bill', billId, { filename: name, bytes: buf.length }, ownerId);
   return { id, filename: name, mime: kind.mime, sizeBytes: buf.length, createdAt: t };
 }
 

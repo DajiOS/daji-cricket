@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { useApi, patch } from '../../lib';
 import { Loading, ErrorBox, Empty, Field, useToast } from '../../ui';
-import GroundLinks from './GroundLinks';
 import { Panel, Pill, errText, DAY_NAMES, DAY_ORDER, hourLabel, slotTimes } from './common';
 
 type Ball = 'leather' | 'tennis' | 'practice';
@@ -150,6 +149,5 @@ export default function Prices() {
   return <div className="ad-ground">
     <div className="hint" style={{ margin: 0 }}>Set what each ball costs, on which days and at what times. Customers see the changes as soon as you save.</div>
     {data.items.map((g) => <GroundCard key={g.id} g={g} />)}
-    <GroundLinks />
   </div>;
 }

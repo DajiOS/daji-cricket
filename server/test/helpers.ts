@@ -4,7 +4,6 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { loadConfig, type Config } from '../src/config.ts';
 import { openDb, closeDb, db } from '../src/db.ts';
-import { withAppendOnlyLifted } from '../src/appendOnly.ts';
 import { buildServer } from '../src/app.ts';
 import { seedDemo, DEMO_ACCOUNTS } from '../src/seed.ts';
 import { setNow, resetClock, advance, T0 } from '../src/clock.ts';
@@ -40,7 +39,7 @@ export async function startHarness(env: Record<string, string> = {}): Promise<Ha
   setNow(T0);
   openDb(':memory:');
   seedDemo(cfg);
-  updateSettings({ requireApproval: false, bookingsOpenFrom: '', bookingsCloseFrom: '', guppiAssistEnabled: true, customerRescheduleEnabled: true, securityDepositEnabled: true }, null); // the older tests book and confirm straight away; approval has its own tests. The release switches ship OFF; tests of those features turn them on here (rel-lang.test.ts checks the shipped defaults).
+  updateSettings({ requireApproval: false, bookingsOpenFrom: '', bookingsCloseFrom: '' }, null); // the older tests book and confirm straight away; approval has its own tests
   const server = buildServer(cfg);
   await new Promise<void>((res) => server.listen(0, '127.0.0.1', res));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -64,11 +63,11 @@ export async function startHarness(env: Record<string, string> = {}): Promise<Ha
       const d = db();
       d.exec('PRAGMA foreign_keys = OFF');
       const tables = d.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as { name: string }[];
-      withAppendOnlyLifted(d, () => { for (const t of tables) d.exec(`DELETE FROM "${t.name}"`); });
+      for (const t of tables) d.exec(`DELETE FROM "${t.name}"`);
       d.exec('PRAGMA foreign_keys = ON');
       setNow(T0);
       seedDemo(cfg);
-      updateSettings({ requireApproval: false, bookingsOpenFrom: '', bookingsCloseFrom: '', guppiAssistEnabled: true, customerRescheduleEnabled: true, securityDepositEnabled: true }, null);
+      updateSettings({ requireApproval: false, bookingsOpenFrom: '', bookingsCloseFrom: '' }, null);
       ensureBuiltinCategories();
     },
     async close() {
@@ -135,7 +134,7 @@ export async function sendWebhook(h: Harness, payload: unknown, opts: { eventId?
 
 export const capturedEvent = (orderId: string, amountPaise: number, paymentId = 'pay_wh_1') => ({
   entity: 'event', event: 'payment.captured',
-  payload: { payment: { entity: { id: paymentId, order_id: orderId, amount: amountPaise, currency: 'INR', status: 'captured' } } },
+  payload: { payment: { entity: { id: paymentId, order_id: orderId, amount: amountPaise, status: 'captured' } } },
 });
 
 export const setting = (patch: Record<string, unknown>): void => { updateSettings(patch, null); };

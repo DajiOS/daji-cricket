@@ -16,12 +16,6 @@ export interface Config {
   /** A CDN address that serves the photos, videos and background films (deploy/CDN.md), e.g. https://d1abcd.cloudfront.net. Empty = this server serves them. */
   mediaCdn: string;
   demoMode: boolean;
-  /** Which system this is: live (real money, real customers), test (a rehearsal with provider test keys) or dev. 'unset' on a real domain is a fatal configuration error. */
-  appEnv: 'live' | 'test' | 'dev' | 'unset';
-  /** 'razorpay' needs the provider keys; 'upi_only' is for a ground that takes direct UPI only. */
-  paymentsMode: 'razorpay' | 'upi_only';
-  /** Uploaded files are scanned before they are kept. In live the scanner must be ClamAV. */
-  files: { scanner: 'builtin' | 'clamav' | 'off'; clamavHost: string; clamavPort: number };
   /** Phone number and WhatsApp code sign-up and sign-in. Off until the WhatsApp OTP template is approved in Meta (Facebook Developer); set OTP_SIGNIN=on to switch it back on. */
   otpSignIn: boolean;
   jwtSecret: string;
@@ -148,9 +142,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     isLocal,
     mediaCdn: env.MEDIA_CDN?.trim() ? parseOrigin('MEDIA_CDN', env.MEDIA_CDN.trim()) : '',
     demoMode: truthy(env.DEMO_MODE, isLocal),
-    appEnv: appEnvOf(env.APP_ENV, isLocal),
-    paymentsMode: env.PAYMENTS_MODE === 'upi_only' ? 'upi_only' : 'razorpay',
-    files: filesOf(env, isLocal),
     otpSignIn: truthy(env.OTP_SIGNIN, false),
     jwtSecret: secret || DEV_SECRET,
     jwtTtlDays: Number(env.JWT_TTL_DAYS ?? 30),
@@ -213,20 +204,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   };
 }
 
-function appEnvOf(v: string | undefined, isLocal: boolean): 'live' | 'test' | 'dev' | 'unset' {
-  const e = (v ?? '').trim().toLowerCase();
-  if (!e) return isLocal ? 'dev' : 'unset';
-  if (e === 'live' || e === 'test' || e === 'dev') return e;
-  throw new Error(`APP_ENV must be live, test or dev (got "${v}")`);
-}
-
-function filesOf(env: Record<string, string | undefined>, isLocal: boolean): Config['files'] {
-  const m = (env.FILE_SCANNER ?? '').trim().toLowerCase();
-  const live = (env.APP_ENV ?? '').trim().toLowerCase() === 'live' || (!isLocal && !env.APP_ENV);
-  const scanner = m === 'clamav' || m === 'builtin' || m === 'off' ? m : m === '' ? (live ? 'clamav' : 'builtin') : (() => { throw new Error(`FILE_SCANNER must be clamav, builtin or off (got "${env.FILE_SCANNER}")`); })();
-  return { scanner, clamavHost: env.CLAMAV_HOST || '127.0.0.1', clamavPort: Number(env.CLAMAV_PORT ?? 3310) || 3310 };
-}
-
 function aiMode(v: string | undefined): 'builtin' | 'auto' | 'claude' {
   const m = (v ?? 'auto').trim().toLowerCase();
   if (m === 'builtin' || m === 'auto' || m === 'claude') return m;
@@ -253,25 +230,4 @@ export function configWarnings(c: Config): string[] {
   if (!c.isLocal && c.backup.enabled && !c.backup.s3.bucket) w.push('BACKUP_S3_BUCKET is not set: backups stay on the same disk as the database. Set the BACKUP_S3_* settings (needs BACKUP_PASSPHRASE) to copy each backup off the server.');
   if (!c.isLocal && c.backup.enabled && !c.backup.passphrase) w.push('BACKUP_PASSPHRASE is not set: backups are stored unencrypted. Set it, and keep a copy of it away from the server.');
   return w;
-}
-
-/**
- * Problems that must stop the server from starting, because carrying on would risk real money or real data. The wrong system must never pass for the right one:
- * a real domain has to say which system it is, a live system cannot run demo accounts or a fake gateway, and a rehearsal cannot hold live payment keys (or the reverse).
- */
-export function fatalConfigProblems(c: Config): string[] {
-  const p: string[] = [];
-  if (c.appEnv === 'unset') p.push('APP_ENV is not set. Set APP_ENV=live (real customers and money) or APP_ENV=test (a rehearsal) so this system knows what it is.');
-  const live = c.appEnv === 'live';
-  if (live) {
-    if (c.demoMode) p.push('DEMO_MODE is on in a live system: demo accounts and the fake payment gateway would be active. Turn it off.');
-    if (c.paymentsMode === 'razorpay' && !razorpayConfigured(c)) p.push('Razorpay keys are not set in a live system (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET). Set them, or PAYMENTS_MODE=upi_only if the ground takes direct UPI only.');
-    if (c.paymentsMode === 'razorpay' && razorpayConfigured(c) && !c.razorpay.webhookSecret) p.push('RAZORPAY_WEBHOOK_SECRET is not set in a live system: payments would never be confirmed.');
-    if (c.razorpay.keyId.startsWith('rzp_test_')) p.push('A Razorpay TEST key is set in a live system. Use the live keys.');
-    if (c.files.scanner !== 'clamav') p.push(`FILE_SCANNER is ${c.files.scanner} in a live system: uploads must be scanned by ClamAV (FILE_SCANNER=clamav, CLAMAV_HOST, CLAMAV_PORT).`);
-    if (!c.publicUrl.startsWith('https://') && !c.isLocal) p.push('PUBLIC_URL must be https:// in a live system.');
-  }
-  if ((c.appEnv === 'test' || c.appEnv === 'dev') && c.razorpay.keyId.startsWith('rzp_live_')) p.push(`A Razorpay LIVE key is set in a ${c.appEnv} system: a rehearsal must use test keys only.`);
-  if (c.appEnv === 'test' && c.files.scanner === 'off') p.push('FILE_SCANNER=off is not allowed outside dev.');
-  return p;
 }

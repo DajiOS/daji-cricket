@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 const STAFF: ('owner' | 'staff' | 'super_admin')[] = ['owner', 'staff', 'super_admin'];
 const A = { auth: STAFF };
 const BIG = { auth: STAFF, maxBody: 16 * 1024 * 1024 };
-const FILE = { auth: STAFF, maxBody: MAX_ATTACHMENT_BYTES + 1024, upload: 'accounting_file' };
+const FILE = { auth: STAFF, maxBody: MAX_ATTACHMENT_BYTES + 1024 };
 
 const pdfCache = new Map<string, ParsedStatement>();
 export function booksRoutes(r: Router): void {

@@ -13,7 +13,6 @@ import { gatewayRoutes } from './routes/gateway.ts';
 import { contactRoutes } from './routes/contacts.ts';
 import { accountingRoutes } from './routes/accounting.ts';
 import { askRoutes } from './routes/ask.ts';
-import { guppiRoutes } from './routes/guppi.ts';
 import { academyRoutes } from './routes/academy.ts';
 import { matchRoutes } from './routes/matches.ts';
 import { booksRoutes } from './routes/books.ts';
@@ -37,7 +36,6 @@ export function buildRouter(): Router {
   contactRoutes(r);
   accountingRoutes(r);
   askRoutes(r);
-  guppiRoutes(r);
   academyRoutes(r);
   matchRoutes(r);
   booksRoutes(r);

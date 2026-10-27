@@ -6,7 +6,8 @@ import { getSettings } from '../settings.ts';
 import { availability, getGroundOr404, listGrounds, toGround } from '../grounds.ts';
 import { Validator } from '../input.ts';
 import { HttpError } from '../errors.ts';
-import { checkPasswordStrength, createUser, login, revokeAllTokens, revokeToken, signToken, toUser, userByEmail, userByPhone, userRow } from '../auth.ts';
+import { checkPasswordStrength, createUser, hashPassword, login, revokeAllTokens, revokeToken, signToken, toUser, userByEmail, userByPhone, userRow, type UserRow } from '../auth.ts';
+import { splitName, titleCase } from '../names.ts';
 import { checkOtp, requestOtp } from '../otp.ts';
 import { requestPasswordReset, resetPassword } from '../passwordReset.ts';
 import { otpAvailable } from '../notifications.ts';
@@ -26,7 +27,7 @@ export function publicRoutes(r: Router): void {
     let database = 'ok';
     try { one('SELECT 1 AS n'); } catch { database = 'error'; }
     const healthy = database === 'ok';
-    return ok({ ok: healthy, time: now(), database, demo: c.cfg.demoMode, env: c.cfg.appEnv }, healthy ? 200 : 503);
+    return ok({ ok: healthy, time: now(), database, demo: c.cfg.demoMode }, healthy ? 200 : 503);
   }, { rate: 'none' });
 
   // Today's festival look (India time), read by the website on every page load. ?date= shows another day and
@@ -75,9 +76,6 @@ export function publicRoutes(r: Router): void {
       demoMode: c.cfg.demoMode,
       publicUrl: c.cfg.publicUrl,
       mediaBase: c.cfg.mediaCdn || null,
-      guppiBookingEnabled: s.guppiAssistEnabled,
-      securityDepositEnabled: s.securityDepositEnabled,
-      customerRescheduleEnabled: s.customerRescheduleEnabled && s.rescheduleCutoffHours !== null && s.rescheduleMaxMoves !== null,
     };
     return ok(cfg);
   });

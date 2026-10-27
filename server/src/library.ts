@@ -6,7 +6,6 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { many, one, registerSchema, run } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
-import { gateFile } from './intake.ts';
 import { HttpError, notFound } from './errors.ts';
 
 // The media library: photos and videos of any size (a few GB is fine) uploaded from the admin desk and shown on the website.
@@ -363,13 +362,6 @@ export async function putChunk(dataDir: string, req: IncomingMessage, id: string
   const received = offset + got;
   run('UPDATE media_uploads SET received = ? WHERE id = ?', received, id);
   if (received < u.size) return { received, size: u.size, item: null };
-  // the finished file is checked before it becomes part of the library; if it is infected it is removed, if it cannot be checked the last piece is asked for again
-  try { await gateFile(partPath(dataDir, id), 'library', { id: actorId, role: null }); }
-  catch (e) {
-    if (e instanceof HttpError && e.code === 'FILE_REJECTED') { try { unlinkSync(partPath(dataDir, id)); } catch { /* gone */ } run('DELETE FROM media_uploads WHERE id = ?', id); }
-    else run('UPDATE media_uploads SET received = ? WHERE id = ?', offset, id);
-    throw e;
-  }
   const file = pathOf(dataDir, id, u.ext);
   renameSync(partPath(dataDir, id), file);
   run('DELETE FROM media_uploads WHERE id = ?', id);

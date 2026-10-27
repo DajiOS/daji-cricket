@@ -57,7 +57,7 @@ export function Attention({ today, canBookings, canVerify, onChanged, version }:
         <div key={b.id} className="attn">
           <div className="attn-main">
             <div className="strong">{b.customerName} <span className="muted small">· {b.groundName}</span></div>
-            <div className="small muted">{fmtDay(b.date)}, {timeRange(b)}{b.formatLabel ? ` · ${b.formatLabel}` : ''} · paid {inr(b.paidPaise)} of {inr(b.totalPaise)}</div>
+            <div className="small muted">{fmtDay(b.date)}, {timeRange(b)}{b.formatLabel ? ` · ${b.formatLabel}` : ''} · deposit {inr(b.paidPaise)} of {inr(b.totalPaise)}</div>
           </div>
           <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
             <button className="btn sm primary" onClick={() => approve(b)}>Approve</button>

@@ -211,7 +211,7 @@ export function sellMembership(ownerId: string, actor: Actor, body: unknown): Me
   v.done();
   const plan = planOr404(ownerId, pay.planId!);
   if (!plan.active) throw conflict('PLAN_INACTIVE', 'That plan is switched off');
-  const dup = one<{ id: string; name: string }>('SELECT id, name FROM memberships WHERE owner_id = ? AND phone = ? AND deleted_at IS NULL', ownerId, phone!);
+  const dup = one<{ id: string; name: string }>('SELECT id, name FROM memberships WHERE owner_id = ? AND phone = ? AND deleted_at IS NULL', ownerId, phone);
   if (dup) throw conflict('MEMBER_EXISTS', `${dup.name} already has a membership with this number. Renew it instead.`, { memberId: dup.id });
   return tx(() => {
     const id = newId('mem'), t = now(), start = startDate ?? today();

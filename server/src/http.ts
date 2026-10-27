@@ -8,8 +8,6 @@ import { HttpError, forbidden } from './errors.ts';
 import { now } from './clock.ts';
 import { serveWeb } from './site.ts';
 import { serveLibraryFile } from './library.ts';
-import { configureIntake, gateUpload } from './intake.ts';
-import { idemAbandon, idemBegin, idemFinish, parseIdempotencyKey, requestHash } from './idempotency.ts';
 
 export interface Reply {
   status: number;
@@ -42,10 +40,6 @@ export interface RouteOpts {
   /** The handler reads the request itself (a large upload streamed to disk); the body is not buffered. */
   stream?: boolean;
   rate?: 'auth' | 'none';
-  /** Honours the `Idempotency-Key` header: a retry with the same key and request gets the first answer back and the action is not repeated. 'required' refuses a request that has no key. */
-  idempotent?: boolean | 'required';
-  /** The request body is an uploaded file. It is virus-checked (and refused if it fails or cannot be checked) before the handler runs; the name says what the file is for. */
-  upload?: string;
 }
 interface Route { method: string; re: RegExp; keys: string[]; handler: Handler; opts: RouteOpts }
 
@@ -136,7 +130,7 @@ function corsHeaders(cfg: Config, origin: string | undefined): Record<string, st
     }
   }
   if (h['Access-Control-Allow-Origin']) {
-    h['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, Idempotency-Key, X-Daji-Env';
+    h['Access-Control-Allow-Headers'] = 'Authorization, Content-Type';
     h['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
     h['Access-Control-Max-Age'] = '600';
   }
@@ -197,7 +191,6 @@ export function errorBody(e: HttpError) {
 
 export function createApp(cfg: Config, router: Router): Server {
   setVaultKey(cfg.fieldKey);
-  configureIntake(cfg);
   const DEFAULT_BODY = 256 * 1024;
   return createServer(async (req, res) => {
     const started = Date.now();
@@ -235,12 +228,6 @@ export function createApp(cfg: Config, router: Router): Server {
       if (m === 'method') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'That method is not allowed here');
       const { route, params } = m;
 
-      // An app or tool that says which system it was built for is refused by any other system: a rehearsal build can never act on the live one, nor the reverse.
-      const claimed = req.headers['x-daji-env'];
-      if (claimed !== undefined && url.pathname !== '/api/health' && claimed !== cfg.appEnv) {
-        throw new HttpError(409, 'ENV_MISMATCH', 'This app was built for a different Daji system than the one it is talking to, so the request was not sent through.', { server: cfg.appEnv });
-      }
-
       if (cfg.rateLimit && route.opts.rate !== 'none') {
         const retry = route.opts.rate === 'auth'
           ? limited(`auth|${ip}`, 20, 60_000)
@@ -253,12 +240,7 @@ export function createApp(cfg: Config, router: Router): Server {
         }
       }
 
-      // If who this is cannot be worked out (the database could not answer), nothing is granted and the client is told to retry: never a 200, never a sign-out.
-      let user: UserRow | null;
-      try { user = authenticate(cfg, req.headers.authorization); } catch (e) {
-        if (cfg.log) console.error(JSON.stringify({ t: new Date().toISOString(), level: 'error', path: pathForLog, where: 'authenticate', error: String((e as Error)?.message ?? e) }));
-        throw new HttpError(503, 'AUTH_UNAVAILABLE', 'We could not check your access just now. Please try again in a moment.');
-      }
+      const user = authenticate(cfg, req.headers.authorization);
       const a = route.opts.auth;
       if (a) {
         if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Please sign in');
@@ -271,7 +253,6 @@ export function createApp(cfg: Config, router: Router): Server {
       }
 
       const raw = method === 'GET' || method === 'HEAD' || route.opts.stream ? Buffer.alloc(0) : await readBody(req, route.opts.maxBody ?? DEFAULT_BODY);
-      if (route.opts.upload) await gateUpload(raw, route.opts.upload, user ? { id: user.id, role: user.role } : null, user ? (user.role === 'staff' ? user.owner_id : user.id) : null);
       let parsed: unknown;
       const ctx: Ctx = {
         req, res, url, params, query: url.searchParams, ip, cfg, user, raw,
@@ -281,24 +262,8 @@ export function createApp(cfg: Config, router: Router): Server {
           try { return (parsed = JSON.parse(raw.toString('utf8'))); } catch { throw new HttpError(400, 'BAD_JSON', 'The request body is not valid JSON'); }
         },
       };
-      const idemKey = route.opts.idempotent ? parseIdempotencyKey(req.headers['idempotency-key']) : null;
-      if (route.opts.idempotent === 'required' && !idemKey) throw new HttpError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'Send an Idempotency-Key header so a retry cannot repeat this action');
-      const scope = user ? `u:${user.id}` : `ip:${ip}`;
-      if (idemKey) {
-        const begin = idemBegin(scope, idemKey, method, url.pathname + url.search, requestHash(method, url.pathname + url.search, raw));
-        if (begin.kind === 'replay') {
-          status = begin.status;
-          send(res, { status: begin.status, raw: begin.body, contentType: 'application/json; charset=utf-8', headers: { 'Idempotent-Replayed': 'true' } }, { ...cors, 'Cache-Control': 'no-store' });
-          return;
-        }
-      }
-      let out: Reply;
-      try { out = await route.handler(ctx); } catch (e) { if (idemKey) idemAbandon(scope, idemKey); throw e; }
-      if ((out as unknown) === HANDLED) { if (idemKey) idemAbandon(scope, idemKey); status = res.statusCode; return; }
-      if (idemKey) {
-        if (out.status >= 200 && out.status < 300 && out.raw === undefined) idemFinish(scope, idemKey, out.status, out.body === undefined ? '' : JSON.stringify(out.body));
-        else idemAbandon(scope, idemKey);
-      }
+      const out = await route.handler(ctx);
+      if ((out as unknown) === HANDLED) { status = res.statusCode; return; }
       status = out.status;
       send(res, out, { ...cors, 'Cache-Control': 'no-store' });
     } catch (e) {

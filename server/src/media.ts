@@ -1,11 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { many, one, registerSchema, run } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
 import { HttpError, notFound } from './errors.ts';
-import { storeUpload } from './intake.ts';
 import { audit, type Actor } from './audit.ts';
 
 // Photos for the website gallery, grounds and the academy. An upload is a normal request body (the file itself); its type is read from its
@@ -60,14 +59,12 @@ export function addPhoto(dataDir: string, ownerId: string | null, actor: Actor, 
   const dup = one<Row>('SELECT * FROM media WHERE owner_id IS ? AND kind = ? AND sha256 = ? AND deleted_at IS NULL', ownerId, kind, sha);
   if (dup) return toOut(dup); // the same photo twice is the same photo
   const id = newId('med');
+  const dir = join(dataDir, 'media');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${id}.${t.ext}`), data);
   const clean = filename.replace(/[^\w.\- ]+/g, '_').slice(0, 100) || 'photo';
-  storeUpload({
-    dataDir, buf: data, finalPath: join(dataDir, 'media', `${id}.${t.ext}`), purpose: 'media', actor, ownerId,
-    writeMetadata: () => {
-      run('INSERT INTO media(id, owner_id, kind, filename, mime, ext, bytes, sha256, created_at, created_by) VALUES(?,?,?,?,?,?,?,?,?,?)', id, ownerId, kind, clean, t.mime, t.ext, data.length, sha, now(), actor.id);
-      audit(actor, 'media.add', 'media', id, { kind, bytes: data.length }, ownerId ?? undefined);
-    },
-  });
+  run('INSERT INTO media(id, owner_id, kind, filename, mime, ext, bytes, sha256, created_at, created_by) VALUES(?,?,?,?,?,?,?,?,?,?)', id, ownerId, kind, clean, t.mime, t.ext, data.length, sha, now(), actor.id);
+  audit(actor, 'media.add', 'media', id, { kind, bytes: data.length }, ownerId ?? undefined);
   return toOut(one<Row>('SELECT * FROM media WHERE id = ?', id)!);
 }
 

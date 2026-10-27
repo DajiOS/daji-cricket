@@ -1,4 +1,4 @@
-import { readFileSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { one, run } from './db.ts';
@@ -6,7 +6,6 @@ import { now } from './clock.ts';
 import { HttpError, notFound } from './errors.ts';
 import { audit } from './audit.ts';
 import { sniffImage } from './media.ts';
-import { storeUpload } from './intake.ts';
 import type { UserRow } from './auth.ts';
 
 /** A person's own profile picture. Stored under a random id (the address is unguessable), the type is read from the file itself, and a new picture replaces the old one. */
@@ -20,15 +19,11 @@ export function setAvatar(dataDir: string, u: UserRow, data: Buffer): string {
   const t = sniffImage(data);
   if (!t) throw new HttpError(415, 'NOT_A_PHOTO', 'Only PNG, JPEG, WebP or GIF pictures can be used');
   const id = randomBytes(12).toString('hex');
-  // scanned, quarantined, then released together with the record; the picture it replaces is kept as an earlier version
-  storeUpload({
-    dataDir, buf: data, finalPath: file(dataDir, id, t.ext), purpose: 'avatar', actor: { id: u.id, role: u.role }, ownerId: u.id,
-    versioned: u.avatar_id && u.avatar_ext ? file(dataDir, u.avatar_id, u.avatar_ext) : false,
-    writeMetadata: () => {
-      run('UPDATE users SET avatar_id = ?, avatar_ext = ?, avatar_mime = ?, updated_at = ? WHERE id = ?', id, t.ext, t.mime, now(), u.id);
-      audit({ id: u.id, role: u.role }, 'profile.avatar_set', 'user', u.id, { bytes: data.length });
-    },
-  });
+  mkdirSync(join(dataDir, 'avatars'), { recursive: true });
+  writeFileSync(file(dataDir, id, t.ext), data);
+  dropFile(dataDir, u);
+  run('UPDATE users SET avatar_id = ?, avatar_ext = ?, avatar_mime = ?, updated_at = ? WHERE id = ?', id, t.ext, t.mime, now(), u.id);
+  audit({ id: u.id, role: u.role }, 'profile.avatar_set', 'user', u.id, { bytes: data.length });
   return `/api/avatar/${id}`;
 }
 

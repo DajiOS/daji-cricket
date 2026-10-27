@@ -5,7 +5,7 @@ import { audit, listAudit, type Actor } from './audit.ts';
 import { conflict, forbidden, notFound } from './errors.ts';
 import { newId } from './ids.ts';
 import { Validator } from './input.ts';
-import { permissionList, type UserRow } from './auth.ts';
+import type { UserRow } from './auth.ts';
 
 // Approval workflows the owner builds: for each kind of thing that needs a decision, the steps it goes through, who signs
 // each step (the owner, a role, a named person, or anyone who looks after that area), amounts that add a step, and where a
@@ -87,7 +87,7 @@ export function getFlow(ownerId: string, kind: ApprovalKind): { flow: Flow; cust
 
 const name = (id: string | null): string | null => (id ? one<{ name: string }>('SELECT name FROM users WHERE id = ?', id)?.name ?? null : null);
 const team = (ownerId: string) => many<UserRow>("SELECT * FROM users WHERE role = 'staff' AND owner_id = ? AND active = 1 ORDER BY name", ownerId);
-const perms = (u: UserRow): string[] => (u.role === 'staff' ? permissionList(u.permissions) : []);
+const perms = (u: UserRow): string[] => (u.role === 'staff' ? JSON.parse(u.permissions || '[]') as string[] : []);
 /** Whether a team member looks after this kind: its right, and for refunds and discounts every right of the General manager
  * role too (the owner decided only the owner and the general manager deal with those). */
 const holds = (mine: string[], kind: ApprovalKind): boolean => {

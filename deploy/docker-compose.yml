@@ -7,12 +7,6 @@ services:
     environment: { TRUST_PROXY: "1" }
     volumes: [ "daji-data:/data" ]
     expose: ["4000"]
-    depends_on: [clamav]
-  clamav:
-    image: clamav/clamav:1.4
-    restart: unless-stopped
-    volumes: [ "clamav-db:/var/lib/clamav" ]
-    expose: ["3310"]
   caddy:
     image: caddy:2
     restart: unless-stopped
@@ -20,4 +14,4 @@ services:
     ports: ["80:80", "443:443"]
     environment: { API_HOST: "${API_HOST:-api.dajicricket.com}" }
     volumes: [ "./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy-data:/data", "caddy-config:/config" ]
-volumes: { daji-data: {}, caddy-data: {}, caddy-config: {}, clamav-db: {} }
+volumes: { daji-data: {}, caddy-data: {}, caddy-config: {} }

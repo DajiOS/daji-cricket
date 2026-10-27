@@ -40,7 +40,7 @@ registerSchema('offers-1', `ALTER TABLE bookings ADD COLUMN cancel_offers TEXT;`
 export interface BookingRow {
   id: string; ref: string; ground_id: string; owner_id: string; customer_id: string; date: string; start_at: number; end_at: number; slot_count: number; format_label: string | null; ball: 'red' | 'white' | 'tennis' | null;
   status: BookingStatus; source: 'online' | 'walk_in' | 'enquiry'; total_paise: number; advance_paise: number; paid_paise: number; pay_method: 'razorpay' | 'upi' | null;
-  hold_expires_at: number | null; hold_extensions: number; reschedule_count: number; needs_review: number; confirmed_at: number | null; cancelled_at: number | null;
+  hold_expires_at: number | null; hold_extensions: number; needs_review: number; confirmed_at: number | null; cancelled_at: number | null;
   cancel_kind: 'free' | 'credit' | 'none' | null; cancel_reason: string | null; cancelled_by: string | null; refund_paise: number; credit_paise: number;
   approval: 'pending' | 'approved'; resolution: 'awaiting' | 'refund' | 'half' | 'credit' | null; owner_cancelled: number; cancel_offers: string | null; promo_code: string | null; discount_paise: number; series_id: string | null; series_index: number | null;
   players: number | null; notes: string | null; enquiry_id: string | null; created_by: string | null; reminded_at: number | null; created_at: number; updated_at: number;
@@ -50,28 +50,12 @@ type Joined = BookingRow & { ground_name: string; customer_name: string; custome
 const JOIN = `SELECT b.*, g.name AS ground_name, u.name AS customer_name, u.phone AS customer_phone
   FROM bookings b JOIN grounds g ON g.id = b.ground_id JOIN users u ON u.id = b.customer_id`;
 
-/**
- * What the customer still owes online because a booking was moved to a dearer time: the net rise in price since before its first move, less what has been paid since the first move
- * with a balance payment (online, by auto-debit, or recorded by staff), and never more than the booking's balance. The server calculates it so no screen has to.
- * A cheaper move owes nothing (it is settled as credit or a refund request) and a booking that is not confirmed owes nothing here.
- */
-export function moveDifferenceDue(b: BookingRow): number {
-  if (b.status !== 'confirmed' || b.total_paise <= b.paid_paise) return 0;
-  const moves = many<{ from_total_paise: number; created_at: number }>("SELECT from_total_paise, created_at FROM booking_reschedules WHERE booking_id = ? AND kind = 'move' ORDER BY created_at, rowid", b.id);
-  if (!moves.length) return 0;
-  // the net rise over the price the booking had before its first move (a dearer move followed by a cheaper one owes nothing), less what has been paid on the balance since
-  const increase = b.total_paise - moves[0]!.from_total_paise;
-  if (increase <= 0) return 0;
-  const paid = one<{ s: number | null }>("SELECT SUM(amount_paise - refunded_paise) s FROM payments WHERE booking_id = ? AND purpose = 'balance' AND status IN ('captured','partially_refunded') AND created_at >= ?", b.id, moves[0]!.created_at)!.s ?? 0;
-  return Math.max(0, Math.min(increase - paid, b.total_paise - b.paid_paise));
-}
-
 export function toBooking(r: Joined): Booking {
   return {
     id: r.id, ref: r.ref, groundId: r.ground_id, groundName: r.ground_name, ownerId: r.owner_id, customerId: r.customer_id,
     customerName: r.customer_name, customerPhone: r.customer_phone, date: r.date, startAt: r.start_at, endAt: r.end_at, slotCount: r.slot_count, formatLabel: r.format_label ?? null, ball: r.ball ?? null,
     status: r.status, source: r.source, totalPaise: r.total_paise, advancePaise: r.advance_paise, paidPaise: r.paid_paise,
-    balancePaise: Math.max(r.total_paise - r.paid_paise, 0), moveDifferenceDuePaise: moveDifferenceDue(r), holdExpiresAt: r.hold_expires_at, needsReview: !!r.needs_review,
+    balancePaise: Math.max(r.total_paise - r.paid_paise, 0), holdExpiresAt: r.hold_expires_at, needsReview: !!r.needs_review,
     cancelKind: r.cancel_kind, approval: r.approval, cancelledByOwner: !!r.owner_cancelled, resolution: r.resolution ?? null, promoCode: r.promo_code ?? null, seriesId: r.series_id ?? null, seriesIndex: r.series_index ?? null, discountPaise: r.discount_paise ?? 0, cancelOffers: (r.cancel_offers ? r.cancel_offers.split(',') : r.owner_cancelled ? ['refund', 'credit'] : []) as Booking['cancelOffers'], cancelReason: r.cancel_reason ?? null, refundPaise: r.refund_paise, creditPaise: r.credit_paise, cancelledAt: r.cancelled_at, confirmedAt: r.confirmed_at,
     players: r.players, notes: r.notes, createdAt: r.created_at,
   };
@@ -120,19 +104,13 @@ export function releaseSlots(bookingId: string): void {
   run("DELETE FROM booking_slots WHERE booking_id = ? AND kind = 'booking'", bookingId);
 }
 
-/** Gives up this booking's slots except the ones it keeps. Used by a move, after the new slots are already held. */
-export function releaseSlotsExcept(bookingId: string, keep: number[]): void {
-  const ph = keep.map(() => '?').join(',') || 'NULL';
-  run(`DELETE FROM booking_slots WHERE booking_id = ? AND kind = 'booking' AND slot_start NOT IN (${ph})`, bookingId, ...keep);
-}
-
 /** held → confirmed. Idempotent: returns false when it was already confirmed. */
 export function confirmBooking(id: string, actor: Actor, detail: Record<string, unknown> = {}): boolean {
   const b = bookingOr404(id);
   if (b.status === 'confirmed') return false;
   if (b.status !== 'held') throw new HttpError(409, 'BAD_STATE', `A ${b.status} booking cannot be confirmed`);
   const t = now();
-  // Online bookings wait for the owner to approve them; the advance is in and the slot stays held meanwhile.
+  // Online bookings wait for the owner to approve them; the deposit is in and the slot stays held meanwhile.
   const needsApproval = b.source === 'online' && getSettings().requireApproval;
   run("UPDATE bookings SET status = 'confirmed', approval = ?, confirmed_at = ?, hold_expires_at = NULL, needs_review = 0, updated_at = ? WHERE id = ?", needsApproval ? 'pending' : 'approved', t, t, id);
   audit(actor, 'booking.confirm', 'booking', id, { paidPaise: b.paid_paise, approval: needsApproval ? 'pending' : 'approved', ...detail }, b.owner_id);
@@ -141,20 +119,20 @@ export function confirmBooking(id: string, actor: Actor, detail: Record<string, 
   if (needsApproval) {
     notify(b.customer_id, 'booking_pending', d, id);
     const who = one<{ name: string }>('SELECT name FROM users WHERE id = ?', b.customer_id);
-    pushStaffOf(b.owner_id, 'booking_needs_approval', 'Booking waiting for approval', `${who?.name ?? 'A customer'} · ${g?.name ?? ''} · ${fmtDateTime(b.start_at)} · paid ${formatPaise(b.paid_paise)}. Open the app to approve.`, id);
+    pushStaffOf(b.owner_id, 'booking_needs_approval', 'Booking waiting for approval', `${who?.name ?? 'A customer'} · ${g?.name ?? ''} · ${fmtDateTime(b.start_at)} · deposit ${formatPaise(b.paid_paise)}. Open the app to approve.`, id);
   } else notify(b.customer_id, 'booking_confirmed', d, id);
-  confirmSiblings(b, needsApproval, t, actor);
+  confirmSiblings(b, needsApproval, t);
   return true;
 }
 
 /**
- * The first booking of a repeating series carries the advance. The later dates are reserved with it (held without a timer);
+ * The first booking of a repeating series carries the deposit. The later dates are reserved with it (held without a timer);
  * once the first is confirmed they are confirmed too, with their balance due at the ground (or collected by auto-debit).
  */
-function confirmSiblings(first: BookingRow, needsApproval: boolean, t: number, actor: Actor): void {
+function confirmSiblings(first: BookingRow, needsApproval: boolean, t: number): void {
   if (!first.series_id || first.series_index !== 0) return;
   const r = run("UPDATE bookings SET status = 'confirmed', approval = ?, confirmed_at = ?, updated_at = ? WHERE series_id = ? AND series_index > 0 AND status = 'held'", needsApproval ? 'pending' : 'approved', t, t, first.series_id);
-  if (Number(r.changes) > 0) audit(actor, 'series.confirm', 'booking', first.id, { dates: Number(r.changes) }, first.owner_id);
+  if (Number(r.changes) > 0) audit({ id: first.created_by ?? 'system', role: 'customer' }, 'series.confirm', 'booking', first.id, { dates: Number(r.changes) }, first.owner_id);
 }
 
 /** The first booking of a series did not go through: the reserved later dates are given back. */
@@ -171,7 +149,7 @@ export function releaseSiblings(first: { id: string; series_id: string | null; s
 /** The owner (or staff with the right) approves a booking that is waiting. The customer is told it is confirmed. */
 export function approveBooking(actor: Actor, id: string): void {
   const b = bookingOr404(id);
-  if (b.status !== 'confirmed') throw new HttpError(409, 'BAD_STATE', `Only a booking with its advance paid can be approved (this one is ${b.status})`);
+  if (b.status !== 'confirmed') throw new HttpError(409, 'BAD_STATE', `Only a booking with its deposit paid can be approved (this one is ${b.status})`);
   if (b.approval === 'approved') return;
   run("UPDATE bookings SET approval = 'approved', updated_at = ? WHERE id = ?", now(), id);
   audit(actor, 'booking.approve', 'booking', id, null, b.owner_id);

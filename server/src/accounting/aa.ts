@@ -73,6 +73,7 @@ const PROVIDERS: readonly AaProvider[] = ['setu', 'finvu'];
 
 const TEXT_KEYS = ['setu.baseUrl', 'setu.clientId', 'setu.productInstanceId', 'setu.authUrl', 'finvu.baseUrl', 'finvu.clientId'] as const;
 const SECRET_KEYS = ['setu.clientSecret', 'finvu.clientSecret', 'webhookSecret'] as const;
+const ALL_KEYS: readonly string[] = [...TEXT_KEYS, ...SECRET_KEYS];
 
 function stored(): Map<string, string> {
   const m = new Map<string, string>();

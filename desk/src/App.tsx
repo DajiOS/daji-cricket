@@ -91,7 +91,7 @@ function Shell({ route }: { route: string }) {
         </div>
         <div className="drail-foot">
           <button type="button" className="drail-me" onClick={() => setMeOpen(!meOpen)} aria-expanded={meOpen} aria-haspopup="menu" title={`${s.me.name} · ${roleLabel(s.me)} · ${groundLabel}`}>{initialsOf(s.me.name || s.me.email || '')}</button>
-          <span className="drail-venue">{groundLabel}</span>
+          <span className="drail-hotel">{groundLabel}</span>
           {meOpen && (
             <div className="drail-mepop" role="menu">
               <b>{s.me.name}</b>
