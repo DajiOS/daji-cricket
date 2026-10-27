@@ -199,7 +199,8 @@ export function listBookings(f: {
   if (f.status) { where.push('b.status = ?'); p.push(f.status); }
   if (f.collapse) {
     // a multi-day block is one row: its first day stands for it, and a date filter looks at every day of the block
-    where.push(`NOT (b.series_index > 0 AND b.series_id IN (SELECT id FROM booking_series WHERE kind = 'block'))`);
+    // series_index is NULL on an ordinary booking: compare it as 0, or NOT (NULL ...) drops every ordinary booking once any block exists
+    where.push(`NOT (COALESCE(b.series_index, 0) > 0 AND b.series_id IS NOT NULL AND b.series_id IN (SELECT id FROM booking_series WHERE kind = 'block'))`);
     if (f.from || f.to) {
       const c: string[] = []; const q: string[] = [];
       if (f.from) { c.push('x.date >= ?'); q.push(f.from); }
