@@ -143,3 +143,18 @@ rel('REL-DESK-007', 'a page whose data is refused or fails stops loading: Approv
   assert.match(read('desk/src/lib.ts'), /OWNER_SCOPED = \['\/api\/legal\/staff-terms\/report'/);
   ev('checked', ['Approvals', 'Bills', 'Vendors', 'Media', 'Cameras', 'Reminders', 'Team terms scope']);
 });
+
+rel('REL-DESK-010', 'the bookings list and month calendar keep every ordinary booking once a multi-day booking exists', async () => {
+  // Found on the live desk: an ordinary booking has no series_index (NULL), so "NOT (series_index > 0 AND ...)" was NULL and dropped
+  // every ordinary booking from the grouped list as soon as one multi-day booking existed. The calendar said "0 bookings this month".
+  const plain = await bookAndPay(h, cust, g.id, dayFromNow(2), '07:00', 1);
+  const blk = await h.post('/api/staff/bookings/block', { groundId: g.id, fromDate: dayFromNow(20), toDate: dayFromNow(22), startTime: '07:00', endTime: '22:00', totalPaise: 3_000_000, customer: { name: 'Tejpal Mali', phone: '9637333770' }, payment: { method: 'upi', amountPaise: 1_500_000, reference: 'UTRBLOCK0001' } }, owner);
+  assert.equal(blk.status, 201, JSON.stringify(blk.body));
+  const list = await h.get('/api/staff/bookings?group=1&limit=50', owner);
+  const ids = list.body.items.map((b: any) => b.id);
+  assert.ok(ids.includes(plain.id), 'the ordinary booking is still listed');
+  assert.equal(list.body.items.filter((b: any) => b.seriesId === blk.body.series.id).length, 1, 'the multi-day booking is one row');
+  const cal = await h.get(`/api/staff/bookings?group=1&from=${dayFromNow(0)}&to=${dayFromNow(30)}&limit=200`, owner);
+  assert.ok(cal.body.items.some((b: any) => b.id === plain.id), 'the month calendar range finds it too');
+  ev('listed', ids.length);
+});
