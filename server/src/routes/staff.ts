@@ -17,6 +17,8 @@ import { lookupCustomer, readName, createStaffBlock, createStaffBooking, parseBl
 import { cancelBooking, previewCancel } from '../cancellation.ts';
 import { createPromos, listPromos, setPromoActive } from '../promo.ts';
 import { completeManualRefund, requestRefund, listPayments, listRefunds, paymentHistory, paymentOr404, recordOffline, verifyUpi } from '../payments.ts';
+import { linksOf, setLinks } from '../groundLinks.ts';
+import { readDeposit, recordDeposit } from '../securityDeposit.ts';
 import { blockRange, createGround, listGrounds, toGround, unblockRange, updateGround } from '../grounds.ts';
 import { addEnquiryNote, closeEnquiry, convertEnquiry, convertEnquiryToBlock, getEnquiry, listEnquiries, sendQuotation } from '../enquiries.ts';
 import { customerList, overview, parseRange } from '../reports.ts';
@@ -272,6 +274,32 @@ export function staffRoutes(r: Router): void {
     audit({ id: u.id, role: u.role }, 'ground.update', 'ground', g.id, { before: { price: g0.price_paise, active: g0.active }, after: { price: g.price_paise, active: g.active } }, g.owner_id);
     return ok(toGround(g));
   }, A);
+
+  // Which grounds include which (a whole ground and its nets or pitches). Configuration only: nothing infers it.
+  r.get('/api/staff/grounds/:id/links', (c) => {
+    const u = U(c);
+    requirePermission(u, 'manage_grounds');
+    const g = groundInScope(u, c.params.id!);
+    return ok({ groundId: g.id, includes: linksOf(g.id) });
+  }, A);
+
+  r.put('/api/staff/grounds/:id/links', (c) => {
+    const u = U(c);
+    requirePermission(u, 'manage_grounds');
+    const g = groundInScope(u, c.params.id!);
+    const b = (c.json() ?? {}) as { includes?: unknown };
+    if (!Array.isArray(b.includes) || b.includes.length > 20) throw new HttpError(400, 'VALIDATION_FAILED', 'Send includes: a list of up to 20 resources', { fields: [{ field: 'includes', message: 'A list of { groundId, conflicts }' }] });
+    const items = b.includes.map((x: any) => {
+      if (!x || typeof x.groundId !== 'string' || typeof x.conflicts !== 'boolean') throw new HttpError(400, 'VALIDATION_FAILED', 'Each included resource needs a groundId and conflicts: true or false', { fields: [{ field: 'includes', message: 'groundId and conflicts' }] });
+      return { groundId: x.groundId, conflicts: x.conflicts as boolean };
+    });
+    return ok({ groundId: g.id, includes: setLinks({ id: u.id, role: u.role }, g, items) });
+  }, A);
+
+  r.get('/api/staff/bookings/:id/security-deposit', (c) => ok({ deposit: readDeposit(U(c), c.params.id!) }), A);
+  for (const kind of ['collect', 'refund', 'deduct', 'reverse'] as const) {
+    r.post(`/api/staff/bookings/:id/security-deposit/${kind}`, (c) => created({ deposit: recordDeposit(U(c), c.params.id!, kind, c.json()) }), { ...A, idempotent: true });
+  }
 
   r.post('/api/staff/grounds/:id/blocks', (c) => {
     const u = U(c);

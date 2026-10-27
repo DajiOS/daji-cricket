@@ -7,6 +7,7 @@ import './payments.ts';
 import './credits.ts';
 import './bookings.ts';
 import './appendOnly.ts';
+import './securityDeposit.ts';
 
 // Financial events and the reconciliation that proves the books agree with the records.
 //
@@ -74,16 +75,17 @@ export function reconcile(ownerId: string | null, upTo = '9999-12-31'): Reconcil
   }
 
   // 3. Money in versus what the booking says: it cannot claim more than was received, and what was received beyond it must have gone back.
-  for (const b of many<{ id: string; ref: string; status: string; paid_paise: number; total_paise: number; needs_review: number; source: string; advance_paise: number; recd: number; ref_sum: number }>(
+  for (const b of many<{ id: string; ref: string; status: string; paid_paise: number; total_paise: number; needs_review: number; source: string; advance_paise: number; recd: number; ref_sum: number; restored: number }>(
     `SELECT b.id, b.ref, b.status, b.paid_paise, b.total_paise, b.needs_review, b.source, b.advance_paise,
        COALESCE((SELECT SUM(amount_paise) FROM payments p WHERE p.booking_id = b.id AND p.status IN ('captured','partially_refunded','refunded')), 0) recd,
-       COALESCE((SELECT SUM(r.amount_paise) FROM refunds r WHERE r.booking_id = b.id AND r.status <> 'failed'), 0) ref_sum
+       COALESCE((SELECT SUM(r.amount_paise) FROM refunds r WHERE r.booking_id = b.id AND r.status <> 'failed'), 0) ref_sum,
+       COALESCE((SELECT SUM(c.amount_paise) FROM credit_lots c WHERE c.booking_id = b.id AND c.source = 'restore'), 0) restored
      FROM bookings b WHERE 1=1 ${own.replace('owner_id', 'b.owner_id')}`, ...p)) {
     const seen = b.needs_review === 1;
     if (b.paid_paise > b.recd) add('PAID_EXCEEDS_RECEIVED', 'booking', b.id, `${b.ref}: shows ${b.paid_paise} paid but only ${b.recd} was received`, seen);
     if (b.paid_paise > b.total_paise && ['held', 'confirmed', 'completed'].includes(b.status)) add('OVERPAID_BOOKING', 'booking', b.id, `${b.ref}: paid ${b.paid_paise} on a total of ${b.total_paise}`, seen);
     if (['held', 'confirmed', 'completed', 'no_show'].includes(b.status)) {
-      const gap = b.recd - b.paid_paise - b.ref_sum;
+      const gap = b.recd - b.paid_paise - b.ref_sum - b.restored; // restored: the difference of a cheaper move, returned to the customer as account credit (reschedule.ts settleCheaper)
       if (gap > 0) add('UNAPPLIED_MONEY', 'booking', b.id, `${b.ref}: received ${b.recd}, applied ${b.paid_paise}, returned ${b.ref_sum}: ${gap} is neither on the booking nor returned`, seen);
       // A refund that came out of money already on the booking (a goodwill or correction refund by the ground): approved and audited, and the books use the net figure, but the booking still shows the gross paid.
       else if (gap < 0) add('REFUND_AFTER_PAYMENT_APPLIED', 'booking', b.id, `${b.ref}: ${-gap} was refunded out of money already on the booking, which still shows ${b.paid_paise} paid`, true, 'info');
@@ -95,6 +97,10 @@ export function reconcile(ownerId: string | null, upTo = '9999-12-31'): Reconcil
   for (const x of many<{ id: string }>(`SELECT p.id FROM payments p LEFT JOIN bookings b ON b.id = p.booking_id WHERE (b.id IS NULL OR b.owner_id <> p.owner_id) ${own.replace('owner_id', 'p.owner_id')}`, ...p)) add('PAYMENT_BOOKING_MISMATCH', 'payment', x.id, 'the booking is missing or belongs to another business');
   for (const x of many<{ k: string; n: number }>(`SELECT rp_payment_id k, COUNT(*) n FROM payments WHERE rp_payment_id IS NOT NULL ${own} GROUP BY rp_payment_id HAVING n > 1`, ...p)) add('PROVIDER_PAYMENT_REUSED', 'payment', x.k, `${x.n} payments carry the same provider payment id`);
   for (const x of many<{ id: string }>(`SELECT id FROM payments WHERE status IN ('captured','partially_refunded','refunded') AND (verified_at IS NULL) ${own}`, ...p)) add('CAPTURED_WITHOUT_VERIFICATION', 'payment', x.id, 'received money with no verification time');
+
+  // 4b. The security deposit is its own money: its balance is never negative, and an entry never belongs to another business than its booking.
+  for (const x of many<{ booking_id: string; held: number }>(`SELECT booking_id, SUM(CASE kind WHEN 'collect' THEN amount_paise WHEN 'reverse' THEN amount_paise ELSE -amount_paise END) held FROM security_deposit_entries WHERE 1=1 ${own} GROUP BY booking_id HAVING held < 0`, ...p)) add('DEPOSIT_NEGATIVE', 'booking', x.booking_id, `the security deposit held is ${x.held}`);
+  for (const x of many<{ id: string }>(`SELECT e.id FROM security_deposit_entries e LEFT JOIN bookings b ON b.id = e.booking_id WHERE (b.id IS NULL OR b.owner_id <> e.owner_id) ${own.replace('owner_id', 'e.owner_id')}`, ...p)) add('DEPOSIT_BOOKING_MISMATCH', 'deposit', x.id, 'the booking is missing or belongs to another business');
 
   // 5. Customer credit: no lot is overspent or negative.
   for (const x of many<{ id: string; amount_paise: number; remaining_paise: number }>(`SELECT id, amount_paise, remaining_paise FROM credit_lots WHERE (remaining_paise < 0 OR remaining_paise > amount_paise) ${own}`, ...p)) add('CREDIT_LOT_INVALID', 'credit_lot', x.id, `remaining ${x.remaining_paise} of ${x.amount_paise}`);

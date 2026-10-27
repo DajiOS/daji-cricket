@@ -218,9 +218,9 @@ test('moving: inside the cut-off, unpaid holds, cheaper-than-paid, closed or not
   const dear = await confirmed(cust, dayFromNow(6), '19:00');
   const settle = await h.post(`/api/staff/bookings/${dear.id}/payments`, { method: 'cash', amountPaise: dear.totalPaise - dear.paidPaise }, staff);
   assert.equal(settle.status, 201, JSON.stringify(settle.body));
+  // a cheaper time is no longer refused: the difference is settled as account credit (never refunded silently), see REL-BIZ-UD03-006
   const cheap = await mv(cust, dear.id, dayFromNow(6), '09:00');
-  assert.equal(cheap.status, 409); assert.equal(cheap.body.error.code, 'RESCHEDULE_NEEDS_SETTLEMENT');
-  assert.equal(slotsOf(dear.id)[0], slotStart(dayFromNow(6), '19:00'), 'the refused move changed nothing');
+  assert.equal(cheap.status, 200, JSON.stringify(cheap.body)); assert.equal(cheap.body.settlement.treatment, 'credit'); assert.equal(cheap.body.settlement.creditPaise, dear.totalPaise - 180000);
   // the owner closed a day for online booking
   assert.equal((await h.post('/api/admin/closed-dates', { dates: [dayFromNow(9)], closed: true, reason: 'ground maintenance', scopes: ['ground'] }, await h.login('admin'))).status, 200);
   const ok = await confirmed(cust, dayFromNow(7), '10:00');
@@ -228,7 +228,7 @@ test('moving: inside the cut-off, unpaid holds, cheaper-than-paid, closed or not
   assert.equal(toClosed.status, 409); assert.equal(toClosed.body.error.code, 'DATE_CLOSED');
   assert.equal(slotsOf(ok.id)[0], slotStart(dayFromNow(7), '10:00'));
   // the ground itself (staff) may still move a booking onto a day closed for online booking
-  assert.equal((await h.post(`/api/staff/bookings/${ok.id}/reschedule`, { date: dayFromNow(9), startTime: '10:00' }, staff)).status, 200);
+  assert.equal((await h.post(`/api/staff/bookings/${ok.id}/reschedule`, { date: dayFromNow(9), startTime: '10:00', reason: 'owner asked for this day' }, staff)).status, 200);
   const toBad = await mv(cust, ok.id, date, '03:00');
   void toBad;
   assert.equal(toBad.status, 400, 'outside opening hours');

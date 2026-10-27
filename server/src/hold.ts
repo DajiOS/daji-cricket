@@ -19,6 +19,7 @@ import * as credits from './credits.ts';
 import type { Config } from './config.ts';
 import { evaluatePromo, normCode } from './promo.ts';
 import { isClosedDate } from './closures.ts';
+import { linkedBusy } from './groundLinks.ts';
 import { expandDates, parseRepeat } from './recurring.ts';
 
 export const MAX_DAYS_AHEAD = 365; // customers can book up to a year ahead
@@ -88,6 +89,8 @@ export function planFor(ground: GroundRow, req: { date: string; startTime: strin
 
 /** Inserts the slot rows. The (ground, slot) primary key is the final guard against double booking. */
 export function takeSlots(bookingId: string, ground: GroundRow, starts: number[]): void {
+  // A whole ground and the nets or pitches included in it share time (groundLinks.ts): the final guard refuses a slot a linked booking already holds.
+  for (const [s, by] of linkedBusy(ground, starts, bookingId)) throw new HttpError(409, 'SLOT_TAKEN', `The ${timeOfDay(s)} slot is not available: ${by} is booked at that time`, { slot: s, linkedWith: by });
   for (const s of starts) {
     const hit = one<{ kind: string; booking_id: string | null }>('SELECT kind, booking_id FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, s);
     if (hit) {
@@ -258,7 +261,7 @@ function reserveSeries(ground: GroundRow, customer: UserRow, firstId: string, re
       if (st.bookingsCloseFrom && date >= st.bookingsCloseFrom) throw new HttpError(409, 'BOOKINGS_CLOSED', 'Bookings are closed from that date');
       const p = planFor(ground, { ...req, date }, true);
       if (isClosedDate(date, scope)) throw new HttpError(409, 'DATE_CLOSED', 'Online booking is switched off that day');
-      const busy = p.starts.some((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x));
+      const busy = p.starts.some((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x)) || linkedBusy(ground, p.starts).size > 0;
       if (busy) throw new HttpError(409, 'SLOT_TAKEN', 'That time is already booked');
       const sid = insertBooking({ ground, customerId: customer.id, date, starts: p.starts, totalPaise: p.totalPaise, advancePaise: 0, status: 'held', source: 'online', payMethod: method, holdExpiresAt: null, players: req.players, notes: req.notes ?? null, createdBy: customer.id, format: p.format });
       takeSlots(sid, ground, p.starts);
@@ -497,7 +500,8 @@ export function createStaffBlock(staff: UserRow, input: BlockInput): { series: {
       return planSlots(open, date, input.startTime, count, t, { ignoreMaxSlots: true });
     });
     for (const p of plans) {
-      const hit = p.starts.find((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x));
+      const linked = linkedBusy(ground, p.starts);
+      const hit = p.starts.find((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x) || linked.has(x));
       if (hit) throw new HttpError(409, 'SLOT_TAKEN', `${p.date} is not free for those hours (${timeOfDay(hit)} is taken or blocked). Pick other dates or hours.`, { date: p.date });
     }
     const noMoney = input.payment.amountPaise === 0; // staff may book with nothing received; the whole amount stays due

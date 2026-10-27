@@ -198,12 +198,12 @@ rel('REL-AI-002', 'Guppi has no way to pay, confirm, refund, waive, approve or c
     assert.ok(x.status === 404 || x.status === 405, `${m} ${p} -> ${x.status}`);
   }
   assert.equal(one<{ status: string }>('SELECT status FROM bookings WHERE id = ?', body.hold.id)!.status, 'held');
-  // it cannot move a booking onto a payment or approval either: reschedule leaves the money alone and refuses what needs settling
+  // it cannot move a booking onto a payment or approval either: a cheaper move is settled by the approved Daji credit path, never a silent refund (UD-03)
   const paid = await bookAndPay(h, cust, g.id, dayFromNow(7), '19:00', 1);
   await h.post(`/api/staff/bookings/${paid.id}/payments`, { method: 'cash', amountPaise: paid.totalPaise - paid.paidPaise }, staff);
   const cheap = await freshOption(cust, dayFromNow(7), '09:00');
   const mv = await gMove(cust, { bookingId: paid.id, optionId: cheap, actionId: 'act-cheaper-01', context: { bookingId: paid.id } });
-  assert.equal(mv.status, 409); assert.equal(mv.body.error.code, 'RESCHEDULE_NEEDS_SETTLEMENT');
+  assert.equal(mv.status, 200); assert.equal(mv.body.settlement.treatment, 'credit');
   assert.equal(one<{ n: number }>('SELECT COUNT(*) n FROM refunds')!.n, 0);
   // every Guppi write names Guppi in the audit trail
   assert.equal(JSON.parse(one<{ detail: string }>("SELECT detail FROM audit_log WHERE action = 'booking.hold' AND entity_id = ?", body.hold.id)!.detail).via, 'guppi');
@@ -237,7 +237,7 @@ rel('REL-AI-003', 'when Guppi is switched off or its model is down, the normal b
   setting({ customerRescheduleEnabled: false });
   const off = await h.post(`/api/bookings/${b2.id}/reschedule`, { date: dayFromNow(6), startTime: '12:00' }, cust);
   assert.equal(off.status, 503); assert.equal(off.body.error.code, 'FEATURE_OFF');
-  assert.equal((await h.post(`/api/staff/bookings/${b2.id}/reschedule`, { date: dayFromNow(6), startTime: '12:00' }, staff)).status, 200, 'the ground can still move it');
+  assert.equal((await h.post(`/api/staff/bookings/${b2.id}/reschedule`, { date: dayFromNow(6), startTime: '12:00', reason: 'Ground maintenance that evening' }, staff)).status, 200, 'the ground can still move it');
   assert.equal((await h.post('/api/bookings', { groundId: g.id, date: dayFromNow(8), startTime: '10:00', slots: 1 }, cust)).status, 201, 'booking itself is untouched');
   ev('guppiOffStatuses', [o.status, ask.status]); ev('standardFlow', 'hold, pay, move, cancel all worked');
 });

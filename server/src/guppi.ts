@@ -51,7 +51,7 @@ export function guppiContext(user: UserRow) {
     enabled: s.guppiAssistEnabled,
     authoritative: false,
     user: { role: user.role, canBook: user.role === 'customer', canSeeRevenue: hasPermission(user, 'view_revenue') },
-    actions: user.role === 'customer' ? [...GUPPI_ACTIONS.filter((a) => a !== 'reschedule' || s.customerRescheduleEnabled), 'understand'] : ['options'],
+    actions: user.role === 'customer' ? [...GUPPI_ACTIONS.filter((a) => a !== 'reschedule' || (s.customerRescheduleEnabled && s.rescheduleCutoffHours !== null && s.rescheduleMaxMoves !== null)), 'understand'] : ['options'],
     languages: ['en', 'gu', 'hi', 'gu-Latn', 'hi-Latn'],
     labels: LABELS,
     note: 'Guppi shows only options issued by the booking system and hands over to the secure payment screen. Prices, availability, payments and approvals are decided by the system, not by Guppi.',

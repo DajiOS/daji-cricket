@@ -510,6 +510,12 @@ export interface GlobalSettings {
   guppiAssistEnabled: boolean;
   customerRescheduleEnabled: boolean;
   retentionDisputesEnabled: boolean;
+  /** Customer rescheduling policy (decided by the owner): the cut-off in hours before the start (exactly this many hours or fewer is blocked), the number of completed customer moves allowed, and what happens to money when the new time is cheaper. null cut-off or limit = not configured = customers cannot move a booking. */
+  rescheduleCutoffHours: number | null;
+  rescheduleMaxMoves: number | null;
+  rescheduleCheaperTreatment: 'credit' | 'refund_request';
+  /** Off in this release: the separate refundable security (damage) deposit. The advance is never a security deposit. */
+  securityDepositEnabled: boolean;
   /** 'rotate' (the design changes through the day) or one fixed design id. */
   siteDesign: string;
   /** How often the rotating design changes: daypart (four times a day), daily or weekly. */

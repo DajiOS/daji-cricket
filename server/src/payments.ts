@@ -15,6 +15,7 @@ import { checkCashReceipt } from './taxrules.ts';
 import type { Config } from './config.ts';
 import { getGateway, verifyWebhookSignature, webhookSecretFor } from './gateway.ts';
 import * as credits from './credits.ts';
+import { linkedBusy } from './groundLinks.ts';
 import { pendingFor, sendBack, signStep, startRequest, withdrawRequest, type ReqRow } from './approvals.ts';
 
 export interface PaymentRow {
@@ -129,7 +130,7 @@ function lateForExpired(b: BookingRow, p: PaymentRow, amount: number, actor: Act
   const slotMs = one<{ slot_minutes: number }>('SELECT slot_minutes FROM grounds WHERE id = ?', b.ground_id)!.slot_minutes * MIN;
   const starts = Array.from({ length: b.slot_count }, (_, i) => b.start_at + i * slotMs);
   const t = now();
-  const free = b.start_at > t && starts.every((s) => !one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', b.ground_id, s));
+  const free = b.start_at > t && starts.every((s) => !one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', b.ground_id, s)) && linkedBusy({ id: b.ground_id, slot_minutes: slotMs / MIN }, starts, b.id).size === 0;
   run('UPDATE payments SET late = 1 WHERE id = ?', p.id);
   if (!free) {
     refundPayment(paymentOr404(p.id), amount, 'payment arrived after the slot was released and it is no longer free', actor);

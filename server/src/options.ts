@@ -77,10 +77,13 @@ export function resolveOption(cfg: Config, userId: string, optionId: string): { 
   return { request: { groundId: p.g, date: p.d, startTime: p.t, slots: p.n, formatId: p.f, ruleId: p.r }, totalPaise: p.tp };
 }
 
+import { linkedBusy } from './groundLinks.ts';
+
 function isFree(ground: GroundRow, starts: number[]): boolean {
   if (!starts.length) return false;
   const lo = starts[0]!, hi = starts[starts.length - 1]!;
   const taken = new Set(many<{ slot_start: number }>('SELECT slot_start FROM booking_slots WHERE ground_id = ? AND slot_start >= ? AND slot_start <= ?', ground.id, lo, hi).map((r) => r.slot_start));
+  if (linkedBusy(ground, starts).size) return false;
   return starts.every((s) => !taken.has(s));
 }
 

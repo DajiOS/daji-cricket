@@ -8,7 +8,10 @@ import { audit, type Actor } from './audit.ts';
 import { Validator } from './input.ts';
 import { HOUR, MIN, timeOfDay } from './time.ts';
 import { getSettings, requireFeature } from './settings.ts';
-import { accessBooking, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
+import { accessBooking, releaseSlotsExcept, viewBooking, type BookingRow } from './bookings.ts';
+import * as credits from './credits.ts';
+import { refundPayment } from './payments.ts';
+import type { PaymentRow } from './payments.ts';
 import { getGroundOr404, slotPrice, slotStarts } from './grounds.ts';
 import { assertDayOpen, assertOnlineWindow, planFor, takeSlots } from './hold.ts';
 import { resolveOption } from './options.ts';
@@ -36,10 +39,42 @@ CREATE TRIGGER trg_ao_booking_reschedules_update BEFORE UPDATE ON booking_resche
 CREATE TRIGGER trg_ao_booking_reschedules_delete BEFORE DELETE ON booking_reschedules BEGIN SELECT RAISE(ABORT, 'booking_reschedules is append-only: delete refused'); END;
 `);
 
-/** A customer may move a booking this many times. The ground's staff are not limited. */
-export const MAX_CUSTOMER_RESCHEDULES = 2;
+// The policy numbers are settings (rescheduleCutoffHours, rescheduleMaxMoves), decided by the owner: 24 hours and 2 completed moves. Only a move the customer made and that
+// completed counts; a failed or abandoned attempt changes nothing and so uses none. Staff are not limited and their moves are not the customer's.
 
-export interface RescheduleResult { booking: Booking; fromStartAt: number; toStartAt: number; fromTotalPaise: number; toTotalPaise: number; balancePaise: number }
+/** What a cheaper new time did with the difference. Never a silent refund: credit (recorded, audited, the customer is told) or a refund request that goes through the approval chain. */
+export interface Settlement { treatment: 'none' | 'credit' | 'refund_request'; paiseSettled: number; creditPaise: number; refundRequestedPaise: number; creditLotId?: string }
+export interface RescheduleResult { booking: Booking; fromStartAt: number; toStartAt: number; fromTotalPaise: number; toTotalPaise: number; balancePaise: number; settlement?: Settlement }
+
+/** Completed moves the customer made on this booking, from the append-only history (not from a counter that could drift). */
+export function customerMovesDone(bookingId: string): number {
+  return one<{ n: number }>("SELECT COUNT(*) n FROM booking_reschedules WHERE booking_id = ? AND kind = 'move' AND actor_role = 'customer'", bookingId)!.n;
+}
+
+/** The customer's policy as configured; null when either number is not configured (then customers cannot move a booking). */
+export function reschedulePolicy(): { cutoffHours: number; maxMoves: number } | null {
+  const s = getSettings();
+  return s.rescheduleCutoffHours === null || s.rescheduleMaxMoves === null ? null : { cutoffHours: s.rescheduleCutoffHours, maxMoves: s.rescheduleMaxMoves };
+}
+
+function settleCheaper(b: BookingRow, user: UserRow, excess: number, actor: Actor, t: number): Settlement {
+  const treatment = getSettings().rescheduleCheaperTreatment;
+  let toRefund = 0, requested = 0;
+  if (treatment === 'refund_request') {
+    toRefund = excess;
+    const pays = many<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method <> 'credit' AND status IN ('captured','partially_refunded') ORDER BY created_at DESC, rowid DESC", b.id);
+    for (const p of pays) {
+      if (toRefund <= 0) break;
+      const take = Math.min(p.amount_paise - p.refunded_paise, toRefund);
+      if (take > 0) { refundPayment(p, take, `booking ${b.ref} moved to a cheaper time`, actor, { onBooking: true }); toRefund -= take; requested += take; }
+    }
+  }
+  const credit = excess - requested; // credit is also where any part a refund could not cover goes
+  let lotId: string | undefined;
+  if (credit > 0) lotId = credits.issueCredit({ customerId: b.customer_id, ownerId: b.owner_id, amountPaise: credit, source: 'restore', bookingId: b.id, note: `Booking ${b.ref} moved to a cheaper time`, by: user.id }).lotId;
+  run('UPDATE bookings SET paid_paise = paid_paise - ?, updated_at = ? WHERE id = ?', excess, t, b.id);
+  return { treatment: requested > 0 && credit === 0 ? 'refund_request' : 'credit', paiseSettled: excess, creditPaise: credit, refundRequestedPaise: requested, ...(lotId ? { creditLotId: lotId } : {}) };
+}
 
 function parseMove(cfg: Config, user: UserRow, body: unknown): { groundId?: string; date: string; startTime: string; slots?: number; formatId?: string; ruleId?: string; reason?: string; totalPaise?: number } {
   const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
@@ -83,11 +118,14 @@ export function rescheduleBooking(cfg: Config, user: UserRow, bookingId: string,
     const b = accessBooking(user, bookingId);
     ensureMovable(b);
     const t = now();
+    const policy = reschedulePolicy();
     if (byCustomer) {
-      if (b.start_at - t <= getSettings().freeCancelHours * HOUR) throw new HttpError(409, 'RESCHEDULE_TOO_LATE', `A booking can be moved up to ${getSettings().freeCancelHours} hours before it starts. Please call the ground.`);
-      if (b.reschedule_count >= MAX_CUSTOMER_RESCHEDULES) throw new HttpError(409, 'RESCHEDULE_LIMIT', `A booking can be moved ${MAX_CUSTOMER_RESCHEDULES} times. Please call the ground.`);
+      if (!policy) throw new HttpError(409, 'RESCHEDULE_NOT_CONFIGURED', 'Changing a booking yourself is not set up yet. Please call the ground.');
+      // exactly the cut-off, or less, is blocked; only strictly more than the cut-off is allowed. The start is the booking's own timestamp, never text on a screen.
+      if (b.start_at - t <= policy.cutoffHours * HOUR) throw new HttpError(409, 'RESCHEDULE_TOO_LATE', `A booking can be moved only when more than ${policy.cutoffHours} hours remain before it starts. Please call the ground.`);
+      if (customerMovesDone(b.id) >= policy.maxMoves) throw new HttpError(409, 'RESCHEDULE_LIMIT', `A booking can be moved ${policy.maxMoves} times. Please call the ground.`);
       assertOnlineWindow(req.date);
-    }
+    } else if ((req.reason ?? '').trim().length < 10) throw new HttpError(400, 'REASON_REQUIRED', 'Say why the booking is being moved (at least 10 characters). It is recorded with your name.');
     const ground = getGroundOr404(b.ground_id);
     const plan = planFor(ground, { date: req.date, startTime: req.startTime, slots: req.slots ?? (b.format_label ? undefined : b.slot_count), formatId: req.formatId, ruleId: req.ruleId }, byCustomer);
     if (byCustomer) assertDayOpen(req.date, plan.format?.ball === 'practice' ? 'practice' : 'ground');
@@ -95,19 +133,23 @@ export function rescheduleBooking(cfg: Config, user: UserRow, bookingId: string,
     const sameSlots = plan.starts.length === b.slot_count && plan.starts[0] === b.start_at;
     if (sameSlots) throw new HttpError(409, 'NO_CHANGE', 'That is the time the booking already has.');
     const newTotal = Math.max(plan.totalPaise - Math.min(b.discount_paise ?? 0, plan.totalPaise), 0);
-    if (newTotal < b.paid_paise) throw new HttpError(409, 'RESCHEDULE_NEEDS_SETTLEMENT', `That time costs ${formatPaise(newTotal)}, less than the ${formatPaise(b.paid_paise)} already paid. Cancel this booking and book the new time so the difference is settled by the refund rules.`, { newTotalPaise: newTotal, paidPaise: b.paid_paise });
+    const excess = Math.max(b.paid_paise - newTotal, 0); // a cheaper time: the difference is settled below, as credit or a refund request, never refunded silently
 
-    releaseSlots(b.id);
-    takeSlots(b.id, ground, plan.starts); // a taken slot throws and the whole move rolls back, including the release above
+    // The replacement is taken FIRST (only the slots the booking does not already own); if any is taken the move stops here and the original stays exactly as it was.
+    // Only after the replacement is held are the old slots it no longer needs given up.
+    const owned = new Set(many<{ slot_start: number }>("SELECT slot_start FROM booking_slots WHERE booking_id = ? AND kind = 'booking'", b.id).map((r) => r.slot_start));
+    takeSlots(b.id, ground, plan.starts.filter((s) => !owned.has(s)));
+    releaseSlotsExcept(b.id, plan.starts);
     const endAt = plan.starts[plan.starts.length - 1]! + ground.slot_minutes * MIN;
-    run(`UPDATE bookings SET date = ?, start_at = ?, end_at = ?, slot_count = ?, total_paise = ?, advance_paise = MIN(advance_paise, ?), format_label = ?, ball = ?, reminded_at = NULL, reschedule_count = reschedule_count + 1, updated_at = ? WHERE id = ?`,
-      plan.date, plan.starts[0]!, endAt, plan.starts.length, newTotal, newTotal, plan.format?.label ?? null, plan.format?.ball ?? null, t, b.id);
+    run(`UPDATE bookings SET date = ?, start_at = ?, end_at = ?, slot_count = ?, total_paise = ?, advance_paise = MIN(advance_paise, ?), format_label = ?, ball = ?, reminded_at = NULL, reschedule_count = reschedule_count + ?, updated_at = ? WHERE id = ?`,
+      plan.date, plan.starts[0]!, endAt, plan.starts.length, newTotal, newTotal, plan.format?.label ?? null, plan.format?.ball ?? null, byCustomer ? 1 : 0, t, b.id);
     run("INSERT INTO booking_reschedules(id, booking_id, owner_id, kind, from_start_at, from_end_at, from_slots, from_total_paise, to_start_at, to_end_at, to_slots, to_total_paise, actor_id, actor_role, reason, created_at) VALUES(?,?,?,'move',?,?,?,?,?,?,?,?,?,?,?,?)",
       newId('rsc'), b.id, b.owner_id, b.start_at, b.end_at, b.slot_count, b.total_paise, plan.starts[0]!, endAt, plan.starts.length, newTotal, user.id, user.role, req.reason ?? null, t);
-    audit(actor, 'booking.reschedule', 'booking', b.id, { fromStartAt: b.start_at, toStartAt: plan.starts[0], fromTotalPaise: b.total_paise, toTotalPaise: newTotal, paidPaise: b.paid_paise, reason: req.reason ?? null, ...(via.channel ? { via: via.channel, actionId: via.actionId ?? null } : {}) }, b.owner_id);
+    const settlement = excess > 0 ? settleCheaper(b, user, excess, actor, t) : undefined;
+    audit(actor, 'booking.reschedule', 'booking', b.id, { ...(settlement ? { settlement } : {}), movedBy: byCustomer ? 'customer' : 'staff', fromStartAt: b.start_at, toStartAt: plan.starts[0], fromTotalPaise: b.total_paise, toTotalPaise: newTotal, paidPaise: b.paid_paise, reason: req.reason ?? null, ...(via.channel ? { via: via.channel, actionId: via.actionId ?? null } : {}) }, b.owner_id);
     notify(b.customer_id, 'booking_rescheduled', { ref: b.ref, ground: ground.name, startAt: plan.starts[0], extra: newTotal > b.paid_paise ? `Balance to pay at the ground: ${formatPaise(newTotal - b.paid_paise)}.` : undefined, ...venueData(b.ground_id) }, b.id);
     if (byCustomer) pushStaffOf(b.owner_id, 'booking_rescheduled_by_customer', 'Booking moved', `${b.ref} was moved by the customer to ${timeOfDay(plan.starts[0]!)} on ${plan.date}.`, b.id);
-    return { booking: viewBooking(b.id), fromStartAt: b.start_at, toStartAt: plan.starts[0]!, fromTotalPaise: b.total_paise, toTotalPaise: newTotal, balancePaise: Math.max(newTotal - b.paid_paise, 0) };
+    return { booking: viewBooking(b.id), fromStartAt: b.start_at, toStartAt: plan.starts[0]!, fromTotalPaise: b.total_paise, toTotalPaise: newTotal, balancePaise: Math.max(newTotal - (b.paid_paise - (settlement?.paiseSettled ?? 0)), 0), ...(settlement ? { settlement } : {}) };
   });
 }
 

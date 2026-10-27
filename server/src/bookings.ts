@@ -104,6 +104,12 @@ export function releaseSlots(bookingId: string): void {
   run("DELETE FROM booking_slots WHERE booking_id = ? AND kind = 'booking'", bookingId);
 }
 
+/** Gives up this booking's slots except the ones it keeps. Used by a move, after the new slots are already held. */
+export function releaseSlotsExcept(bookingId: string, keep: number[]): void {
+  const ph = keep.map(() => '?').join(',') || 'NULL';
+  run(`DELETE FROM booking_slots WHERE booking_id = ? AND kind = 'booking' AND slot_start NOT IN (${ph})`, bookingId, ...keep);
+}
+
 /** held → confirmed. Idempotent: returns false when it was already confirmed. */
 export function confirmBooking(id: string, actor: Actor, detail: Record<string, unknown> = {}): boolean {
   const b = bookingOr404(id);
