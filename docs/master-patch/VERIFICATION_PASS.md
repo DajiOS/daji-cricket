@@ -2,7 +2,7 @@
 
 **This is not an independent review.** The same model (Sonnet 5.5) wrote the code, the tests and this review. Sunny chose a strict self-review over a separate Opus 5.5 Max pass. The tests may share my blind spots. Treat this as a careful check of the package's own consistency, not as proof. `INDEPENDENT_OPUS_MAX_REPORT` is NOT_RUN. An independent reviewer should repeat section 4 first.
 
-Reviewed: branch `master-patch` (PR #143), package `DAJI_MASTER_PATCH_FINAL_V2`. The test evidence comes from commit `2d8c610`; later commits changed only documents (this file, the GO/NO-GO paper, one register row) and were followed by a re-run of the document-reading tests (section 2).
+Reviewed: branch `master-patch` (PR #143), package `DAJI_MASTER_PATCH_FINAL_V2`. Revision 2 (27 Oct 2026) records Sunny's decisions. The test evidence comes from commit `0e89ab4`; later commits change only documents (this file, the GO/NO-GO paper) and are followed by a re-run of the document-reading tests (section 2).
 
 ## 1. Result in one paragraph
 
@@ -12,7 +12,7 @@ No required P0 test failed, none was skipped, none is missing, and after the cor
 
 | Check asked for | How | Result |
 |---|---|---|
-| Required tests re-run | Whole server suite on the final code with the old-release fixture (migration and rollback cases included) | 842 of 842 pass, 0 skipped, 0 cancelled. Browser run 12 of 12 (desktop Chromium and iPad-size emulation, 6 scenarios each, stopping at the secure payment window). After the document edits I re-ran `rel-lang`, `rel-guppi`, `rel-sep` and `rel-traceability` (see the end of section 2). |
+| Required tests re-run | Whole server suite on the final code with the old-release fixture (migration and rollback cases included), re-run for revision 2 | 842 of 842 pass, 0 skipped, 0 cancelled. Browser run 12 of 12 (desktop Chromium and iPad-size emulation, 6 scenarios each, stopping at the secure payment window). After the document edits I re-ran `rel-lang`, `rel-guppi`, `rel-sep` and `rel-traceability` (see the end of section 2). |
 | Incomplete P0 | `P0_GATES.json` | 104 required rows: 104 PASS, 0 FAIL, 0 not run, 0 unapproved skipped. Met by the letter. **Not met in substance** for 17 rows that carry a named real-world residual (GO/NO-GO says so). |
 | Skipped tests | Run log, and a search of `server/test` for `.skip`, `.todo` and `only` | 0 skipped; none found |
 | Missing evidence | Every `FOLDER/path.ext` named in any document in this package was resolved against the package (376 references) | All resolve. The one exception is the range `PAR-API-A..D`, a shorthand. |
@@ -30,6 +30,15 @@ No required P0 test failed, none was skipped, none is missing, and after the cor
 After the last document edits I re-ran `rel-lang`, `rel-guppi`, `rel-sep` and `rel-traceability` together: 52 of 52 pass, 0 skipped.
 
 ## 3. Problems this review found in my own work, and what I did
+
+Revision 2 (decisions of 27 Oct 2026):
+
+* Sunny's message answers "UD-01", "UD-02" and "UD-03" with Guppi language principles (natural wording, kept context, clarify only real ambiguity). The register's UD-01 to UD-03 are different questions (what "deposit" means, whole ground versus nets, reschedule policy). I did not remap them: his words are recorded as UD-10 to UD-12, UD-01 to UD-03 stay OPEN, and the GO/NO-GO paper and the final message say so.
+* UD-09 says a named ground must be kept and never switched silently. I checked the code first: it already behaves that way, but no test said so. REL-LANG-020 now proves it (a named ground that is taken gets no other-ground offer until the customer says any ground will do; then the other ground is tagged as another ground).
+* UD-13 (account name): the three current documents were neutralized. A re-run of the project-purity test and of the search shows no hit in current documents; the remaining occurrences are the source diffs that record the rename, the third-party code, and the pull request address.
+* The manifest generator refused a changed file with no entry (the three documents). That is the guard working; I added their entries.
+
+Earlier in V2:
 
 1. The route diff in the package was still the first package's (21 added) while the manifest said V2 adds one route. I re-dumped the router: 455 routes, 22 added, 0 removed. Regenerated.
 2. The iOS and Android README files still said "No reschedule or Guppi booking screen exists" next to a V2 section describing the Guppi screen. Rewritten; they now say the screen exists, is not type-checked and not run.
@@ -50,7 +59,7 @@ After the last document edits I re-ran `rel-lang`, `rel-guppi`, `rel-sep` and `r
 ## 5. Open items I am not hiding
 
 * **Devices:** iOS, Android and real iPad NOT_RUN; the mobile Guppi screen is unbuilt. Guppi Booking is **not complete**.
-* **Owner decisions:** UD-01, UD-02, UD-03 are assumptions awaiting Sunny's own words. UD-08 (relative dates) and UD-09 (flexible ground) are my proposals.
+* **Owner decisions:** UD-01 (what "deposit" means), UD-02 (whole ground versus nets) and UD-03 (reschedule policy) are still assumptions awaiting Sunny's own words. UD-08 to UD-13 are decided and recorded in his words. "Learn my words" was not approved and stays out of this patch.
 * **Payments:** real provider NOT_RUN. **Files:** real ClamAV NOT_RUN. **Migration and backup:** rehearsed on a generated database, not production; real offsite backup NOT_RUN. **Construction to Finance:** producer proven, real consumer NOT_RUN. **Desk:** not rebuilt with the normal toolchain.
 * **Language:** spelling tolerance is a word list, not a language model (P1-16); the "learn how this person speaks" idea and automatic translation for other languages are unbuilt proposals.
 * **Process:** no independent Opus Max review, no staff pilot, no customer canary, no signed GO.

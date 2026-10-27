@@ -19,7 +19,7 @@ This is a proposal. It is not signed. Only a person signs it. Guppi Booking is *
 |---|---|
 | All applicable REL-LANG tests pass with evidence | **45 of 45 records PASS** (`REL_LANG/REL_LANG_TEST_MATRIX.csv`, transcripts in `REL_LANG_TRANSCRIPTS.csv`) |
 | Device parity: desktop web, iPad web, iOS, Android | **NOT MET.** Desktop Chromium: 6 of 6 browser scenarios PASS. iPad: PASS only as an emulation (iPad screen size, touch, user agent), not a real iPad. iOS app and Android app: screen written, **NOT_RUN** (no devices; not type-checked here). |
-| No unresolved language defects | Met: 8 defects found by the tests, all fixed and retested. Open limits are in P1-15 and P1-16. |
+| No unresolved language defects | Met: 8 defects found by the tests, all fixed and retested. The open limit is P1-16. |
 | Traceability complete | Met for tests (`REL_LANG_TRACEABILITY.csv`); no requirement is marked complete only because a test file exists. |
 | REL-SEP-001 project purity | **PASS.** The stylesheet is `daji.css`; searched the repository and this package; remaining occurrences are listed with reasons in `SEPARATION/REL-SEP-001-search-evidence.txt`. |
 
@@ -31,13 +31,13 @@ This is a proposal. It is not signed. Only a person signs it. Guppi Booking is *
 4. **Migration and backup rehearsed on a generated old-release database**, not on a copy of production; the real offsite backup and restore were not run.
 5. **The staff desk was not rebuilt with the normal toolchain** (repatch point 6): build tools are not available here.
 6. **Construction to Finance:** the producer side is proven; the real consumer was not run.
-7. **Owner decisions still open, in Sunny's own words:** UD-01 (what "deposit" means), UD-02 (whole ground versus nets), UD-03 (reschedule policy); new proposals UD-08 (relative dates such as "Sunday") and UD-09 (flexible ground).
+7. **Owner decisions still open:** UD-01 (what "deposit" means), UD-02 (whole ground versus nets), UD-03 (reschedule policy). Sunny's message of 27 Oct 2026 answered UD-08, UD-09 and gave Guppi language principles (recorded as UD-10..12) and the account-name rule (UD-13), but his texts under the numbers UD-01..03 answer different questions, so I did not treat the three original questions as answered.
 8. **Verification is a strict self-review by the building model**, not the independent Opus Max review (`INDEPENDENT_OPUS_MAX_REPORT` NOT_RUN).
 9. **No staff pilot and no customer canary.**
 
 ## Conditions to move to GO
 
-1. Sunny answers UD-01, UD-02, UD-03, UD-08, UD-09.
+1. Sunny answers the original UD-01 (what "deposit" means), UD-02 (whole ground versus nets) and UD-03 (reschedule policy). UD-08..UD-13 are decided.
 2. Run the payment rows against the provider's test mode, then a small controlled live payment and refund.
 3. Run the file-safety tests and the construction upload test against a real ClamAV (EICAR).
 4. Run the parity table, including PAR-004 Guppi Booking, on a real iPad, iPhone and Android phone; type-check and build the mobile app in CI.
