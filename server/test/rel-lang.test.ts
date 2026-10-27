@@ -113,7 +113,7 @@ rel('REL-LANG-002', 'Gujarati availability question: the upcoming Sunday, 7 PM, 
   assert.deepEqual([r.criteria.date, r.criteria.weekday, r.criteria.startTime, r.criteria.durationMinutes], [SUN, 'Sunday', '19:00', 180]);
   assert.equal(r.next, undefined, 'no hold is proposed for a question');
   noBooking();
-  c.record({ resolvedDate: SUN, relativeDateRule: 'bare weekday = first one after today (UD-08, proposed)' });
+  c.record({ resolvedDate: SUN, relativeDateRule: 'bare weekday = first one after today (UD-08, approved 27 Oct 2026)' });
 });
 
 rel('REL-LANG-003', 'Hindi booking request gives the same canonical request, figures and offer as the Gujarati and English ones', async () => {
@@ -282,7 +282,7 @@ rel('REL-LANG-014', 'mixed romanized Gujarati ("next sunday sanje 7 vagye 3 hour
   const c = new Convo(cust);
   const r = await c.say('next sunday sanje 7 vagye 3 hours mate ground joie che');
   assert.equal(r.inputKind, 'mixed'); assert.equal(canon(r), canon(gu)); assert.deepEqual(r.offers.map((o: any) => o.optionId), gu.offers.map((o: any) => o.optionId));
-  noBooking(); c.record({ resolvedDate: r.criteria.date, relativeDateRule: '"next Sunday" = "aavta ravivaar" = the first Sunday after today (UD-08, proposed)' });
+  noBooking(); c.record({ resolvedDate: r.criteria.date, relativeDateRule: '"next Sunday" = "aavta ravivaar" = the first Sunday after today (UD-08, approved 27 Oct 2026)' });
 });
 
 // ------------------------------------------------------------------ memory, corrections, selection
@@ -351,7 +351,7 @@ rel('REL-LANG-019', 'flexible length "3 kalak na male to 2 kalak chale": prefers
   c.record({ resolvedDate: SUN, preferredMinutes: 180, acceptedMinutes: 120 });
 });
 
-rel('REL-LANG-020', 'flexible ground "ground koi pan chale": the ground becomes flexible, the date, time and length stay, and offers come from more than one ground', async () => {
+rel('REL-LANG-020', 'flexible ground "ground koi pan chale": the ground becomes flexible, the date, time and length stay, and offers come from more than one ground; a ground the customer named is kept (never switched silently)', async () => {
   const c = new Convo(cust);
   await c.say('aavta ravivaar sanje 7 vagye 3 kalak ground joie che');
   const r = await c.say('ground koi pan chale');
@@ -359,7 +359,16 @@ rel('REL-LANG-020', 'flexible ground "ground koi pan chale": the ground becomes 
   const ids = new Set(r.offers.map((o: any) => o.groundId)); assert.ok(ids.has(g.id) && ids.has(g2.id), 'both match grounds are searched');
   assert.ok(!r.offers.some((o: any) => o.groundName === 'Practice Nets'), 'practice nets are another kind of place');
   for (const o of r.offers) { assert.deepEqual([o.date, o.startTime, o.slots], [SUN, '19:00', 3]); const a = await authoritative(cust, { groundId: o.groundId, date: SUN, startTime: '19:00', slots: 3 }); assert.equal(o.optionId, a.exact.optionId); }
-  c.record({ resolvedDate: SUN, groundsOffered: [...ids].length });
+  // Sunny's rule (UD-09): a ground the customer named is preserved. If it is taken, Guppi does not switch to another ground on its own; other grounds appear only when the customer says any ground will do, and then they are tagged as another ground.
+  await takeSlot(SUN, '19:00', 3);
+  const named = new Convo(cust);
+  const n1 = await named.say(`aavta ravivaar sanje 7 vagye 3 kalak ${g.name} joie che`);
+  assert.equal(n1.criteria.groundId, g.id); assert.equal(n1.criteria.anyGround, false);
+  assert.ok(n1.offers.every((o: any) => o.groundId === g.id && o.tag !== 'other_ground'), 'the named ground is kept, no other ground is offered on its own');
+  assert.ok(!n1.offers.some((o: any) => o.tag === 'exact'), 'the named ground is taken at that time, so no exact offer');
+  const n2 = await named.say('ground koi pan chale');
+  assert.ok(n2.offers.some((o: any) => o.groundId === g2.id && o.tag === 'other_ground'), 'only after the customer says any ground: the other ground is offered and tagged as another ground');
+  c.record({ resolvedDate: SUN, groundsOffered: [...ids].length, namedGroundKept: true });
 });
 
 rel('REL-LANG-021', 'cheapest option "sauthi sasto option batavo": the lowest total among the offers on screen, as priced by the booking system', async () => {
@@ -530,7 +539,7 @@ rel('REL-LANG-033', 'a full booking conversation in romanized Hindi, and all fou
 
 // ------------------------------------------------------------------ dates, changes of mind, no exact slot, open hours, edits
 
-rel('REL-LANG-034', 'relative dates resolve to exact calendar dates under the proposed rule (UD-08): today, tomorrow, day after tomorrow, aa / aavta / bijo ravivaar, and a bare weekday on that weekday is asked', async () => {
+rel('REL-LANG-034', 'relative dates resolve to exact calendar dates under the approved rule (UD-08): today, tomorrow, day after tomorrow, aa / aavta / bijo ravivaar, and a bare weekday on that weekday is asked', async () => {
   const dates = (t: string, today: string) => parseBooking(t, today).date;
   const wed = '2026-10-14';
   const table: [string, string | undefined][] = [
@@ -548,7 +557,7 @@ rel('REL-LANG-034', 'relative dates resolve to exact calendar dates under the pr
   const r = await c.say('bijo ravivaar');
   assert.equal(r.status, 'options'); assert.deepEqual([r.criteria.date, r.criteria.startTime, r.criteria.durationMinutes], ['2026-10-25', '19:00', 180]);
   const fresh = new Convo(cust); const q = await fresh.say('bijo ravivaar sanje 7 vagye 3 kalak ground joie che'); assert.equal(q.status, 'clarify'); assert.equal(q.needs[0].field, 'date');
-  ev('device', 'API'); ev('rule', 'UD-08 proposed: bare weekday / this / aa = first such day after today (asked if today is that day; "this" then means today); next / upcoming / aavta = first after today (a week on if today is that day); another / bijo = a week after the day being discussed'); ev('table', table); ev('transcript', c.turns); ev('finalDb', dbState());
+  ev('device', 'API'); ev('rule', 'UD-08 approved (27 Oct 2026): bare weekday / this / aa = first such day after today (asked if today is that day; "this" then means today); next / upcoming / aavta = first after today (a week on if today is that day); another / bijo = a week after the day being discussed'); ev('table', table); ev('transcript', c.turns); ev('finalDb', dbState());
 });
 
 rel('REL-LANG-035', 'a change of mind: choosing one option and then another before holding changes the choice, and a second hold needs a new explicit yes while the first stays untouched', async () => {

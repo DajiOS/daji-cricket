@@ -273,7 +273,7 @@ function finish(year: number | null, month: number, day: number, today: string, 
 }
 
 /**
- * The relative-day rule (proposed, see UD-08). A weekday named alone is the first one after today; said on that very weekday it is asked (today or next week).
+ * The relative-day rule (approved by Sunny Patel on 27 Oct 2026, see UD-08). A weekday named alone is the first one after today; said on that very weekday it is asked (today or next week).
  * "this" / "aa" is the one in the current week: today when today is that weekday. "next", "upcoming", "coming", "aavta", "agle" is the first one after today
  * (so a week from today when today is that weekday). "another" / "biju" is the one a week after the day already being discussed.
  */
