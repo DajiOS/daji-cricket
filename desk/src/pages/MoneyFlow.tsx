@@ -5,7 +5,7 @@ import { useApi, go, inr, inrShort, monthLabel, thisMonth } from '../lib';
 // The starter kit's money flow: what was earned, then collected, then banked, then paid out, with the gap at each step.
 interface Flow {
   month: string;
-  earned: { totalPaise: number; bookingsPaise: number; membershipsPaise: number; academyPaise: number };
+  earned: { totalPaise: number; bookingsPaise: number; membershipsPaise: number; academyPaise: number; playedPaise?: number };
   collected: { totalPaise: number; bookingsPaise: number; membershipsPaise: number; academyPaise: number };
   banked: { totalPaise: number; bankPaise: number; cashPaise: number };
   paidOut: { totalPaise: number; billsPaise: number; payrollPaise: number; otherPaise: number };
@@ -53,7 +53,7 @@ export default function MoneyFlow({ sub }: { sub: string }) {
       <ErrorBox msg={err} />
       {!c ? (!err && <Loading h={260} />) : (<>
         <div className="flow">
-          <Stage step={1} title="Earned" tone="blue" total={c.earned.totalPaise} href="/bookings" lines={[['Sessions this month', c.earned.bookingsPaise], ['Memberships sold', c.earned.membershipsPaise], ['Academy fees billed', c.earned.academyPaise]]} />
+          <Stage step={1} title="Earned" tone="blue" total={c.earned.totalPaise} href="/bookings" lines={[['Sessions booked this month', c.earned.bookingsPaise], ['Of these, played so far (as in the P&L)', c.earned.playedPaise ?? 0], ['Memberships sold', c.earned.membershipsPaise], ['Academy fees billed', c.earned.academyPaise]]} />
           <Gap label="still to collect" value={c.toCollectPaise} hint="Booking balances and academy fees for this month that are not paid yet" />
           <Stage step={2} title="Collected" tone="teal" total={c.collected.totalPaise} href="/bookings/payments" lines={[['Booking payments', c.collected.bookingsPaise], ['Memberships', c.collected.membershipsPaise], ['Academy fees', c.collected.academyPaise]]} />
           <Gap label="not yet in the books" value={c.collected.totalPaise - c.banked.totalPaise} hint="Collected this month but not yet seen in an imported bank statement or the cash book" />

@@ -46,7 +46,7 @@ export function AskPanel() {
           <button type="button" className="dround" onClick={() => setOpen(false)} aria-label="Close"><Icon name="x" size={16} /></button>
         </header>
         <div className="ai-body">
-          {ex && !ex.claudeEnabled && <p className="ai-note">Guppi is answering from the built-in reports, which cover bookings, money and customers. To let it answer anything, the owner adds the AI key on the server (see deploy/.env).</p>}
+          {ex && !ex.claudeEnabled && <p className="ai-note">Guppi is answering from the built-in reports, which cover bookings, money and customers. To let it answer any question, add an Anthropic API key (ANTHROPIC_API_KEY) to the server settings.</p>}
           {!turns.length && <>
             <p className="muted" style={{ margin: 0 }}>Ask about bookings, money, jobs or the team. It only reads your own data and only what your login may see.</p>
             <div className="ai-ex">{(ex?.items ?? []).slice(0, 6).map((x) => <button key={x} type="button" onClick={() => send(x)}>{x}</button>)}</div>

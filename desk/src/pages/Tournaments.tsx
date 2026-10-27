@@ -6,6 +6,7 @@ import { TeamsTab } from '../parts/tournaments/TeamsTab';
 import { FixturesTab } from '../parts/tournaments/FixturesTab';
 import { TableTab } from '../parts/tournaments/TableTab';
 import { FeesTab } from '../parts/tournaments/FeesTab';
+import { UpcomingTournaments } from '../parts/tournaments/Upcoming';
 import { API, STATUS, formatLabel, type Detail, type Tournament } from '../parts/tournaments/shared';
 
 type Tab = 'fixtures' | 'table' | 'teams' | 'fees';
@@ -41,6 +42,10 @@ function List() {
             ]} />
         </div>
       </>}
+      <div className="card">
+        <div className="card-head"><h3>Coming up</h3><span className="small muted">Tournaments set up here and bookings made on a tournament price</span></div>
+        <div className="card-pad"><UpcomingTournaments /></div>
+      </div>
       {form && <TournamentForm onClose={() => setForm(false)} onSaved={(t) => { setForm(false); go('/tournaments/' + t.id); }} />}
     </div>
   );

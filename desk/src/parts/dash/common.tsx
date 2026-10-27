@@ -13,7 +13,7 @@ export interface Booking {
   status: 'held' | 'confirmed' | 'cancelled' | 'expired' | 'no_show' | 'completed'; source: 'online' | 'walk_in' | 'enquiry';
   totalPaise: number; advancePaise: number; paidPaise: number; balancePaise: number; holdExpiresAt: number | null; needsReview: boolean;
   approval: 'pending' | 'approved'; cancelledByOwner: boolean; resolution: string | null; cancelReason: string | null; refundPaise: number; creditPaise: number;
-  discountPaise: number; promoCode: string | null; players: number | null; notes: string | null; seriesId?: string | null; seriesIndex?: number | null;
+  discountPaise: number; promoCode: string | null; players: number | null; notes: string | null; seriesId?: string | null; seriesIndex?: number | null; deletedAt?: number | null;
   confirmedAt: number | null; cancelledAt: number | null; createdAt: number; cancelKind: string | null;
 }
 export interface Page<T> { items: T[]; total: number; limit: number; offset: number }

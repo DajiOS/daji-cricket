@@ -47,11 +47,12 @@ const RULES: [Intent, RegExp][] = [
   ['expenses', /expens|spend|spent|spending|costs?\b|\bbills?\b|outgo|paid out|payments made|outflow/],
   ['collections', /collect(ed|ion|ions)?\b|received|receipts?|came in|money in\b|takings|cash in\b/],
   ['revenue', /revenue|income|turnover|sales\b|earnings?|earned|gross|top line/],
-  ['upcoming', /upcoming|who.?s (playing|coming|booked)|what.?s (booked|coming|on|scheduled|next)|next (booking|session|match|game|slot)s?|\bagenda\b|\bschedule/],
+  ['upcoming', /on (the )?books|booked (ahead|in advance)|in the pipeline|upcoming|who(.?s| is| are) (playing|coming|booked)|what(.?s| is) (booked|coming|on|scheduled|next)|next (booking|session|match|game|slot)s?|\bagenda\b|\bschedule/],
   ['customers', /customers?|players?|\bpeople\b|\bmembers?\b|\bclients?\b/],
   ['bookings', /bookings?|sessions?|\bslots?\b|matches|games|reservations?|hours (booked|played)/],
 ];
 
+const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
 const PRIORITY: Intent[] = ['help', 'approvals_why', 'approvals_report', 'approvals_waiting', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
@@ -168,6 +169,8 @@ export function answerBuiltin(input: AskInput): Built {
   // ---- which dates
   const noRangeDefault = (): Span => {
     const m = today.slice(0, 7);
+    // "on the books" means everything booked from today on, however far ahead
+    if (intent === 'upcoming' && ON_BOOKS.test(t)) return { from: today, to: addDays(today, 730), label: 'everything booked from today' };
     if (intent === 'upcoming') return { from: today, to: addDays(today, 6), label: 'the next 7 days' };
     if (intent === 'bookings') return { from: `${m}-01`, to: monthEnd(today), label: 'this month' };
     if (intent === 'no_shows' || intent === 'cancellations' || intent === 'utilisation' || intent === 'customers' || intent === 'refunds') return { from: addDays(today, -29), to: today, label: 'the past 30 days' };
@@ -369,7 +372,8 @@ export function answerBuiltin(input: AskInput): Built {
       if (b.played.sessions) bits.push(`${count(b.played.sessions, 'session')} played (${count(b.played.slots, 'slot')})`);
       if (b.noShows.count) bits.push(`${count(b.noShows.count, 'no-show')}`);
       if (b.cancellations.count) bits.push(`${count(b.cancellations.count, 'cancellation')}`);
-      if (b.upcoming.bookings) bits.push(`${count(b.upcoming.bookings, 'booking')} still to come (${count(b.upcoming.slots, 'slot')}, worth ${R(b.upcoming.valuePaise)}, ${R(b.upcoming.toCollectPaise)} still to collect)`);
+      // asked what is ahead: what is still to come leads, cancellations follow
+      if (b.upcoming.bookings) bits[intent === 'upcoming' ? 'unshift' : 'push'](`${count(b.upcoming.bookings, 'booking')} still to come (${count(b.upcoming.slots, 'slot')}, worth ${R(b.upcoming.valuePaise)}, ${R(b.upcoming.toCollectPaise)} still to collect)`);
       const open: OpenReport = { tab: 'reports', report: p.to >= today && b.upcoming.bookings ? 'schedule/future' : 'schedule/past', params: { from: p.from, to: p.to } };
       const details: Detail[] = [];
       if (b.upcoming.bookings && b.upcoming.bookings <= 8 || intent === 'upcoming') {
@@ -378,6 +382,8 @@ export function answerBuiltin(input: AskInput): Built {
         if (u.total > u.sessions.length) notes.push(`Showing the first ${u.sessions.length} of ${u.total}.`);
       }
       if (!bits.length) return done(`I found no bookings${where} for ${describe(p)}.`, { open });
+      // a list of cancellations alone does not answer "how many bookings": say first that none are live
+      if (!b.played.sessions && !b.noShows.count && !b.upcoming.bookings) return done(`No bookings${where} are live for ${describe(p)}. ${cap(count(b.cancellations.count, 'booking'))} ${b.cancellations.count === 1 ? 'was' : 'were'} cancelled.`, { open, understood: understood() });
       const multi = !ground && b.byGround.length > 1;
       if (multi && !details.length) for (const g of b.byGround) details.push({ label: g.groundName, text: `${g.played} played, ${g.upcoming} coming up` });
       return done(`For ${describe(p)}${where}: ${bits.join('; ')}.`, { open, details, understood: understood(), suggestions: ['Who still owes us money?', 'How busy were the grounds then?'] });

@@ -124,8 +124,17 @@ function bookingItems(owner: string): QueueItem[] {
     out.push({ kind: 'booking', key: b.id, customerId: b.cid, name: b.name, phone: b.phone, summary: `${b.gname}, ${dayText(b.date)} ${timeText(timeOfDay(b.start_at))} (${b.ref})`, message, link: waLink(b.phone, message), sentAt: lastSent(owner, 'booking', b.id) });
   }
   const from = addDays(t, -30);
-  for (const b of many<any>(`${base} WHERE b.owner_id = ? AND b.status IN ('confirmed','completed') AND b.total_paise > b.paid_paise AND b.date >= ? ORDER BY b.start_at`, owner, from)) {
-    const bal = b.total_paise - b.paid_paise;
+  // a multi-day booking is one reminder for its whole balance, on its first unpaid day, not one per day
+  const blockBal = new Map<string, number>();
+  const rows = many<any>(`SELECT b.id, b.ref, b.date, b.start_at, b.total_paise, b.paid_paise, u.id cid, u.name, u.phone, g.name gname,
+      CASE WHEN s.kind = 'block' THEN b.series_id END block
+    FROM bookings b JOIN users u ON u.id = b.customer_id JOIN grounds g ON g.id = b.ground_id LEFT JOIN booking_series s ON s.id = b.series_id
+    WHERE b.owner_id = ? AND b.status IN ('confirmed','completed') AND b.total_paise > b.paid_paise AND b.date >= ? ORDER BY b.start_at`, owner, from);
+  for (const b of rows) if (b.block) blockBal.set(b.block, (blockBal.get(b.block) ?? 0) + b.total_paise - b.paid_paise);
+  for (const b of rows) {
+    if (b.block && !blockBal.has(b.block)) continue; // a later day of a block already listed
+    const bal = b.block ? blockBal.get(b.block)! : b.total_paise - b.paid_paise;
+    if (b.block) blockBal.delete(b.block);
     const message = renderTemplate(bodyOf(owner, 'payment'), { name: b.name, date: dayText(b.date), time: timeText(timeOfDay(b.start_at)), amount: inrText(bal) });
     out.push({ kind: 'payment', key: b.id, customerId: b.cid, name: b.name, phone: b.phone, summary: `${inrText(bal)} due, ${dayText(b.date)} (${b.ref})`, message, link: waLink(b.phone, message), sentAt: lastSent(owner, 'payment', b.id) });
   }

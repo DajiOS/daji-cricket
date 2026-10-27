@@ -41,7 +41,7 @@ export default function Compare({ sub }: { sub: string }) {
       {!modes.length ? <p className="muted">Your login has nothing to compare.</p> : <>
         <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>
           {modes.length > 1 && <Tabs value={mode} onChange={(m) => to(m, a, b)} items={modes} label="Compare" />}
-          <label className="row small" style={{ gap: 6 }}>{mode === 'months' ? 'This month' : 'Month'}<input className="inp" type="month" value={a} onChange={(e) => e.target.value && to(mode, e.target.value, b)} /></label>
+          <label className="row small" style={{ gap: 6 }}>Month<input className="inp" type="month" value={a} onChange={(e) => e.target.value && to(mode, e.target.value, b)} /></label>
           {mode === 'months' && <label className="row small" style={{ gap: 6 }}>against<input className="inp" type="month" value={b} onChange={(e) => e.target.value && to(mode, a, e.target.value)} /></label>}
         </div>
         <ErrorBox msg={err} />

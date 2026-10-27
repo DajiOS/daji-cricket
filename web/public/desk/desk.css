@@ -713,7 +713,7 @@ html[data-theme="dark"] .dap-mark.now { color: var(--on-strong); }
 .ai-form button:disabled { opacity: .5; cursor: default; }
 
 /* Settings, Team, Platform and Promos */
-.tabs-scroll { width: 0; min-width: 100%; overflow-x: auto; max-width: 100%; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+.tabs-scroll { width: 0; min-width: 100%; overflow-x: auto; overflow-y: hidden; max-width: 100%; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
 .tabs-scroll .seg { flex-wrap: nowrap; }
 .tabs-scroll .seg button { white-space: nowrap; }
 .pill { height: 30px; min-width: 44px; padding: 0 11px; border-radius: 20px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--muted); font: 600 12.5px var(--sans); cursor: pointer; }
@@ -733,11 +733,13 @@ html[data-theme="dark"] .dap-mark.now { color: var(--on-strong); }
 .rate-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .rate-row .lbl { font-size: 12px; color: var(--faint); min-width: 38px; }
 .rate-row .inp { width: auto; min-width: 110px; }
-.glance { overflow-x: auto; }
+.glance { overflow-x: auto; overflow-y: hidden; }
 .glance table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 480px; }
 .glance th, .glance td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
 .glance th { color: var(--muted); font-weight: 600; }
 .glance td.cl { color: var(--faint); }
+/* on a phone the week fits the card instead of running off its right edge */
+@media (max-width: 720px) { .glance table { min-width: 0; font-size: 12px; } .glance th, .glance td { padding: 6px 4px; } }
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; max-width: 420px; }
 .cal-h { text-align: center; font-size: 11px; color: var(--faint); padding: 4px 0; }
 .cal-d { height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ivory); font: 600 13px var(--sans); cursor: pointer; }
@@ -808,7 +810,7 @@ html[data-theme="dark"] .dap-mark.now { color: var(--on-strong); }
 @media (max-width: 720px) { .bills-sm-only { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; } }
 
 /* ---------- accounting (Accounting, Transactions, Bank import) ---------- */
-.bk-tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.bk-tabs { max-width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .bk-tabs .seg { max-width: none; }
 .amt { font-variant-numeric: tabular-nums; }
 .strong { color: var(--ivory); font-weight: 600; }
@@ -1620,7 +1622,7 @@ a.xstat:hover { border-color: color-mix(in srgb, var(--strong) 35%, var(--line))
 .xpanel-hd h2 { font-size: 18px; margin: 0; display: flex; align-items: baseline; gap: 10px; }
 .xpanel-hd h2 small { font-size: 13.5px; color: var(--muted); font-weight: 400; }
 .xpanel-hd a { font-size: 13.5px; font-weight: 500; color: var(--link); white-space: nowrap; }
-.xtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow-x: auto; }
+.xtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow-x: auto; overflow-y: hidden; }
 .xtabs button { border: 0; background: transparent; padding: 10px 14px; font: 500 14px var(--sans); color: var(--ink2); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .xtabs button.on { color: var(--link); border-bottom-color: var(--strong); font-weight: 600; }
 .xtbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -1673,6 +1675,19 @@ a.xstat:hover { border-color: color-mix(in srgb, var(--strong) 35%, var(--line))
   .xstat-txt > span:first-child { white-space: normal; }
 }
 
+/* A table wider than a phone scrolls sideways inside its card; a soft shadow on the cut edge shows there is more to see
+   (the Contacts and price tables were cut mid-word with no sign they scroll). overflow-y: hidden keeps the lone up/down scrollbar away. */
+@media (max-width: 720px) {
+  .tbl-wrap {
+    overflow-x: auto; overflow-y: hidden;
+    background:
+      linear-gradient(to right, var(--surface), var(--surface)) left / 28px 100% no-repeat local,
+      linear-gradient(to left, var(--surface), var(--surface)) right / 28px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, .16), transparent) left / 14px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, .16), transparent) right / 14px 100% no-repeat scroll;
+  }
+}
+
 /* The club look from the Daji Admin brief: dark forest green, champagne gold and black glass. data-pal="club" (the default) in light and dark.
    Then the shared states every workspace uses (loading, failed, denied, partial, not built) and the workspace tab strip. */
 html[data-pal="club"]{--bg:#F3F1EA;--surface:#FFFDF8;--surface2:#FAF7EF;--soft:#ECE7DB;--soft2:#F4ECDA;--line:#E2DACB;--line2:#ECE6DA;--ink:#0D1F18;--ink2:#25392F;--muted:#5C5A50;--link:#7B6230;--strong:#0F2A1F;--on-strong:#F3EBD8;--deep:#0F2A1F;--rail:#0B1F17;--accent:#CDB27A;color-scheme:light}
@@ -1691,7 +1706,7 @@ html[data-pal="club"][data-theme="dark"] .eyebrow { color: var(--accent); }
 .state-missing { border-style: dashed; border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 
 /* workspace tabs (a booking, a customer, Guppi): always shown, even where the page-level chips hide on a wide screen; they scroll on a phone */
-.ws-tabs { display: flex !important; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+.ws-tabs { display: flex !important; gap: 6px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; padding-bottom: 2px; }
 .ws-tabs .dchip { flex: 0 0 auto; }
 
 .timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 8px; }

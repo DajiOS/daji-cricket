@@ -665,3 +665,28 @@ test('without a key: what is waiting on whom, why you cannot sign, and an approv
   perms(['manage_bookings', 'record_payments']);
   assert.equal((await ask("What's waiting on whom?", sc.staff)).status, 403);
 });
+
+test('"how many bookings on the books" means everything booked from today, not this month', async () => {
+  assert.equal(classify('how many booking on the books').intent, 'upcoming');
+  assert.equal(classify('what do we have booked ahead').intent, 'upcoming');
+  const r = await ask('how many booking on the books');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.period.from, TODAY);
+  assert.ok(r.body.period.to >= '2028-10-01', r.body.period.to);
+  assert.doesNotMatch(r.body.answer, /^For this month/);
+});
+
+test('a period with only cancellations says no bookings are live before counting the cancellations', async () => {
+  run("UPDATE bookings SET status = 'cancelled', cancelled_at = ?", Number(T0));
+  const r = await ask('how many bookings this month');
+  assert.equal(r.status, 200);
+  assert.match(r.body.answer, /^No bookings are live for this month/);
+});
+
+test('"what is coming up" is read like "what\'s coming up", and what is ahead leads the answer', async () => {
+  assert.equal(classify('what is coming up').intent, 'upcoming');
+  assert.equal(classify('who is playing tomorrow').intent, 'upcoming');
+  const r = await ask('how many bookings are on the books');
+  assert.equal(r.status, 200);
+  assert.doesNotMatch(r.body.answer, /^For [^:]+: \d+ cancellation/);
+});

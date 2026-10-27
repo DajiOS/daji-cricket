@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useApi, post, put, go, fmtDate, fmtDateTime, inr } from '../lib';
 import { PageHead, Tabs, Table, Chip, Modal, Field, ErrorBox, Loading, useToast, useForm, type Tone } from '../ui';
 
-type Tab = 'rules' | 'changes' | 'gst' | 'terms';
-const TABS: [Tab, string][] = [['rules', 'Rules and review dates'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']];
+type Tab = 'rules' | 'renewals' | 'changes' | 'gst' | 'terms';
+const TABS: [Tab, string][] = [['rules', 'Rules and review dates'], ['renewals', 'Renewals'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']];
 
 interface Item { code: string; title: string; authority: string; rule: string; currentValue: string; enforcedIn: string; reviewEveryDays: number; lastReviewedOn: string; nextReviewOn: string; status: 'ok' | 'soon' | 'due'; daysToReview: number }
 interface Change { id: string; code: string; changedOn: string; summary: string; oldValue: string | null; newValue: string | null; source: string | null }
@@ -22,6 +22,7 @@ export default function Compliance({ sub }: { sub: string }) {
       <Tabs<Tab> value={tab} onChange={(t) => go(`/compliance/${t}`)} items={TABS} label="Compliance sections" />
       <ErrorBox msg={err} />
       {tab === 'rules' && (reg ? <Rules reg={reg} reload={reload} /> : !err && <Loading />)}
+      {tab === 'renewals' && (reg ? <Renewals reg={reg} reload={reload} /> : !err && <Loading />)}
       {tab === 'changes' && (reg ? <Changes reg={reg} reload={reload} /> : !err && <Loading />)}
       {tab === 'gst' && <Gst />}
       {tab === 'terms' && <Terms />}
@@ -48,6 +49,28 @@ function Rules({ reg, reload }: { reg: Reg; reload: () => void }) {
         { head: 'Enforced as', cell: (i) => <><div>{i.currentValue}</div><div className="small muted">{i.enforcedIn}</div></> },
         { head: 'Last reviewed', cell: (i) => fmtDate(i.lastReviewedOn) },
         { head: 'Next review', cell: (i) => <><div>{fmtDate(i.nextReviewOn)}</div><Chip tone={TONE[i.status]!}>{LABEL[i.status]}</Chip></> },
+        { head: '', cell: (i) => <button className="btn sm ghost" onClick={() => review(i.code)}>Reviewed</button> },
+      ]} />
+    </div>
+  );
+}
+
+/** What has to be looked at again next: every rule by its next review date, soonest (or most overdue) first. */
+function Renewals({ reg, reload }: { reg: Reg; reload: () => void }) {
+  const toast = useToast();
+  const [err, setErr] = useState<string | null>(null);
+  const rows = [...reg.items].sort((a, b) => a.daysToReview - b.daysToReview);
+  const within30 = rows.filter((i) => i.daysToReview <= 30).length;
+  async function review(code: string) { try { await post(`/api/compliance/${code}/review`, {}); toast('Marked as reviewed'); reload(); } catch (e: any) { setErr(e.message); } }
+  return (
+    <div className="card">
+      <div className="card-head"><h3>Renewals {within30 > 0 && <Chip tone="warn">{within30} in the next 30 days</Chip>}</h3></div>
+      <div className="card-pad small muted">Each rule is checked again on its review date. Soonest first. Memberships that are ending are under Customers, Members &amp; plans, Expiring soon.</div>
+      {err && <div className="card-pad"><ErrorBox msg={err} /></div>}
+      <Table rows={rows} rowKey={(i) => i.code} empty="No rules on the register." cols={[
+        { head: 'Due', cell: (i) => <><div>{fmtDate(i.nextReviewOn)}</div><div className="small muted">{i.daysToReview < 0 ? `${-i.daysToReview} days overdue` : i.daysToReview === 0 ? 'Today' : `In ${i.daysToReview} days`}</div></> },
+        { head: 'Rule', cell: (i) => <><span className="strong">{i.title}</span><div className="small muted">{i.authority} · every {i.reviewEveryDays} days</div></> },
+        { head: 'Status', cell: (i) => <Chip tone={TONE[i.status]!}>{LABEL[i.status]}</Chip> },
         { head: '', cell: (i) => <button className="btn sm ghost" onClick={() => review(i.code)}>Reviewed</button> },
       ]} />
     </div>

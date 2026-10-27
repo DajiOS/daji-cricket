@@ -36,11 +36,15 @@ CREATE INDEX idx_bookings_series ON bookings(series_id);`);
 registerSchema('series-kind-1', `ALTER TABLE booking_series ADD COLUMN kind TEXT;
 UPDATE booking_series SET kind = 'block' WHERE frequency = 'daily' AND first_booking_id IN (SELECT id FROM bookings WHERE source <> 'online');`);
 registerSchema('offers-1', `ALTER TABLE bookings ADD COLUMN cancel_offers TEXT;`);
+// An owner can delete a cancelled booking from every screen. The row stays (money records are never deleted, see finevents.ts) so the books,
+// GST and reconciliation still add up; deleted_at only takes it out of the lists.
+registerSchema('booking-deleted-1', `ALTER TABLE bookings ADD COLUMN deleted_at INTEGER;
+ALTER TABLE bookings ADD COLUMN deleted_by TEXT;`);
 
 export interface BookingRow {
   id: string; ref: string; ground_id: string; owner_id: string; customer_id: string; date: string; start_at: number; end_at: number; slot_count: number; format_label: string | null; ball: 'red' | 'white' | 'tennis' | null;
   status: BookingStatus; source: 'online' | 'walk_in' | 'enquiry'; total_paise: number; advance_paise: number; paid_paise: number; pay_method: 'razorpay' | 'upi' | null;
-  hold_expires_at: number | null; hold_extensions: number; reschedule_count: number; needs_review: number; confirmed_at: number | null; cancelled_at: number | null;
+  hold_expires_at: number | null; hold_extensions: number; reschedule_count: number; needs_review: number; confirmed_at: number | null; cancelled_at: number | null; deleted_at?: number | null;
   cancel_kind: 'free' | 'credit' | 'none' | null; cancel_reason: string | null; cancelled_by: string | null; refund_paise: number; credit_paise: number;
   approval: 'pending' | 'approved'; resolution: 'awaiting' | 'refund' | 'half' | 'credit' | null; owner_cancelled: number; cancel_offers: string | null; promo_code: string | null; discount_paise: number; series_id: string | null; series_index: number | null;
   players: number | null; notes: string | null; enquiry_id: string | null; created_by: string | null; reminded_at: number | null; created_at: number; updated_at: number;
@@ -72,7 +76,7 @@ export function toBooking(r: Joined): Booking {
     customerName: r.customer_name, customerPhone: r.customer_phone, date: r.date, startAt: r.start_at, endAt: r.end_at, slotCount: r.slot_count, formatLabel: r.format_label ?? null, ball: r.ball ?? null,
     status: r.status, source: r.source, totalPaise: r.total_paise, advancePaise: r.advance_paise, paidPaise: r.paid_paise,
     balancePaise: Math.max(r.total_paise - r.paid_paise, 0), moveDifferenceDuePaise: moveDifferenceDue(r), holdExpiresAt: r.hold_expires_at, needsReview: !!r.needs_review,
-    cancelKind: r.cancel_kind, approval: r.approval, cancelledByOwner: !!r.owner_cancelled, resolution: r.resolution ?? null, promoCode: r.promo_code ?? null, seriesId: r.series_id ?? null, seriesIndex: r.series_index ?? null, discountPaise: r.discount_paise ?? 0, cancelOffers: (r.cancel_offers ? r.cancel_offers.split(',') : r.owner_cancelled ? ['refund', 'credit'] : []) as Booking['cancelOffers'], cancelReason: r.cancel_reason ?? null, refundPaise: r.refund_paise, creditPaise: r.credit_paise, cancelledAt: r.cancelled_at, confirmedAt: r.confirmed_at,
+    cancelKind: r.cancel_kind, approval: r.approval, cancelledByOwner: !!r.owner_cancelled, resolution: r.resolution ?? null, promoCode: r.promo_code ?? null, seriesId: r.series_id ?? null, seriesIndex: r.series_index ?? null, discountPaise: r.discount_paise ?? 0, cancelOffers: (r.cancel_offers ? r.cancel_offers.split(',') : r.owner_cancelled ? ['refund', 'credit'] : []) as Booking['cancelOffers'], cancelReason: r.cancel_reason ?? null, refundPaise: r.refund_paise, creditPaise: r.credit_paise, cancelledAt: r.cancelled_at, deletedAt: r.deleted_at ?? null, confirmedAt: r.confirmed_at,
     players: r.players, notes: r.notes, createdAt: r.created_at,
   };
 }
@@ -190,8 +194,10 @@ export function clearReview(actor: Actor, id: string): BookingRow {
 
 export function listBookings(f: {
   ownerId?: string | null; customerId?: string; groundId?: string; status?: string; from?: string; to?: string; q?: string; needsReview?: boolean; approval?: 'pending' | 'approved'; resolution?: 'awaiting'; limit: number; offset: number; collapse?: boolean;
+  /** Only bookings made on a tournament price ("Saturday tournament", "Two-day tournament"), and only those still to come, soonest first. */
+  tournament?: boolean; upcoming?: boolean;
 }): Page<Booking> {
-  const where: string[] = [];
+  const where: string[] = ['b.deleted_at IS NULL'];
   const p: (string | number)[] = [];
   if (f.ownerId) { where.push('b.owner_id = ?'); p.push(f.ownerId); }
   if (f.customerId) { where.push('b.customer_id = ?'); p.push(f.customerId); }
@@ -199,7 +205,8 @@ export function listBookings(f: {
   if (f.status) { where.push('b.status = ?'); p.push(f.status); }
   if (f.collapse) {
     // a multi-day block is one row: its first day stands for it, and a date filter looks at every day of the block
-    where.push(`NOT (b.series_index > 0 AND b.series_id IN (SELECT id FROM booking_series WHERE kind = 'block'))`);
+    // series_index is NULL on an ordinary booking: compare it as 0, or NOT (NULL ...) drops every ordinary booking once any block exists
+    where.push(`NOT (COALESCE(b.series_index, 0) > 0 AND b.series_id IS NOT NULL AND b.series_id IN (SELECT id FROM booking_series WHERE kind = 'block'))`);
     if (f.from || f.to) {
       const c: string[] = []; const q: string[] = [];
       if (f.from) { c.push('x.date >= ?'); q.push(f.from); }
@@ -214,14 +221,17 @@ export function listBookings(f: {
   if (f.needsReview) where.push('b.needs_review = 1');
   if (f.approval) { where.push("b.approval = ? AND b.status = 'confirmed'"); p.push(f.approval); }
   if (f.resolution) { where.push('b.resolution = ?'); p.push(f.resolution); }
+  if (f.tournament) where.push("lower(b.format_label) LIKE '%tournament%'");
+  if (f.upcoming) { where.push("b.end_at > ? AND b.status IN ('held','confirmed')"); p.push(now()); }
   if (f.q) {
     const like = `%${f.q.replace(/[%_\\]/g, '\\$&')}%`;
-    where.push("(b.ref LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.phone LIKE ? ESCAPE '\\')");
-    p.push(like, like, like);
+    // the booking type too, so searching "tournament" finds the bookings made on a tournament price
+    where.push("(b.ref LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.phone LIKE ? ESCAPE '\\' OR b.format_label LIKE ? ESCAPE '\\')");
+    p.push(like, like, like, like);
   }
   const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const total = one<{ n: number }>(`SELECT COUNT(*) n FROM bookings b JOIN users u ON u.id = b.customer_id ${w}`, ...p)?.n ?? 0;
-  const rows = many<Joined>(`${JOIN} ${w} ORDER BY b.start_at DESC, b.id DESC LIMIT ? OFFSET ?`, ...p, f.limit, f.offset);
+  const rows = many<Joined>(`${JOIN} ${w} ORDER BY ${f.upcoming ? 'b.start_at ASC, b.id ASC' : 'b.start_at DESC, b.id DESC'} LIMIT ? OFFSET ?`, ...p, f.limit, f.offset);
   const items = rows.map(toBooking);
   if (f.collapse) for (const b of items) if (b.seriesId) b.block = blockOf(b.seriesId, false);
   return { items, total, limit: f.limit, offset: f.offset };
@@ -253,7 +263,7 @@ export function blockOf(seriesId: string, withDays = true): BlockSummary | null 
     refundedPaise: rows.reduce((a, r) => a + r.refund_paise, 0), creditedPaise: rows.reduce((a, r) => a + r.credit_paise, 0),
     cancellableDays: rows.filter((r) => (r.status === 'confirmed' || r.status === 'held') && r.start_at > now()).length,
     tournament: one<{ id: string; name: string }>('SELECT id, name FROM tournaments WHERE series_id = ? AND deleted_at IS NULL', seriesId) ?? null,
-    days: use.length, fromDate: use[0]!.date, toDate: use[use.length - 1]!.date, totalPaise: total, paidPaise: paid, balancePaise: Math.max(total - paid, 0),
+    days: use.length, fromDate: use[0]!.date, toDate: use[use.length - 1]!.date, totalPaise: total, paidPaise: paid, balancePaise: live.length ? Math.max(total - paid, 0) : 0, // nothing is owed on a cancelled booking
     ...(withDays ? { payments: pays } : {}),
     ...(withDays ? { items: rows.map((r) => ({ id: r.id, ref: r.ref, date: r.date, startAt: r.start_at, endAt: r.end_at, status: r.status, totalPaise: r.total_paise, paidPaise: r.paid_paise, balancePaise: Math.max(r.total_paise - r.paid_paise, 0) })) } : {}),
   };
@@ -269,6 +279,27 @@ export const toPayment = (r: any): Payment => ({
 });
 
 /** Staff marks a confirmed booking as a no-show: no refund, no credit; the advance stays as income. */
+/**
+ * Deletes a cancelled booking from every screen (a multi-day booking: every day of it). Only the owner. Refused while a refund is still to be
+ * paid, so no money is left without a booking to find it by. The record itself stays for the books and the audit log.
+ */
+export function deleteCancelled(actor: Actor, id: string): { deleted: number } {
+  if (actor.role !== 'owner' && actor.role !== 'super_admin') throw new HttpError(403, 'FORBIDDEN', 'Only the owner can delete a booking');
+  const b = bookingOr404(id);
+  const block = b.series_id && one<{ kind: string | null }>('SELECT kind FROM booking_series WHERE id = ?', b.series_id)?.kind === 'block';
+  const rows = block ? many<BookingRow>('SELECT * FROM bookings WHERE series_id = ? AND deleted_at IS NULL', b.series_id) : [b];
+  const live = rows.filter((r) => r.status !== 'cancelled' && r.status !== 'expired');
+  if (live.length) throw new HttpError(409, 'NOT_CANCELLED', block ? 'Cancel every day of this booking before deleting it' : 'Only a cancelled booking can be deleted. Cancel it first.');
+  const ids = rows.map((r) => r.id);
+  const marks = ids.map(() => '?').join(',');
+  const open = one<{ n: number }>(`SELECT COUNT(*) n FROM refunds WHERE booking_id IN (${marks}) AND status IN ('pending','processing','failed')`, ...ids)!.n;
+  if (open) throw new HttpError(409, 'REFUND_OPEN', 'A refund on this booking is still to be paid. Mark it paid first, then delete the booking.');
+  const t = now();
+  run(`UPDATE bookings SET deleted_at = ?, deleted_by = ?, updated_at = ? WHERE id IN (${marks})`, t, actor.id, t, ...ids);
+  audit(actor, 'booking.delete', 'booking', b.id, { ref: b.ref, days: ids.length, paidPaise: rows.reduce((x, r) => x + r.paid_paise, 0) }, b.owner_id);
+  return { deleted: ids.length };
+}
+
 export function markNoShow(actor: Actor, id: string): BookingRow {
   const b = bookingOr404(id);
   if (b.status !== 'confirmed') throw new HttpError(409, 'BAD_STATE', `Only a confirmed booking can be a no-show (this one is ${b.status})`);

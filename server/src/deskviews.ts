@@ -85,7 +85,7 @@ export function opsCalendar(u: UserRow, owner: string, monthIn: string | null): 
 
 export interface FlowMonth {
   month: string;
-  earned: { totalPaise: number; bookingsPaise: number; membershipsPaise: number; academyPaise: number };
+  earned: { totalPaise: number; bookingsPaise: number; membershipsPaise: number; academyPaise: number; playedPaise: number };
   collected: { totalPaise: number; bookingsPaise: number; membershipsPaise: number; academyPaise: number };
   banked: { totalPaise: number; bankPaise: number; cashPaise: number };
   paidOut: { totalPaise: number; billsPaise: number; payrollPaise: number; otherPaise: number };
@@ -97,6 +97,8 @@ function flowMonth(owner: string, month: string): FlowMonth {
   const fromMs = istMidnight(from), toMs = istMidnight(addDays(to, 1));
   const n = (sql: string, ...p: (string | number)[]) => one<{ s: number | null }>(sql, ...p)?.s ?? 0;
   const bookingsEarned = n(`SELECT SUM(total_paise) s FROM bookings WHERE owner_id = ? AND date BETWEEN ? AND ? AND status IN ('confirmed','completed','no_show')`, owner, from, to);
+  // the profit and loss counts a session only once it has been played; say how much of the month's sessions that is so far
+  const bookingsPlayed = n(`SELECT SUM(total_paise) s FROM bookings WHERE owner_id = ? AND date BETWEEN ? AND ? AND status IN ('confirmed','completed','no_show') AND end_at <= ?`, owner, from, to, now());
   const members = n('SELECT SUM(amount_paise) s FROM membership_payments WHERE owner_id = ? AND paid_on BETWEEN ? AND ?', owner, from, to);
   const academyEarned = n('SELECT SUM(amount_paise) s FROM academy_fees WHERE owner_id = ? AND month = ?', owner, month);
   const bookingsIn = n(`SELECT SUM(amount_paise - refunded_paise) s FROM payments WHERE owner_id = ? AND status IN ('captured','partially_refunded','refunded') AND method <> 'credit' AND created_at >= ? AND created_at < ?`, owner, fromMs, toMs);
@@ -113,7 +115,7 @@ function flowMonth(owner: string, month: string): FlowMonth {
     AND f.amount_paise > COALESCE((SELECT SUM(p.amount_paise) FROM academy_fee_payments p WHERE p.fee_id = f.id), 0)`, owner, month);
   return {
     month,
-    earned: { totalPaise: bookingsEarned + members + academyEarned, bookingsPaise: bookingsEarned, membershipsPaise: members, academyPaise: academyEarned },
+    earned: { totalPaise: bookingsEarned + members + academyEarned, bookingsPaise: bookingsEarned, membershipsPaise: members, academyPaise: academyEarned, playedPaise: bookingsPlayed },
     collected: { totalPaise: bookingsIn + members + academyIn, bookingsPaise: bookingsIn, membershipsPaise: members, academyPaise: academyIn },
     banked: { totalPaise: bank + cash, bankPaise: bank, cashPaise: cash },
     paidOut: { totalPaise: bills + payroll + other, billsPaise: bills, payrollPaise: payroll, otherPaise: other },

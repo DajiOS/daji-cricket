@@ -269,6 +269,8 @@ export interface Booking {
   refundPaise: number;
   creditPaise: number;
   cancelledAt: number | null;
+  /** Set when the owner deleted this cancelled booking from the lists; the record stays for the books. */
+  deletedAt?: number | null;
   confirmedAt: number | null;
   players: number | null;
   notes: string | null;

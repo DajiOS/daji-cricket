@@ -38,6 +38,8 @@ const Hub = lazy(() => import('./pages/Hub'));
 const Enquiries = lazy(() => import('./pages/Enquiries'));
 const Blocks = lazy(() => import('./pages/Blocks'));
 const Guppi = lazy(() => import('./pages/Guppi'));
+const LiveScore = lazy(() => import('./pages/LiveScore'));
+const BookingsReport = lazy(() => import('./pages/BookingsReport'));
 
 export interface NavItem { to: string; href?: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
 /** Who may see a menu entry: the same rules the server applies to the page behind it. */
@@ -51,7 +53,7 @@ export const SUBS: Record<string, [string, string][]> = {
   '/accounting': [['overview', 'Overview'], ['review', 'Books review'], ['reports', 'Reports'], ['reconcile', 'Reconcile'], ['recurring', 'Recurring'], ['journals', 'Journals'], ['cashflow', 'Cash flow'], ['budget', 'Budget'], ['gst', 'GST'], ['assets', 'Fixed assets'], ['close', 'Month-end'], ['setup', 'Setup']],
   '/settings': [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['backups', 'Backups'], ['people', 'People'], ['connections', 'Connections'], ['services', 'Services'], ['golive', 'Go-live check']],
   '/bills': [['', 'Bills'], ['vendors', 'Vendors']],
-  '/compliance': [['rules', 'Rules and review dates'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']],
+  '/compliance': [['rules', 'Rules and review dates'], ['renewals', 'Renewals'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']],
   '/payroll': [['run', 'Payroll run'], ['attendance', 'Attendance'], ['advances', 'Advances and deductions'], ['staff', 'Staff']],
   '/memberships': [['', 'Members'], ['expiring', 'Expiring soon'], ['plans', 'Plans'], ['activity', 'Activity']],
   '/reminders': [['', 'Queue'], ['templates', 'Templates'], ['one', 'Send one'], ['history', 'History']],
@@ -71,7 +73,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
   { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub }, { path: '/grounds', page: Spots },
-  { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/guppi', page: Guppi },
+  { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/guppi', page: Guppi }, { path: '/live', page: LiveScore }, { path: '/booking-report', page: BookingsReport },
 ];
 export const HOME = Dashboard;
 
@@ -94,7 +96,7 @@ const grounds = { check: (me: Me) => can(me, 'manage_bookings') || can(me, 'mana
 export const NAV: NavGroup[] = [
   { section: 'today', group: 'Today', items: [
     { to: '/', href: '/today', label: 'Command center', icon: 'dashboard' },
-    { to: '/bookings/day', href: '/operations/live', label: 'Live board', icon: 'calendar', perm: 'manage_bookings' },
+    { to: '/live', href: '/operations/live', label: 'Live score', icon: 'ball', perm: 'manage_matches' },
     { to: '/grounds', href: '/operations/grounds', label: 'Ground status', icon: 'ball', ...grounds },
   ] },
 
@@ -164,12 +166,13 @@ export const NAV: NavGroup[] = [
 
   { section: 'reports', group: 'Reports', items: [
     { to: '/health', href: '/reports/operations', label: 'Operations', icon: 'pulse' },
-    { to: '/compare', href: '/reports/bookings', label: 'Bookings', icon: 'pie', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
+    { to: '/booking-report', href: '/reports/bookings', label: 'Bookings', icon: 'pie', check: (me) => can(me, 'view_reports') && can(me, 'view_revenue') },
     { to: '/accounting/reports', href: '/reports/finance', label: 'Finance', icon: 'accounts', ...books },
+    { to: '/compare', href: '/reports/compare', label: 'Compare months', icon: 'swap', check: seesMoney },
   ] },
   { section: 'reports', group: 'Compliance', items: [
     { to: '/compliance', label: 'Register', icon: 'audit', ...owner },
-    { to: '/compliance/rules', href: '/compliance/renewals', label: 'Renewals', icon: 'calendar', ...owner },
+    { to: '/compliance/renewals', label: 'Renewals', icon: 'calendar', ...owner },
     { to: '/compliance/changes', href: '/compliance/change-log', label: 'Change log', icon: 'book', ...owner },
   ] },
 
