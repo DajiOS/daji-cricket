@@ -7,7 +7,7 @@ import { checkPasswordStrength, createUser, hasPermission, listStaff, requirePer
 import { one, many, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
-import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, listBookings, markNoShow, viewBooking } from '../bookings.ts';
+import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, deleteCancelled, listBookings, markNoShow, viewBooking } from '../bookings.ts';
 import { reconcile } from '../finevents.ts';
 import { approveRetentionRelease, getRetentionCase, listRetentionCases, proposeRetentionRelease, rejectRetentionRelease } from '../retention.ts';
 import { cancelGroundDay, extendBooking, previewReschedule, rescheduleBooking } from '../reschedule.ts';
@@ -51,7 +51,7 @@ export function staffRoutes(r: Router): void {
     const { limit, offset } = page(c);
     return ok(listBookings({
       ownerId: ownerFilter(c), groundId: c.query.get('groundId') ?? undefined, status: c.query.get('status') ?? undefined, from: c.query.get('from') ?? undefined,
-      to: c.query.get('to') ?? undefined, q: c.query.get('q') ?? undefined, needsReview: c.query.get('needsReview') === '1', collapse: c.query.get('group') === '1', approval: c.query.get('approval') === 'pending' ? 'pending' : undefined, resolution: c.query.get('resolution') === 'awaiting' ? 'awaiting' : undefined, limit, offset,
+      to: c.query.get('to') ?? undefined, q: c.query.get('q') ?? undefined, needsReview: c.query.get('needsReview') === '1', collapse: c.query.get('group') === '1', approval: c.query.get('approval') === 'pending' ? 'pending' : undefined, resolution: c.query.get('resolution') === 'awaiting' ? 'awaiting' : undefined, tournament: c.query.get('kind') === 'tournament', upcoming: c.query.get('upcoming') === '1', limit, offset,
     }));
   }, A);
 
@@ -138,6 +138,12 @@ export function staffRoutes(r: Router): void {
     const b = accessBooking(U(c), c.params.id!, 'manage_bookings');
     markNoShow({ id: U(c).id, role: U(c).role }, b.id);
     return ok({ booking: viewBooking(b.id) });
+  }, { ...A, idempotent: true });
+
+  // The owner deletes a cancelled booking from every screen (the books keep the record)
+  r.post('/api/staff/bookings/:id/delete', (c) => {
+    const b = accessBooking(U(c), c.params.id!);
+    return ok(deleteCancelled({ id: U(c).id, role: U(c).role }, b.id));
   }, { ...A, idempotent: true });
 
   r.post('/api/staff/bookings/:id/approve', (c) => {

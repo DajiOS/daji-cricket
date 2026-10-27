@@ -144,7 +144,7 @@ a.xstat:hover { border-color: color-mix(in srgb, var(--strong) 35%, var(--line))
 .xpanel-hd h2 { font-size: 18px; margin: 0; display: flex; align-items: baseline; gap: 10px; }
 .xpanel-hd h2 small { font-size: 13.5px; color: var(--muted); font-weight: 400; }
 .xpanel-hd a { font-size: 13.5px; font-weight: 500; color: var(--link); white-space: nowrap; }
-.xtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow-x: auto; }
+.xtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow-x: auto; overflow-y: hidden; }
 .xtabs button { border: 0; background: transparent; padding: 10px 14px; font: 500 14px var(--sans); color: var(--ink2); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .xtabs button.on { color: var(--link); border-bottom-color: var(--strong); font-weight: 600; }
 .xtbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -195,4 +195,17 @@ a.xstat:hover { border-color: color-mix(in srgb, var(--strong) 35%, var(--line))
   .xstat { flex-direction: column; gap: 10px; padding: 14px; }
   .xtile { width: 40px; height: 40px; border-radius: 10px; }
   .xstat-txt > span:first-child { white-space: normal; }
+}
+
+/* A table wider than a phone scrolls sideways inside its card; a soft shadow on the cut edge shows there is more to see
+   (the Contacts and price tables were cut mid-word with no sign they scroll). overflow-y: hidden keeps the lone up/down scrollbar away. */
+@media (max-width: 720px) {
+  .tbl-wrap {
+    overflow-x: auto; overflow-y: hidden;
+    background:
+      linear-gradient(to right, var(--surface), var(--surface)) left / 28px 100% no-repeat local,
+      linear-gradient(to left, var(--surface), var(--surface)) right / 28px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, .16), transparent) left / 14px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, .16), transparent) right / 14px 100% no-repeat scroll;
+  }
 }

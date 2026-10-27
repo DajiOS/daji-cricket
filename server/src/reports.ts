@@ -28,10 +28,10 @@ export function overview(ownerId: string | null, range: Range) {
   const ob = own('b.owner_id', ownerId), op = own('p.owner_id', ownerId), oe = own('e.owner_id', ownerId), ol = own('l.owner_id', ownerId);
 
   const byStatus = many<{ status: string; n: number; total: number; paid: number }>(
-    `SELECT b.status, COUNT(*) n, SUM(b.total_paise) total, SUM(b.paid_paise) paid FROM bookings b WHERE b.date BETWEEN ? AND ? ${ob.sql} GROUP BY b.status`, from, to, ...ob.p);
+    `SELECT b.status, COUNT(*) n, SUM(b.total_paise) total, SUM(b.paid_paise) paid FROM bookings b WHERE b.date BETWEEN ? AND ? AND b.deleted_at IS NULL ${ob.sql} GROUP BY b.status`, from, to, ...ob.p);
   const statusMap = Object.fromEntries(byStatus.map((r) => [r.status, { count: r.n, totalPaise: r.total ?? 0, paidPaise: r.paid ?? 0 }]));
   const cancellations = many<{ kind: string; n: number; refund: number; credit: number }>(
-    `SELECT b.cancel_kind kind, COUNT(*) n, SUM(b.refund_paise) refund, SUM(b.credit_paise) credit FROM bookings b WHERE b.status = 'cancelled' AND b.date BETWEEN ? AND ? ${ob.sql} GROUP BY b.cancel_kind`, from, to, ...ob.p);
+    `SELECT b.cancel_kind kind, COUNT(*) n, SUM(b.refund_paise) refund, SUM(b.credit_paise) credit FROM bookings b WHERE b.status = 'cancelled' AND b.deleted_at IS NULL AND b.date BETWEEN ? AND ? ${ob.sql} GROUP BY b.cancel_kind`, from, to, ...ob.p);
 
   const grounds = many<GroundRow>(`SELECT g.* FROM grounds g WHERE 1 = 1 ${own('g.owner_id', ownerId).sql} ORDER BY g.name`, ...own('g.owner_id', ownerId).p);
   const booked = many<{ ground_id: string; slots: number }>(

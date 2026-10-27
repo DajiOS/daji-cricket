@@ -21,6 +21,7 @@ export function DayView({ version, onChanged }: { version: number; onChanged: ()
         <button className="btn sm" onClick={() => setDate(addDaysISO(date, 1))} aria-label="Next day">→</button>
         {date !== todayISO() && <button className="btn ghost sm" onClick={() => setDate(todayISO())}>Today</button>}
         <b className="gold" style={{ marginLeft: 6 }}>{fmtDay(date)}</b>
+        {new Date().getTimezoneOffset() !== -330 && <span className="muted small">India time</span>}
         {d && <span className="muted small">{live.length} {live.length === 1 ? 'session' : 'sessions'}</span>}
         <span style={{ marginLeft: 'auto' }}><ViewToggle value={view} onChange={setView} /></span>
       </div>

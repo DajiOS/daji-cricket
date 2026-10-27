@@ -102,15 +102,16 @@ export function useApi<T = any>(path: string | null, deps: unknown[] = []) {
 export const inr = (paise: number | null | undefined, decimals?: number) => {
   const r = (paise || 0) / 100;
   const d = decimals ?? (Number.isInteger(r) ? 0 : 2);
-  return '₹' + r.toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d });
+  // a loss reads "−₹700" as on the accounting pages, never "₹-700"
+  return (r < 0 ? '−₹' : '₹') + Math.abs(r).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d });
 };
 /** paise -> compact "₹12.3 L" / "₹1.24 Cr" */
 export function inrShort(paise: number | null | undefined) {
-  const r = (paise || 0) / 100;
-  if (Math.abs(r) >= 1e7) return `₹${(r / 1e7).toFixed(2)} Cr`;
-  if (Math.abs(r) >= 1e5) return `₹${(r / 1e5).toFixed(1)} L`;
-  if (Math.abs(r) >= 1e3) return `₹${(r / 1e3).toFixed(1)} K`;
-  return `₹${r.toFixed(0)}`;
+  const r = (paise || 0) / 100, a = Math.abs(r), s = r < 0 ? '−₹' : '₹';
+  if (a >= 1e7) return `${s}${(a / 1e7).toFixed(2)} Cr`;
+  if (a >= 1e5) return `${s}${(a / 1e5).toFixed(1)} L`;
+  if (a >= 1e3) return `${s}${(a / 1e3).toFixed(1)} K`;
+  return `${s}${a.toFixed(0)}`;
 }
 /** "1234.50" typed by a person -> paise, or null when it is not a number */
 export function toPaise(text: string): number | null {

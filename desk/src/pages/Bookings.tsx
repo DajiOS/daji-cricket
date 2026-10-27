@@ -34,10 +34,12 @@ export default function Bookings({ sub }: { sub: string }) {
 
   return (
     <div className="stack">
-      <PageHead eyebrow="Ground" title="Bookings" lede="Every session at the ground: who is playing, what has been paid and what is still to collect.">
-        <button className="btn primary" onClick={() => go('/bookings/add')}><Icon name="plus" />Add booking</button>
-      </PageHead>
-      <div><Tabs value={tab} onChange={(t) => go(t === 'list' ? '/bookings' : `/bookings/${t}`)} items={tabs} label="Sections" /></div>
+      {filterPreset === 'review'
+        ? <PageHead eyebrow="Work" title="Exceptions" lede="Bookings that need a second look: a payment that came in after the hold ran out, a clash, or anything else the server flagged. Open one to sort it, then mark it reviewed." />
+        : <PageHead eyebrow="Ground" title="Bookings" lede="Every session at the ground: who is playing, what has been paid and what is still to collect.">
+            <button className="btn primary" onClick={() => go('/bookings/add')}><Icon name="plus" />Add booking</button>
+          </PageHead>}
+      {filterPreset !== 'review' && <div><Tabs value={tab} onChange={(t) => go(t === 'list' ? '/bookings' : `/bookings/${t}`)} items={tabs} label="Sections" /></div>}
       {tab === 'list' && <List version={version} preset={filterPreset} />}
       {tab === 'day' && <DayView version={version} onChanged={bump} />}
       {tab === 'approvals' && <Approvals version={version} onChanged={bump} />}

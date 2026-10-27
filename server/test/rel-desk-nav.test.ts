@@ -41,7 +41,7 @@ rel('REL-DESK-001', 'every one of the register\'s 82 routes resolves: to a desk 
   assert.equal(resolveRoute('/bookings/new').path, '/bookings/new');
   assert.equal(resolveRoute('/bookings/bk_9/money').path, '/bookings/bk_9/money');
   assert.equal(resolveRoute('/customers/u_7/activity').path, '/contacts/u_7/activity');
-  assert.equal(resolveRoute('/matches/live').path, '/matches');
+  assert.equal(resolveRoute('/matches/live').path, '/live'); // Live score has its own page now
   assert.equal(resolveRoute('/finance/gst').path, '/accounting/gst');
   // older addresses still open what they always opened
   for (const old of ['/accounting/gst', '/bookings/day', '/settings/prices', '/payroll/attendance', '/hub/finance', '/']) assert.equal(resolveRoute(old).path, old);
@@ -144,6 +144,39 @@ rel('REL-DESK-007', 'a page whose data is refused or fails stops loading: Approv
   ev('checked', ['Approvals', 'Bills', 'Vendors', 'Media', 'Cameras', 'Reminders', 'Team terms scope']);
 });
 
+rel('REL-DESK-008', 'a tournament on the books is listed: a booking made on a tournament price shows under upcoming tournaments and is found by searching "tournament"', async () => {
+  // Found on the live desk: a customer's tournament booking ("Saturday tournament" price) appeared nowhere as a tournament, because the Tournaments page
+  // only listed tournaments set up there and the dashboard listed only today.
+  const t = await bookAndPay(h, cust, g.id, dayFromNow(9), '07:00', 2);
+  const plain = await bookAndPay(h, cust, g.id, dayFromNow(10), '07:00', 1);
+  run("UPDATE bookings SET format_label = 'Saturday tournament' WHERE id = ?", t.id);
+  const up = await h.get('/api/staff/bookings?kind=tournament&upcoming=1&group=1', owner);
+  assert.equal(up.status, 200, JSON.stringify(up.body));
+  assert.deepEqual(up.body.items.map((b: any) => b.id), [t.id], 'the tournament booking, and not the ordinary one');
+  assert.equal(up.body.items[0].formatLabel, 'Saturday tournament');
+  const found = await h.get('/api/staff/bookings?q=tournament', owner);
+  assert.ok(found.body.items.some((b: any) => b.id === t.id) && !found.body.items.some((b: any) => b.id === plain.id), 'search finds it by its type');
+  // a cancelled or finished one is no longer upcoming, and another business never sees it
+  run("UPDATE bookings SET status = 'cancelled' WHERE id = ?", t.id);
+  assert.deepEqual((await h.get('/api/staff/bookings?kind=tournament&upcoming=1', owner)).body.items, []);
+  run("UPDATE bookings SET status = 'confirmed' WHERE id = ?", t.id);
+  const other = await h.get('/api/staff/bookings?kind=tournament&upcoming=1', owner2);
+  assert.ok(other.status === 403 || other.body.items.length === 0, `other owner got ${other.status}`);
+  // the dashboard and the Tournaments page both show the list
+  assert.match(read('desk/src/pages/Dashboard.tsx'), /<UpcomingTournaments /);
+  assert.match(read('desk/src/pages/Tournaments.tsx'), /<UpcomingTournaments \/>/);
+  ev('upcoming', up.body.items.map((b: any) => ({ ref: b.ref, formatLabel: b.formatLabel, date: b.date })));
+});
+
+rel('REL-DESK-009', 'tab strips never show a lone up/down scrollbar', () => {
+  // overflow-x: auto alone lets the browser scroll a strip up and down as well: Windows then drew up/down arrows beside the dashboard's tabs
+  const css = ['desk/styles/zz-look.css', 'desk/styles/admin.css', 'desk/styles/books.css', 'desk/styles/zzz-club.css'].map(read).join('\n');
+  for (const sel of ['.xtabs', '.tabs-scroll', '.bk-tabs', '.ws-tabs']) {
+    const rule = css.match(new RegExp('^\\' + sel + ' \\{[^}]*\\}', 'm'))?.[0] ?? '';
+    assert.match(rule, /overflow-y: hidden/, sel);
+  }
+});
+
 rel('REL-DESK-010', 'the bookings list and month calendar keep every ordinary booking once a multi-day booking exists', async () => {
   // Found on the live desk: an ordinary booking has no series_index (NULL), so "NOT (series_index > 0 AND ...)" was NULL and dropped
   // every ordinary booking from the grouped list as soon as one multi-day booking existed. The calendar said "0 bookings this month".
@@ -157,4 +190,56 @@ rel('REL-DESK-010', 'the bookings list and month calendar keep every ordinary bo
   const cal = await h.get(`/api/staff/bookings?group=1&from=${dayFromNow(0)}&to=${dayFromNow(30)}&limit=200`, owner);
   assert.ok(cal.body.items.some((b: any) => b.id === plain.id), 'the month calendar range finds it too');
   ev('listed', ids.length);
+});
+
+rel('REL-DESK-011', 'the owner deletes a cancelled multi-day booking from every screen once its refund is paid; the books keep the record', async () => {
+  // Asked for on the live desk: a cancelled multi-day booking (refunded) could not be removed. The owner chose "delete from every screen":
+  // money records are never deleted (finevents.ts), so the row stays for the books and only leaves the lists.
+  const body = { groundId: g.id, fromDate: dayFromNow(40), toDate: dayFromNow(42), startTime: '07:00', endTime: '22:00', totalPaise: 3_000_000, customer: { name: 'Tejpal Mali', phone: '9637333770' }, payment: { method: 'upi', amountPaise: 1_600_000, reference: 'UTRTEJPAL001' } };
+  const blk = (await h.post('/api/staff/bookings/block', body, owner)).body;
+  const first = blk.bookings[0].id as string;
+  assert.equal((await h.post(`/api/staff/bookings/${first}/delete`, {}, owner)).status, 409, 'not while it is still booked');
+  assert.equal((await h.post(`/api/staff/bookings/block/${blk.series.id}/cancel`, { reason: 'Ground closed', settle: 'refund' }, owner)).status, 200);
+  // nothing is owed on a cancelled booking (the desk showed "Balance ₹2,39,000" on the live one)
+  assert.equal((await h.get(`/api/staff/bookings/${first}`, owner)).body.block.balancePaise, 0);
+  // the advance was spread over the days, so there is one refund per day it landed on
+  const refunds = (await h.get('/api/staff/refunds', owner)).body.items.filter((r: any) => blk.bookings.some((b: any) => b.id === r.bookingId) && r.status !== 'done');
+  assert.ok(refunds.length > 0, 'cancelling with a refund leaves refunds to pay');
+  const open = await h.post(`/api/staff/bookings/${first}/delete`, {}, owner);
+  assert.equal(open.status, 409, 'a refund still to pay blocks it');
+  assert.equal(open.body.error.code, 'REFUND_OPEN');
+  const admin = await h.login('admin');
+  for (const r of refunds) {
+    assert.equal((await h.post(`/api/admin/refunds/${r.id}/approve`, {}, admin)).status, 200, 'the software owner authorises it');
+    const done = await h.post(`/api/staff/refunds/${r.id}/complete`, { reference: 'UTRBACK' + r.id.slice(-4) }, owner);
+    assert.equal(done.status, 200, JSON.stringify(done.body));
+  }
+  const bsBefore = (await h.get(`/api/accounting/reports/balance-sheet?asOf=${dayFromNow(0)}`, owner)).body;
+  assert.equal((await h.post(`/api/staff/bookings/${first}/delete`, {}, staff)).status, 403, 'front desk staff cannot delete');
+  assert.equal((await h.post(`/api/staff/bookings/${first}/delete`, {}, owner2)).status, 404, 'another business cannot see it');
+  const del = await h.post(`/api/staff/bookings/${first}/delete`, {}, owner);
+  assert.equal(del.status, 200, JSON.stringify(del.body));
+  assert.equal(del.body.deleted, 3, 'every day of the multi-day booking');
+  const list = (await h.get('/api/staff/bookings?group=1&limit=100', owner)).body.items;
+  assert.ok(!list.some((b: any) => b.seriesId === blk.series.id), 'gone from the list');
+  assert.ok(!(await h.get('/api/staff/bookings?status=cancelled&limit=100', owner)).body.items.some((b: any) => b.seriesId === blk.series.id), 'gone from the cancelled filter too');
+  assert.equal(one<{ n: number }>('SELECT COUNT(*) n FROM bookings WHERE series_id = ?', blk.series.id)!.n, 3, 'the records stay for the books');
+  const bsAfter = (await h.get(`/api/accounting/reports/balance-sheet?asOf=${dayFromNow(0)}`, owner)).body;
+  assert.equal(bsAfter.balanced, true);
+  assert.equal(bsAfter.totalAssetsPaise, bsBefore.totalAssetsPaise, 'deleting changes nothing in the books');
+  assert.equal(bsAfter.totalLiabilitiesPaise, bsBefore.totalLiabilitiesPaise);
+  // an ordinary booking that is not cancelled cannot be deleted
+  const plain = await bookAndPay(h, cust, g.id, dayFromNow(3), '07:00', 1);
+  assert.equal((await h.post(`/api/staff/bookings/${plain.id}/delete`, {}, owner)).body.error.code, 'NOT_CANCELLED');
+  ev('deleted', del.body);
+});
+
+rel('REL-DESK-012', 'a multi-day booking with a balance is one payment reminder, not one per day', async () => {
+  const body = { groundId: g.id, fromDate: dayFromNow(5), toDate: dayFromNow(8), startTime: '07:00', endTime: '22:00', totalPaise: 4_000_000, customer: { name: 'Pune Corporate League', phone: '9890000444' }, payment: { method: 'upi', amountPaise: 1_000_000, reference: 'UTRPCL00001' } };
+  const blk = await h.post('/api/staff/bookings/block', body, owner);
+  assert.equal(blk.status, 201, JSON.stringify(blk.body));
+  const q = (await h.get('/api/desk/reminders/queue', owner)).body;
+  const mine = q.items.filter((i: any) => i.kind === 'payment' && i.name === 'Pune Corporate League');
+  assert.equal(mine.length, 1, 'one reminder for the whole booking');
+  assert.match(mine[0].summary, /₹30,000/, mine[0].summary);
 });

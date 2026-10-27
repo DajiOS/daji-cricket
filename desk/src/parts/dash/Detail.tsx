@@ -10,6 +10,13 @@ import { type Booking, type Block, type RefundItem, RefundList, BookingChip, Can
 interface Pay { id: string; method: string; status: string; purpose: string; amountPaise: number; refundedPaise: number; reference: string | null; createdAt: number; rejectReason: string | null }
 interface Detail { booking: Booking; block: Block | null; payments: Pay[]; refunds: RefundItem[]; audit: { id: number; at: number; action: string; actorRole: string | null }[] }
 
+/** The owner deletes a cancelled booking (every day of a multi-day one) from every screen; the books keep the record. */
+const isOwner = (role: string) => role === 'owner' || role === 'super_admin';
+function DeleteBooking({ id, onDone, onError }: { id: string; onDone: () => void; onError: (m: string) => void }) {
+  return <Confirm className="btn danger" label="Delete booking" ask="Delete it from every screen for good? The books keep their record."
+    onYes={async () => { try { await post(`/api/staff/bookings/${encodeURIComponent(id)}/delete`, {}); onDone(); } catch (e) { onError(errText(e)); } }} />;
+}
+
 const ACTION_LABEL = (a: string) => a.replace(/^booking\./, '').replace(/[._]/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 /** The workspace tabs of one booking. Each has its own address, /bookings/<id>/<tab>, so a link opens the booking on that tab. */
@@ -57,6 +64,7 @@ export function BookingDetail({ id, asDay, tab: tabIn, onClose, onChanged }: { i
         {canMove && <button className="btn" id="move-booking" onClick={() => setMove(true)}>Move booking</button>}
         {b.status === 'confirmed' && started && <Confirm label="Mark no-show" ask="No refund, no credit?" onYes={() => act('no-show', {}, 'Marked as a no-show.')} />}
         {cancellable(b) && <button className="btn danger" onClick={() => setCancel(true)}>Cancel booking</button>}
+        {isOwner(me.role) && (b.status === 'cancelled' || b.status === 'expired') && !b.deletedAt && <DeleteBooking id={b.id} onError={setMsg} onDone={() => { toast('Booking deleted.'); onChanged(); onClose(); }} />}
         <button className="btn ghost" onClick={onClose}>Close</button>
       </>}>
       <div className="stack" style={{ gap: 18 }}>
@@ -273,7 +281,7 @@ function BlockDetail({ d, onClose, onChanged }: { d: Detail; onClose: () => void
   return (
     <>
       <Modal title={`Multi-day booking ${b.ref}`} onClose={onClose} wide
-        foot={<>{k.cancellableDays > 0 && can(me, 'manage_bookings') && <button className="btn danger" onClick={() => setCancelAll(true)}>Cancel all {k.cancellableDays} days</button>}{canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}<button className="btn ghost" onClick={onClose}>Close</button></>}>
+        foot={<>{k.cancellableDays > 0 && can(me, 'manage_bookings') && <button className="btn danger" onClick={() => setCancelAll(true)}>Cancel all {k.cancellableDays} days</button>}{canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}{isOwner(me.role) && !live.length && !b.deletedAt && <DeleteBooking id={b.id} onError={setMsg} onDone={() => { toast('Booking deleted.'); onChanged(); onClose(); }} />}<button className="btn ghost" onClick={onClose}>Close</button></>}>
         <div className="stack" style={{ gap: 18 }}>
           <ErrorBox msg={msg} />
           {k.tournament && <div className="card card-pad row" style={{ justifyContent: 'space-between' }}><div><b>Tournament:</b> {k.tournament.name}<div className="small muted">Teams, fixtures and entry fees are kept under Tournaments. Cancelling every day also cancels the tournament.</div></div><button className="btn sm" onClick={() => go('/tournaments/' + k.tournament!.id)}>Open tournament</button></div>}

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { UpcomingTournaments } from '../parts/tournaments/Upcoming';
 import { useSession } from '../App';
 import { Icon } from '../ui';
 import { api, useApi, inr, fmtDay, fmtTime, fmtDateTime, todayISO, can } from '../lib';
@@ -31,7 +32,7 @@ function Clock() {
   const [t, setT] = useState(Date.now());
   useEffect(() => { const i = window.setInterval(() => setT(Date.now()), 30_000); return () => clearInterval(i); }, []);
   const d = fmtDay(todayISO());
-  return <div className="xclock" aria-label="Today"><span>{d}</span><span>{fmtTime(t).toUpperCase()}</span></div>;
+  return <div className="xclock" aria-label="Today"><span>{d}</span><span>{fmtTime(t).toUpperCase()}{new Date().getTimezoneOffset() !== -330 && ' IST'}</span></div>;
 }
 
 function StatCard({ icon, tone, label, value, foot, href, alert }: { icon: string; tone: string; label: string; value: ReactNode; foot: ReactNode; href?: string; alert?: boolean }) {
@@ -52,6 +53,8 @@ export default function Dashboard({ sub }: { sub: string }) {
   const canPay = can(me, 'verify_payments') || can(me, 'record_payments') || can(me, 'view_reports');
   const canPeople = can(me, 'view_customers');
   const day = todayISO();
+  // "today" is the ground's day in India; someone looking from another time zone is told so, since their own date can differ
+  const awayFromIndia = new Date().getTimezoneOffset() !== -330;
 
   const [today, todayErr] = useApi<TodayData>(canBookings ? '/api/staff/today' : null, [version, ownerId]);
   const [cancelled, cancelledErr] = useApi<Page<Booking>>(canBookings ? `/api/staff/bookings?from=${day}&to=${day}&status=cancelled&limit=50` : null, [version, ownerId]);
@@ -159,7 +162,7 @@ export default function Dashboard({ sub }: { sub: string }) {
         <div className="xcol">
           {canBookings && (
             <section className="xpanel" aria-label="Today's bookings">
-              <div className="xpanel-hd"><h2>Today's bookings <small>{fmtDay(day)}</small></h2><a href="#/bookings/day">View all bookings →</a></div>
+              <div className="xpanel-hd"><h2>Today's bookings <small>{fmtDay(day)}{awayFromIndia && ' · India time'}</small></h2><a href="#/bookings/day">View all bookings →</a></div>
               <div className="xtabs" role="tablist">{tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l} ({count(k)})</button>)}</div>
               {todayErr || cancelledErr ? <p className="xempty err" role="alert">Today's bookings could not be loaded: {todayErr || cancelledErr}</p> : !today || !cancelled ? <p className="xempty">Loading today…</p> : !rows.length ? <p className="xempty">{tab === 'all' ? 'No bookings today yet.' : `Nothing ${tab} today.`}</p> : (
                 <div className="tbl-wrap"><table className="xtbl">
@@ -179,6 +182,12 @@ export default function Dashboard({ sub }: { sub: string }) {
                       </tr>);
                   })}</tbody>
                 </table></div>)}
+            </section>)}
+
+          {(canBookings || can(me, 'manage_matches')) && (
+            <section className="xpanel" aria-label="Upcoming tournaments">
+              <div className="xpanel-hd"><h2>Upcoming tournaments</h2><a href="#/tournaments">All tournaments →</a></div>
+              <UpcomingTournaments limit={5} version={version} />
             </section>)}
 
           <div className="xtwo">

@@ -1,5 +1,5 @@
 /* ---------- accounting (Accounting, Transactions, Bank import) ---------- */
-.bk-tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.bk-tabs { max-width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .bk-tabs .seg { max-width: none; }
 .amt { font-variant-numeric: tabular-nums; }
 .strong { color: var(--ivory); font-weight: 600; }
