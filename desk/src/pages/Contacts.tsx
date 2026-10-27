@@ -6,10 +6,12 @@ import { Async, FilterBar, Select, errMsg, useDebounced } from '../parts/club/co
 import Composer, { loadTemplates } from '../parts/club/Composer';
 import { CustomerWorkspace } from '../parts/customers/Workspace';
 
-interface Contact { id: string; name: string; phone: string | null; email: string | null; timesPlayed: number; lastPlayedAt: number; paidPaise: number | null; reachable: { email: boolean; whatsapp: boolean; sms: boolean } }
+interface Contact { id: string; name: string; phone: string | null; email: string | null; timesPlayed: number; lastPlayedAt: number; lastPastAt: number | null; nextAt: number | null; paidPaise: number | null; reachable: { email: boolean; whatsapp: boolean; sms: boolean } }
 interface Result { items: Contact[]; total: number; summary: { total: number; reachableEmail: number; reachableWhatsapp: number; reachableSms: number } }
 interface Broadcast { id: string; createdAt: number; channel: string; subject?: string | null; body: string; sent: number; queued: number }
 const LIMIT = 50;
+/** An instant as its India date (yyyy-mm-dd). */
+const day = (ms: number) => new Date(ms + 330 * 60000).toISOString().slice(0, 10);
 const CHAN: Record<string, string> = { whatsapp: 'WhatsApp', email: 'Email', sms: 'Text' };
 
 /** The customer directory. /customers/<id> (or /contacts/<id>) opens one customer's workspace, with its tab after the id. */
@@ -63,10 +65,12 @@ function Directory() {
           <>
             <Table rows={d.items} rowKey={(c) => c.id} onRow={(c) => go(`/customers/${encodeURIComponent(c.id)}`)} empty="Nobody matches yet." cols={[
               { head: 'Person', cell: (c) => <><a className="strong" href={`#/customers/${encodeURIComponent(c.id)}`} onClick={(e) => e.stopPropagation()}>{c.name}</a><div className="muted small">{[c.phone, c.email].filter(Boolean).join(' · ')}</div></> },
-              { head: 'Times', num: true, cell: (c) => c.timesPlayed },
-              { head: 'Last played', cell: (c) => fmtDate(new Date(c.lastPlayedAt + 330 * 60000).toISOString().slice(0, 10)) },
+              { head: who === 'played' ? 'Times played' : 'Bookings', num: true, cell: (c) => c.timesPlayed },
+              // a booking ahead is not a game played: the last one that has started, and the next one under it
+              { head: 'Last played', cell: (c) => <>{c.lastPastAt ? fmtDate(day(c.lastPastAt)) : <span className="muted">Not yet</span>}{c.nextAt && <div className="muted small">Next {fmtDate(day(c.nextAt))}</div>}</> },
               { head: 'Paid', num: true, cell: (c) => (c.paidPaise == null ? '—' : inr(c.paidPaise)) },
-              { head: 'Can reach on', cell: (c) => <div className="row" style={{ gap: 6 }}>{(['email', 'whatsapp', 'sms'] as const).map((k) => <Chip key={k} tone={c.reachable[k] ? 'good' : 'mute'}>{k === 'sms' ? 'SMS' : k === 'email' ? 'Email' : 'WhatsApp'}</Chip>)}</div> },
+              // only the channels this person said yes to (and has an address for): the counts above add these up
+              { head: 'Can reach on', cell: (c) => { const on = (['email', 'whatsapp', 'sms'] as const).filter((k) => c.reachable[k]); return on.length ? <div className="row" style={{ gap: 6 }}>{on.map((k) => <Chip key={k} tone="good">{k === 'sms' ? 'SMS' : k === 'email' ? 'Email' : 'WhatsApp'}</Chip>)}</div> : <span className="muted small">No channel agreed</span>; } },
             ]} />
             <div className="card-pad row" style={{ justifyContent: 'space-between' }}>
               <button className="btn ghost sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LIMIT))}>Previous</button>

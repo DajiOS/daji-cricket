@@ -220,7 +220,7 @@ export default function Media() {
           )}
         </div>
       )}
-      {!lib ? <Loading /> : lib.items.length === 0 ? <p className="hint">Nothing uploaded yet.</p> : shown.length === 0 ? <p className="hint">No {type === 'image' ? 'photos' : 'videos'} yet.</p> : (
+      {!lib ? (err ? null : <Loading />) : lib.items.length === 0 ? <p className="hint">Nothing uploaded yet.</p> : shown.length === 0 ? <p className="hint">No {type === 'image' ? 'photos' : 'videos'} yet.</p> : (
         <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))' }}>
           {shown.map((it) => (
             <div key={it.id} className="card" style={{ padding: 10, display: 'grid', gap: 8, minWidth: 0, outline: picked.has(it.id) ? '2px solid var(--strong)' : undefined }}>

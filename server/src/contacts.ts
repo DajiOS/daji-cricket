@@ -20,7 +20,7 @@ export const MAX_AUDIENCE = 5000;
 interface Row {
   id: string; name: string; phone: string | null; email: string | null; active: number;
   consent_email: number; consent_sms: number; consent_whatsapp: number;
-  times: number; slots: number; first_at: number; last_at: number; paid: number; ground_ids: string;
+  times: number; slots: number; first_at: number; last_at: number; past_at: number | null; next_at: number | null; paid: number; ground_ids: string;
 }
 
 export function parseContactFilter(src: unknown): ContactFilter {
@@ -62,11 +62,13 @@ function base(ownerId: string, f: ContactFilter): { sql: string; p: (string | nu
     where.push("(u.name LIKE ? ESCAPE '\\' OR u.phone LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')");
     p.push(like, like, like);
   }
+  const t = Math.floor(Number(now())); // a number from the clock, written into the query as one
   const having: string[] = [];
   if (f.minTimes) { having.push('COUNT(*) >= ?'); p.push(f.minTimes); }
   if (f.inactiveSince) { having.push('MAX(b.date) < ?'); p.push(f.inactiveSince); }
   const sql = `SELECT u.id, u.name, u.phone, u.email, u.active, u.consent_email, u.consent_sms, u.consent_whatsapp,
-      COUNT(*) AS times, SUM(b.slot_count) AS slots, MIN(b.start_at) AS first_at, MAX(b.start_at) AS last_at, SUM(b.paid_paise) AS paid,
+      COUNT(*) AS times, SUM(b.slot_count) AS slots, MIN(b.start_at) AS first_at, MAX(b.start_at) AS last_at,
+      MAX(CASE WHEN b.start_at <= ${t} THEN b.start_at END) AS past_at, MIN(CASE WHEN b.start_at > ${t} THEN b.start_at END) AS next_at, SUM(b.paid_paise) AS paid,
       group_concat(DISTINCT b.ground_id) AS ground_ids
     FROM bookings b JOIN users u ON u.id = b.customer_id
     WHERE ${where.join(' AND ')}
@@ -82,7 +84,7 @@ const reach = (r: Row) => ({
 
 const toContact = (r: Row): Contact => ({
   id: r.id, name: r.name, phone: r.phone, email: r.email, timesPlayed: r.times, slotsPlayed: r.slots ?? 0,
-  firstPlayedAt: r.first_at, lastPlayedAt: r.last_at, paidPaise: r.paid ?? 0, groundIds: r.ground_ids ? r.ground_ids.split(',') : [],
+  firstPlayedAt: r.first_at, lastPlayedAt: r.last_at, lastPastAt: r.past_at ?? null, nextAt: r.next_at ?? null, paidPaise: r.paid ?? 0, groundIds: r.ground_ids ? r.ground_ids.split(',') : [],
   consent: { email: !!r.consent_email, sms: !!r.consent_sms, whatsapp: !!r.consent_whatsapp }, reachable: reach(r),
 });
 

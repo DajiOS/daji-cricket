@@ -18,7 +18,7 @@ export function VendorsTab({ onBill }: { onBill: (vendorId: string) => void }) {
       </div>
       <ErrorBox msg={err} />
       <div className="card">
-        {!data ? <div className="card-pad"><Loading /></div> : (
+        {!data ? (err ? null : <div className="card-pad"><Loading /></div>) : (
           <Table rows={data.items.filter((v: any) => !has || (has === 'upi' ? v.upiId : has === 'gstin' ? v.gstin : v.phone))} empty={q || has ? 'No vendor matches that search.' : 'No vendors yet. Add the people you pay: turf suppliers, electricity, cleaners.'} cols={[
             { head: 'Vendor', cell: (v) => <div><div className="strong">{v.name}</div>{v.gstin && <div className="small faint">GSTIN {v.gstin}</div>}</div> },
             { head: 'Phone', cell: (v) => formatPhone(v.phone) || '—' },

@@ -13,7 +13,7 @@ function DateRow({ label, field, value, okText, clearText }: { label: string; fi
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   async function save(v: string) { try { await put('/api/admin/settings', { [field]: v }); setMsg({ ok: true, text: v ? okText(v) : clearText }); } catch (e) { setMsg({ ok: false, text: errText(e) }); } }
   return (
-    <div className="ad-line">
+    <div className="dl-line">
       <div><b>{label}</b></div>
       <div className="acts">
         <DateInput className="inp" style={{ width: 170 }} value={d} onChange={(e) => setD(e.target.value)} aria-label={label} />

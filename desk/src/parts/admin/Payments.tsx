@@ -19,10 +19,10 @@ export default function Payments() {
   return (
     <div className="stack">
       <Panel title="Online payments" actions={<button className="btn sm" onClick={() => send({ razorpayEnabled: !s.razorpayEnabled }).then(() => toast(`Online payments are now ${!s.razorpayEnabled ? 'ON' : 'OFF'}.`))}>{s.razorpayEnabled ? 'Turn Razorpay OFF' : 'Turn Razorpay ON'}</button>}>
-        <div className="ad-line"><span>Razorpay (online payments)</span><span>{s.razorpayEnabled ? <Chip tone="good">On</Chip> : <><Chip tone="warn">Off</Chip> <span className="small muted">direct UPI with staff verification</span></>}</span></div>
-        <div className="ad-line"><span>Contact person</span><b>{s.contactName}  ·  {formatPhone(s.contactPhone)}</b></div>
-        <div className="ad-line"><span>Email</span><b>{s.contactEmail}</b></div>
-        <div className="ad-line"><span>MP13 Academy</span><b>{s.academyName}  ·  {s.academyBrand}</b></div>
+        <div className="dl-line"><span>Razorpay (online payments)</span><span>{s.razorpayEnabled ? <Chip tone="good">On</Chip> : <><Chip tone="warn">Off</Chip> <span className="small muted">direct UPI with staff verification</span></>}</span></div>
+        <div className="dl-line"><span>Contact person</span><b>{s.contactName}  ·  {formatPhone(s.contactPhone)}</b></div>
+        <div className="dl-line"><span>Email</span><b>{s.contactEmail}</b></div>
+        <div className="dl-line"><span>MP13 Academy</span><b>{s.academyName}  ·  {s.academyBrand}</b></div>
       </Panel>
       <Panel title="Auto-debit" note="Lets customers approve their bank once (UPI AutoPay) so the balance of each booking is charged automatically before it starts. Needs Recurring Payments enabled on the Razorpay account. Try it in test mode first."
         actions={<><Chip tone={s.autoDebitEnabled ? 'good' : 'mute'}>{s.autoDebitEnabled ? 'On' : 'Off'}</Chip><button className="btn sm" onClick={() => send({ autoDebitEnabled: !s.autoDebitEnabled })}>{s.autoDebitEnabled ? 'Turn auto-debit OFF' : 'Turn auto-debit ON'}</button></>}>

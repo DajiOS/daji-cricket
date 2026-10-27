@@ -30,9 +30,9 @@ function renderContacts(pane) {
       clear(list); clear(summary);
       for (const [l, v] of [['People', r.summary.total], ['Can email', r.summary.reachableEmail], ['Can WhatsApp', r.summary.reachableWhatsapp], ['Can text', r.summary.reachableSms]]) summary.append(h('div', { class: 'kpi' }, h('span', {}, l), h('b', {}, String(v))));
       const rows = r.items.map((c) => h('tr', {}, h('td', {}, c.name, h('small', { class: 'sub' }, ' ' + (c.phone || '') + (c.email ? ' ' + c.email : ''))),
-        h('td', { class: 'n' }, String(c.timesPlayed)), h('td', {}, niceDate(day(c.lastPlayedAt))), h('td', { class: 'n' }, inr(c.paidPaise)),
-        h('td', {}, chip(c.reachable.email, 'Email'), chip(c.reachable.whatsapp, 'WhatsApp'), chip(c.reachable.sms, 'SMS'))));
-      list.append(r.items.length ? h('div', { class: 'tblwrap' }, h('table', { class: 'dt' }, h('thead', {}, h('tr', {}, ['Person', 'Times', 'Last played', 'Paid', 'Can reach on'].map((x, i) => h('th', { class: i === 1 || i === 3 ? 'n' : null }, x)))), h('tbody', {}, rows))) : h('div', { class: 'empty' }, 'Nobody matches yet.'),
+        h('td', { class: 'n' }, String(c.timesPlayed)), h('td', {}, c.lastPastAt ? niceDate(day(c.lastPastAt)) : 'Not yet', c.nextAt ? h('small', { class: 'sub' }, ' Next ' + niceDate(day(c.nextAt))) : null), h('td', { class: 'n' }, inr(c.paidPaise)),
+        h('td', {}, ...(c.reachable.email || c.reachable.whatsapp || c.reachable.sms ? [c.reachable.email && chip(true, 'Email'), c.reachable.whatsapp && chip(true, 'WhatsApp'), c.reachable.sms && chip(true, 'SMS')].filter(Boolean) : [h('small', { class: 'sub' }, 'No channel agreed')]))));
+      list.append(r.items.length ? h('div', { class: 'tblwrap' }, h('table', { class: 'dt' }, h('thead', {}, h('tr', {}, ['Person', filter().who === 'played' ? 'Times played' : 'Bookings', 'Last played', 'Paid', 'Can reach on'].map((x, i) => h('th', { class: i === 1 || i === 3 ? 'n' : null }, x)))), h('tbody', {}, rows))) : h('div', { class: 'empty' }, 'Nobody matches yet.'),
         h('div', { class: 'bar' }, btn('Previous', () => { offset = Math.max(0, offset - LIMIT); run(false); }, 'ghost sm'), h('span', { class: 'hint' }, `${r.total ? offset + 1 : 0} to ${Math.min(offset + LIMIT, r.total)} of ${r.total}`), btn('Next', () => { if (offset + LIMIT < r.total) { offset += LIMIT; run(false); } }, 'ghost sm')));
     } catch (e) { clear(list).append(h('div', { class: 'empty' }, e.status === 403 ? 'Your role does not include contacts.' : e.message)); }
   };

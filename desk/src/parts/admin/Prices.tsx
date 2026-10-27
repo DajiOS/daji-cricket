@@ -72,13 +72,13 @@ function GroundCard({ g }: { g: Ground }) {
 
   return (
     <Panel title={g.name} note={g.ownerName ? `Owner: ${g.ownerName}` : undefined} actions={<button className="btn sm ghost" onClick={loadDaji}>Load the Daji price list</button>}>
-      <div className="ad-sub">Days the ground is closed</div>
+      <div className="dl-sub">Days the ground is closed</div>
       <div className="hint" style={{ margin: '0 0 8px' }}>Tap a day to close it, for example Monday for maintenance. Nothing can be booked on a closed day.</div>
       <div className="pills">{DAY_ORDER.map((d) => <Pill key={d} on={closed.includes(d)} onClick={() => setClosed(flipDay(closed, d))}>{DAY_NAMES[d]}</Pill>)}</div>
 
       {BALLS.map(([ball, title, help]) => (
         <div key={ball}>
-          <div className="ad-sub">{title}</div>
+          <div className="dl-sub">{title}</div>
           {help && <div className="hint" style={{ margin: '0 0 8px' }}>{help}</div>}
           <div className="stack" style={{ gap: 10 }}>
             {rows.map((r, i) => r.ball !== ball ? null : (
@@ -112,18 +112,18 @@ function GroundCard({ g }: { g: Ground }) {
       ))}
       <div className="hint" style={{ marginTop: 12 }}>A fixed session is booked as one block at one price. A by-the-hour price lets the customer choose how many hours. Times after midnight show as "next day".</div>
 
-      <div className="ad-sub">The week at a glance</div>
+      <div className="dl-sub">The week at a glance</div>
       <div className="glance"><table>
         <thead><tr><th></th><th>Leather ball</th><th>Tennis ball</th>{showPractice && <th>Practice</th>}</tr></thead>
         <tbody>{DAY_ORDER.map((d) => <tr key={d}><th>{DAY_NAMES[d]}</th>{cell(d, 'leather')}{cell(d, 'tennis')}{showPractice && cell(d, 'practice')}</tr>)}</tbody>
       </table></div>
 
-      <div className="ad-sub">Message to customers</div>
+      <div className="dl-sub">Message to customers</div>
       <textarea className="inp" rows={2} maxLength={300} style={{ height: 'auto', padding: 10 }} placeholder="e.g. For custom days and reservations please call." value={f.note} onChange={setField('note')} />
 
       <details style={{ marginTop: 16 }}>
         <summary className="small muted" style={{ cursor: 'pointer' }}>More settings (slot length, opening hours without a price list)</summary>
-        <div className="ad-grid" style={{ marginTop: 12 }}>
+        <div className="dl-grid" style={{ marginTop: 12 }}>
           <Field label="Slot length"><select className="inp" value={f.slotMinutes} onChange={setField('slotMinutes')}>{[30, 60, 90, 120].concat([30, 60, 90, 120].includes(g.slotMinutes) ? [] : [g.slotMinutes]).map((n) => <option key={n} value={n}>{n === 60 ? '1 hour' : n === 90 ? '1 hour 30' : n === 120 ? '2 hours' : `${n} minutes`}</option>)}</select></Field>
           <Field label="Most hours at once"><select className="inp" value={f.maxSlots} onChange={setField('maxSlots')}>{[1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 24].map((n) => <option key={n} value={n}>{n}</option>)}</select></Field>
           <Field label="Summer opens"><select className="inp" value={f.openTime} onChange={setField('openTime')}>{openOpts.map((t) => <option key={t} value={t}>{hourLabel(t)}</option>)}</select></Field>
@@ -147,7 +147,7 @@ export default function Prices() {
   if (error) return <ErrorBox msg={error} />;
   if (!data) return <Loading />;
   if (!data.items.length) return <Empty>No grounds yet.</Empty>;
-  return <div className="ad-ground">
+  return <div className="dl-ground">
     <div className="hint" style={{ margin: 0 }}>Set what each ball costs, on which days and at what times. Customers see the changes as soon as you save.</div>
     {data.items.map((g) => <GroundCard key={g.id} g={g} />)}
     <GroundLinks />

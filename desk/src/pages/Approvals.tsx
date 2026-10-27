@@ -93,8 +93,10 @@ function Board() {
   const [paid] = useApi<{ items: Bill[] }>(acct ? '/api/accounting/bills?status=paid' : null, dep);
   const [bks] = useApi<{ items: Booking[] }>(books ? '/api/staff/bookings?approval=pending&limit=100' : null, dep);
   const [pays] = useApi<{ items: Pay[] }>(upiOk ? '/api/staff/payments?status=submitted&limit=50' : null, dep);
-  const [reqs] = useApi<{ items: Req[] }>(ruled ? '/api/accounting/approvals/requests' : null, dep);
-  const loaded = (!acct || (draft && pend && appr && paid)) && (!ruled || reqs) && (!books || bks) && (!upiOk || pays);
+  const [reqs, reqsErr, , reqsStatus] = useApi<{ items: Req[] }>(ruled ? '/api/accounting/approvals/requests' : null, dep);
+  // The server shows approval chains only to someone who signs a step in one (or reads the reports). A refusal means none are theirs, not a
+  // page that waits for ever; any other failure is said on the page.
+  const loaded = (!acct || (draft && pend && appr && paid)) && (!ruled || reqs || reqsErr) && (!books || bks) && (!upiOk || pays);
   const chain = new Map((reqs?.items ?? []).map((r) => [`${r.kind}:${r.entityId}`, r]));
 
   const week = Date.now() - 7 * 86400000;
@@ -153,6 +155,7 @@ function Board() {
         {kinds.map((k) => <button key={k} type="button" role="tab" aria-selected={filter === k} className={`dchip${filter === k ? ' on' : ''}`} onClick={() => setFilter(k)}>{K[k].name} · {open.filter((x) => x.k === k).length}</button>)}
       </div>
       <ErrorBox msg={err} />
+      {reqsErr && reqsStatus !== 403 && <ErrorBox msg={`Could not load the approval chains: ${reqsErr}`} />}
       {!loaded ? <Loading h={300} /> : (<>
         <div className="dap-stages">
           {ST.map((st, i) => <span key={st[0]} className={`dap-chev${i === 0 ? ' first' : ''}${i === 4 ? ' last' : ''}`} style={{ background: st[3], color: st[2] }}><b>{st[0]}</b><span>{vis.filter((x) => x.stage === i).length}</span></span>)}
