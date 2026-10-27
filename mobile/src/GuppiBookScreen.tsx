@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { api } from './api';
 import type { Booking, HoldResponse, PaymentInstructions } from './types';
-import { Btn, Chip, s } from './ui';
+import { Btn, Chip, GuppiMark, s } from './ui';
 import { C } from './theme';
 
 // Guppi booking, in any language. This screen only shows what the server's booking conversation returns and passes the customer's words, choices and taps back. It has no
@@ -56,12 +56,21 @@ export function GuppiBookScreen({ onHold, onBack, signedIn, onNeedSignIn }: { on
   const picked = reply?.status === 'selected' ? reply.option : undefined;
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
-      <Text style={s.eyebrow}>{L.title}</Text>
-      <Text style={[s.muted, { marginBottom: 10 }]}>{turns.length ? '' : L.example}</Text>
+    <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 52 }} keyboardShouldPersistTaps="handled">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} hitSlop={10}><Text style={{ color: C.gold, fontSize: 28, lineHeight: 30 }}>‹</Text></Pressable>
+        <GuppiMark size={40} />
+        <View style={{ flex: 1 }}><Text style={[s.text, { fontSize: 18, fontWeight: '800' }]}>Guppi</Text><Text style={s.muted}>{L.title}</Text></View>
+      </View>
+      {!turns.length && (
+        <View style={{ alignSelf: 'flex-start', maxWidth: '88%', marginBottom: 10, padding: 12, borderRadius: 16, borderTopLeftRadius: 4, backgroundColor: C.soft }}>
+          <Text style={s.text}>નમસ્તે! नमस्ते! Hello!</Text>
+          <Text style={s.muted}>{L.example}</Text>
+        </View>
+      )}
       {turns.map((t, i) => (
-        <View key={i} style={{ alignSelf: t.who === 'me' ? 'flex-end' : 'flex-start', maxWidth: '88%', marginBottom: 8, padding: 10, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: t.who === 'me' ? 'rgba(201,169,107,.14)' : 'transparent' }}>
-          <Text style={s.text}>{t.text}</Text>
+        <View key={i} style={{ alignSelf: t.who === 'me' ? 'flex-end' : 'flex-start', maxWidth: '88%', marginBottom: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 16, ...(t.who === 'me' ? { borderTopRightRadius: 4, backgroundColor: C.strong } : { borderTopLeftRadius: 4, backgroundColor: C.soft }) }}>
+          <Text style={[s.text, t.who === 'me' ? { color: C.onStrong } : null]}>{t.text}</Text>
         </View>
       ))}
       {!!reply?.needs?.length && reply.needs.some((n) => n.choices?.length) && (
@@ -70,26 +79,25 @@ export function GuppiBookScreen({ onHold, onBack, signedIn, onNeedSignIn }: { on
         </View>
       )}
       {(reply?.status === 'options' || reply?.status === 'selected') && !!reply.offers?.length && reply.offers.map((o, i) => (
-        <View key={o.optionId ?? i} style={{ borderWidth: 1, borderColor: C.line, borderRadius: 14, padding: 12, marginBottom: 8 }}>
-          <Text style={s.text}>{L.option} {i + 1}</Text>
+        <View key={o.optionId ?? i} style={[s.card, { padding: 12, marginBottom: 8 }]}>
+          <Text style={[s.text, { fontWeight: '800' }]}>{L.option} {i + 1}</Text>
           <Text style={s.text}>{o.text}</Text>
           <Btn label={`${L.option} ${i + 1}`} kind="outline" onPress={() => void turn({ text: `#${i + 1}` }, `${L.option} ${i + 1}`)} disabled={busy} style={{ marginTop: 8, marginBottom: 0 }} />
         </View>
       ))}
       {!!picked && (
-        <View style={{ borderWidth: 1, borderColor: C.gold, borderRadius: 14, padding: 12, marginBottom: 8 }}>
+        <View style={[s.card, { borderColor: C.gold, borderWidth: 1.5, padding: 12, marginBottom: 8 }]}>
           <Text style={s.text}>{picked.text}</Text>
           <Text style={s.muted}>{L.total} {inr(picked.totalPaise)} · {L.advance} {inr(picked.advancePaise)}</Text>
           <Btn label={L.hold} onPress={() => { setErr(''); setBusy(true); void holdIt(picked.optionId!, reply!).catch((e: any) => setErr(e.message)).finally(() => setBusy(false)); }} busy={busy} style={{ marginTop: 10, marginBottom: 0 }} />
         </View>
       )}
       {!!err && <Text style={s.err}>{err}</Text>}
-      <TextInput value={text} onChangeText={setText} onSubmitEditing={send} placeholder={L.placeholder} placeholderTextColor={C.muted} style={s.input} multiline editable={!busy} />
-      <Btn label={L.send} onPress={send} busy={busy} disabled={!text.trim()} />
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Btn label={L.reset} kind="ghost" onPress={reset} />
-        <Btn label="←" kind="ghost" onPress={onBack} />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 6 }}>
+        <TextInput value={text} onChangeText={setText} onSubmitEditing={send} placeholder={L.placeholder} placeholderTextColor={C.muted} style={[s.input, { flex: 1, marginBottom: 0, borderRadius: 22, paddingHorizontal: 16, backgroundColor: C.panel }]} multiline editable={!busy} />
+        <Btn label={L.send} onPress={send} busy={busy} disabled={!text.trim()} style={{ marginBottom: 0, borderRadius: 22, paddingHorizontal: 18 }} />
       </View>
+      <Btn label={L.reset} kind="ghost" onPress={reset} style={{ marginTop: 6 }} />
       <Text style={[s.muted, { textAlign: 'center' }]}>{L.secure}</Text>
     </ScrollView>
   );

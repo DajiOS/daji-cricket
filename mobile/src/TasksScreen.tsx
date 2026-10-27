@@ -73,12 +73,12 @@ export function TasksScreen({ user }: { user: User }) {
           <Field label="Checklist (optional, one step per line)" value={steps} onChangeText={setSteps} multiline autoCapitalize="sentences" placeholder={'Sweep the crease\nWater the pitch\nRoll both ends'} style={[s.input, { minHeight: 84, textAlignVertical: 'top' }]} />
           <Field label="Photos needed" value={need} onChangeText={setNeed} keyboardType="numeric" />
           <DateField label={repeat ? 'First due day' : 'Due day (optional)'} value={due} onChange={setDue} />
-          <Text style={[s.muted, { marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11 }]}>Repeats</Text>
+          <Text style={[s.muted, { marginBottom: 6, fontSize: 12, fontWeight: '600' }]}>Repeats</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{REPEATS.map(([k, label]) => <Chip key={k || 'once'} label={label} on={repeat === k} onPress={() => setRepeat(k)} />)}</View>
           {!!repeat && <Text style={[s.muted, { marginBottom: 8 }]}>When it is closed, the next one is added with the next due day.</Text>}
-          <Text style={[s.muted, { marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11 }]}>Priority</Text>
+          <Text style={[s.muted, { marginBottom: 6, fontSize: 12, fontWeight: '600' }]}>Priority</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{PRIORITIES.map((p) => <Chip key={p} label={cap(p)} on={prio === p} onPress={() => setPrio(p)} />)}</View>
-          <Text style={[s.muted, { marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11 }]}>For</Text>
+          <Text style={[s.muted, { marginBottom: 6, fontSize: 12, fontWeight: '600' }]}>For</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}><Chip label="Anyone" on={!who} onPress={() => setWho('')} />{team.map((m) => <Chip key={m.id} label={m.name} on={who === m.id} onPress={() => setWho(m.id)} />)}</View>
           <Btn label="Add task" onPress={add} disabled={title.trim().length < 3} />
         </View>

@@ -65,7 +65,7 @@ export function SettingsScreen({ user }: { user: User }) {
           <Text style={s.h2}>Approval and advance</Text>
           <Text style={[s.muted, { marginBottom: 6 }]}>New bookings {st.requireApproval ? 'wait for the team to approve them.' : 'are confirmed straight away once paid.'}</Text>
           <Btn kind="outline" label={st.requireApproval ? 'Confirm bookings without approval' : 'Ask for approval on new bookings'} busy={saving === 'approval'} onPress={() => put('approval', { requireApproval: !st.requireApproval })} />
-          <Text style={[s.muted, { marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1.4, fontSize: 11 }]}>Advance to hold a booking</Text>
+          <Text style={[s.muted, { marginBottom: 6, fontSize: 12, fontWeight: '600' }]}>Advance to hold a booking</Text>
           <View style={{ flexDirection: 'row' }}>
             <Chip label="Percent of the price" on={st.advanceMode === 'percent'} onPress={() => setSt({ ...st, advanceMode: 'percent' })} />
             <Chip label="Fixed amount" on={st.advanceMode === 'fixed'} onPress={() => setSt({ ...st, advanceMode: 'fixed' })} />
