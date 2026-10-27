@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { many, one, run, tx } from '../db.ts';
+import { many, one, registerSchema, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
 import { audit, type Actor } from '../audit.ts';
 import { HttpError, conflict, notFound } from '../errors.ts';
@@ -291,7 +291,7 @@ export function importStatement(ownerId: string, actor: Actor, accountId: string
 export interface ImportOut { id: string; accountId: string; accountName: string; filename: string | null; kind: string; rowsNew: number; rowsDuplicate: number; rowsSkipped: number; periodFrom: string | null; periodTo: string | null; createdAt: number; undoneAt: number | null }
 export function listImports(ownerId: string): ImportOut[] {
   return many<{ id: string; account_id: string; aname: string; filename: string | null; kind: string; rows_new: number; rows_duplicate: number; rows_skipped: number; period_from: string | null; period_to: string | null; created_at: number; undone_at: number | null }>(
-    `SELECT i.*, a.name aname FROM acct_imports i JOIN acct_accounts a ON a.id = i.account_id WHERE i.owner_id = ? ORDER BY i.created_at DESC LIMIT 100`, ownerId)
+    `SELECT i.*, a.name aname FROM acct_imports i JOIN acct_accounts a ON a.id = i.account_id WHERE i.owner_id = ? AND i.removed_at IS NULL ORDER BY i.created_at DESC LIMIT 100`, ownerId)
     .map((i) => ({ id: i.id, accountId: i.account_id, accountName: i.aname, filename: i.filename, kind: i.kind, rowsNew: i.rows_new, rowsDuplicate: i.rows_duplicate, rowsSkipped: i.rows_skipped, periodFrom: i.period_from, periodTo: i.period_to, createdAt: i.created_at, undoneAt: i.undone_at }));
 }
 
@@ -309,4 +309,17 @@ export function undoImport(ownerId: string, actor: Actor, id: string): { removed
   });
   audit(actor, 'acct.import.undo', 'acct_import', id, { removed: n }, ownerId);
   return { removed: n };
+}
+
+// a removed import leaves the "Statements loaded" list; its row stays for the audit trail
+registerSchema('acct-import-removed-1', 'ALTER TABLE acct_imports ADD COLUMN removed_at INTEGER; ALTER TABLE acct_imports ADD COLUMN removed_by TEXT;');
+
+/** Takes an import off the list. One still in force is undone first, so its transactions leave the books too. */
+export function removeImport(ownerId: string, actor: Actor, id: string): { removed: number } {
+  const imp = one<{ undone_at: number | null; removed_at: number | null }>('SELECT undone_at, removed_at FROM acct_imports WHERE id = ? AND owner_id = ?', id, ownerId);
+  if (!imp || imp.removed_at) throw notFound('Import not found');
+  const { removed } = imp.undone_at ? { removed: 0 } : undoImport(ownerId, actor, id);
+  run('UPDATE acct_imports SET removed_at = ?, removed_by = ? WHERE id = ?', now(), actor.id, id);
+  audit(actor, 'acct.import.remove', 'acct_import', id, { removed }, ownerId);
+  return { removed };
 }

@@ -4,7 +4,7 @@ import { U, ownerOrFail } from './helpers.ts';
 import { HttpError, forbidden } from '../errors.ts';
 import { hasPermission, requireRevenue } from '../auth.ts';
 import { accountChecks, addAttachment, attachmentCounts, autoMatch, createRecurring, deleteRecurring, listAttachments, listRecurring, matchPayment, MAX_ATTACHMENT_BYTES, readAttachment, reconciliationQueue, removeAttachment, runRecurring, unmatchPayment, updateRecurring } from '../accounting/books.ts';
-import { applyRules, createRule, deleteRule, importStatement, listImports, listRules, undoImport, updateRule, type ParsedStatement } from '../accounting/import.ts';
+import { applyRules, createRule, deleteRule, importStatement, listImports, listRules, removeImport, undoImport, updateRule, type ParsedStatement } from '../accounting/import.ts';
 import { readPdfStatement } from '../accounting/pdfstatement.ts';
 import { createHash } from 'node:crypto';
 
@@ -50,6 +50,7 @@ export function booksRoutes(r: Router): void {
   }, BIG);
   r.get('/api/accounting/imports', (c) => { const o = read(c); return ok({ items: listImports(o) }); }, A);
   r.post('/api/accounting/imports/:id/undo', (c) => { const w = write(c); return ok(undoImport(w.owner, w.actor, c.params.id!)); }, A);
+  r.post('/api/accounting/imports/:id/remove', (c) => { const w = write(c); return ok(removeImport(w.owner, w.actor, c.params.id!)); }, A);
 
   // ---- categorising rules
   r.get('/api/accounting/rules', (c) => { const o = read(c); return ok({ items: listRules(o) }); }, A);

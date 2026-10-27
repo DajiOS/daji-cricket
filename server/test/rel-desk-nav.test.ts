@@ -243,3 +243,14 @@ rel('REL-DESK-012', 'a multi-day booking with a balance is one payment reminder,
   assert.equal(mine.length, 1, 'one reminder for the whole booking');
   assert.match(mine[0].summary, /₹30,000/, mine[0].summary);
 });
+
+rel('REL-DESK-013', 'the Accounting tabs run in the same order as the menu on the left', () => {
+  // Reported on the live desk: the menu lists Overview, Reconcile, Books, GST, ... but the tabs ran Overview, Books review, Reports, Reconcile, ...,
+  // so each menu item opened a tab somewhere in the middle of the strip
+  const reg = read('desk/src/registry.ts');
+  const finance = reg.slice(reg.indexOf("{ section: 'finance'"), reg.indexOf("{ section: 'work'"));
+  const menu = [...finance.matchAll(/to: '\/accounting(?:\/(\w+))?'/g)].map((m) => m[1] ?? 'overview');
+  const tabs = [...read('desk/src/pages/Accounting.tsx').matchAll(/\['(\w+)', '[^']+'\]/g)].map((m) => m[1]!);
+  assert.deepEqual(tabs.filter((t) => menu.includes(t)), menu);
+  ev('order', tabs);
+});

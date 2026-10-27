@@ -5,9 +5,10 @@ import { Reports } from '../parts/books/Reports';
 import { Reconcile, Recurring, Journals, MonthEnd, Setup } from '../parts/books/Ledgers';
 import { CashFlow, Budget, Gst, Assets } from '../parts/books/Planning';
 
+// the same order as the menu on the left (Overview, Reconcile, Books, GST, Month end, Books review, Budget), then the tabs the menu does not list
 const TABS: [string, string][] = [
-  ['overview', 'Overview'], ['review', 'Books review'], ['reports', 'Reports'], ['reconcile', 'Reconcile'], ['recurring', 'Recurring'], ['journals', 'Journals'],
-  ['cashflow', 'Cash flow'], ['budget', 'Budget'], ['gst', 'GST'], ['assets', 'Fixed assets'], ['close', 'Month-end'], ['setup', 'Setup'],
+  ['overview', 'Overview'], ['reconcile', 'Reconcile'], ['journals', 'Journals'], ['gst', 'GST'], ['close', 'Month-end'], ['review', 'Books review'], ['budget', 'Budget'],
+  ['reports', 'Reports'], ['recurring', 'Recurring'], ['cashflow', 'Cash flow'], ['assets', 'Fixed assets'], ['setup', 'Setup'],
 ];
 
 /** sub: the tab, and for reports the report id (reports/pnl). */
