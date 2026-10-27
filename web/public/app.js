@@ -1575,12 +1575,12 @@ function openPay(res) {
 // This chat only shows what the server's booking conversation returns (/api/guppi/understand) and sends back the customer's words, choices and taps. It has no booking rules
 // of its own: the date, time, price, advance and availability it shows are the booking system's. It stops at the normal secure payment window (openPay) and never
 // takes, confirms or marks a payment. The same endpoint serves the iPad site and the iOS and Android apps.
-const GUPPI_FIRST = { title: 'Guppi booking assistant', placeholder: 'Tell Guppi what you need, in any language', send: 'Send', option: 'Option', total: 'Total', advance: 'Advance', hold: 'Hold and go to secure payment', change: 'Change', secure: 'Guppi never takes payment. Payment happens only on the secure payment screen.', reset: 'Start over', signIn: 'Sign in to book with Guppi.', example: 'Example: Sunday 7 PM for 3 hours' };
+const GUPPI_FIRST = { title: 'DCG booking assistant', placeholder: 'Tell DCG what you need, in any language', send: 'Send', option: 'Option', total: 'Total', advance: 'Advance', hold: 'Hold and go to secure payment', change: 'Change', secure: 'DCG never takes payment. Payment happens only on the secure payment screen.', reset: 'Start over', signIn: 'Sign in to book with DCG.', example: 'Example: Sunday 7 PM for 3 hours' };
 
 function guppiButton() {
   const head = $('#book .pc-head');
   if (!head || $('#guppi-open') || !(state.config && state.config.guppiBookingEnabled)) return;
-  head.append(h('button', { class: 'btn outline', id: 'guppi-open', type: 'button', onclick: () => openGuppi() }, 'Book with Guppi · ગુજરાતી · हिन्दी · English'));
+  head.append(h('button', { class: 'btn outline', id: 'guppi-open', type: 'button', onclick: () => openGuppi() }, 'Book with DCG · ગુજરાતી · हिन्दी · English'));
 }
 
 function openGuppi() {
@@ -1894,7 +1894,7 @@ async function loadBookings() {
     if (!state.bkFilter || !count(state.bkFilter)) state.bkFilter = count('upcoming') ? 'upcoming' : 'all';
     const bar = h('div', { class: 'bk-filter', role: 'tablist' }), cards = h('div', { class: 'bk-cards' });
     const paintBar = () => { clear(bar); for (const [k, label] of tabs) bar.append(h('button', { type: 'button', role: 'tab', class: 'tab' + (state.bkFilter === k ? ' on' : ''), 'aria-selected': state.bkFilter === k ? 'true' : 'false', onclick: () => { state.bkFilter = k; paintBar(); paintCards(); } }, `${label} (${count(k)})`)); };
-    const guppi = state.config && state.config.guppiBookingEnabled ? h('button', { class: 'btn outline sm bk-guppi', type: 'button', onclick: () => openGuppi() }, 'Chat with Guppi') : null;
+    const guppi = state.config && state.config.guppiBookingEnabled ? h('button', { class: 'btn outline sm bk-guppi', type: 'button', onclick: () => openGuppi() }, 'Chat with DCG') : null;
     list.append(h('div', { class: 'bk-top' }, bar, guppi), cards);
     paintBar();
     function paintCards() {

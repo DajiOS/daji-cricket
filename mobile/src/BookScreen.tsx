@@ -176,7 +176,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       {!!cfg.guppiBookingEnabled && (
         <Pressable accessibilityRole="button" onPress={() => setGuppi(true)} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 4 }]}>
           <GuppiMark />
-          <View style={{ flex: 1 }}><Text style={[s.text, { fontWeight: '700' }]}>Book with Guppi</Text><Text style={s.muted}>Just say it · ગુજરાતી · हिन्दी · English</Text></View>
+          <View style={{ flex: 1 }}><Text style={[s.text, { fontWeight: '700' }]}>Book with DCG</Text><Text style={s.muted}>Just say it · ગુજરાતી · हिन्दी · English</Text></View>
           <Text style={{ color: C.gold, fontSize: 22 }}>›</Text>
         </Pressable>
       )}
