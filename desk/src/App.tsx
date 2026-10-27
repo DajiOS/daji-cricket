@@ -3,7 +3,7 @@ import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, 
 import { Icon, ToastHost, Loading, Crest, ErrorBox } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
-import { HOME, NAV, PAGES, RAIL, BLURBS, railOf, itemFor, navVisible, type NavItem, type RailItem } from './registry';
+import { HOME, NAV, PAGES, SIDE, sideOf, navItem, itemFor, navVisible, type NavItem } from './registry';
 import { CommandSearch, askAssistant } from './CommandSearch';
 import { AskPanel } from './AskPanel';
 import { GroundPicker } from './GroundPicker';
@@ -25,80 +25,65 @@ function Shell({ route }: { route: string }) {
   const s = useSession();
   const [open, setOpen] = useState(false);
   const [meOpen, setMeOpen] = useState(false);
-  const [fly, setFly] = useState<{ key: string; top: number } | null>(null);
-  const flyTimer = useRef<number | undefined>(undefined);
-  const phone = () => matchMedia('(max-width: 900px)').matches;
-  const show = (key: string, el: HTMLElement) => { clearTimeout(flyTimer.current); setFly({ key, top: Math.max(8, Math.min(el.getBoundingClientRect().top - 10, innerHeight - 560)) }); };
-  const hide = () => { clearTimeout(flyTimer.current); flyTimer.current = window.setTimeout(() => setFly(null), 160); };
-  useEffect(() => { setOpen(false); setFly(null); setMeOpen(false); }, [route]);
-  useEffect(() => { const f = (e: KeyboardEvent) => { if (e.key === 'Escape') { setFly(null); setMeOpen(false); } }; addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, []);
+  const meBox = useRef<HTMLDivElement>(null);
+  useEffect(() => { setOpen(false); setMeOpen(false); }, [route]);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setMeOpen(false); setOpen(false); } };
+    const away = (e: MouseEvent) => { if (meBox.current && !meBox.current.contains(e.target as Node)) setMeOpen(false); };
+    addEventListener('keydown', esc); addEventListener('mousedown', away);
+    return () => { removeEventListener('keydown', esc); removeEventListener('mousedown', away); };
+  }, []);
   const visible = (i: NavItem) => navVisible(s.me, i);
-  const allowed = (r: RailItem) => can(s.me, r.perm) && (!r.anyPerm || r.anyPerm.some((p) => can(s.me, p))) && (!r.ownerOnly || s.me.role !== 'staff');
-  // the one menu item for this address (the longest match), and the rail button it sits under
+  // the one menu item for this address (the longest match), and the sidebar entry it sits under
   const active = itemFor(route, NAV.flatMap((g) => g.items));
-  const here = railOf(route);
-  const jobsOf = (sec?: string) => NAV.filter((g) => g.section === sec).map((g) => ({ ...g, items: g.items.filter(visible) })).filter((g) => g.items.length);
-  const rail = RAIL.map((r) => {
-    const jobs = r.section ? jobsOf(r.section) : [];
-    return { ...r, jobs, first: r.to ?? (r.hub ? `/hub/${r.section}` : jobs[0]?.items[0]?.to) };
-  }).filter((r) => (r.to ? allowed(r) : r.jobs.length > 0));
+  const here = sideOf(route);
+  const side = SIDE.map((x) => {
+    const pages = (x.pages ?? []).map(navItem).filter((i): i is NavItem => !!i && visible(i));
+    return { ...x, list: pages, first: x.to ?? pages[0]?.to };
+  }).filter((x) => x.action || (x.to ? (!x.anyPerm || x.anyPerm.some((p) => can(s.me, p))) : x.list.length > 0));
 
   const hit = PAGES.find((p) => route === p.path || route.startsWith(p.path + '/'));
   const Page = hit ? hit.page : HOME;
   const sub = hit ? route.slice(hit.path.length + 1) : '';
 
   const [counts, , reloadCounts] = useApi<{ count: number }>(can(s.me, 'manage_accounting') && s.ownerId ? '/api/accounting/approvals/count' : null, [route, s.ownerId]);
+  const [today, , reloadToday] = useApi<{ awaitingVerification: number; needsReview: number }>(can(s.me, 'manage_bookings') && s.ownerId ? '/api/staff/today' : null, [s.ownerId]);
   const waiting = counts?.count ?? 0;
-  s.refreshCounts = reloadCounts;
+  const alerts = waiting + (today?.awaitingVerification ?? 0) + (today?.needsReview ?? 0);
+  s.refreshCounts = () => { reloadCounts(); reloadToday(); };
   const signOut = () => { const t = getToken(); const done = () => { setToken(null); location.href = './'; }; if (!t) return done(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + t } }).catch(() => {}).finally(done); };
   const owner = s.owners.find((o) => o.id === s.ownerId);
   const groundLabel = owner?.businessName || s.me.businessName || 'Daji Cricket Ground';
-  // the section bar above a department page: the department, where the page sits and the other pages in that job
-  const job = active ? NAV.find((g) => g.items.includes(active)) : undefined;
-  const bar = here?.section && job ? { rail: here, job, pages: job.items.filter(visible) } : null;
+  // the pages that sit with this one, as chips above it (the same list the sidebar shows under its entry)
+  const siblings = here && !here.to ? side.find((x) => x.key === here.key)?.list ?? [] : [];
 
   return (
     <div className="dapp">
-      <nav className={`drail${open ? ' open' : ''}`} aria-label="Menu" id="main-menu" onScroll={() => setFly(null)}>
-        <a className="drail-mark" href="./" aria-label="Daji Cricket Ground, back to the website"><Crest size={40} /></a>
-        <div className="drail-items">
-          {rail.map((r) => {
-            const on = here?.key === r.key, hasSubs = r.jobs.length > 0, isOpen = fly?.key === r.key;
+      <nav className={`dside${open ? ' open' : ''}`} aria-label="Menu" id="main-menu">
+        <a className="dside-brand" href="./" aria-label="Daji Cricket Ground, back to the website">
+          <span className="dside-word">Daji<img src="assets/icon.svg" alt="" width={30} height={30} /></span>
+          <span className="dside-name">Cricket Ground</span>
+          <span className="dside-tag">Play · Practice · Grow</span>
+        </a>
+        <div className="dside-items">
+          {side.map((x) => {
+            const on = here?.key === x.key;
+            if (x.action === 'ask') return <button key={x.key} type="button" className="dside-item" onClick={() => { setOpen(false); askAssistant(); }}><Icon name={x.icon} size={20} /><span>{x.label}</span></button>;
             return (
-              <div key={r.key} className="drail-item" onMouseEnter={(e) => { if (hasSubs && !phone()) show(r.key, e.currentTarget); }} onMouseLeave={hide}>
-                {r.sep && <span className="drail-sep">{r.sep}</span>}
-                <a href={`#${r.first}`} className={`drail-btn${on ? ' on' : ''}`} aria-current={on ? 'page' : undefined} aria-haspopup={hasSubs || undefined} aria-expanded={hasSubs ? isOpen : undefined} title={r.label}
-                  onFocus={(e) => { if (hasSubs && !phone()) show(r.key, e.currentTarget.parentElement!); }}
-                  onClick={(e) => { if (hasSubs && phone()) { e.preventDefault(); if (isOpen) setFly(null); else show(r.key, e.currentTarget.parentElement!); } }}>
-                  <Icon name={r.icon} size={22} /><span>{r.short}</span>
-                  {r.key === 'approvals' && waiting > 0 && <span className="drail-n" aria-label={`${waiting} waiting`}>{waiting}</span>}
+              <div key={x.key} className={`dside-grp${on ? ' on' : ''}`}>
+                <a href={`#${x.first}`} className={`dside-item${on ? ' on' : ''}`} aria-current={on && (x.to || x.list.length < 2) ? 'page' : undefined}>
+                  <Icon name={x.icon} size={20} /><span>{x.label}</span>
+                  {x.count === 'approvals' && waiting > 0 && <span className="dside-n" aria-label={`${waiting} waiting`}>{waiting}</span>}
                 </a>
-                {isOpen && (
-                  <div className="drail-fly" style={{ top: fly!.top }} onMouseEnter={() => clearTimeout(flyTimer.current)}>
-                    <div role="menu" aria-label={r.label} className="drail-panel" style={{ maxHeight: `min(86vh, ${innerHeight - fly!.top - 12}px)` }}>
-                      <span className="drail-title">{r.label}</span>
-                      {r.jobs.map((g) => (
-                        <div key={g.group} className={`drail-grp${job === g ? ' on' : ''}`}>
-                          <a role="menuitem" href={`#${g.items[0]!.to}`} className="drail-gname"><b>{g.group} ›</b><span>{BLURBS[g.group]}</span></a>
-                          <div className="drail-pages">
-                            {g.items.map((i) => <a key={i.to} role="menuitem" href={`#${i.to}`} className={`drail-page${active === i ? ' on' : ''}`} aria-current={active === i ? 'page' : undefined}>{i.label}{i.count === 'approvals' && waiting > 0 ? ` · ${waiting}` : ''}</a>)}
-                          </div>
-                        </div>))}
-                    </div>
+                {on && x.list.length > 1 && (
+                  <div className="dside-subs">
+                    {x.list.map((i) => <a key={i.to} href={`#${i.to}`} className={`dside-sub${active === i ? ' on' : ''}`} aria-current={active === i ? 'page' : undefined}>{i.label}</a>)}
                   </div>)}
               </div>);
           })}
         </div>
-        <div className="drail-foot">
-          <button type="button" className="drail-me" onClick={() => setMeOpen(!meOpen)} aria-expanded={meOpen} aria-haspopup="menu" title={`${s.me.name} · ${roleLabel(s.me)} · ${groundLabel}`}>{initialsOf(s.me.name || s.me.email || '')}</button>
-          <span className="drail-venue">{groundLabel}</span>
-          {meOpen && (
-            <div className="drail-mepop" role="menu">
-              <b>{s.me.name}</b>
-              <span className="muted small">{roleLabel(s.me)}</span>
-              <a role="menuitem" href="./">View website</a>
-              <button type="button" role="menuitem" className="link" onClick={signOut}>Sign out</button>
-            </div>)}
+        <div className="dside-foot">
+          <button type="button" className="dside-item" onClick={signOut}><Icon name="logout" size={20} /><span>Sign out</span></button>
         </div>
       </nav>
       <AskPanel />
@@ -107,19 +92,31 @@ function Shell({ route }: { route: string }) {
         <header className="dtop">
           <button type="button" className="dround dburger" onClick={() => setOpen(true)} aria-label="Open the menu" aria-controls="main-menu" aria-expanded={open}><Icon name="menu" size={18} /></button>
           <CommandSearch me={s.me} visible={visible} />
+          <span className="dtop-gap" />
           <GroundPicker />
           <ThemeToggle />
-          <a className="dround" href="#/activity" aria-label="What happened" title="What happened"><Icon name="bell" size={18} /></a>
-          <button type="button" className="dconcierge" onClick={() => askAssistant()}><Icon name="ai" size={16} /><span>Ask AI</span></button>
+          <a className="dround dbell" href={alerts && can(s.me, 'manage_bookings') ? '#/' : '#/activity'} aria-label={alerts ? `${alerts} things need you` : 'What happened'} title={alerts ? `${alerts} things need you` : 'What happened'}>
+            <Icon name="bell" size={19} />{alerts > 0 && <span className="dbell-n">{alerts > 99 ? '99+' : alerts}</span>}
+          </a>
+          <div className="duser-box" ref={meBox}>
+            <button type="button" className="duser" onClick={() => setMeOpen(!meOpen)} aria-expanded={meOpen} aria-haspopup="menu">
+              <span className="duser-av">{initialsOf(s.me.name || s.me.email || '')}</span>
+              <span className="duser-txt"><b>{s.me.name}</b><span>{roleLabel(s.me)}</span></span>
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            {meOpen && (
+              <div className="duser-pop" role="menu">
+                <b>{s.me.name}</b>
+                <span className="muted small">{roleLabel(s.me)} · {groundLabel}</span>
+                <a role="menuitem" href="./">View website</a>
+                <button type="button" role="menuitem" className="link" onClick={signOut}>Sign out</button>
+              </div>)}
+          </div>
         </header>
         <main className="main dcontent">
-          {bar && (
-            <div className="dsechead no-print">
-              <div className="dsec-title"><span className="eyebrow">{bar.rail.eyebrow}</span><h1>{bar.rail.label}</h1>{bar.rail.desc && <span className="muted">{bar.rail.desc}</span>}</div>
-              <div className="dsection">
-                <span className="dcrumb">{bar.rail.label}{'  ›  '}{bar.job.group}</span>
-                {bar.pages.length > 1 && <div role="tablist" className="dtabs">{bar.pages.map((p) => <a key={p.to} role="tab" aria-selected={active === p} href={`#${p.to}`} className={`dchip${active === p ? ' on' : ''}`}>{p.label}</a>)}</div>}
-              </div>
+          {siblings.length > 1 && (
+            <div role="tablist" aria-label={here!.label} className="dtabs no-print">
+              {siblings.map((p) => <a key={p.to} role="tab" aria-selected={active === p} href={`#${p.to}`} className={`dchip${active === p ? ' on' : ''}`}>{p.label}</a>)}
             </div>)}
           <div className="page" key={route}><Suspense fallback={<p className="muted" style={{ padding: 24 }}>Loading…</p>}><Page sub={sub} /></Suspense></div>
         </main>
