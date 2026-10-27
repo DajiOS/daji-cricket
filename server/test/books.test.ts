@@ -85,6 +85,26 @@ test('a bank statement is previewed, imported once, de-duplicated, categorised b
   assert.equal((await send(`/api/accounting/imports?accountId=${acct}&filename=x.csv`, csv, owner2)).status, 404);
 });
 
+test('an undone statement leaves the list, and any loaded statement can be removed together with its transactions', async () => {
+  // Asked for on the live desk: four statements were undone and still sat in "Statements loaded" with no way to remove them
+  const acct = await bank();
+  const d1 = dayFromNow(-3), d2 = dayFromNow(-2);
+  const a = await (await send(`/api/accounting/imports?accountId=${acct}&filename=a.csv`, stmt([`${d1},TEA,,50.00,,"99,950.00"`]))).json() as any;
+  const b = await (await send(`/api/accounting/imports?accountId=${acct}&filename=b.csv`, stmt([`${d2},SNACKS,,30.00,,"99,920.00"`, `${d2},MILK,,20.00,,"99,900.00"`]))).json() as any;
+  assert.equal((await h.post(`/api/accounting/imports/${a.importId}/undo`, {}, owner)).status, 200);
+  assert.deepEqual((await h.get('/api/accounting/imports', owner)).body.items.map((i: any) => i.id), [b.importId], 'undone, it is off the list straight away');
+  assert.equal((await h.post(`/api/accounting/imports/${a.importId}/remove`, {}, owner2)).status, 404, 'another business cannot');
+  const ra = await h.post(`/api/accounting/imports/${a.importId}/remove`, {}, owner);
+  assert.equal(ra.status, 200, JSON.stringify(ra.body)); assert.equal(ra.body.removed, 0, 'already undone');
+  const rb = await h.post(`/api/accounting/imports/${b.importId}/remove`, {}, owner);
+  assert.equal(rb.status, 200); assert.equal(rb.body.removed, 2, 'a live one is undone as it goes');
+  assert.deepEqual((await h.get('/api/accounting/imports', owner)).body.items, [], 'both leave the list');
+  assert.equal(many('SELECT 1 FROM acct_transactions WHERE deleted_at IS NULL').length, 0, 'and none of their transactions stay in the books');
+  assert.equal(many('SELECT 1 FROM acct_imports').length, 2, 'the records stay for the audit trail');
+  assert.equal((await h.post(`/api/accounting/imports/${b.importId}/remove`, {}, owner)).status, 404, 'removing twice');
+  assert.equal((await send(`/api/accounting/imports?accountId=${acct}&filename=b.csv`, stmt([`${d2},SNACKS,,30.00,,"99,920.00"`, `${d2},MILK,,20.00,,"99,900.00"`]))).status, 201, 'the file can be loaded again');
+});
+
 test('a PDF statement is read on upload, previewed, then imported', async () => {
   const acct = await bank();
   const pdf = (await import('node:fs')).readFileSync(new URL('./fixtures/bank-statement.pdf', import.meta.url));

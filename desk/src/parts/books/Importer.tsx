@@ -1,7 +1,7 @@
-// Bank statement import: an always-visible upload box (PDF, Excel, CSV), a dry-run preview, then confirm. Past imports can be undone.
+// Bank statement import: an always-visible upload box (PDF, Excel, CSV), a dry-run preview, then confirm. A past import can be removed, with its transactions.
 import { useRef, useState } from 'react';
 import { api, sendFile, useApi, fmtDate, inr, fmtDateTime } from '../../lib';
-import { Field, Chip, ErrorBox, Loading, useToast, Icon } from '../../ui';
+import { Field, Chip, ErrorBox, Loading, useToast, Icon, Confirm } from '../../ui';
 import { Section, Note, Grid, Money, useShared } from './kit';
 import { AccountDialog } from './dialogs';
 import { FeedPanel } from './Feed';
@@ -47,7 +47,7 @@ export function Importer() {
       setPreview(null); setCur(null); setPass(''); setNeedPass(false); if (input.current) input.current.value = ''; toast('Statement imported'); reloadHist(); sh.reload();
     } catch (e: any) { toast(e.message); } finally { setBusy(false); }
   };
-  const undo = async (i: any) => { try { const x = await api(`/api/accounting/imports/${i.id}/undo`, { method: 'POST', body: {} }); toast(`Removed ${x.removed} transactions`); reloadHist(); sh.reload(); } catch (e: any) { toast(e.message); } };
+  const remove = async (i: any) => { try { const x = await api(`/api/accounting/imports/${i.id}/remove`, { method: 'POST', body: {} }); toast(x.removed ? `Removed the statement and its ${x.removed} transactions` : 'Removed the statement'); reloadHist(); sh.reload(); } catch (e: any) { toast(e.message); } };
   const accountAdded = async () => { sh.reload(); const f = waiting; waiting = null; if (!f) return; try { const a = await api('/api/accounting/accounts'); if (a.items[0]) { setAccountId(a.items[0].id); read(f, { account: a.items[0].id }); } } catch { /* the person can choose the file again */ } };
 
   const r = preview;
@@ -111,7 +111,7 @@ export function Importer() {
       <Section title="Statements loaded" pad={false}>
         {he ? <ErrorBox msg={he} /> : !hist ? <Loading h={80} /> : (
           <Grid heads={['Loaded', 'File', 'Account', 'New', 'Skipped duplicates', '']} nums={[3, 4]} empty="No statements loaded yet."
-            rows={hist.items.map((i) => [fmtDateTime(i.createdAt), i.filename || '', i.accountName, i.rowsNew, i.rowsDuplicate, i.undoneAt ? <Chip>Undone</Chip> : <button className="btn sm ghost" onClick={() => undo(i)}>Undo</button>])} />)}
+            rows={hist.items.map((i) => [fmtDateTime(i.createdAt), i.filename || '', i.accountName, i.rowsNew, i.rowsDuplicate, <Confirm className="btn sm ghost" label="Remove" ask={`Remove it and its ${i.rowsNew} transactions?`} onYes={() => remove(i)} />])} />)}
       </Section>
       {adding && <AccountDialog onClose={() => { setAdding(false); }} done={accountAdded} />}
     </div>
