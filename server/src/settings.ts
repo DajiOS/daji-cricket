@@ -8,7 +8,7 @@ import { DESIGN_PACES } from './design.ts';
 
 export const DEFAULT_SETTINGS: GlobalSettings = {
   razorpayEnabled: true,
-  /** Every online booking waits for the owner's approval after the deposit is paid; the slot stays held meanwhile. */
+  /** Every online booking waits for the owner's approval after the advance is paid; the slot stays held meanwhile. */
   requireApproval: true,
   /** Customers may let the ground charge the balance of a booking from their bank (UPI AutoPay) shortly before it starts. Off until the Razorpay account supports it. */
   autoDebitEnabled: false,
@@ -47,10 +47,27 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   noShowGraceMinutes: 30,
   /** On a festival day the website wears the festival look for every visitor, even one who picked a theme. Off: a visitor's own pick wins. */
   festivalForEveryone: true,
+  /** Off until the owner switches it on: the customer Guppi booking assistant (any language) over the normal booking commands. */
+  guppiAssistEnabled: false,
+  /** Off in this release: customers changing a booked slot themselves. The API exists but no client has a screen for it. */
+  customerRescheduleEnabled: false,
+  retentionDisputesEnabled: true,
+  /** Owner's decision (27 Oct 2026): customers may move a booking only when MORE than 24 hours remain, at most 2 completed moves. */
+  rescheduleCutoffHours: 24,
+  rescheduleMaxMoves: 2,
+  /** A cheaper new time returns the difference as account credit; 'refund_request' sends it through the refund approval chain instead. Never an automatic refund. */
+  rescheduleCheaperTreatment: 'credit',
+  /** Off until its screens are run on devices: the separate refundable security deposit (staff record it; the customer sees it). */
+  securityDepositEnabled: false,
   /** The website's design for visitors who have not picked one: 'rotate' changes it through the day (design.ts), or one fixed design. */
   siteDesign: 'rotate',
   designPace: 'daypart',
 };
+
+/** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
+export function requireFeature(key: 'guppiAssistEnabled' | 'customerRescheduleEnabled' | 'retentionDisputesEnabled' | 'securityDepositEnabled', what: string): void {
+  if (!getSettings()[key]) throw new HttpError(503, 'FEATURE_OFF', `${what} is switched off for now. Please use the normal booking screens or call the ground.`);
+}
 
 export function getSettings(): GlobalSettings {
   const out: Record<string, unknown> = { ...DEFAULT_SETTINGS };
@@ -84,8 +101,13 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
   const next: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULT_SETTINGS)) { fields.push({ field: k, message: 'Unknown setting' }); continue; }
-    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone') {
+    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled') {
       if (typeof v !== 'boolean') fields.push({ field: k, message: 'Must be true or false' }); else next[k] = v;
+    } else if (k === 'rescheduleCutoffHours' || k === 'rescheduleMaxMoves') {
+      const [lo, hi] = k === 'rescheduleCutoffHours' ? [0, 720] : [0, 10];
+      if (v !== null && (!Number.isInteger(v) || (v as number) < lo || (v as number) > hi)) fields.push({ field: k, message: `A whole number from ${lo} to ${hi}, or null to leave it not configured` }); else next[k] = v;
+    } else if (k === 'rescheduleCheaperTreatment') {
+      if (v !== 'credit' && v !== 'refund_request') fields.push({ field: k, message: "Must be 'credit' or 'refund_request'" }); else next[k] = v;
     } else if (k === 'siteDesign') {
       if (typeof v !== 'string' || !(SITE_DESIGN_CHOICES as readonly string[]).includes(v)) fields.push({ field: k, message: `One of ${SITE_DESIGN_CHOICES.join(', ')}` }); else next[k] = v;
     } else if (k === 'designPace') {

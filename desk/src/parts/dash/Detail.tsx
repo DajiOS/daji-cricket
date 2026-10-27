@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Modal, Chip, Loading, ErrorBox, Field, Status, Table, Confirm, useToast } from '../../ui';
 import { useApi, post, api, go, inr, toPaise, rupees, fmtDay, fmtDateTime, formatPhone, can } from '../../lib';
 import { useSession } from '../../App';
+import { DepositPanel } from './Deposit';
+import { MoveBookingDialog } from './MoveBooking';
 import { type Booking, type Block, type RefundItem, RefundList, BookingChip, CancelDialog, SettleChoice, HAND_METHODS, METHOD_LABEL, PAY_STATUS, SOURCE_LABEL, STATUS_LABEL, cancellable, errText, timeRange, whatOf } from './common';
 
 interface Pay { id: string; method: string; status: string; purpose: string; amountPaise: number; refundedPaise: number; reference: string | null; createdAt: number; rejectReason: string | null }
@@ -18,6 +20,7 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
   const [inv, setInv] = useState<Invoice | null>(null);
   const [cancel, setCancel] = useState(false);
   const [disc, setDisc] = useState(false);
+  const [move, setMove] = useState(false);
   const [refundOf, setRefundOf] = useState<Pay | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const changed = () => { reload(); onChanged(); };
@@ -44,6 +47,7 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
         {(b.status === 'confirmed' || b.status === 'completed') && b.paidPaise > 0 && <button className="btn" onClick={async () => { try { setInv(await api<Invoice>(`/api/bookings/${encodeURIComponent(b.id)}/invoice`)); } catch (e) { toast(errText(e)); } }}>Invoice</button>}
         {canPay && <button className="btn primary" onClick={() => setPay(true)}>Record a payment</button>}
         {can(me, 'manage_bookings') && (b.status === 'confirmed' || b.status === 'completed') && b.balancePaise > 0 && <button className="btn" onClick={() => setDisc(true)}>Give a discount</button>}
+        {can(me, 'manage_bookings') && b.status === 'confirmed' && !started && !b.seriesId && <button className="btn" id="move-booking" onClick={() => setMove(true)}>Move booking</button>}
         {b.status === 'confirmed' && started && <Confirm label="Mark no-show" ask="No refund, no credit?" onYes={() => act('no-show', {}, 'Marked as a no-show.')} />}
         {cancellable(b) && <button className="btn danger" onClick={() => setCancel(true)}>Cancel booking</button>}
         <button className="btn ghost" onClick={onClose}>Close</button>
@@ -90,6 +94,8 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
           ]} /></div>
         </div>
 
+        <DepositPanel b={b} />
+
         <RefundList refunds={d.refunds} canPay={can(me, 'record_payments')} onChanged={changed} />
 
         {d.audit.length > 0 && (
@@ -104,6 +110,7 @@ export function BookingDetail({ id, asDay, onClose, onChanged }: { id: string; a
     {pay && <RecordPayment b={b} onClose={() => setPay(false)} onDone={() => { setPay(false); toast('Payment recorded.'); changed(); }} />}
     {refundOf && <RefundRequest p={refundOf} onClose={() => setRefundOf(null)} onDone={() => { setRefundOf(null); toast('Refund requested. It waits for the owner or the general manager.'); changed(); }} />}
     {disc && <DiscountDialog b={b} onClose={() => setDisc(false)} onDone={(waiting) => { setDisc(false); toast(waiting ? 'Sent for sign-off. The discount is given once it is approved.' : 'Discount given.'); changed(); }} />}
+    {move && <MoveBookingDialog b={b} onClose={() => setMove(false)} onDone={() => { setMove(false); changed(); }} />}
     {cancel && <CancelDialog b={b} onClose={() => setCancel(false)} onDone={() => { setCancel(false); toast('Cancelled. The customer has been told.'); changed(); }} />}
     </>
   );

@@ -1,4 +1,5 @@
-import { many, one, run, tx } from '../db.ts';
+import type { SQLInputValue } from 'node:sqlite';
+import { one, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
 import { audit, type Actor } from '../audit.ts';
 import { conflict, HttpError, notFound } from '../errors.ts';
@@ -15,7 +16,7 @@ export interface CoaItem {
 }
 
 function categoryUses(ownerId: string, c: { id: string; code: string; kind: string }): number {
-  const n = (sql: string, ...p: unknown[]): number => one<{ n: number }>(sql, ...p)!.n;
+  const n = (sql: string, ...p: SQLInputValue[]): number => one<{ n: number }>(sql, ...p)!.n;
   const jcode = `${c.kind === 'income' ? 'inc' : 'exp'}:${c.code}`;
   return n('SELECT COUNT(*) n FROM acct_transactions WHERE owner_id = ? AND category_id = ? AND deleted_at IS NULL', ownerId, c.id)
     + n('SELECT COUNT(*) n FROM acct_rules WHERE owner_id = ? AND category_id = ? AND deleted_at IS NULL', ownerId, c.id)

@@ -15,12 +15,14 @@ It talks to the same server as the website, so the booking rules, prices and per
 ## Run it
 ```
 cd mobile
-cp .env.example .env        # set EXPO_PUBLIC_API_URL
+cp .env.example .env        # set EXPO_PUBLIC_APP_ENV (dev, test or live) and EXPO_PUBLIC_API_URL
 npm install
 npx expo install --fix      # aligns every package to the Expo version you have
 npx expo start              # scan the QR code with Expo Go
 ```
-To test on a phone against your own computer, run the server with `DEMO_MODE=1` and put the computer's address (for example `http://192.168.1.20:4000`) in `.env`.
+The app never guesses which system it belongs to. Every request carries `X-Daji-Env`, and a server that is a different system refuses it (`ENV_MISMATCH`); a live build only accepts `https://api.dajicricket.com`, and a test or dev build refuses the live host. Preview (test) builds therefore need `EXPO_PUBLIC_API_URL` set to the rehearsal server in EAS.
+
+To test on a phone against your own computer, run the server with `APP_ENV=dev DEMO_MODE=1` and put the computer's address (for example `http://192.168.1.20:4000`) in `.env`.
 
 ## Expo, builds and store review
 See `docs/APP_REVIEW.md` for the Expo (EAS) setup, the preview-update workflow, what the stores need and the demo login for reviewers.

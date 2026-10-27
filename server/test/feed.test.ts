@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
-import { startHarness, dayFromNow, advance, DAY, type Harness } from './helpers.ts';
+import { startHarness, dayFromNow, advance, type Harness } from './helpers.ts';
 import { buildScenario } from './scenario.ts';
 import { syncAccount, runFeedSync, yodleeToken } from '../src/accounting/feed.ts';
 import { SYSTEM } from '../src/audit.ts';
@@ -70,7 +70,7 @@ test('the Yodlee provider signs its token, reads transactions, and skips pending
   });
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   try {
-    const cfg = { ...h.cfg, demoMode: false, yodlee: { apiUrl: `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, fastLinkUrl: '', clientId: 'c', secret: '', adminLoginName: 'daji', privateKeyPem: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), issuer: 'iss', keyId: 'k1' } };
+    const cfg = { ...h.cfg, demoMode: false, yodlee: { apiUrl: `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, fastLinkUrl: '', clientId: 'c', secret: '', adminLoginName: 'daji', privateKeyPem: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), issuer: 'iss', keyId: 'k1', webhookSecret: '', configName: '', userLogin: '' } };
     const id = await bank();
     await h.post('/api/accounting/feed/link', { accountId: id, providerRef: 'DEMO' }, owner); // links as demo; relink under yodlee below
     const { run } = await import('../src/db.ts');

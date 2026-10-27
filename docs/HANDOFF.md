@@ -11,7 +11,7 @@ One system for Daji Cricket Ground (and, later, other ground owners):
 - **Camera bridge** (`camera-bridge/`): program for a PC at the ground that sends camera pictures to the desk.
 - **Shared types** (`shared/`).
 
-Repo: github.com/akeahms/daji-cricket. Everything is on `main`; the owner merges pull requests.
+Repo: the `daji-cricket` repository on GitHub. Everything is on `main`; the owner merges pull requests.
 
 ## Where it runs
 - AWS Lightsail, Mumbai. Docker with Caddy (HTTPS certificates are automatic) and the `api` container.

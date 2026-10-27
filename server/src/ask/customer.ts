@@ -10,6 +10,8 @@ import { availability, getGroundOr404, listGrounds, directionsUrl, groundRow } f
 import { addDays, dayOfWeek, fmtDateTime, istDate } from '../time.ts';
 import { cleanQuestion } from './index.ts';
 import { niceDay, parseRange } from './dates.ts';
+import { parseBooking } from '../guppiLang.ts';
+import { say } from '../guppiText.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -94,6 +96,10 @@ export function askCustomer(user: UserRow, rawQuestion: unknown): CustomerAnswer
     return { question, answer, details: [], open: null, suggestions: [], source: 'builtin', intent, ...extra };
   };
 
+  // Asked in any language to pay, confirm or mark a payment, or to waive a deposit: the same Daji-native refusal Guppi gives when booking. This assistant only reads.
+  const asked = parseBooking(question, today);
+  if (asked.flags.payAct || asked.flags.waiver) return out(say(asked.language, asked.flags.waiver ? 'waiver' : 'payAct'), { intent: 'payment_boundary', open: 'bookings' });
+
   switch (intent) {
     case 'next': {
       const up = listBookings({ customerId: user.id, from: today, limit: 50, offset: 0 }).items
@@ -175,7 +181,7 @@ export function askCustomer(user: UserRow, rawQuestion: unknown): CustomerAnswer
     case 'contact':
       return out(`Call or write to ${s.contactName}: ${s.contactPhone}${s.contactEmail ? `, ${s.contactEmail}` : ''}.`, { open: 'contact' });
     default:
-      return out('I can answer questions about your own bookings and credit, and about the grounds: prices, opening times, free slots and directions. I cannot make or change a booking, so use the booking panel or My bookings for that.',
+      return out('I can answer questions about your own bookings and credit, and about the grounds: prices, opening times, free slots and directions. I cannot make or change a booking, take or confirm a payment, or waive or refund anything, so use the booking panel or My bookings for that.',
         { suggestions: CUSTOMER_EXAMPLES, open: null, intent: 'help' });
   }
 }

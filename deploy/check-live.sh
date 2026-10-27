@@ -10,5 +10,6 @@ fail=0
 case "$BODY" in *'"ok":true'*) echo "ok    health check answers" ;; *) echo "FAIL  health check says not ok: $BODY"; fail=1 ;; esac
 case "$BODY" in *'"database":"ok"'*) echo "ok    database is readable" ;; *) echo "FAIL  database is not readable"; fail=1 ;; esac
 case "$BODY" in *'"demo":false'*) echo "ok    demo mode is off" ;; *) echo "FAIL  demo mode is ON: set DEMO_MODE=off in deploy/.env and restart"; fail=1 ;; esac
+case "$BODY" in *'"env":"live"'*) echo "ok    this system says it is the live one" ;; *) echo "FAIL  the system does not report env=live (set APP_ENV=live in deploy/.env)"; fail=1 ;; esac
 [ "$fail" -eq 0 ] && echo "All checks passed for $API"
 exit "$fail"

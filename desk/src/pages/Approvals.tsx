@@ -32,7 +32,7 @@ const ST: [string, string, string, string][] = [
 const CHAIN: Record<Kind, string[]> = {
   bill: ['Entered by the team', 'Approved by someone else', 'Paid'],
   pay: ['Sent by the owner', 'Signed off', 'Month locked'],
-  book: ['Customer pays the deposit', 'You approve the booking', 'Session played'],
+  book: ['Customer pays the advance', 'You approve the booking', 'Session played'],
   upi: ['Customer sends the UPI payment', 'Checked against the bank', 'Booking confirmed'],
   refund: ['Refund started', 'Signed at the ground', 'Super admin authorises'],
   discount: ['Asked for', 'Signed off', 'Discount given'],
@@ -44,7 +44,7 @@ const ENDS: Partial<Record<Kind, [string, string]>> = { pay: ['Sent by', 'Month 
 const RULE: Record<Kind, string> = {
   bill: 'A bill is approved by someone other than the person who entered it. The owner can approve any bill.',
   pay: 'The month locks when the last step signs.',
-  book: 'The deposit is holding the slot until you approve it.',
+  book: 'The advance is holding the slot until you approve it.',
   upi: 'Approve only once the money shows in the bank. Rejecting tells the customer it was not received.',
   refund: 'The super admin authorises it after the last step here. Sending it back keeps it waiting from the first step.',
   discount: 'The booking owes less once the last step signs.',

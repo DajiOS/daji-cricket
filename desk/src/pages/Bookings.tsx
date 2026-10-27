@@ -139,13 +139,13 @@ function Approvals({ version, onChanged }: { version: number; onChanged: () => v
   const rows = d.items.slice().sort((a, b) => a.startAt - b.startAt);
   return (
     <div className="card">
-      <div className="card-head"><h3>Waiting for your approval</h3><span className="muted small">The deposit is holding the slot</span></div>
+      <div className="card-head"><h3>Waiting for your approval</h3><span className="muted small">The advance is holding the slot</span></div>
       {msg && <div className="card-pad"><ErrorBox msg={msg} /></div>}
       <Table rows={rows} empty="Nothing is waiting. New paid bookings appear here." cols={[
         { head: 'When', cell: (b) => <><div className="strong">{fmtDay(b.date)}</div><div className="small muted tabular">{timeRange(b)}</div></> },
         { head: 'Customer', cell: (b) => <><div className="strong">{b.customerName}</div><div className="small muted">{formatPhone(b.customerPhone)}</div></> },
         { head: 'Ground', cell: (b) => <>{b.groundName}<div className="small muted">{whatOf(b)}</div></> },
-        { head: 'Deposit', num: true, cell: (b) => <>{inr(b.paidPaise)}<div className="small muted">of {inr(b.totalPaise)}</div></> },
+        { head: 'Paid', num: true, cell: (b) => <>{inr(b.paidPaise)}<div className="small muted">of {inr(b.totalPaise)}</div></> },
         { head: '', cell: (b) => <span className="row" style={{ gap: 6, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
           <button className="btn sm ghost" onClick={() => go(`/bookings/${b.id}`)}>Open</button><button className="btn sm primary" onClick={() => approve(b)}>Approve</button></span> },
       ]} />

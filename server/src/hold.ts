@@ -7,10 +7,10 @@ import { audit, type Actor } from './audit.ts';
 import { Validator, normalizePhone } from './input.ts';
 import { getSettings } from './settings.ts';
 import { MIN, DAY, addDays, istMidnight, timeOfDay } from './time.ts';
-import { accessBooking, blockOf, advanceFor, bookingOr404, confirmBooking, loadBooking, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
+import { accessBooking, blockOf, advanceFor, bookingOr404, confirmBooking, loadBooking, moveDifferenceDue, releaseSiblings, releaseSlots, viewBooking, type BookingRow } from './bookings.ts';
 import { getGroundOr404, slotPrice, slotStarts, type GroundRow } from './grounds.ts';
 import { createUser, requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
-import { insertPayment, logEvent, recordOffline, type PaymentRow } from './payments.ts';
+import { closeDifferenceSessions, DIFFERENCE_NOTE, insertPayment, logEvent, markDifferenceSession, recordOffline, type PaymentRow } from './payments.ts';
 import { getGateway } from './gateway.ts';
 import { findFormat, formatPrice, formatWindows, groundFormats } from './formats.ts';
 import { findRule, fixedShare, groundRates, hourlySlotPrice, isClosedOn, ruleWindow } from './rates.ts';
@@ -19,6 +19,7 @@ import * as credits from './credits.ts';
 import type { Config } from './config.ts';
 import { evaluatePromo, normCode } from './promo.ts';
 import { isClosedDate } from './closures.ts';
+import { linkedBusy } from './groundLinks.ts';
 import { expandDates, parseRepeat } from './recurring.ts';
 
 export const MAX_DAYS_AHEAD = 365; // customers can book up to a year ahead
@@ -87,10 +88,18 @@ export function planFor(ground: GroundRow, req: { date: string; startTime: strin
 }
 
 /** Inserts the slot rows. The (ground, slot) primary key is the final guard against double booking. */
-function takeSlots(bookingId: string, ground: GroundRow, starts: number[]): void {
+export function takeSlots(bookingId: string, ground: GroundRow, starts: number[]): void {
+  // A whole ground and the nets or pitches included in it share time (groundLinks.ts): the final guard refuses a slot a linked booking already holds.
+  for (const [s, by] of linkedBusy(ground, starts, bookingId)) throw new HttpError(409, 'SLOT_TAKEN', `The ${timeOfDay(s)} slot is not available: ${by} is booked at that time`, { slot: s, linkedWith: by });
   for (const s of starts) {
-    const hit = one<{ kind: string }>('SELECT kind FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, s);
-    if (hit) throw new HttpError(409, 'SLOT_TAKEN', hit.kind === 'block' ? `The ${timeOfDay(s)} slot is not available` : `The ${timeOfDay(s)} slot has just been booked by someone else`, { slot: s });
+    const hit = one<{ kind: string; booking_id: string | null }>('SELECT kind, booking_id FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, s);
+    if (hit) {
+      // The same person asking again for exactly the same time (a retry whose answer was lost, a second tap) is told about their own hold instead of "someone else booked it".
+      const mine = hit.kind === 'booking' && hit.booking_id
+        ? one<{ id: string; ref: string }>("SELECT o.id, o.ref FROM bookings o JOIN bookings n ON n.customer_id = o.customer_id AND n.start_at = o.start_at AND n.slot_count = o.slot_count WHERE o.id = ? AND n.id = ? AND o.status = 'held'", hit.booking_id, bookingId) : undefined;
+      if (mine) throw new HttpError(409, 'ALREADY_HELD_BY_YOU', `You already hold the ${timeOfDay(s)} slot (booking ${mine.ref}). Continue with that booking.`, { slot: s, bookingId: mine.id });
+      throw new HttpError(409, 'SLOT_TAKEN', hit.kind === 'block' ? `The ${timeOfDay(s)} slot is not available` : `The ${timeOfDay(s)} slot has just been booked by someone else`, { slot: s });
+    }
     try {
       run("INSERT INTO booking_slots(ground_id, slot_start, kind, booking_id) VALUES(?,?,'booking',?)", ground.id, s, bookingId);
     } catch (e) {
@@ -128,10 +137,10 @@ export function upiDetails(ownerId: string): { upiId: string; payee: string } | 
   return { upiId, payee: o?.upi_id ? (o.business_name || o.name) : s.upiPayee };
 }
 
-function upiInstructions(b: BookingRow, amountPaise: number, paymentId: string): PaymentInstructions {
+function upiInstructions(b: BookingRow, amountPaise: number, paymentId: string, deadline: number | null = b.hold_expires_at): PaymentInstructions {
   const d = upiDetails(b.owner_id)!;
   const uri = `upi://pay?pa=${encodeURIComponent(d.upiId)}&pn=${encodeURIComponent(d.payee)}&am=${(amountPaise / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(b.ref)}`;
-  return { mode: 'upi', amountPaise, paymentId, upi: { upiId: d.upiId, payee: d.payee, uri, note: `Put ${b.ref} in the payment remarks`, deadline: b.hold_expires_at! } };
+  return { mode: 'upi', amountPaise, paymentId, upi: { upiId: d.upiId, payee: d.payee, uri, note: `Put ${b.ref} in the payment remarks`, deadline: deadline! } };
 }
 
 export function parseHold(body: unknown) {
@@ -150,17 +159,29 @@ export function parseHold(body: unknown) {
   return { groundId: groundId!, date: date!, startTime: startTime!, slots, formatId, useCredit: !!useCredit, players, notes, ruleId, promoCode: promoCode ? normCode(promoCode) : undefined };
 }
 
+/**
+ * The release switches for online booking: the opening date, the closing date and a day switched off. Every online way in (the hold, a Guppi hold, a reschedule,
+ * a list of options) calls these, so none of them can reach a date the ground has not opened to customers.
+ */
+export function assertOnlineWindow(date: string): void {
+  const openFrom = getSettings().bookingsOpenFrom;
+  if (openFrom && date < openFrom) throw new HttpError(409, 'NOT_OPEN_YET', `Online bookings open on ${openFrom.slice(8, 10).replace(/^0/, '')} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(openFrom.slice(5, 7)) - 1]} ${openFrom.slice(0, 4)}. Please pick that day or later.`, { openFrom });
+  const closeFrom = getSettings().bookingsCloseFrom;
+  if (closeFrom && date >= closeFrom) throw new HttpError(409, 'BOOKINGS_CLOSED', 'Bookings are closed from that date for now. Please pick an earlier day, or call us.', { closeFrom });
+}
+export function assertDayOpen(date: string, scope: 'ground' | 'practice'): void {
+  if (isClosedDate(date, scope)) throw new HttpError(409, 'DATE_CLOSED', `Online booking for ${scope === 'practice' ? 'practice sessions' : 'the ground'} is switched off for that day. Please pick another day, or call us.`);
+}
+export function assertOnlineBookable(date: string, scope: 'ground' | 'practice'): void { assertOnlineWindow(date); assertDayOpen(date, scope); }
+
 /** Customer step 1: hold the slots, apply credit if asked, and say how to pay. */
-export async function holdSlots(cfg: Config, customer: UserRow, body: unknown): Promise<HoldResponse> {
+export async function holdSlots(cfg: Config, customer: UserRow, body: unknown, via: { channel?: 'guppi'; actionId?: string } = {}): Promise<HoldResponse> {
   const req = parseHold(body);
   const repeat = parseRepeat(body);
-  const openFrom = getSettings().bookingsOpenFrom;
-  if (openFrom && req.date < openFrom) throw new HttpError(409, 'NOT_OPEN_YET', `Online bookings open on ${openFrom.slice(8, 10).replace(/^0/, '')} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(openFrom.slice(5, 7)) - 1]} ${openFrom.slice(0, 4)}. Please pick that day or later.`, { openFrom });
-  const closeFrom = getSettings().bookingsCloseFrom;
-  if (closeFrom && req.date >= closeFrom) throw new HttpError(409, 'BOOKINGS_CLOSED', 'Bookings are closed from that date for now. Please pick an earlier day, or call us.', { closeFrom });
+  assertOnlineWindow(req.date);
   const ground = getGroundOr404(req.groundId);
   const plan = planFor(ground, req, true);
-  if (isClosedDate(req.date, plan.format?.ball === 'practice' ? 'practice' : 'ground')) throw new HttpError(409, 'DATE_CLOSED', `Online booking for ${plan.format?.ball === 'practice' ? 'practice sessions' : 'the ground'} is switched off for that day. Please pick another day, or call us.`);
+  assertDayOpen(req.date, plan.format?.ball === 'practice' ? 'practice' : 'ground');
   const promo = req.promoCode ? evaluatePromo(req.promoCode, ground, customer.id, plan.totalPaise) : null;
   if (promo) plan.totalPaise -= promo.discountPaise;
   const s = getSettings();
@@ -180,7 +201,7 @@ export async function holdSlots(cfg: Config, customer: UserRow, body: unknown): 
     takeSlots(id, ground, plan.starts);
     if (promo) run('UPDATE bookings SET promo_code = ?, discount_paise = ? WHERE id = ?', promo.promo.code, promo.discountPaise, id);
     if (repeat) seriesOut = reserveSeries(ground, customer, id, req, repeat, method, plan.format?.ball === 'practice' ? 'practice' : 'ground');
-    audit({ id: customer.id, role: customer.role }, 'booking.hold', 'booking', id, { promo: promo?.promo.code ?? null, discountPaise: promo?.discountPaise ?? 0, slots: plan.starts.length, totalPaise: plan.totalPaise, advancePaise: advance, method }, ground.owner_id);
+    audit({ id: customer.id, role: customer.role }, 'booking.hold', 'booking', id, { promo: promo?.promo.code ?? null, discountPaise: promo?.discountPaise ?? 0, slots: plan.starts.length, totalPaise: plan.totalPaise, advancePaise: advance, method, ...(via.channel ? { via: via.channel, actionId: via.actionId ?? null } : {}) }, ground.owner_id);
 
     let creditApplied = 0;
     if (req.useCredit) {
@@ -240,7 +261,7 @@ function reserveSeries(ground: GroundRow, customer: UserRow, firstId: string, re
       if (st.bookingsCloseFrom && date >= st.bookingsCloseFrom) throw new HttpError(409, 'BOOKINGS_CLOSED', 'Bookings are closed from that date');
       const p = planFor(ground, { ...req, date }, true);
       if (isClosedDate(date, scope)) throw new HttpError(409, 'DATE_CLOSED', 'Online booking is switched off that day');
-      const busy = p.starts.some((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x));
+      const busy = p.starts.some((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x)) || linkedBusy(ground, p.starts).size > 0;
       if (busy) throw new HttpError(409, 'SLOT_TAKEN', 'That time is already booked');
       const sid = insertBooking({ ground, customerId: customer.id, date, starts: p.starts, totalPaise: p.totalPaise, advancePaise: 0, status: 'held', source: 'online', payMethod: method, holdExpiresAt: null, players: req.players, notes: req.notes ?? null, createdBy: customer.id, format: p.format });
       takeSlots(sid, ground, p.starts);
@@ -479,7 +500,8 @@ export function createStaffBlock(staff: UserRow, input: BlockInput): { series: {
       return planSlots(open, date, input.startTime, count, t, { ignoreMaxSlots: true });
     });
     for (const p of plans) {
-      const hit = p.starts.find((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x));
+      const linked = linkedBusy(ground, p.starts);
+      const hit = p.starts.find((x) => one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', ground.id, x) || linked.has(x));
       if (hit) throw new HttpError(409, 'SLOT_TAKEN', `${p.date} is not free for those hours (${timeOfDay(hit)} is taken or blocked). Pick other dates or hours.`, { date: p.date });
     }
     const noMoney = input.payment.amountPaise === 0; // staff may book with nothing received; the whole amount stays due
@@ -540,4 +562,87 @@ export function recordBlockPayment(staff: UserRow, seriesId: string, input: { me
     }
     return blockOf(seriesId)!;
   });
+}
+
+/**
+ * The way to pay for a booking that is being held, read back from the payment session that already exists for it (nothing new is created).
+ * This is what a payment screen opens after a hold, including when the hold was started somewhere else, such as through Guppi.
+ */
+export function paymentInstructionsFor(cfg: Config, customer: UserRow, bookingId: string): PaymentInstructions {
+  const b = accessBooking(customer, bookingId);
+  // a confirmed booking has something to pay online only when it was moved to a dearer time (the difference); the session is read back, never created here
+  if (b.status === 'confirmed') return openDifferenceSession(cfg, b);
+  if (b.status !== 'held') throw new HttpError(409, 'BAD_STATE', `This booking is ${b.status}, so there is nothing to pay now`);
+  const p = one<{ id: string; method: string; amount_paise: number; rp_order_id: string | null }>("SELECT id, method, amount_paise, rp_order_id FROM payments WHERE booking_id = ? AND status IN ('created','pending') ORDER BY created_at DESC, rowid DESC LIMIT 1", b.id);
+  if (!p) return { mode: 'none', amountPaise: 0, paymentId: null };
+  if (p.method === 'upi') return upiInstructions(b, p.amount_paise, p.id);
+  const gw = getGateway(cfg);
+  if (!gw || !p.rp_order_id) throw new HttpError(503, 'PAYMENTS_UNAVAILABLE', 'Online payments are not available for this booking right now. Please try again later.');
+  return { mode: 'razorpay', amountPaise: p.amount_paise, paymentId: p.id, razorpay: { keyId: gw.keyId, orderId: p.rp_order_id, demo: gw.demo } };
+}
+
+// ---------------------------------------------------------------- paying the difference of a dearer move, online
+
+interface OpenSession { id: string; method: string; status: string; amount_paise: number; rp_order_id: string | null; created_at: number }
+const openSession = (bookingId: string) => one<OpenSession>("SELECT id, method, status, amount_paise, rp_order_id, created_at FROM payments WHERE booking_id = ? AND purpose = 'balance' AND status IN ('created','pending') AND proof_note = ? ORDER BY created_at DESC, rowid DESC LIMIT 1", bookingId, DIFFERENCE_NOTE);
+
+function sessionInstructions(cfg: Config, b: BookingRow, p: OpenSession): PaymentInstructions {
+  if (p.method === 'upi') return upiInstructions(b, p.amount_paise, p.id, p.created_at + getSettings().verifyMinutesUpi * MIN);
+  const gw = getGateway(cfg);
+  if (!gw || !p.rp_order_id) throw new HttpError(503, 'PAYMENTS_UNAVAILABLE', 'Online payments are not available right now. Please try again later.');
+  return { mode: 'razorpay', amountPaise: p.amount_paise, paymentId: p.id, razorpay: { keyId: gw.keyId, orderId: p.rp_order_id, demo: gw.demo } };
+}
+
+/** The online session already open for the difference, if its amount is still what the booking owes. */
+function openDifferenceSession(cfg: Config, b: BookingRow): PaymentInstructions {
+  const due = moveDifferenceDue(b), p = openSession(b.id);
+  if (!p || due <= 0 || p.amount_paise !== due) return { mode: 'none', amountPaise: 0, paymentId: null };
+  return sessionInstructions(cfg, b, p);
+}
+
+/**
+ * The customer pays, online, exactly what a dearer move added to the booking. It goes through the same payment records and the same provider as every other payment:
+ * a 'balance' payment on the confirmed booking, captured only when the provider (webhook or signed checkout result) says so, by the one function that books captured money.
+ * Asking again returns the session that is open (no second charge); if the amount owed has changed since, the old session is closed and a new one opened. Until the provider
+ * confirms, the difference stays an outstanding balance. Guppi has no route here.
+ */
+export async function startDifferencePayment(cfg: Config, customer: UserRow, bookingId: string): Promise<{ payment: PaymentInstructions; differencePaise: number; booking: Booking }> {
+  const b0 = accessBooking(customer, bookingId);
+  if (customer.role !== 'customer') throw new HttpError(403, 'FORBIDDEN', 'Only the customer pays this online');
+  if (b0.status !== 'confirmed') throw new HttpError(409, 'BAD_STATE', `This booking is ${b0.status}, so there is nothing to pay now`);
+  const due0 = moveDifferenceDue(b0);
+  if (due0 <= 0) throw new HttpError(409, 'NOTHING_DUE', 'Nothing is due online on this booking. Any balance is paid at the ground.');
+  const method: 'razorpay' | 'upi' = getSettings().razorpayEnabled ? 'razorpay' : 'upi';
+  const gw = method === 'razorpay' ? getGateway(cfg) : null;
+  if (method === 'razorpay' && !gw) throw new HttpError(503, 'PAYMENTS_UNAVAILABLE', 'Online payments are not set up yet. Please pay at the ground.');
+  if (method === 'upi' && !upiDetails(b0.owner_id)) throw new HttpError(503, 'UPI_NOT_CONFIGURED', 'This ground has no UPI ID set up yet. Please pay at the ground.');
+  const opened = tx(() => {
+    const b = bookingOr404(b0.id);
+    const due = moveDifferenceDue(b);
+    if (b.status !== 'confirmed' || due <= 0) throw new HttpError(409, 'NOTHING_DUE', 'Nothing is due online on this booking. Any balance is paid at the ground.');
+    if (one("SELECT 1 FROM payments WHERE booking_id = ? AND purpose = 'balance' AND status = 'submitted'", b.id)) throw new HttpError(409, 'ALREADY_SUBMITTED', 'A payment reference for this booking is already waiting to be checked by the ground');
+    // another unfinished balance payment (an auto-debit order, say) is not ours to close: wait for it to settle rather than risk charging the customer twice
+    if (one("SELECT 1 FROM payments WHERE booking_id = ? AND purpose = 'balance' AND status IN ('created','pending') AND COALESCE(proof_note,'') <> ?", b.id, DIFFERENCE_NOTE)) throw new HttpError(409, 'PAYMENT_IN_FLIGHT', 'Another payment on this booking is still being confirmed. Try again once it has settled.');
+    const cur = openSession(b.id);
+    if (cur && cur.amount_paise === due && cur.method === method && (method === 'upi' || cur.rp_order_id)) return { b, due, reuse: cur, payId: null as string | null };
+    if (cur) closeDifferenceSessions(b.id, 'replaced by a new amount'); // the amount owed changed or the earlier attempt never got an order: only one session is ever open
+    const payId = insertPayment(b, { method, status: 'created', purpose: 'balance', amountPaise: due });
+    markDifferenceSession(payId);
+    audit({ id: customer.id, role: customer.role }, 'booking.difference_payment_started', 'booking', b.id, { amountPaise: due, method, paymentId: payId }, b.owner_id);
+    return { b, due, reuse: null as OpenSession | null, payId };
+  });
+  let payment: PaymentInstructions;
+  if (opened.reuse) payment = sessionInstructions(cfg, opened.b, opened.reuse);
+  else if (method === 'razorpay') {
+    try {
+      const order = await gw!.createOrder(opened.due, opened.b.ref, { booking: opened.b.id, ref: opened.b.ref, purpose: 'balance' });
+      run('UPDATE payments SET rp_order_id = ?, updated_at = ? WHERE id = ?', order.id, now(), opened.payId!);
+      logEvent(opened.payId!, null, 'order.created', { orderId: order.id });
+      payment = { mode: 'razorpay', amountPaise: opened.due, paymentId: opened.payId, razorpay: { keyId: gw!.keyId, orderId: order.id, demo: gw!.demo } };
+    } catch (e) {
+      run("UPDATE payments SET status = 'failed', reject_reason = 'could not start payment', updated_at = ? WHERE id = ?", now(), opened.payId!);
+      throw e;
+    }
+  } else payment = upiInstructions(opened.b, opened.due, opened.payId!, now() + getSettings().verifyMinutesUpi * MIN);
+  return { payment, differencePaise: opened.due, booking: viewBooking(opened.b.id) };
 }

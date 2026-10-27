@@ -104,7 +104,7 @@ export function verifyToken(cfg: Config, token: string): TokenPayload | null {
 
 // ---- users ----
 export function toUser(r: UserRow): User {
-  const perms = (JSON.parse(r.permissions || '[]') as string[]).filter((p): p is StaffPermission => (STAFF_PERMISSIONS as readonly string[]).includes(p));
+  const perms = permissionList(r.permissions).filter((p): p is StaffPermission => (STAFF_PERMISSIONS as readonly string[]).includes(p));
   const consent: Consent = { email: !!r.consent_email, sms: !!r.consent_sms, whatsapp: !!r.consent_whatsapp, updatedAt: r.consent_updated_at };
   return {
     id: r.id, role: r.role, name: r.name, firstName: r.first_name ?? splitName(r.name).first, lastName: r.last_name ?? splitName(r.name).last, email: r.email, phone: r.phone, ownerId: r.owner_id,
@@ -202,10 +202,17 @@ export function authenticate(cfg: Config, header: string | undefined): UserRow |
 }
 
 // ---- permissions ----
+/** The rights written on a team member's record. Anything that is not a plain list of text (a damaged or hand-edited record) grants nothing: access fails closed. */
+export function permissionList(raw: string | null | undefined): string[] {
+  try {
+    const v: unknown = JSON.parse(raw || '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch { return []; }
+}
 export function hasPermission(u: UserRow, perm: StaffPermission): boolean {
   if (u.role === 'super_admin' || u.role === 'owner') return true;
   if (u.role !== 'staff') return false;
-  return (JSON.parse(u.permissions || '[]') as string[]).includes(perm);
+  return permissionList(u.permissions).includes(perm);
 }
 /**
  * Revenue, profit, the books and the money reports. A team member sees none of it unless the owner has switched on

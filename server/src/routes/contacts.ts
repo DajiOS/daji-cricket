@@ -3,7 +3,7 @@ import type { Reply } from '../http.ts';
 import { U, page, ownerOrFail } from './helpers.ts';
 import { HttpError } from '../errors.ts';
 import { audit } from '../audit.ts';
-import { requirePermission } from '../auth.ts';
+import { canSeeRevenue, requirePermission } from '../auth.ts';
 import { audience, FILTER_FIELDS, listContacts, parseContactFilter } from '../contacts.ts';
 import { BROADCAST_TEMPLATES, broadcastDetail, listBroadcasts, manualPlan, markManualSent, previewBroadcast, sendBroadcast, staffOptOut, unsubscribe } from '../broadcasts.ts';
 import { toCsv } from '../accounting/csv.ts';
@@ -51,7 +51,9 @@ export function contactRoutes(r: Router): void {
     requirePermission(u, 'view_customers');
     const owner = ownerOrFail(c, 'list contacts');
     const { limit, offset } = page(c, 50);
-    return ok(listContacts(owner, filterFromQuery(c), limit, offset, channelFromQuery(c)));
+    const out = listContacts(owner, filterFromQuery(c), limit, offset, channelFromQuery(c));
+    // What a customer has paid in total is revenue: a team member without "Can see revenue" gets no figure (null, never a made-up zero).
+    return ok(canSeeRevenue(u) ? out : { ...out, items: out.items.map((x) => ({ ...x, paidPaise: null })) });
   }, A);
 
   r.get('/api/staff/contacts/export', (c) => {
@@ -62,9 +64,10 @@ export function contactRoutes(r: Router): void {
     const people = audience(owner, f);
     const names = new Map(many<{ id: string; name: string }>('SELECT id, name FROM grounds WHERE owner_id = ?', owner).map((g) => [g.id, g.name]));
     const yn = (b: boolean) => (b ? 'Yes' : 'No');
-    const rows: (string | number)[][] = [['Name', 'Phone (with country code 91)', 'Email', 'Times played', 'Sessions (slots)', 'First played', 'Last played', 'Total paid', 'Grounds', 'OK to email', 'OK to WhatsApp', 'OK to text']];
+    const money = canSeeRevenue(u); // the "Total paid" column is revenue: only for those who may see revenue
+    const rows: (string | number)[][] = [['Name', 'Phone (with country code 91)', 'Email', 'Times played', 'Sessions (slots)', 'First played', 'Last played', ...(money ? ['Total paid'] : []), 'Grounds', 'OK to email', 'OK to WhatsApp', 'OK to text']];
     for (const p of people) {
-      rows.push([p.name, p.phone ? waNumber(p.phone) : '', p.email ?? '', p.timesPlayed, p.slotsPlayed, istDate(p.firstPlayedAt), istDate(p.lastPlayedAt), formatPaise(p.paidPaise, true),
+      rows.push([p.name, p.phone ? waNumber(p.phone) : '', p.email ?? '', p.timesPlayed, p.slotsPlayed, istDate(p.firstPlayedAt), istDate(p.lastPlayedAt), ...(money ? [formatPaise(p.paidPaise ?? 0, true)] : []),
         p.groundIds.map((g) => names.get(g) ?? g).join('; '), yn(p.reachable.email), yn(p.reachable.whatsapp), yn(p.reachable.sms)]);
     }
     audit({ id: u.id, role: u.role }, 'contacts.export', 'contacts', null, { rows: people.length, filter: f }, owner);

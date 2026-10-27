@@ -30,11 +30,11 @@ const srv = createServer((req, res) => {
 });
 const tx = (id: string, amount: string, type: string, daysAgo: number, narration: string) => ({ txnId: id, type, amount, currentBalance: '1000.00', mode: 'UPI', narration, transactionTimestamp: new Date(Date.parse(dayFromNow(-daysAgo) + 'T10:00:00+05:30')).toISOString(), valueDate: dayFromNow(-daysAgo) });
 
-let h: Harness, owner: string, owner2: string, admin: string, ownerId: string;
+let h: Harness, owner: string, owner2: string, admin: string;
 before(async () => { await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r)); h = await startHarness(); });
 after(async () => { await h.close(); srv.close(); });
 beforeEach(async () => {
-  ({ owner, owner2, admin, ownerId } = await buildScenario(h));
+  ({ owner, owner2, admin } = await buildScenario(h));
   consentStatus = 'PENDING'; sessionStatus = 'COMPLETED'; created = []; sessions = 0;
   txns = [tx('t1', '5000.00', 'CREDIT', 3, 'RENT RECEIVED'), tx('t2', '750.25', 'DEBIT', 2, 'ELECTRICITY')];
   run('DELETE FROM aa_settings');

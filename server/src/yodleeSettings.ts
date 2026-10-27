@@ -6,7 +6,7 @@ import { seal, unseal, vaultOn } from './vault.ts';
 import { HttpError } from './errors.ts';
 import { Validator } from './input.ts';
 import type { Config } from './config.ts';
-import { yFetch, yodleeConfigured, yodleeLogin } from './accounting/feed.ts';
+import { yFetch, yodleeConfigured } from './accounting/feed.ts';
 
 // The software owner's Yodlee keys, kept in the database (secret ones encrypted when FIELD_KEY is set) so they can be changed from the
 // screen without editing the server file. A value saved here wins over the same value in the server settings; clearing it falls back.

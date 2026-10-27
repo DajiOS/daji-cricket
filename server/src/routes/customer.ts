@@ -10,7 +10,11 @@ import { run, one } from '../db.ts';
 import { now } from '../clock.ts';
 import { splitName, titleCase } from '../names.ts';
 import { accessBooking, bookingPayments, listBookings, viewBooking } from '../bookings.ts';
-import { readName, holdSlots, parseHold, planFor } from '../hold.ts';
+import { readName, holdSlots, parseHold, planFor, paymentInstructionsFor, startDifferencePayment } from '../hold.ts';
+import { previewReschedule, rescheduleBooking, rescheduleStatus } from '../reschedule.ts';
+import { readDeposit } from '../securityDeposit.ts';
+import { getRetentionCase, openRetentionDispute, withdrawRetentionDispute } from '../retention.ts';
+import { holdFromOption, parseOptionRequest, searchOptions } from '../options.ts';
 import { cancelSeries, seriesOf } from '../recurring.ts';
 import { cancelMandate, confirmMandate, mandateView, startMandate, LIMITS } from '../autodebit.ts';
 import { evaluatePromo } from '../promo.ts';
@@ -113,7 +117,7 @@ export function customerRoutes(r: Router): void {
   }, { auth: 'user' });
 
   // ---- profile picture
-  r.post('/api/me/avatar', (c) => { const url = setAvatar(c.cfg.dataDir, U(c), c.raw); return ok({ avatarUrl: url, user: toUser(userRow(U(c).id)!) }); }, { auth: 'user', maxBody: MAX_AVATAR_BYTES + 1024 });
+  r.post('/api/me/avatar', (c) => { const url = setAvatar(c.cfg.dataDir, U(c), c.raw); return ok({ avatarUrl: url, user: toUser(userRow(U(c).id)!) }); }, { auth: 'user', maxBody: MAX_AVATAR_BYTES + 1024, upload: 'avatar' });
   r.del('/api/me/avatar', (c) => { clearAvatar(c.cfg.dataDir, U(c)); return ok({ avatarUrl: null }); }, { auth: 'user' });
   r.get('/api/avatar/:id', (c): Reply => {
     const f = readAvatar(c.cfg.dataDir, c.params.id!);
@@ -149,7 +153,15 @@ export function customerRoutes(r: Router): void {
     const { promo, discountPaise } = evaluatePromo(code, getGroundOr404(req.groundId), U(c).id, plan.totalPaise);
     return ok({ code: promo.code, label: promo.label, discountPaise, totalPaise: plan.totalPaise - discountPaise, fullPricePaise: plan.totalPaise });
   }, { auth: ['customer'] });
-  r.post('/api/bookings', async (c) => created(await holdSlots(c.cfg, U(c), c.json())), { auth: ['customer'] });
+  r.post('/api/bookings', async (c) => {
+    const body = c.json();
+    const viaOption = !!body && typeof body === 'object' && 'optionId' in (body as object);
+    return created(await (viaOption ? holdFromOption(c.cfg, U(c), body) : holdSlots(c.cfg, U(c), body)));
+  }, { idempotent: true, auth: ['customer'] });
+  r.post('/api/availability/options', (c) => {
+    const q = parseOptionRequest(c.json());
+    return ok(searchOptions(c.cfg, U(c), q, q.max));
+  }, { auth: ['customer', 'owner', 'staff'] });
 
   r.get('/api/bookings', (c) => {
     const { limit, offset } = page(c);
@@ -161,6 +173,8 @@ export function customerRoutes(r: Router): void {
     return ok({ booking: viewBooking(b.id), payments: bookingPayments(b.id) });
   }, { auth: 'user' });
 
+  r.get('/api/bookings/:id/security-deposit', (c) => ok({ deposit: readDeposit(U(c), c.params.id!) }), { auth: ['customer'] });
+  r.get('/api/bookings/:id/payment-instructions', (c) => ok({ payment: paymentInstructionsFor(c.cfg, U(c), c.params.id!) }), { auth: ['customer'] });
   r.post('/api/bookings/:id/upi-reference', (c) => {
     const v = new Validator(c.json());
     const utr = v.str('utr', { required: true, max: 30 });
@@ -168,12 +182,21 @@ export function customerRoutes(r: Router): void {
     v.done();
     const p = submitUpiReference(U(c), c.params.id!, { utr: utr!, note });
     return ok({ payment: p, booking: viewBooking(p.bookingId) });
-  }, { auth: ['customer'] });
+  }, { idempotent: true, auth: ['customer'] });
 
   r.get('/api/bookings/:id/cancel-preview', (c) => {
     const prefer = c.query.get('prefer');
     return ok(cancelPreviewFor(U(c), c.params.id!, prefer === 'credit' ? 'credit' : undefined));
   }, { auth: ['customer'] });
+
+  r.get('/api/bookings/:id/reschedule', (c) => ok({ status: rescheduleStatus(U(c), c.params.id!) }), { auth: ['customer'] });
+  r.post('/api/bookings/:id/reschedule-preview', (c) => ok({ preview: previewReschedule(c.cfg, U(c), c.params.id!, c.json()) }), { auth: ['customer'] });
+  r.post('/api/bookings/:id/reschedule', (c) => ok(rescheduleBooking(c.cfg, U(c), c.params.id!, c.json())), { idempotent: true, auth: ['customer'] });
+  r.post('/api/bookings/:id/pay-difference', async (c) => ok(await startDifferencePayment(c.cfg, U(c), c.params.id!)), { idempotent: true, auth: ['customer'] });
+
+  r.get('/api/bookings/:id/retention-dispute', (c) => ok({ dispute: getRetentionCase(U(c), c.params.id!) }), { auth: ['customer'] });
+  r.post('/api/bookings/:id/retention-dispute', (c) => created({ dispute: openRetentionDispute(U(c), c.params.id!, c.json()) }), { idempotent: true, auth: ['customer'] });
+  r.post('/api/bookings/:id/retention-dispute/withdraw', (c) => ok({ dispute: withdrawRetentionDispute(U(c), c.params.id!) }), { idempotent: true, auth: ['customer'] });
 
   r.post('/api/bookings/:id/cancel', (c) => {
     const v = new Validator(c.json());
@@ -181,7 +204,7 @@ export function customerRoutes(r: Router): void {
     const prefer = v.oneOf('prefer', ['refund', 'credit'] as const);
     v.done();
     return ok(cancelBooking(U(c), c.params.id!, { reason, prefer }));
-  }, { auth: ['customer'] });
+  }, { idempotent: true, auth: ['customer'] });
 
   // Auto-debit: approve once, and the balance of each booking is charged shortly before it starts.
   r.get('/api/autodebit', (c) => ok({ ...mandateView(U(c).id), limits: LIMITS }), { auth: ['customer'] });
@@ -210,7 +233,7 @@ export function customerRoutes(r: Router): void {
     const reason = v.str('reason', { max: 300 });
     v.done();
     return ok(cancelSeries(U(c), c.params.id!, reason));
-  }, { auth: 'user' });
+  }, { idempotent: true, auth: 'user' });
 
   // The ground cancelled the booking and explained why: the customer picks a full refund, the full amount as credit, or another slot (which keeps the money as credit to use on the new booking).
   r.post('/api/bookings/:id/resolve', (c) => {
@@ -218,7 +241,7 @@ export function customerRoutes(r: Router): void {
     const choice = v.oneOf('choice', ['refund', 'half', 'credit', 'rebook'] as const, true);
     v.done();
     return ok(resolveOwnerCancel(U(c), c.params.id!, choice!));
-  }, { auth: ['customer'] });
+  }, { idempotent: true, auth: ['customer'] });
 
   r.post('/api/payments/razorpay/verify', (c) => {
     const v = new Validator(c.json());
@@ -229,7 +252,7 @@ export function customerRoutes(r: Router): void {
     const out = verifyRazorpayCheckout(c.cfg, U(c), { orderId: orderId!, paymentId: paymentId!, signature: signature! });
     const p = one<{ booking_id: string }>('SELECT booking_id FROM payments WHERE rp_order_id = ?', orderId!);
     return ok({ outcome: out.outcome, booking: viewBooking(p!.booking_id) });
-  }, { auth: ['customer'] });
+  }, { idempotent: true, auth: ['customer'] });
 
   // ---- the customer's own dashboard
   r.get('/api/my/dashboard', (c) => ok(myDashboard(U(c))), { auth: ['customer'] });

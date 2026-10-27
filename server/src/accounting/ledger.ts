@@ -1,6 +1,7 @@
 import { many, one } from '../db.ts';
 import { now } from '../clock.ts';
 import { istDate } from '../time.ts';
+import '../securityDeposit.ts';
 
 // The ledger. Every figure in the reports is built from these lines, so the profit and loss, the balance sheet and the
 // trial balance cannot disagree. Lines are DERIVED on demand from the real records (bank transactions, booking payments,
@@ -96,6 +97,15 @@ export function ledgerLines(ownerId: string, upTo: string): Line[] {
     const earned = earnedOn(bookings.get(r.booking_id));
     // A refund after the session was played takes money back out of what was earned.
     out.post(d, 'refund', r.id, [[earned !== null && d > earned ? 'booking_income' : 'customer_advances', r.amount_paise], [r.mode === 'gateway' ? 'gateway_clearing' : 'refunds_payable', -r.amount_paise]]);
+  }
+
+  // ---- security deposits (securityDeposit.ts): a liability of their own, kept apart from the booking advance and from booking income
+  for (const e of many<{ id: string; kind: string; amount_paise: number; method: string | null; created_at: number }>('SELECT id, kind, amount_paise, method, created_at FROM security_deposit_entries WHERE owner_id = ?', ownerId)) {
+    const cash = e.method === 'cash' ? 'cash_bookings' : 'gateway_clearing', d = istDate(e.created_at), n = e.amount_paise;
+    if (e.kind === 'collect') out.post(d, 'sdeposit', e.id, [[cash, n], ['security_deposits_held', -n]]);
+    else if (e.kind === 'refund') out.post(d, 'sdeposit', e.id, [['security_deposits_held', n], [cash, -n]]);
+    else if (e.kind === 'deduct') out.post(d, 'sdeposit', e.id, [['security_deposits_held', n], ['deposit_deductions', -n]]);
+    else out.post(d, 'sdeposit', e.id, [['deposit_deductions', n], ['security_deposits_held', -n]]);
   }
 
   // ---- account credit: issued, expired, written down

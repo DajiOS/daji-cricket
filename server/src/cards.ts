@@ -1,9 +1,10 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { many, one, registerSchema, run } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
 import { HttpError, notFound } from './errors.ts';
+import { storeUpload } from './intake.ts';
 import { audit, type Actor } from './audit.ts';
 import { sniff } from './accounting/books.ts';
 import { aiConfigured, type Config } from './config.ts';
@@ -138,14 +139,15 @@ export function addCard(dataDir: string, ownerId: string, actor: Actor, raw: unk
     const k = sniff(image);
     if (!k || k.mime === 'application/pdf') throw new HttpError(415, 'FILE_TYPE_NOT_ALLOWED', 'Use a PNG, JPEG or WebP photo.');
     if (image.length > MAX_CARD_BYTES) throw new HttpError(413, 'FILE_TOO_LARGE', 'The photo can be at most 5 MB.');
-    const dir = join(dataDir, 'cards', ownerId);
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, id), image, { mode: 0o600 });
     mime = k.mime;
   }
-  run('INSERT INTO biz_cards(id, owner_id, name, job_title, company, phones, emails, website, address, notes, image_mime, created_at, created_by, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    id, ownerId, f.name, f.title, f.company, JSON.stringify(f.phones), JSON.stringify(f.emails), f.website, f.address, f.notes, mime, t, actor.id, t);
-  audit(actor, 'card.add', 'biz_card', id, { name: f.name, company: f.company }, ownerId);
+  const record = (): void => {
+    run('INSERT INTO biz_cards(id, owner_id, name, job_title, company, phones, emails, website, address, notes, image_mime, created_at, created_by, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      id, ownerId, f.name, f.title, f.company, JSON.stringify(f.phones), JSON.stringify(f.emails), f.website, f.address, f.notes, mime, t, actor.id, t);
+    audit(actor, 'card.add', 'biz_card', id, { name: f.name, company: f.company }, ownerId);
+  };
+  if (image && image.length) storeUpload({ dataDir, buf: image, finalPath: join(dataDir, 'cards', ownerId, id), purpose: 'card_image', actor, ownerId, writeMetadata: record });
+  else record();
   return getCard(ownerId, id);
 }
 
@@ -219,9 +221,11 @@ export function attachCardImage(dataDir: string, ownerId: string, actor: Actor, 
   const k = image.length ? sniff(image) : null;
   if (!k || k.mime === 'application/pdf') throw new HttpError(415, 'FILE_TYPE_NOT_ALLOWED', 'Use a PNG, JPEG or WebP photo.');
   if (image.length > MAX_CARD_BYTES) throw new HttpError(413, 'FILE_TOO_LARGE', 'The photo can be at most 5 MB.');
-  const dir = join(dataDir, 'cards', ownerId);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, id), image, { mode: 0o600 });
-  run('UPDATE biz_cards SET image_mime = ?, updated_at = ? WHERE id = ? AND owner_id = ?', k.mime, now(), id, ownerId);
-  audit(actor, 'card.photo', 'biz_card', id, { bytes: image.length }, ownerId);
+  storeUpload({
+    dataDir, buf: image, finalPath: join(dataDir, 'cards', ownerId, id), purpose: 'card_image', actor, ownerId, versioned: true,
+    writeMetadata: () => {
+      run('UPDATE biz_cards SET image_mime = ?, updated_at = ? WHERE id = ? AND owner_id = ?', k.mime, now(), id, ownerId);
+      audit(actor, 'card.photo', 'biz_card', id, { bytes: image.length }, ownerId);
+    },
+  });
 }

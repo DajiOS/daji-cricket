@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { Page, Payment, PayMethod, RefundRow } from '@daji/shared';
+import { formatPaise } from '@daji/shared';
 import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
 import { HttpError, notFound } from './errors.ts';
 import { audit, SYSTEM, type Actor } from './audit.ts';
-import { notify } from './notifications.ts';
+import { notify, pushStaffOf } from './notifications.ts';
 import { accessBooking, bookingOr404, confirmBooking, toPayment, type BookingRow } from './bookings.ts';
 import { requirePermission, scopeOwnerId, type UserRow } from './auth.ts';
 import { getSettings } from './settings.ts';
@@ -14,6 +15,7 @@ import { checkCashReceipt } from './taxrules.ts';
 import type { Config } from './config.ts';
 import { getGateway, verifyWebhookSignature, webhookSecretFor } from './gateway.ts';
 import * as credits from './credits.ts';
+import { linkedBusy } from './groundLinks.ts';
 import { pendingFor, sendBack, signStep, startRequest, withdrawRequest, type ReqRow } from './approvals.ts';
 
 export interface PaymentRow {
@@ -64,6 +66,16 @@ registerSchema('refund-on-booking-1', `
 ALTER TABLE refunds ADD COLUMN on_booking INTEGER NOT NULL DEFAULT 0;
 UPDATE refunds SET on_booking = 1 WHERE reason = 'free cancellation' OR reason LIKE 'cancelled: %' OR reason LIKE 'cancelled by the ground:%';
 `);
+
+/** Marks a payment session that was opened for the difference of a dearer move (see hold.ts startDifferencePayment). Only these may be closed when the booking is moved again. */
+export const DIFFERENCE_NOTE = 'difference-session';
+export function markDifferenceSession(paymentId: string): void { run('UPDATE payments SET proof_note = ? WHERE id = ?', DIFFERENCE_NOTE, paymentId); }
+/** Closes the unpaid difference sessions of a booking (the amount owed changed). Money already captured is never touched. */
+export function closeDifferenceSessions(bookingId: string, reason: string): number {
+  const rows = many<{ id: string }>("SELECT id FROM payments WHERE booking_id = ? AND status = 'created' AND proof_note = ?", bookingId, DIFFERENCE_NOTE);
+  for (const r of rows) { run("UPDATE payments SET status = 'failed', reject_reason = ?, updated_at = ? WHERE id = ?", reason, now(), r.id); logEvent(r.id, null, 'closed', { reason }); }
+  return rows.length;
+}
 
 export type CaptureOutcome = 'confirmed' | 'partial' | 'already' | 'extra_refunded' | 'late_reconfirmed' | 'late_refunded' | 'cancelled_refunded' | 'paid_extra';
 
@@ -128,7 +140,7 @@ function lateForExpired(b: BookingRow, p: PaymentRow, amount: number, actor: Act
   const slotMs = one<{ slot_minutes: number }>('SELECT slot_minutes FROM grounds WHERE id = ?', b.ground_id)!.slot_minutes * MIN;
   const starts = Array.from({ length: b.slot_count }, (_, i) => b.start_at + i * slotMs);
   const t = now();
-  const free = b.start_at > t && starts.every((s) => !one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', b.ground_id, s));
+  const free = b.start_at > t && starts.every((s) => !one('SELECT 1 FROM booking_slots WHERE ground_id = ? AND slot_start = ?', b.ground_id, s)) && linkedBusy({ id: b.ground_id, slot_minutes: slotMs / MIN }, starts, b.id).size === 0;
   run('UPDATE payments SET late = 1 WHERE id = ?', p.id);
   if (!free) {
     refundPayment(paymentOr404(p.id), amount, 'payment arrived after the slot was released and it is no longer free', actor);
@@ -185,18 +197,22 @@ export function submitUpiReference(user: UserRow, bookingId: string, input: { ut
   const b = accessBooking(user, bookingId);
   if (user.role !== 'customer') throw new HttpError(403, 'FORBIDDEN', 'Only the customer submits a UPI reference');
   const late = b.status === 'expired' && b.pay_method === 'upi';
-  if (b.status !== 'held' && !late) throw new HttpError(409, 'BAD_STATE', `This booking is ${b.status}, so a payment reference cannot be added`);
-  if (b.pay_method !== 'upi') throw new HttpError(409, 'WRONG_METHOD', 'This booking is being paid through Razorpay, not UPI');
+  // a confirmed booking that was moved to a dearer time has a waiting UPI session for the difference; the reference is for that session
+  const forDifference = b.status === 'confirmed' && !!one("SELECT 1 FROM payments WHERE booking_id = ? AND method = 'upi' AND purpose = 'balance' AND status = 'created'", b.id);
+  if (b.status !== 'held' && !late && !forDifference) throw new HttpError(409, 'BAD_STATE', `This booking is ${b.status}, so a payment reference cannot be added`);
+  if (b.pay_method !== 'upi' && !forDifference) throw new HttpError(409, 'WRONG_METHOD', 'This booking is being paid through Razorpay, not UPI');
   if (!UTR_RE.test(input.utr)) throw new HttpError(400, 'VALIDATION_FAILED', 'The UPI reference must be 12 digits', { fields: [{ field: 'utr', message: 'Must be the 12-digit UPI reference (UTR)' }] });
   return tx(() => {
     const t = now();
     // after expiry the waiting payment was marked failed; it still holds the amount the customer was asked to send
-    let p = late
+    let p = forDifference
+      ? one<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method = 'upi' AND purpose = 'balance' AND status = 'created' ORDER BY created_at DESC LIMIT 1", b.id)
+      : late
       ? one<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'failed' AND reference IS NULL ORDER BY created_at DESC LIMIT 1", b.id)
       : one<PaymentRow>("SELECT * FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'created' ORDER BY created_at DESC LIMIT 1", b.id);
     if (late && one("SELECT 1 FROM payments WHERE booking_id = ? AND method = 'upi' AND status = 'submitted'", b.id)) throw new HttpError(409, 'ALREADY_SUBMITTED', 'A payment reference for this booking is already waiting to be checked');
     // after expiry paid_paise is back to 0 and any credit used went back to the wallet, so ask for what the customer was told to send
-    const due = late ? (one<{ a: number }>("SELECT amount_paise a FROM payments WHERE booking_id = ? AND method = 'upi' ORDER BY created_at DESC, rowid DESC LIMIT 1", b.id)?.a ?? amountDue(b)) : amountDue(b);
+    const due = forDifference ? (p?.amount_paise ?? 0) : late ? (one<{ a: number }>("SELECT amount_paise a FROM payments WHERE booking_id = ? AND method = 'upi' ORDER BY created_at DESC, rowid DESC LIMIT 1", b.id)?.a ?? amountDue(b)) : amountDue(b);
     if (!p) {
       if (due <= 0) throw new HttpError(409, 'NOTHING_DUE', 'Nothing is due on this booking');
       const id = insertPayment(b, { method: 'upi', status: 'created', purpose: b.advance_paise === b.total_paise ? 'full' : 'advance', amountPaise: due });
@@ -210,7 +226,7 @@ export function submitUpiReference(user: UserRow, bookingId: string, input: { ut
     }
     logEvent(p.id, user.id, 'submitted', { utr: input.utr, ...(late ? { afterExpiry: true } : {}) });
     if (late) run('UPDATE bookings SET needs_review = 1, updated_at = ? WHERE id = ?', t, b.id); // staff see that money may have arrived for a released booking
-    else {
+    else if (!forDifference) {
       const deadline = t + getSettings().verifyMinutesUpi * MIN;
       run('UPDATE bookings SET hold_expires_at = MAX(COALESCE(hold_expires_at, 0), ?), updated_at = ? WHERE id = ?', deadline, t, b.id);
     }
@@ -324,11 +340,16 @@ function processWebhookEvent(ev: any, type: string): string {
     case 'order.paid': {
       const p = findByOrder(pay?.order_id ?? ev?.payload?.order?.entity?.id);
       if (!p) return 'unknown_order';
-      const amount = Number(pay?.amount);
-      if (Number.isFinite(amount) && amount !== p.amount_paise && p.status !== 'captured') {
+      // Fail closed: money is only taken in when the provider states an amount and currency that match the order. A missing or different figure is held for a person to look at.
+      const amount = pay?.amount === undefined || pay?.amount === null ? NaN : Number(pay.amount);
+      const currency = pay?.currency;
+      const wrongAmount = !Number.isInteger(amount) || amount !== p.amount_paise;
+      const wrongCurrency = currency !== undefined && currency !== null && String(currency).toUpperCase() !== 'INR';
+      if ((wrongAmount || wrongCurrency || currency === undefined) && p.status !== 'captured') {
         run('UPDATE bookings SET needs_review = 1 WHERE id = ?', p.booking_id);
-        logEvent(p.id, null, 'amount_mismatch', { expected: p.amount_paise, got: amount });
-        audit(actor, 'payment.amount_mismatch', 'payment', p.id, { expected: p.amount_paise, got: amount }, p.owner_id);
+        const detail = { expected: p.amount_paise, got: Number.isFinite(amount) ? amount : null, currency: currency ?? null };
+        logEvent(p.id, null, 'amount_mismatch', detail);
+        audit(actor, 'payment.amount_mismatch', 'payment', p.id, detail, p.owner_id);
         return 'amount_mismatch';
       }
       const r = applyCaptured(p.id, { actor, via: 'webhook', rpPaymentId: pay?.id });
@@ -344,7 +365,7 @@ function processWebhookEvent(ev: any, type: string): string {
     case 'refund.failed': {
       const rf = ev?.payload?.refund?.entity;
       const r = one<{ id: string; status: string }>('SELECT id, status FROM refunds WHERE rp_refund_id = ?', rf?.id);
-      if (!r) return 'unknown_refund';
+      if (!r) return providerRefund(type, rf, actor);
       if (type === 'refund.processed') finishRefund(r.id, actor, rf?.id ?? null, null);
       else if (r.status !== 'done') { // Razorpay could not send it: hand it to staff to pay by hand (UPI/bank) and mark done, instead of leaving it stuck
         run("UPDATE refunds SET status = 'pending', mode = 'manual', rp_refund_id = NULL WHERE id = ?", r.id);
@@ -353,9 +374,70 @@ function processWebhookEvent(ev: any, type: string): string {
       }
       return type === 'refund.processed' ? 'refund_done' : 'refund_failed';
     }
+    case 'payment.dispute.created':
+    case 'payment.dispute.under_review':
+    case 'payment.dispute.action_required':
+    case 'payment.dispute.won':
+    case 'payment.dispute.lost':
+    case 'payment.dispute.closed':
+      return recordDispute(type, ev?.payload?.dispute?.entity, actor);
     default:
       return 'ignored';
   }
+}
+
+/**
+ * A refund the provider reports that Daji did not start (someone refunded from the provider's dashboard). It is taken into the books as a finished refund on that payment,
+ * so the figures match the provider, and the booking is flagged for staff. A refund that Daji did start but whose provider id is not saved yet is left to be delivered again.
+ */
+function providerRefund(type: string, rf: any, actor: Actor): string {
+  const p = rf?.payment_id ? one<PaymentRow>('SELECT * FROM payments WHERE rp_payment_id = ?', rf.payment_id) : undefined;
+  if (!p) return 'unknown_refund';
+  if (one("SELECT 1 FROM refunds WHERE payment_id = ? AND mode = 'gateway' AND rp_refund_id IS NULL AND status IN ('pending','processing')", p.id)) return 'unknown_refund'; // ours, id not saved yet
+  if (type !== 'refund.processed') return 'ignored_provider_refund';
+  const amount = Number(rf?.amount);
+  if (!Number.isInteger(amount) || amount <= 0) { audit(actor, 'refund.provider_unreadable', 'payment', p.id, { refund: rf?.id ?? null }, p.owner_id); return 'provider_refund_unreadable'; }
+  const refundable = p.amount_paise - p.refunded_paise;
+  const take = Math.min(amount, Math.max(refundable, 0));
+  const id = newId('rfd');
+  const t = now();
+  if (take > 0) {
+    run("INSERT INTO refunds(id, payment_id, booking_id, owner_id, amount_paise, status, mode, reference, rp_refund_id, reason, created_at, completed_at, completed_by, on_booking, approved_at, approved_by) VALUES(?,?,?,?,?,'done','gateway',?,?,?,?,?,NULL,0,?,'provider')",
+      id, p.id, p.booking_id, p.owner_id, take, rf.id ?? null, rf.id ?? null, 'refunded at the payment provider (not started in Daji)', t, t, t);
+    const total = p.refunded_paise + take;
+    run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', total, total >= p.amount_paise ? 'refunded' : 'partially_refunded', t, p.id);
+  }
+  run('UPDATE bookings SET needs_review = 1 WHERE id = ?', p.booking_id);
+  logEvent(p.id, null, 'refund.provider_initiated', { refundId: take > 0 ? id : null, rpRefundId: rf.id ?? null, amountPaise: amount, recordedPaise: take });
+  audit(actor, 'refund.provider_initiated', 'payment', p.id, { rpRefundId: rf.id ?? null, amountPaise: amount, recordedPaise: take, exceedsPaise: amount - take }, p.owner_id);
+  pushStaffOf(p.owner_id, 'provider_refund', 'Refund made at the payment provider', `A refund of ${formatPaise(amount)} was made outside Daji on a booking payment. Open the booking to review it.`, p.booking_id);
+  return 'provider_refund_recorded';
+}
+
+/**
+ * A chargeback or dispute. Nothing is decided here: it is written on the payment's history, the booking is flagged and staff are told.
+ * When the dispute is lost the provider has taken the money back, so it is recorded as a finished refund (a controlled reversal, never an edit of the original payment).
+ */
+function recordDispute(type: string, d: any, actor: Actor): string {
+  const p = d?.payment_id ? one<PaymentRow>('SELECT * FROM payments WHERE rp_payment_id = ?', d.payment_id) : undefined;
+  if (!p) return 'unknown_order';
+  const state = type.slice('payment.dispute.'.length);
+  const amount = Number(d?.amount);
+  logEvent(p.id, null, `dispute.${state}`, { disputeId: d?.id ?? null, amountPaise: Number.isFinite(amount) ? amount : null, reason: d?.reason_code ?? null });
+  audit(actor, `payment.dispute_${state}`, 'payment', p.id, { disputeId: d?.id ?? null, amountPaise: Number.isFinite(amount) ? amount : null }, p.owner_id);
+  run('UPDATE bookings SET needs_review = 1 WHERE id = ?', p.booking_id);
+  if (state === 'created' || state === 'action_required') pushStaffOf(p.owner_id, 'payment_dispute', 'Payment disputed', `The customer's bank has disputed a payment of ${formatPaise(p.amount_paise)}. Open the booking and reply to the provider in time.`, p.booking_id);
+  if (state === 'lost' && Number.isInteger(amount) && amount > 0 && d?.id && !one("SELECT 1 FROM refunds WHERE rp_refund_id = ?", `dispute:${d.id}`)) {
+    const take = Math.min(amount, Math.max(p.amount_paise - p.refunded_paise, 0));
+    if (take > 0) {
+      const t = now();
+      run("INSERT INTO refunds(id, payment_id, booking_id, owner_id, amount_paise, status, mode, reference, rp_refund_id, reason, created_at, completed_at, completed_by, on_booking, approved_at, approved_by) VALUES(?,?,?,?,?,'done','gateway',?,?,?,?,?,NULL,0,?,'provider')",
+        newId('rfd'), p.id, p.booking_id, p.owner_id, take, d.id, `dispute:${d.id}`, 'chargeback lost: the provider took the money back', t, t, t);
+      const total = p.refunded_paise + take;
+      run('UPDATE payments SET refunded_paise = ?, status = ?, updated_at = ? WHERE id = ?', total, total >= p.amount_paise ? 'refunded' : 'partially_refunded', t, p.id);
+    }
+  }
+  return `dispute_${state}`;
 }
 
 // ---------------------------------------------------------------- refunds
