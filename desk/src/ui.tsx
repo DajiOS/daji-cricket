@@ -240,20 +240,21 @@ export const useToast = () => useContext(ToastCtx);
 /** Simple form state helper. */
 export function useForm<T extends Record<string, any>>(initial: T) {
   const [v, setV] = useState<T>(initial);
-  const bind = (k: keyof T) => ({ value: v[k] ?? '', onChange: (e: any) => setV((s) => ({ ...s, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })) });
+  const bind = <K extends keyof T>(k: K) => ({ value: (v[k] ?? '') as Exclude<T[K], null | undefined | boolean> | '', onChange: (e: any) => setV((s) => ({ ...s, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })) });
   return { v, setV, bind };
 }
 
 // ---------- tables and tabs ----------
 export interface Col<T> { head: string; cell: (row: T) => ReactNode; num?: boolean; width?: number | string }
 /** The standard table: sticky header, optional row click, empty message. */
-export function Table<T>({ rows, cols, onRow, empty, key }: { rows: T[]; cols: Col<T>[]; onRow?: (r: T) => void; empty?: ReactNode; key?: (r: T, i: number) => string | number }) {
+/** rowKey, not key: React keeps `key` for itself and never passes it to the component, so the rows were keyed by position. */
+export function Table<T>({ rows, cols, onRow, empty, rowKey }: { rows: T[]; cols: Col<T>[]; onRow?: (r: T) => void; empty?: ReactNode; rowKey?: (r: T, i: number) => string | number }) {
   if (!rows.length) return <Empty>{empty ?? 'Nothing here yet.'}</Empty>;
   return (
     <div className="tbl-wrap"><table className="tbl">
       <thead><tr>{cols.map((c, i) => <th key={i} className={c.num ? 'num right' : ''} style={c.width ? { width: c.width } : undefined}>{c.head}</th>)}</tr></thead>
       <tbody>{rows.map((r, i) => (
-        <tr key={key ? key(r, i) : i} className={onRow ? 'click' : ''} onClick={onRow ? () => onRow(r) : undefined}>
+        <tr key={rowKey ? rowKey(r, i) : i} className={onRow ? 'click' : ''} onClick={onRow ? () => onRow(r) : undefined}>
           {cols.map((c, j) => <td key={j} className={c.num ? 'num right' : ''}>{c.cell(r)}</td>)}
         </tr>))}</tbody>
     </table></div>

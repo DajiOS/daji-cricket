@@ -23,7 +23,7 @@ export function StatutoryDues({ month }: { month: string }) {
     <div className="card">
       <div className="card-head"><h3>Government dues for this month</h3></div>
       {d.note && <div className="card-pad small muted">{d.note}</div>}
-      <Table rows={rows} key={(r) => r.name} cols={[
+      <Table rows={rows} rowKey={(r) => r.name} cols={[
         { head: 'Due to', cell: (r) => <><span className="strong">{r.name}</span><div className="small muted">{r.note}</div></> },
         { head: 'Amount', num: true, cell: (r) => <span className="strong">{inr(r.amt)}</span> },
         { head: 'Pay by', cell: (r) => fmtDate(r.due) },

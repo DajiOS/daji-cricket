@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { api, useApi, inr, download, todayISO, addDaysISO } from '../../lib';
 import { Modal, Icon, ErrorBox, Loading, Empty, useToast } from '../../ui';
 
-export interface Account { id: string; name: string; kind: string; bankName?: string | null; balancePaise: number; transactions: number; uncategorised: number }
+export interface Account { id: string; name: string; kind: string; holds?: 'bank' | 'card' | 'loan'; bankName?: string | null; balancePaise: number; transactions: number; uncategorised: number }
 export interface Category { id: string; name: string; group: string; kind: string }
 
 /** Bank accounts and categories, used by several screens. */

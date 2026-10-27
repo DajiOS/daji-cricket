@@ -9,7 +9,7 @@ interface Ground { id: string; name: string; active: boolean }
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5); // 5 am to 11 pm
 const LATE = [24, 25, 26, 27]; // midnight to 3 am the next morning, for a ground that stays open late
 const hh = (h: number) => `${String(h % 24).padStart(2, '0')}:00`;
-const label = (h: number) => h >= 24 ? `${label(h - 24)} (next day)` : `${h % 12 || 12}:00 ${h < 12 ? 'am' : 'pm'}`;
+const label = (h: number): string => h >= 24 ? `${label(h - 24)} (next day)` : `${h % 12 || 12}:00 ${h < 12 ? 'am' : 'pm'}`;
 
 export function BlockBooking({ onClose, onDone }: { onClose: () => void; onDone: (firstId: string) => void }) {
   const [gl] = useApi<{ items: Ground[] }>('/api/staff/grounds');
