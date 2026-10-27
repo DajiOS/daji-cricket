@@ -103,9 +103,9 @@ function ensureMovable(b: BookingRow): void {
 }
 
 /**
- * Moves a confirmed booking to another time on the same ground. Customers: before the free-cancellation cut-off, limited times, only to a time the ground offers online.
+ * Moves a confirmed booking to another time on the same ground. Customers: only when more than the owner's cut-off (24 hours) remains, at most 2 completed moves, only to a time offered online.
  * The old slots are given up and the new ones taken in one transaction; if the new ones are not free nothing changes. What was paid stays on the booking;
- * a dearer slot leaves a larger balance. A cheaper slot that would leave the booking over-paid is refused: cancel and rebook, so the money is settled by the refund rules.
+ * a dearer slot leaves a larger balance. A cheaper slot that leaves the booking over-paid is settled as account credit or a refund request (settleCheaper), never refunded silently.
  */
 export function rescheduleBooking(cfg: Config, user: UserRow, bookingId: string, body: unknown, via: { channel?: 'guppi'; actionId?: string } = {}): RescheduleResult {
   const byCustomer = user.role === 'customer';
