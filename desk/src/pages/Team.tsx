@@ -93,7 +93,7 @@ export default function Team({ sub }: { sub: string }) {
           {!items.length ? <Empty>{all.length ? 'No one matches.' : 'No one on your team yet.'}</Empty> : (
             <div className="card-pad">
               {items.map((m) => (
-                <div className="ad-line" key={m.id}>
+                <div className="dl-line" key={m.id}>
                   <div>
                     <b>{m.name || m.email || m.phone || 'Unnamed member'}</b> <Chip tone={m.active ? 'good' : 'mute'}>{m.active ? 'Active' : 'Switched off'}</Chip> <Chip tone="gold">{roleOf(m, data.presets)}</Chip>
                     <div className="small muted">{[m.email, m.phone && formatPhone(m.phone)].filter(Boolean).join('  ·  ')}</div>

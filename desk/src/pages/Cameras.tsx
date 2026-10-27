@@ -62,7 +62,7 @@ export default function Cameras({ sub }: { sub: string }) {
         {manager && <button className="btn primary" onClick={() => setAdding(true)}>Add camera</button>}
       </PageHead>
       <ErrorBox msg={error} />
-      {!data ? <Loading /> : live.length === 0 ? (
+      {!data ? (error ? null : <Loading />) : live.length === 0 ? (
         <div className="card card-pad"><p>{manager ? 'No cameras yet. Add one, then start the camera bridge at the ground. The steps are in camera-bridge/README.md.' : 'No cameras are set up yet. Ask the owner.'}</p></div>
       ) : (
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: big ? '1fr' : 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))' }}>

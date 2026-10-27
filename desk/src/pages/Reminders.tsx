@@ -28,10 +28,10 @@ export default function Reminders({ sub }: { sub: string }) {
         <Stat label="Memberships" value={queue ? (queue.membershipsAvailable ? c?.membership ?? 0 : 'n/a') : '—'} foot={queue && !queue.membershipsAvailable ? 'Memberships not set up yet' : 'Ending within 7 days'} />
       </div>
       <Tabs value={tab} onChange={setTab} label="Sections" items={[['queue', 'Queue'], ['templates', 'Templates'], ['one', 'Send one'], ['history', 'History']]} />
-      {tab === 'queue' && (queue ? <QueueTab queue={queue} reload={() => { reloadQ(); reloadH(); }} /> : <Loading />)}
-      {tab === 'templates' && (tpl ? <TemplatesTab templates={tpl.items} reload={() => { reloadT(); reloadQ(); }} /> : <Loading />)}
-      {tab === 'one' && (tpl ? <ComposeTab templates={tpl.items} onLogged={reloadH} /> : <Loading />)}
-      {tab === 'history' && (hist ? <HistoryTab rows={hist.items} /> : <Loading />)}
+      {tab === 'queue' && (queue ? <QueueTab queue={queue} reload={() => { reloadQ(); reloadH(); }} /> : !qErr && <Loading />)}
+      {tab === 'templates' && (tpl ? <TemplatesTab templates={tpl.items} reload={() => { reloadT(); reloadQ(); }} /> : !tErr && <Loading />)}
+      {tab === 'one' && (tpl ? <ComposeTab templates={tpl.items} onLogged={reloadH} /> : !tErr && <Loading />)}
+      {tab === 'history' && (hist ? <HistoryTab rows={hist.items} /> : !hErr && <Loading />)}
     </div>
   );
 }

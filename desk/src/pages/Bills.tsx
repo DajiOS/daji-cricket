@@ -52,7 +52,7 @@ function BillList({ view }: { view: View }) {
           </div>
           <ErrorBox msg={err} />
           <div className="card">
-            {!data ? <div className="card-pad"><Loading /></div> : (
+            {!data ? (err ? null : <div className="card-pad"><Loading /></div>) : (
               !shown.length ? <Empty>{f || q || week || cat || from || to ? 'No bills match these filters.' : 'No bills yet. Enter the first one to start the approval flow.'}</Empty> : (
               <div className="tbl-wrap"><table className="tbl">
                 <thead><tr><th>Vendor</th><th className="hide-sm">Due</th><th className="num">Amount</th><th className="hide-sm">Status</th></tr></thead>

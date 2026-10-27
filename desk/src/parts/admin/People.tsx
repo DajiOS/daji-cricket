@@ -25,7 +25,7 @@ function Person({ u0 }: { u0: any }) {
     setBusy(false);
   }
   return (
-    <div className="ad-person">
+    <div className="dl-person">
       <div className="row"><b>{u.name}</b><Chip tone="mute">{String(u.role).replace('_', ' ')}</Chip></div>
       <div className="fields">
         <input className="inp" placeholder="First name" aria-label="First name" value={f.firstName} onChange={set('firstName')} />

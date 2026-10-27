@@ -1,6 +1,6 @@
 import { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { startHarness, grounds, bookAndPay, dayFromNow, type Harness, type GroundLite } from './helpers.ts';
 import { one, run } from '../src/db.ts';
 import { REGISTER, resolveRoute } from '../../desk/src/routes.ts';
@@ -99,4 +99,47 @@ rel('REL-DESK-004', 'the desk workspaces show a failed load as a failure and a r
   // the customer's credit is the server's ledger figure, not a sum of payments made in the browser
   assert.doesNotMatch(read('desk/src/parts/customers/Workspace.tsx'), /reduce\(/);
   ev('checked', ['ui.tsx Load', 'Workspace', 'Enquiries', 'Blocks', 'Guppi', 'Detail messages']);
+});
+
+// Found on the live desk after the V2 merge (27 Oct 2026).
+rel('REL-DESK-005', 'no desk or website class name is one that ad blockers hide, so rows never vanish for a visitor with an ad blocker', () => {
+  // EasyList (the list most ad blockers use) hides elements by class names such as .ad-line and .ad-grid. The desk used both for its settings and
+  // team rows, so with an ad blocker the team list, Online payments, Connections and Services looked empty. Names starting like an advert are kept out.
+  const BLOCKED = /(^|[\s"'`.{])(ad|ads|advert|advertisement|sponsor|sponsored|adbox|adslot)[-_][a-z0-9]/i;
+  const files = [...readdirSync(ROOT + 'desk/src', { recursive: true }) as string[]].filter((f) => /\.tsx?$/.test(f)).map((f) => 'desk/src/' + f)
+    .concat((readdirSync(ROOT + 'desk/styles') as string[]).map((f) => 'desk/styles/' + f))
+    .concat((readdirSync(ROOT + 'web/public') as string[]).filter((f) => /\.(js|css|html)$/.test(f)).map((f) => 'web/public/' + f));
+  const hits: string[] = [];
+  for (const f of files) {
+    const src = read(f);
+    for (const m of src.matchAll(/class(?:Name)?\s*[=:]\s*(?:\{`|["'`])([^"'`]*)/g)) if (BLOCKED.test(' ' + m[1])) hits.push(`${f}: ${m[1]!.slice(0, 60)}`);
+    if (f.endsWith('.css')) for (const m of src.matchAll(/\.([a-z][a-z0-9_-]*)/gi)) if (BLOCKED.test('.' + m[1])) hits.push(`${f}: .${m[1]}`);
+  }
+  assert.deepEqual(hits, []);
+  ev('filesScanned', files.length);
+});
+
+rel('REL-DESK-006', 'Contacts says when someone last played and their next booking apart, and the dashboard counts the same people Contacts lists', async () => {
+  const b = await bookAndPay(h, cust, g.id, dayFromNow(4), '10:00', 1);
+  const res = await h.get('/api/staff/contacts?who=booked', owner);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const me = res.body.items.find((x: any) => x.timesPlayed >= 1)!;
+  assert.equal(me.lastPastAt, null, 'a booking ahead is not a game played');
+  assert.equal(me.nextAt, one<{ start_at: number }>('SELECT start_at FROM bookings WHERE id = ?', b.id)!.start_at);
+  // the dashboard tile reads the Contacts list itself, and the reach chips only name channels the person agreed to
+  assert.match(read('desk/src/pages/Dashboard.tsx'), /'\/api\/staff\/contacts\?who=booked&limit=1'/);
+  assert.match(read('desk/src/pages/Contacts.tsx'), /filter\(\(k\) => c\.reachable\[k\]\)/);
+  const csv = await fetch(h.url + '/api/staff/contacts/export?who=booked', { headers: { authorization: 'Bearer ' + owner } }).then((r) => r.text());
+  assert.match(csv.split('\n')[0]!, /Last played,Next booking/);
+  ev('contact', { timesPlayed: me.timesPlayed, lastPastAt: me.lastPastAt, nextAt: me.nextAt });
+});
+
+rel('REL-DESK-007', 'a page whose data is refused or fails stops loading: Approvals for front-desk staff, and the refusal pages', () => {
+  // Approvals waited for the approval chains, which the server shows only to someone who signs a step; front-desk staff saw "Loading" for ever.
+  assert.match(read('desk/src/pages/Approvals.tsx'), /\(!ruled \|\| reqs \|\| reqsErr\)/);
+  for (const [f, pat] of [['desk/src/pages/Bills.tsx', /!data \? \(err \? null/], ['desk/src/parts/bills/VendorsTab.tsx', /!data \? \(err \? null/], ['desk/src/pages/Media.tsx', /!lib \? \(err \? null/],
+    ['desk/src/pages/Cameras.tsx', /!data \? \(error \? null/], ['desk/src/pages/Reminders.tsx', /!hErr && <Loading/]] as const) assert.match(read(f), pat, f);
+  // a super admin's Team terms list is scoped to the business being looked at, like every other owner page
+  assert.match(read('desk/src/lib.ts'), /OWNER_SCOPED = \['\/api\/legal\/staff-terms\/report'/);
+  ev('checked', ['Approvals', 'Bills', 'Vendors', 'Media', 'Cameras', 'Reminders', 'Team terms scope']);
 });

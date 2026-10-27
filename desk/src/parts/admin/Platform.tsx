@@ -28,7 +28,7 @@ export function Connections() {
       {(data.items || []).map((c) => {
         const res = results[c.id];
         return (
-          <div className="ad-line" key={c.id} style={{ alignItems: 'flex-start' }}>
+          <div className="dl-line" key={c.id} style={{ alignItems: 'flex-start' }}>
             <div>
               <b>{c.name}</b> <span className="small muted">· {c.what}</span>
               {c.status !== 'ready' && <div className="hint">{c.note || (c.missing.length ? `Missing: ${c.missing.join(', ')}. ` : '') + c.setup}</div>}
@@ -109,7 +109,7 @@ export function Services() {
   return (
     <Panel title="Services and accounts" note="Which email and phone each service was opened with, so it is never forgotten. Do not write passwords or keys here; those go in the server settings file." actions={<button className="btn sm primary" onClick={() => setEdit(null)}>Add a service</button>}>
       {!data.items.length ? <Empty>No services written down yet.</Empty> : data.items.map((s) => (
-        <div className="ad-line" key={s.id} style={{ alignItems: 'flex-start' }}>
+        <div className="dl-line" key={s.id} style={{ alignItems: 'flex-start' }}>
           <div>
             <b>{s.name}</b>{s.purpose && <span className="small muted"> · {s.purpose}</span>}
             <div className="hint">{[s.accountEmail && 'Email: ' + s.accountEmail, s.phone && 'Phone: ' + formatPhone(s.phone)].filter(Boolean).join('   ·   ') || 'No account details yet'}</div>

@@ -57,7 +57,8 @@ export default function Dashboard({ sub }: { sub: string }) {
   const [cancelled, cancelledErr] = useApi<Page<Booking>>(canBookings ? `/api/staff/bookings?from=${day}&to=${day}&status=cancelled&limit=50` : null, [version, ownerId]);
   const [pending, pendingErr] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?approval=pending&limit=1' : null, [version, ownerId]);
   const [grounds, groundsErr] = useApi<{ items: Ground[] }>(canBookings ? '/api/staff/grounds' : null, [ownerId]);
-  const [people, peopleErr] = useApi<{ total: number }>(canPeople && ownerId ? '/api/staff/customers?limit=1' : null, [ownerId]);
+  // the same people the Contacts page opens on (confirmed or played customers), so the tile and the page agree
+  const [people, peopleErr] = useApi<{ total: number }>(canPeople && ownerId ? '/api/staff/contacts?who=booked&limit=1' : null, [ownerId]);
   const [appr, apprErr] = useApi<{ count: number }>(can(me, 'manage_accounting') ? '/api/accounting/approvals/count' : null, [ownerId]);
   const [pays, paysErr] = useApi<Page<Pay>>(canPay ? '/api/staff/payments?limit=5' : null, [version, ownerId]);
   const [feed, feedErr] = useApi<{ items: Feed[] }>(ownerId ? '/api/desk/activity?limit=6' : null, [version, ownerId]);

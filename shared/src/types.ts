@@ -600,6 +600,9 @@ export interface Contact {
   slotsPlayed: number;
   firstPlayedAt: number;
   lastPlayedAt: number;
+  /** The last session that has started (null if none yet) and the next one ahead (null if none): lastPlayedAt also counts bookings ahead. */
+  lastPastAt: number | null;
+  nextAt: number | null;
   /** Total paid by this person. Null when the viewer may not see revenue. */
   paidPaise: number | null;
   groundIds: string[];
