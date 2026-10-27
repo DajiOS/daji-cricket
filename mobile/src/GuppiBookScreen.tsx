@@ -18,7 +18,7 @@ interface Reply {
 }
 interface Turn { who: 'me' | 'guppi'; text: string }
 
-const FIRST: Labels = { title: 'Guppi booking assistant', placeholder: 'Tell Guppi what you need, in any language', send: 'Send', option: 'Option', total: 'Total', advance: 'Advance', hold: 'Hold and go to secure payment', change: 'Change', secure: 'Guppi never takes payment. Payment happens only on the secure payment screen.', reset: 'Start over', signIn: 'Sign in to book with Guppi.', example: 'Example: Sunday 7 PM for 3 hours' };
+const FIRST: Labels = { title: 'DCG booking assistant', placeholder: 'Tell DCG what you need, in any language', send: 'Send', option: 'Option', total: 'Total', advance: 'Advance', hold: 'Hold and go to secure payment', change: 'Change', secure: 'DCG never takes payment. Payment happens only on the secure payment screen.', reset: 'Start over', signIn: 'Sign in to book with DCG.', example: 'Example: Sunday 7 PM for 3 hours' };
 const newActionId = (): string => `guppi-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 const inr = (paise: number): string => `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
@@ -60,7 +60,7 @@ export function GuppiBookScreen({ onHold, onBack, signedIn, onNeedSignIn }: { on
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} hitSlop={10}><Text style={{ color: C.gold, fontSize: 28, lineHeight: 30 }}>‹</Text></Pressable>
         <GuppiMark size={40} />
-        <View style={{ flex: 1 }}><Text style={[s.text, { fontSize: 18, fontWeight: '800' }]}>Guppi</Text><Text style={s.muted}>{L.title}</Text></View>
+        <View style={{ flex: 1 }}><Text style={[s.text, { fontSize: 18, fontWeight: '800' }]}>DCG</Text><Text style={s.muted}>{L.title}</Text></View>
       </View>
       {!turns.length && (
         <View style={{ alignSelf: 'flex-start', maxWidth: '88%', marginBottom: 10, padding: 12, borderRadius: 16, borderTopLeftRadius: 4, backgroundColor: C.soft }}>

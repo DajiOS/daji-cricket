@@ -22,7 +22,7 @@ interface Selected { groundId?: string; bookingId?: string }
 /** Guppi's requests are exact: a field it is not meant to send (an amount, a price, a payment result, an approval) is refused, not ignored. */
 export function strict(body: unknown, allowed: readonly string[]): void {
   const extra = body && typeof body === 'object' && !Array.isArray(body) ? Object.keys(body).filter((k) => !allowed.includes(k)) : [];
-  if (extra.length) throw new HttpError(400, 'UNKNOWN_FIELDS', `Guppi cannot send: ${extra.join(', ')}`, { fields: extra.map((field) => ({ field, message: 'Not allowed here' })) });
+  if (extra.length) throw new HttpError(400, 'UNKNOWN_FIELDS', `DCG cannot send: ${extra.join(', ')}`, { fields: extra.map((field) => ({ field, message: 'Not allowed here' })) });
 }
 
 export function guppiOn(): void { requireFeature('guppiAssistEnabled', 'The assistant'); }
@@ -54,7 +54,7 @@ export function guppiContext(user: UserRow) {
     actions: user.role === 'customer' ? [...GUPPI_ACTIONS.filter((a) => a !== 'reschedule' || (s.customerRescheduleEnabled && s.rescheduleCutoffHours !== null && s.rescheduleMaxMoves !== null)), 'understand'] : ['options'],
     languages: ['en', 'gu', 'hi', 'gu-Latn', 'hi-Latn'],
     labels: LABELS,
-    note: 'Guppi shows only options issued by the booking system and hands over to the secure payment screen. Prices, availability, payments and approvals are decided by the system, not by Guppi.',
+    note: 'DCG shows only options issued by the booking system and hands over to the secure payment screen. Prices, availability, payments and approvals are decided by the system, not by DCG.',
   };
 }
 
@@ -67,7 +67,7 @@ export function guppiOptions(cfg: Config, user: UserRow, body: unknown): Options
   v.done();
   delete b.context;
   const q = parseOptionRequest(b);
-  if (selected.groundId && selected.groundId !== q.groundId) throw new HttpError(400, 'CONTEXT_MISMATCH', 'Guppi can only look at the ground that is selected on your screen.');
+  if (selected.groundId && selected.groundId !== q.groundId) throw new HttpError(400, 'CONTEXT_MISMATCH', 'DCG can only look at the ground that is selected on your screen.');
   const res = searchOptions(cfg, user, q, q.max);
   audit({ id: user.id, role: user.role }, 'guppi.options', 'ground', q.groundId, { date: q.date, startTime: q.startTime, offered: (res.exact ? 1 : 0) + res.alternatives.length });
   return { ...res, source: 'booking-system', selected };
@@ -112,7 +112,7 @@ export function guppiReschedule(cfg: Config, user: UserRow, headerKey: string | 
   const selected = parseContext(v, body);
   v.done();
   const id = actionIdOf(headerKey, actionId);
-  if (selected.bookingId !== bookingId) throw new HttpError(400, 'CONTEXT_MISMATCH', 'Guppi can only change the booking that is selected on your screen.');
+  if (selected.bookingId !== bookingId) throw new HttpError(400, 'CONTEXT_MISMATCH', 'DCG can only change the booking that is selected on your screen.');
   accessBooking(user, bookingId!); // the same 404 as anywhere else when it is not theirs
   return rescheduleBooking(cfg, user, bookingId!, { optionId, ...(reason ? { reason } : {}) }, { channel: 'guppi', actionId: id });
 }
