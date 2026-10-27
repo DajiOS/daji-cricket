@@ -10,7 +10,7 @@ import { title as activityTitle } from '../parts/dash/activity';
 import { askAssistant } from '../CommandSearch';
 
 // The Dashboard: today at a glance. Stat cards, today's bookings, quick actions, what each ground and net is doing now,
-// recent payments, Ask AI and what needs someone. Every figure comes from the same endpoints as the pages it links to,
+// recent payments, Guppi and what needs someone. Every figure comes from the same endpoints as the pages it links to,
 // and each card shows only to people whose permissions allow the page behind it.
 
 interface Ground { id: string; name: string; active: boolean }
@@ -121,7 +121,7 @@ export default function Dashboard({ sub }: { sub: string }) {
   if (can(me, 'verify_payments') || can(me, 'record_payments')) quick.push({ icon: 'payments', label: 'Verify payment', href: '#/bookings/payments' });
   if (can(me, 'send_broadcasts')) quick.push({ icon: 'chat', label: 'Send message', href: '#/reminders' });
   if (canMoney) quick.push({ icon: 'accounts', label: 'View reports', href: '#/accounting/reports' });
-  quick.push({ icon: 'ai', label: 'Ask AI', run: () => askAssistant() });
+  quick.push({ icon: 'ai', label: 'Ask Guppi', run: () => askAssistant() });
   if (me.role !== 'staff') quick.push({ icon: 'settings', label: 'Settings', href: '#/settings' });
 
   const tabs: [Tab, string][] = [['all', 'All'], ['upcoming', 'Upcoming'], ['ongoing', 'Ongoing'], ['completed', 'Completed'], ['cancelled', 'Cancelled']];
@@ -197,11 +197,11 @@ export default function Dashboard({ sub }: { sub: string }) {
                   </table></div>)}
               </section>)}
 
-            <section className="xpanel" aria-label="Ask AI">
-              <div className="xpanel-hd"><h2><Icon name="ai" size={20} /> Ask AI</h2></div>
+            <section className="xpanel" aria-label="Guppi Assistant">
+              <div className="xpanel-hd"><h2><Icon name="ai" size={20} /> Guppi Assistant</h2></div>
               <div className="xask">Ask about bookings, money owed, approvals or any report, in plain words.</div>
               <form className="xask-form" onSubmit={(e) => { e.preventDefault(); if (ask.trim().length >= 2) { askAssistant(ask.trim()); setAsk(''); } }}>
-                <label className="sr" htmlFor="xask-q">Ask AI</label>
+                <label className="sr" htmlFor="xask-q">Ask Guppi</label>
                 <input id="xask-q" className="inp" value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Type a question…" />
                 <button type="submit" aria-label="Ask"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
               </form>

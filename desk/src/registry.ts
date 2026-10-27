@@ -197,7 +197,7 @@ export const SIDE: SideItem[] = [
   { key: 'schedule', label: 'Schedule & Blocks', icon: 'clock', pages: ['/calendar', '/activity'] },
   { key: 'approvals', label: 'Approvals', icon: 'check', to: '/approvals', anyPerm: ['manage_accounting', 'manage_bookings'], count: 'approvals' },
   { key: 'messages', label: 'Messages', icon: 'chat', pages: ['/reminders'] },
-  { key: 'ai', label: 'Ask AI', icon: 'ai', action: 'ask' },
+  { key: 'ai', label: 'Guppi AI', icon: 'ai', action: 'ask' },
   { key: 'reports', label: 'Reports', icon: 'accounts', pages: ['/accounting/reports', '/compare'] },
   { key: 'settings', label: 'Settings', icon: 'settings', pages: ['/settings', '/settings/booking', '/settings/payments', '/settings/website', '/settings/festivals', '/settings/people', '/settings/connections', '/settings/services', '/media', '/compliance', '/settings/golive', '/settings/backups', '/platform'] },
 ];
