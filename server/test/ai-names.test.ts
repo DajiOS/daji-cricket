@@ -60,6 +60,16 @@ test('reserved names and wake phrases are refused, in Profile and in Settings, w
   assert.equal((await h.post('/api/ai-name/check', { name: 'Hey Guppi' }, cust)).body.ok, true);
 });
 
+test('"what is your name" in Gujarati and Hindi, in either script, gets the same answer; a question about another name does not', async () => {
+  await h.patch('/api/me', { aiName: 'Guppi' }, owner);
+  for (const q of ['તમારું નામ શું છે?', 'તમે કોણ છો?', 'तुम्हारा नाम क्या है?', 'आप कौन हैं?', 'tamaru naam shu che', 'Guppi tamaru naam shu che?', 'aapka naam kya hai', 'tum kaun ho']) {
+    const a = (await h.post('/api/staff/ask', { question: q }, owner)).body;
+    assert.match(a.answer, /You call me Guppi/, q);
+  }
+  assert.match((await h.post('/api/ask', { question: 'aapka naam kya hai' }, cust)).body.answer, /You call me Ask AI/);
+  for (const q of ['customer ka naam kya hai', 'ground nu naam shu che']) assert.doesNotMatch((await h.post('/api/staff/ask', { question: q }, owner)).body.answer, /You call me/, q);
+});
+
 test('ordinary names that only look like a reserved one are fine', () => {
   for (const name of ['Alexander', 'Sirius', 'Guppi', 'Hey Guppi', 'Ask AI', 'Copiloto', 'Googly', 'Claudette']) assert.equal(reservedMatch(name, BUILTIN_RESERVED), null, name);
 });

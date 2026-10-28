@@ -194,4 +194,7 @@ export function aiNameAnswer(userId: string): string {
   const mine = ownAiName(userId), site = siteAiName();
   return `You call me ${mine ?? site}${mine ? ` (the business default is ${site})` : ', the name this business set'}. Underneath I am ${CORE_AI_NAME}, the assistant built into the software. You can change the name you see under Profile › Preferences › AI assistant name; it changes only the label, not what I can see or do.`;
 }
-export const isNameQuestion = (q: string): boolean => /\b(what('?s| is) your name|who are you|what (are|should) (i|we) call you|what do (i|we) call you|your name\??$|rename (you|the assistant)|change (your|the assistant'?s?) name)\b/i.test(q);
+// The same question in Gujarati and Hindi, in their own scripts or typed in English letters ("tamaru naam shu che", "aapka naam kya hai").
+// Only "your name" and "who are you": "the customer's name" is a different question.
+const NAME_Q_IN = /(તમારું|તમારુ|તારું|તારુ)\s*નામ|તમે\s*કોણ|(तुम्हारा|आपका|तेरा)\s*नाम|(तुम|आप|तू)\s*कौन|\b(tamaru|tamaaru|taru|tumhara|tumhaara|aapka|apka|tera)\s+(naam|nam)\b|\b(tame|tum|aap|ap|tu)\s+(kon|kaun)\s+(cho|chho|che|ho|hai|hain|hoo?)\b/i;
+export const isNameQuestion = (q: string): boolean => /\b(what('?s| is) your name|who are you|what (are|should) (i|we) call you|what do (i|we) call you|your name\??$|rename (you|the assistant)|change (your|the assistant'?s?) name)\b/i.test(q) || NAME_Q_IN.test(q);
