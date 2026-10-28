@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApi, post, patch, inr, toPaise, rupees, fmtDate, todayISO } from '../../lib';
+import { useApi, post, patch, inr, toPaise, rupees, fmtDate, todayISO, formatPhone } from '../../lib';
 import { Table, Chip, Modal, Field, ErrorBox, Loading, NameField, useToast, useForm, DateInput } from '../../ui';
 import { PAY, type PayStaff } from './common';
 
@@ -22,7 +22,7 @@ export function StaffTab({ onChanged }: { onChanged: () => void }) {
       </div>
       <Table rows={rows} onRow={(s) => setEdit(s)} empty="No staff yet. Add the first person to start payroll."
         cols={[
-          { head: 'Name', cell: (s) => <><span className="strong">{s.name}</span>{s.phone && <div className="small muted">{s.phone}</div>}</> },
+          { head: 'Name', cell: (s) => <><span className="strong">{s.name}</span>{s.phone && <div className="small muted">{formatPhone(s.phone)}</div>}</> },
           { head: 'Role', cell: (s) => s.role },
           { head: 'Pay', cell: (s) => <>{inr(s.ratePaise)} <span className="muted small">{s.payType === 'monthly' ? 'per month' : 'per day'}</span></> },
           { head: 'Deducts', cell: (s) => [s.esi && 'ESI', s.pt && 'PT', s.tds && 'TDS'].filter(Boolean).join(', ') || <span className="muted">-</span> },

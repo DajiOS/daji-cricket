@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { TeamMember } from './types';
 import { Badge, Btn, Chip, Field, Loading, Section, s, NameFields } from './ui';
-import { C } from './theme';
+import { C, formatPhone } from './theme';
 
 const PRESET_LABEL: Record<string, string> = { admin: 'Admin', general_manager: 'General manager', coach: 'Coach', front_desk: 'Front desk', accountant: 'Accountant' };
 
@@ -70,7 +70,7 @@ export function TeamScreen() {
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       {items === null ? <Loading /> : items.map((m) => (
         <View key={m.id} style={[s.card, { marginTop: 12 }]}>
-          <Text style={s.h2}>{m.name}</Text><Text style={s.muted}>{m.email}{m.phone ? `  ·  ${m.phone}` : ''}</Text>
+          <Text style={s.h2}>{m.name}</Text><Text style={s.muted}>{m.email}{m.phone ? `  ·  ${formatPhone(m.phone)}` : ''}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>{m.active === false ? <Badge tone="danger" label="Switched off" /> : <Badge tone="ok" label="Active" />}{m.readOnly && <Badge label="Read only" />}{m.mfa && <Badge tone="ok" label="2FA on" />}<Badge label={`${m.permissions.length} permissions`} /></View>
           <Btn kind="ghost" label={open === `edit:${m.id}` ? 'Close' : 'Edit'} onPress={() => setOpen(open === `edit:${m.id}` ? '' : `edit:${m.id}`)} />
           {open === `edit:${m.id}` && <EditMember m={m} onSaved={(n) => { setNote(n); void load(); }} />}

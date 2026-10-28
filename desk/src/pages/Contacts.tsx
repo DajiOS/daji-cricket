@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Chip, Field, PageHead, Stat, Table, useToast } from '../ui';
-import { addDaysISO, can, download, go, fmtDate, fmtDateTime, getViewOwner, inr, qs, todayISO, useApi } from '../lib';
+import { addDaysISO, can, download, go, fmtDate, fmtDateTime, getViewOwner, inr, qs, todayISO, useApi, formatPhone } from '../lib';
 import { useSession } from '../App';
 import { Async, FilterBar, Select, errMsg, useDebounced } from '../parts/club/common';
 import Composer, { loadTemplates } from '../parts/club/Composer';
@@ -64,7 +64,7 @@ function Directory() {
         <Async data={data} error={error}>{(d) => (
           <>
             <Table rows={d.items} rowKey={(c) => c.id} onRow={(c) => go(`/customers/${encodeURIComponent(c.id)}`)} empty="Nobody matches yet." cols={[
-              { head: 'Person', cell: (c) => <><a className="strong" href={`#/customers/${encodeURIComponent(c.id)}`} onClick={(e) => e.stopPropagation()}>{c.name}</a><div className="muted small">{[c.phone, c.email].filter(Boolean).join(' · ')}</div></> },
+              { head: 'Person', cell: (c) => <><a className="strong" href={`#/customers/${encodeURIComponent(c.id)}`} onClick={(e) => e.stopPropagation()}>{c.name}</a><div className="muted small">{[formatPhone(c.phone), c.email].filter(Boolean).join(' · ')}</div></> },
               { head: who === 'played' ? 'Times played' : 'Bookings', num: true, cell: (c) => c.timesPlayed },
               // a booking ahead is not a game played: the last one that has started, and the next one under it
               { head: 'Last played', cell: (c) => <>{c.lastPastAt ? fmtDate(day(c.lastPastAt)) : <span className="muted">{c.timesPlayed ? 'Not yet' : 'Not booked yet'}</span>}{c.nextAt && <div className="muted small">Next {fmtDate(day(c.nextAt))}</div>}</> },

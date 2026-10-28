@@ -2,7 +2,7 @@ import type { Notification } from '@daji/shared';
 import { many, one, run, registerSchema } from './db.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
-import { formatPaise } from '@daji/shared';
+import { formatPaise, formatPhone } from '@daji/shared';
 import { fmtDateTime } from './time.ts';
 import { getSettings } from './settings.ts';
 import { directionsUrl, groundRow } from './grounds.ts';
@@ -82,11 +82,11 @@ export function venueData(groundId: string): Pick<TemplateData, 'directionsUrl' 
   return { directionsUrl: g ? directionsUrl(g) : null, contactName: s.contactName, contactPhone: s.contactPhone };
 }
 
-/** " Directions: <link>. Questions? Call Hemanshu Patel on 7567156000." (either part is left out when we do not have it) */
+/** " Directions: <link>. Questions? Call Hemanshu Patel on +91 75671 56000." (either part is left out when we do not have it) */
 function venueTail(d: TemplateData): string {
   const parts: string[] = [];
   if (d.directionsUrl) parts.push(`Directions: ${d.directionsUrl}`);
-  if (d.contactPhone) parts.push(`Questions? Call ${d.contactName ? d.contactName + ' on ' : ''}${d.contactPhone}.`);
+  if (d.contactPhone) parts.push(`Questions? Call ${d.contactName ? d.contactName + ' on ' : ''}${formatPhone(d.contactPhone)}.`);
   return parts.length ? ' ' + parts.join(' ') : '';
 }
 
@@ -112,7 +112,7 @@ const T: Record<string, (d: TemplateData) => { subject: string; body: string }> 
   booking_reminder: (d) => ({ subject: `Reminder — ${d.ref}`, body: `Reminder: booking ${d.ref} at ${d.ground} starts ${fmtDateTime(d.startAt!)}. Balance to pay at the ground: ${formatPaise(d.amountPaise ?? 0)}.${venueTail(d)}` }),
   autodebit_charged: (d) => ({ subject: `Balance paid automatically — ${d.ref}`, body: `We charged the balance of ${formatPaise(d.amountPaise ?? 0)} for booking ${d.ref} at ${d.ground} on ${fmtDateTime(d.startAt!)} from your approved bank account. Nothing more to pay at the ground.` }),
   autodebit_failed: (d) => ({ subject: `Auto-debit did not go through — ${d.ref}`, body: `We could not charge the balance of ${formatPaise(d.amountPaise ?? 0)} for booking ${d.ref}${d.reason ? ` (${d.reason})` : ''}. Please pay it at the ground, or pay online from My bookings.` }),
-  enquiry_new: (d) => ({ subject: `New enquiry from ${d.name ?? 'a visitor'}`, body: `${d.name ?? 'Someone'}${d.contactPhone ? ' (' + d.contactPhone + ')' : ''} sent an enquiry${d.ground ? ' about ' + d.ground : ''}.${d.extra ? ' ' + d.extra : ''}` }),
+  enquiry_new: (d) => ({ subject: `New enquiry from ${d.name ?? 'a visitor'}`, body: `${d.name ?? 'Someone'}${d.contactPhone ? ' (' + formatPhone(d.contactPhone) + ')' : ''} sent an enquiry${d.ground ? ' about ' + d.ground : ''}.${d.extra ? ' ' + d.extra : ''}` }),
   enquiry_received: (d) => ({ subject: 'We got your enquiry', body: `Thanks ${d.name ?? ''}, we have your enquiry and will get back to you soon.` }),
   quotation_sent: (d) => ({ subject: 'Your quotation', body: `We have sent you a quotation of ${formatPaise(d.amountPaise ?? 0)}.${d.extra ? ' ' + d.extra : ''}` }),
   // the weekly waitlist (waitlist.ts): `extra` carries the session and its day, already in words

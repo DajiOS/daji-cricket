@@ -6,7 +6,7 @@
 'use strict';
 const D = window.DAJI;
 if (!D) return;
-const { h, clear, $, api, toast, openModal, closeModal, niceDate, todayIst, addDays, state, field, input } = D;
+const { h, clear, $, api, toast, openModal, closeModal, niceDate, todayIst, addDays, state, field, input, formatPhone } = D;
 
 const rs = (p) => '₹' + (p / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const pts = (n) => (n === null || n === undefined ? '–' : Number(n).toLocaleString('en-IN') + ' pts');
@@ -232,7 +232,7 @@ function depositBox(v) {
   else if (!dep.settled) {
     const due = dep.requiredPaise - dep.collectedPaise;
     box.append(h('p', {}, h('b', {}, `${rs(due)} to pay. `), 'Players see your tournament once it is paid. It is refundable: you get it back when the tournament ends, unless the matches are not played at Daji.'),
-      h('p', { class: 'hint' }, `Pay at the ground, or by UPI${pay.upiId ? ` to ${pay.upiId} (${pay.payee})` : ''} and send the reference below. Questions: ${pay.contactName} ${pay.contactPhone}.`));
+      h('p', { class: 'hint' }, `Pay at the ground, or by UPI${pay.upiId ? ` to ${pay.upiId} (${pay.payee})` : ''} and send the reference below. Questions: ${pay.contactName} ${formatPhone(pay.contactPhone)}.`));
     if (dep.claimReference) box.append(h('p', { class: 'hint' }, `You sent reference ${dep.claimReference}. The ground will check it.`));
     const ref = input('reference', 'text', { maxlength: '60', placeholder: 'UPI or bank reference' });
     box.append(h('div', { class: 'bar' }, ref, btn('I have paid', () => act(async () => { await post(`/api/auctions/${id}/deposit/paid`, { reference: ref.value.trim() }); return api(`/api/auctions/${id}`); }, 'Sent. The ground will check it.'), 'gold sm')));

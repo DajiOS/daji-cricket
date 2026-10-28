@@ -150,7 +150,7 @@ export function Leads() {
     <Panel title="Requests from ground owners">
       <Table rows={data.items} empty="No requests yet." cols={[
         { head: 'Who', cell: (l) => <><b>{l.business}</b><div className="small muted">{l.name}{l.city ? ', ' + l.city : ''}</div></> },
-        { head: 'Contact', cell: (l) => <span className="small">{l.phone}<br />{l.email}</span> },
+        { head: 'Contact', cell: (l) => <span className="small">{formatPhone(l.phone)}<br />{l.email}</span> },
         { head: 'Grounds', cell: (l) => l.grounds || '', num: true },
         { head: 'Status', cell: (l) => <select className="inp sm" defaultValue={l.status} aria-label="Status" onChange={(e) => setStatus(l, e.target.value)}>{LEAD_STATUS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select> },
         { head: '', cell: (l) => l.message ? <button className="btn sm ghost" onClick={() => setMsg(l)}>Message</button> : null },

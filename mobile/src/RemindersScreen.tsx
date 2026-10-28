@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import { Badge, Btn, Chip, Field, Loading, s } from './ui';
-import { C } from './theme';
+import { C, formatPhone } from './theme';
 
 type Kind = 'booking' | 'payment' | 'membership' | 'fixture';
 interface Item { kind: Kind; key: string; name: string; phone: string | null; summary: string; message: string; link: string | null; sentAt: number | null }
@@ -43,14 +43,14 @@ export function RemindersScreen() {
         : view === 'history' ? (!hist ? <Loading /> : !hist.length ? <Text style={s.muted}>Nothing has been marked as sent yet.</Text> : hist.map((h) => (
           <View key={h.id} style={s.card}>
             <View style={s.row}><Text style={[s.text, { fontWeight: '700', flex: 1 }]}>{h.name}</Text><Badge label={LABEL[h.kind]} /></View>
-            <Text style={s.muted}>{when(h.sentAt)}{h.sentBy ? `, by ${h.sentBy}` : ''}{h.phone ? `  ·  ${h.phone}` : ''}</Text>
+            <Text style={s.muted}>{when(h.sentAt)}{h.sentBy ? `, by ${h.sentBy}` : ''}{h.phone ? `  ·  ${formatPhone(h.phone)}` : ''}</Text>
             <Text style={[s.text, { fontSize: 14, marginTop: 6 }]} numberOfLines={4}>{h.message}</Text>
           </View>
         )))
         : !q ? (err ? null : <Loading />) : !items.length ? <Text style={s.muted}>{view === 'pending' ? 'Everyone is reminded for now.' : 'Nothing in this list.'}</Text> : items.map((i) => (
           <View key={i.kind + i.key} style={s.card}>
             <View style={s.row}><Text style={[s.text, { fontWeight: '700', flex: 1 }]}>{i.name}</Text><Badge label={LABEL[i.kind]} tone={i.kind === 'payment' ? 'danger' : 'gold'} /></View>
-            <Text style={s.muted}>{i.phone ?? 'No phone number'}  ·  {i.summary}</Text>
+            <Text style={s.muted}>{i.phone ? formatPhone(i.phone) : 'No phone number'}  ·  {i.summary}</Text>
             <View style={{ backgroundColor: C.bg, borderRadius: 12, padding: 12, marginVertical: 8 }}><Text style={[s.text, { fontSize: 14 }]}>{i.message}</Text></View>
             {i.sentAt ? (<>
               <View style={{ flexDirection: 'row' }}><Badge tone="ok" label={`Sent ${when(i.sentAt)}`} /></View>

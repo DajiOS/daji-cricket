@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { PaymentRow, StaffBooking, User } from './types';
 import { Badge, Btn, Chip, Field, KV, Loading, Segmented, s } from './ui';
-import { C, inr, niceDate } from './theme';
+import { C, formatPhone, inr, niceDate } from './theme';
 import { BlockForm } from './BlockForm';
 
 const hhmm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
@@ -43,7 +43,7 @@ export function StaffScreen({ user, start = 'today' }: { user: User; start?: Vie
     return (
       <View key={b.id} style={s.card}>
         <View style={s.row}><Text style={[s.text, { fontWeight: '700' }]}>{blk ? `${niceDate(blk.fromDate)} – ${niceDate(blk.toDate)}  ·  ${blk.days} days` : `${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${niceDate(b.date)}`}</Text><Text style={s.muted}>{b.ref}</Text></View>
-        <Text style={s.text}>{b.customerName}{b.customerPhone ? `  ·  ${b.customerPhone}` : ''}</Text>
+        <Text style={s.text}>{b.customerName}{b.customerPhone ? `  ·  ${formatPhone(b.customerPhone)}` : ''}</Text>
         <Text style={[s.muted, { marginBottom: 6 }]}>{b.groundName}{blk ? `  ·  ${blk.tournament ? `Tournament: ${blk.tournament.name}  ·  ` : ''}Multi-day, ${hhmm(b.startAt)} – ${hhmm(b.endAt)} daily` : b.formatLabel ? `  ·  ${b.formatLabel}` : ''}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           <Badge tone={b.status === 'confirmed' ? 'ok' : b.status === 'cancelled' || b.status === 'no_show' ? 'danger' : 'muted'} label={b.status.replace('_', ' ')} />

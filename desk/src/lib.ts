@@ -155,7 +155,15 @@ export const qs = (o: Record<string, unknown>) => {
   const p = Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== '');
   return p.length ? '?' + p.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&') : '';
 };
-export const formatPhone = (p?: string | null) => (p ? p.replace(/^\+?91(\d{5})(\d{5})$/, '+91 $1 $2') : '');
+/** Every phone number is shown with its country code: Indian numbers (stored as 10 digits) get +91, others keep their own +code. Same as shared/src/money.ts. */
+export function formatPhone(phone?: string | null): string {
+  const p = (phone ?? '').trim();
+  if (!p) return '';
+  const d = p.replace(/\D/g, '');
+  const m = /^(?:91|0)?(\d{5})(\d{5})$/.exec(d);
+  if (m && (!p.startsWith('+') || d.startsWith('91'))) return `+91 ${m[1]} ${m[2]}`;
+  return p; // already has its own +code, or is not a phone number we can read
+}
 
 // ---------- tiny router (hash based) ----------
 const hashPath = () => location.hash.replace(/^#/, '') || '/';

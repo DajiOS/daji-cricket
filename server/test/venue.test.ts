@@ -149,7 +149,7 @@ test('the booking confirmation tells the customer how to get there and who to ca
   const b = await bookAndPay(h, cust, g.id, dayFromNow(3), '19:00', 1);
   const text = bodyOf(b.id, 'booking_confirmed');
   assert.ok(text.includes(`Directions: ${MAP}`), text);
-  assert.ok(text.includes('Call Hemanshu Patel on 7567156000'), text);
+  assert.ok(text.includes('Call Hemanshu Patel on +91 75671 56000'), text);
 });
 
 test('the 24-hour reminder carries the same directions and contact', async () => {
@@ -158,7 +158,7 @@ test('the 24-hour reminder carries the same directions and contact', async () =>
   assert.equal((await runSweeps(h.cfg)).reminders, 1);
   const text = bodyOf(b.id, 'booking_reminder');
   assert.ok(text.includes(`Directions: ${MAP}`), text);
-  assert.ok(text.includes('7567156000'), text);
+  assert.ok(text.includes('+91 75671 56000'), text);
 });
 
 test('a ground with no location still gets a clean message, with just the contact', async () => {
@@ -169,5 +169,5 @@ test('a ground with no location still gets a clean message, with just the contac
   const text = bodyOf(b.id, 'booking_confirmed');
   assert.ok(!text.includes('Directions:'), text);
   assert.ok(!/undefined|null/.test(text), text);
-  assert.ok(text.includes('Call Hemanshu Patel on 7567156000'), text);
+  assert.ok(text.includes('Call Hemanshu Patel on +91 75671 56000'), text);
 });

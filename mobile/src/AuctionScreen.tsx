@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import { Avatar, BackBar, Badge, Btn, Chip, DateField, Field, Loading, Section, s, todayIST } from './ui';
-import { C, niceDate } from './theme';
+import { C, formatPhone, niceDate } from './theme';
 
 // Tournaments a customer hosts (server/src/auction.ts): teams are picked at a live player auction (players sign up with their
 // own profile, team owners bid in points, the host brings the hammer down), or teams enter directly for a round robin or knockout.
@@ -229,7 +229,7 @@ function DepositCard({ id, dep, pay, busy, act }: { id: string; dep: Deposit; pa
         : dep.settled ? <Text style={s.text}>The ground holds {rs(dep.heldPaise)} of your deposit. You get it back when the tournament ends.</Text>
         : <>
           <Text style={s.text}>{rs(due)} to pay. Players see your tournament once it is paid. You get it back when the tournament ends, unless the matches are not played at Daji.</Text>
-          <Text style={[s.muted, { marginTop: 6 }]}>Pay at the ground, or by UPI{pay?.upiId ? ` to ${pay.upiId} (${pay.payee})` : ''} and send the reference here.{pay ? ` Questions: ${pay.contactName} ${pay.contactPhone}.` : ''}</Text>
+          <Text style={[s.muted, { marginTop: 6 }]}>Pay at the ground, or by UPI{pay?.upiId ? ` to ${pay.upiId} (${pay.payee})` : ''} and send the reference here.{pay ? ` Questions: ${pay.contactName} ${formatPhone(pay.contactPhone)}.` : ''}</Text>
           {!!dep.claimReference && <Text style={s.muted}>You sent reference {dep.claimReference}. The ground will check it.</Text>}
           <Field label="UPI or bank reference" value={ref} onChangeText={setRef} autoCapitalize="characters" />
           <Btn label="I have paid" busy={busy} onPress={async () => { if (ref.trim().length < 4) { setNote('Enter the payment reference.'); return; } setNote(''); const x = await act(async () => { await post(`/api/auctions/${id}/deposit/paid`, { reference: ref.trim() }); return reload(); }); if (x) setRef(''); }} />

@@ -36,7 +36,7 @@ test('customer Ask AI: public answers (price, hours, free slots, policy, contact
   const cust = await h.login('customer');
   const g = (await grounds(h))[0]!;
   assert.match((await ask('What is the cancellation policy?', cust)).body.answer, /24 hours/);
-  assert.match((await ask('Who can I call?', cust)).body.answer, /7567156000/);
+  assert.match((await ask('Who can I call?', cust)).body.answer, /\+91 75671 56000/);
   assert.match((await ask('how much does it cost', cust)).body.answer + JSON.stringify((await ask('how much does it cost', cust)).body.details), /₹/);
   assert.match((await ask('what time do you open', cust)).body.answer + JSON.stringify((await ask('what time do you open', cust)).body.details), /\d\d:\d\d/);
   const free = await ask(`Is ${g.name} free tomorrow?`, cust);

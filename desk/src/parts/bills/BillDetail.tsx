@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApi, post, del, sendFile, download, inr, fmtDate, fmtDateTime, go, can } from '../../lib';
+import { useApi, post, del, sendFile, download, inr, fmtDate, fmtDateTime, go, can, formatPhone } from '../../lib';
 import { useSession } from '../../App';
 import { PageHead, Loading, ErrorBox, Icon, Confirm, useToast, Stat } from '../../ui';
 import { BillChip, DueText, METHOD, RejectModal, type Bill } from './common';
@@ -57,7 +57,7 @@ export function BillDetail({ id }: { id: string }) {
           <div className="card-head"><h3>Details</h3></div>
           <div className="card-pad bills-kv">
             <div><span>Vendor UPI</span><b>{b.vendorUpi ?? '—'}</b></div>
-            <div><span>Vendor phone</span><b>{b.vendorPhone ?? '—'}</b></div>
+            <div><span>Vendor phone</span><b>{formatPhone(b.vendorPhone) || '—'}</b></div>
             <div><span>Notes</span><b>{b.notes ?? '—'}</b></div>
             {d.transaction && <div><span>Bank transaction</span><b><a href="#/transactions">{fmtDate(d.transaction.date)} · {inr(-d.transaction.amountPaise)} · {d.transaction.description}</a></b></div>}
           </div>

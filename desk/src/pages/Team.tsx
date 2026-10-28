@@ -132,7 +132,7 @@ export default function Team({ sub }: { sub: string }) {
               {items.map((m) => (
                 <div className="dl-line" key={m.id}>
                   <div>
-                    <b>{m.name || m.email || m.phone || 'Unnamed member'}</b> <Chip tone={m.active ? 'good' : 'mute'}>{m.active ? 'Active' : 'Switched off'}</Chip> <Chip tone="gold">{roleOf(m, data.presets)}</Chip>{m.readOnly && <> <Chip tone="mute">Read only</Chip></>}{m.mfa && <> <Chip tone="good">2FA on</Chip></>}
+                    <b>{m.name || m.email || formatPhone(m.phone) || 'Unnamed member'}</b> <Chip tone={m.active ? 'good' : 'mute'}>{m.active ? 'Active' : 'Switched off'}</Chip> <Chip tone="gold">{roleOf(m, data.presets)}</Chip>{m.readOnly && <> <Chip tone="mute">Read only</Chip></>}{m.mfa && <> <Chip tone="good">2FA on</Chip></>}
                     <div className="small muted">{[m.email, m.phone && formatPhone(m.phone)].filter(Boolean).join('  ·  ')}</div>
                     <div className="hint">{(m.permissions || []).length} permissions</div>
                   </div>
