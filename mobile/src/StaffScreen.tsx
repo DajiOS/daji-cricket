@@ -86,6 +86,7 @@ export function StaffScreen({ user, start = 'today' }: { user: User; start?: Vie
   if (can(user, 'manage_bookings')) tabs.push(['block', 'Multi-day']);
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
+      {user.readOnly && <View style={[s.card, { marginBottom: 10 }]} accessibilityRole="summary"><Text style={s.h2}>View-only account</Text><Text style={s.muted}>You can open and read everything your role allows. Changes are switched off.</Text></View>}
       <Text style={s.eyebrow}>Bookings</Text><Text style={s.h1}>{view === 'today' ? 'Today' : view === 'upcoming' ? 'Coming up' : view === 'approvals' ? 'Waiting for approval' : view === 'block' ? 'Multi-day booking' : 'Payments to check'}</Text>
       <Segmented items={tabs} value={view} onChange={setView} />
       {view === 'today' && (counts.awaiting > 0 || counts.review > 0) && <Text style={[s.muted, { color: C.gold, marginBottom: 8 }]}>{counts.awaiting} payment{counts.awaiting === 1 ? '' : 's'} to check · {counts.review} to review</Text>}

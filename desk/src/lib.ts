@@ -172,6 +172,8 @@ export interface Me {
   permissions: string[]; businessName: string | null; avatarUrl: string | null;
   /** The assistant's name as this person sees it, and their own pick (null = the business default). A label only. */
   aiName?: string; aiNameOwn?: string | null;
+  /** A team member the owner marked "Read only": every screen opens, but the server refuses changes (READ_ONLY). */
+  readOnly?: boolean;
 }
 // ---------- the assistant's display name ----------
 // Platform AI is the core feature; what each person sees it called is their own pick (Profile › Preferences) or the business default

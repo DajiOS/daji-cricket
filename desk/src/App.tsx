@@ -122,6 +122,7 @@ function Shell({ route }: { route: string }) {
           </div>
         </header>
         <main className="main dcontent">
+          {s.me.readOnly && <div className="card card-pad small no-print" role="status" style={{ marginBottom: 12 }}><b>View-only account.</b> You can open and read everything your role allows. Changes are switched off.</div>}
           {siblings.length > 1 && (
             <div role="tablist" aria-label={here!.label} className="dtabs no-print">
               {siblings.map((p) => <a key={hrefOf(p)} role="tab" aria-selected={active === p} href={`#${hrefOf(p)}`} className={`dchip${active === p ? ' on' : ''}`}>{p.label}</a>)}

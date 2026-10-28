@@ -1,15 +1,17 @@
 // One customer's workspace: who they are and what they agreed to be sent, their bookings, their money with this ground, and what happened.
 // Everything comes from GET /api/staff/customers/:id; the credit balance is the server's ledger, not a sum made here.
 import { useState } from 'react';
-import { Chip, Load, PageHead, Status, Table } from '../../ui';
-import { useApi, fmtDateTime, fmtDay, formatPhone, inr } from '../../lib';
+import { Chip, ErrorBox, Field, Load, Modal, NameFields, PageHead, Status, Table, useToast } from '../../ui';
+import { useApi, fmtDateTime, fmtDay, formatPhone, inr, patch } from '../../lib';
+import { useSession } from '../../App';
+import { errText } from '../admin/common';
 import { LinkedDocs } from '../docs/LinkedDocs';
 import { type Booking, BookingChip, METHOD_LABEL, PAY_STATUS, timeRange } from '../dash/common';
 
 interface Pay { id: string; bookingId: string | null; method: string; status: string; amountPaise: number; createdAt: number }
 interface Enq { id: string; status: string; preferredDate: string | null; message: string | null; createdAt: number; groundName: string | null }
 interface Detail {
-  customer: { id: string; name: string; phone: string | null; email: string | null; consent?: { email: boolean; sms: boolean; whatsapp: boolean } | null };
+  customer: { id: string; name: string; firstName?: string; lastName?: string; phone: string | null; email: string | null; consent?: { email: boolean; sms: boolean; whatsapp: boolean } | null };
   bookings: Booking[]; payments: Pay[]; enquiries: Enq[]; creditBalancePaise: number;
 }
 export const CUSTOMER_TABS: [string, string][] = [['overview', 'Overview'], ['bookings', 'Bookings'], ['money', 'Money'], ['documents', 'Documents'], ['activity', 'Activity']];
@@ -18,11 +20,17 @@ export function CustomerWorkspace({ id, tab: tabIn }: { id: string; tab?: string
   const [d, err, reload, status] = useApi<Detail>(`/api/staff/customers/${encodeURIComponent(id)}`);
   const [tab, setTab] = useState(CUSTOMER_TABS.some(([k]) => k === tabIn) ? tabIn! : 'overview');
   const base = `#/customers/${encodeURIComponent(id)}`;
+  const { me } = useSession();
+  const owner = me.role === 'owner' || me.role === 'super_admin';
+  const [editing, setEditing] = useState(false);
+  const toast = useToast();
   return (
     <div className="stack">
       <PageHead eyebrow="Customer" title={d?.customer.name ?? (err ? 'Customer' : 'Loading…')} lede={d ? [d.customer.phone && formatPhone(d.customer.phone), d.customer.email].filter(Boolean).join(' · ') : undefined}>
+        {owner && d && <button className="btn ghost" onClick={() => setEditing(true)}>Edit</button>}
         <a className="btn ghost" href="#/customers">All customers</a>
       </PageHead>
+      {editing && d && <EditCustomer c={d.customer} onClose={() => setEditing(false)} onSaved={(msg) => { setEditing(false); toast(msg); reload(); }} />}
       <div role="tablist" aria-label="Customer workspace" className="dtabs ws-tabs">
         {CUSTOMER_TABS.map(([k, l]) => {
           const href = k === 'overview' ? base : `${base}/${k}`;
@@ -88,4 +96,35 @@ function Activity({ d }: { d: Detail }) {
   ].sort((a, b) => b.at - a.at);
   if (!rows.length) return <div data-state="empty" className="small muted">Nothing yet.</div>;
   return <ol className="timeline">{rows.map((r) => <li key={r.key} className="small"><span className="muted">{fmtDateTime(r.at)}</span> · {r.href ? <a href={r.href}>{r.text}</a> : r.text}</li>)}</ol>;
+}
+
+/** The owner corrects a customer's name, email, mobile or sets a new password (which ends every sign-in they have). */
+function EditCustomer({ c, onClose, onSaved }: { c: Detail['customer']; onClose: () => void; onSaved: (msg: string) => void }) {
+  const [f, setF] = useState({ first: c.firstName ?? '', last: c.lastName ?? '', email: c.email ?? '', phone: c.phone ?? '', password: '' });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k: 'email' | 'phone' | 'password') => (e: any) => setF((s) => ({ ...s, [k]: e.target.value }));
+  async function save() {
+    if (!f.first.trim()) { setErr('Type their first name.'); return; }
+    setErr(null); setBusy(true);
+    const body: Record<string, unknown> = {};
+    if (f.first.trim() !== (c.firstName ?? '') || f.last.trim() !== (c.lastName ?? '')) { body.firstName = f.first.trim(); body.lastName = f.last.trim(); }
+    if (f.email.trim() && f.email.trim() !== (c.email ?? '')) body.email = f.email.trim();
+    if (f.phone.trim() && f.phone.trim() !== (c.phone ?? '')) body.phone = f.phone.trim();
+    if (f.password) body.password = f.password;
+    if (!Object.keys(body).length) { onClose(); return; }
+    try { await patch(`/api/staff/customers/${encodeURIComponent(c.id)}`, body); onSaved(f.password ? 'Saved. Their old sign-ins have ended: they sign in again with the new password.' : 'Saved'); }
+    catch (e) { setErr(errText(e)); setBusy(false); }
+  }
+  return (
+    <Modal title={`Edit ${c.name}`} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
+      <div className="form-grid">
+        <NameFields first={f.first} last={f.last} onFirst={(v) => setF((s) => ({ ...s, first: v }))} onLast={(v) => setF((s) => ({ ...s, last: v }))} required />
+        <Field label="Email"><input className="inp" type="email" value={f.email} onChange={set('email')} /></Field>
+        <Field label="Mobile number"><input className="inp" type="tel" placeholder="10 digit mobile number" value={f.phone} onChange={set('phone')} /></Field>
+        <Field label="Set a new password" hint="Leave empty to keep their password. A new one signs them out everywhere."><input className="inp" type="text" autoComplete="new-password" value={f.password} onChange={set('password')} /></Field>
+      </div>
+      <div style={{ marginTop: 10 }}><ErrorBox msg={err} /></div>
+    </Modal>
+  );
 }
