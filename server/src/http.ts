@@ -5,6 +5,7 @@ import type { Role } from '@daji/shared';
 import { originAllowed, type Config } from './config.ts';
 import { authenticate, type UserRow } from './auth.ts';
 import { refuseIfReadOnly } from './readOnly.ts';
+import { tenantOfHost } from './businesses.ts';
 import { HttpError, forbidden } from './errors.ts';
 import { now } from './clock.ts';
 import { serveWeb } from './site.ts';
@@ -225,7 +226,10 @@ export function createApp(cfg: Config, router: Router): Server {
         if (method !== 'GET' && method !== 'HEAD') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use GET');
         // Validate any % escapes before the static layer sees the path.
         safeDecode(url.pathname);
-        const r = serveWeb(cfg, url, typeof req.headers['if-none-match'] === 'string' ? req.headers['if-none-match'] : undefined);
+        // a customer business's own address (its domain, or <slug>.<platform address>) shows only its booking page
+        let tenant = false;
+        try { tenant = !!tenantOfHost(req.headers.host, cfg.platformHost); } catch { /* no database yet: the main site */ }
+        const r = serveWeb(cfg, url, typeof req.headers['if-none-match'] === 'string' ? req.headers['if-none-match'] : undefined, tenant);
         status = r.status;
         send(res, method === 'HEAD' ? { ...r, raw: undefined, body: undefined } : r, cors, sitePolicy(cfg));
         return;

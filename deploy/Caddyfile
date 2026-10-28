@@ -1,3 +1,11 @@
+# Customer businesses' own addresses (white-label): their own domain, or <slug>.<PLATFORM_HOST>. A certificate is made only when
+# the server says the address belongs to a business (/api/platform/domain-check), so pointing any other name here gets nothing.
+{
+	on_demand_tls {
+		ask http://api:4000/api/platform/domain-check
+	}
+}
+
 # Caddy gets and renews the HTTPS certificate by itself once the DNS record for the host points at this server.
 {$API_HOST} {
 	encode zstd gzip
@@ -22,6 +30,17 @@ www.{$SITE_HOST:dajicricket.com} {
 }
 {$SITE_HOST:dajicricket.com} {
 	redir https://www.{$SITE_HOST:dajicricket.com}{uri} permanent
+}
+
+# Every other HTTPS address: a customer business's booking page, once domain-check says it is one (see the top of this file).
+https:// {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	reverse_proxy api:4000
+	header -Server
+	log
 }
 
 # The media CDN (deploy/CDN.md) fetches photos, videos and the background films from this server over plain HTTP, by the server's

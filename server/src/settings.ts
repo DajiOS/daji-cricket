@@ -6,6 +6,7 @@ import { normalizePhone } from './input.ts';
 import { SITE_DESIGN_CHOICES } from './packs.ts';
 import { DESIGN_PACES } from './design.ts';
 import { DEFAULT_AI_NAME, checkAiName } from './aiNames.ts';
+import { SOFTWARE_OWNER } from '@daji/shared';
 
 export const DEFAULT_SETTINGS: GlobalSettings = {
   razorpayEnabled: true,
@@ -69,6 +70,10 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   voiceShortcutsEnabled: true,
   /** Customers see free slots without prices and send a pricing enquiry for a slot instead of paying online (priceOnEnquiry.ts). The saved prices are kept. */
   pricesOnEnquiry: false,
+  /** The company that owns and runs the software. Daji Cricket Ground and every other business are its customers. Software owner only. */
+  softwareOwnerName: SOFTWARE_OWNER.name,
+  /** The customer business the main web address and app show. Empty: every business, as before there was more than one. Software owner only. */
+  mainSiteBusinessId: '',
 };
 
 /** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
@@ -126,6 +131,10 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
     } else if (k === 'upiId') {
       if (typeof v !== 'string' || (v !== '' && !/^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/.test(v))) fields.push({ field: k, message: 'Must look like name@bank' });
       else next[k] = v;
+    } else if (k === 'mainSiteBusinessId') {
+      if (typeof v !== 'string' || (v !== '' && !one("SELECT 1 FROM users WHERE id = ? AND role = 'owner'", v))) fields.push({ field: k, message: 'Must be one of the customer businesses, or empty for all' }); else next[k] = v;
+    } else if (k === 'softwareOwnerName') {
+      if (typeof v !== 'string' || v.trim().length < 2 || v.trim().length > 60) fields.push({ field: k, message: 'Between 2 and 60 characters' }); else next[k] = v.trim();
     } else if (k === 'upiPayee') {
       if (typeof v !== 'string' || v.trim().length < 1 || v.length > 60) fields.push({ field: k, message: 'Between 1 and 60 characters' }); else next[k] = v.trim();
     } else if (k === 'contactName' || k === 'academyName' || k === 'academyRunBy') {

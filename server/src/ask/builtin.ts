@@ -4,13 +4,15 @@ import { addDays, dayOfWeek, istDate, istMidnight, monthRange, DAY } from '../ti
 import { addMonths, niceDay, niceRange, parseRange, type Span } from './dates.ts';
 import * as T from './tools.ts';
 import { rulesIn } from '../lawUpdates.ts';
+import { one } from '../db.ts';
+import { getSettings } from '../settings.ts';
 
 // The built-in answerer: reads a question, works out what is being asked and for which dates, asks the software through
 // the same tools as the Reports tab, and writes the answer in plain words. No outside service is involved.
 // Every answer says which dates and which basis it used, so a wrong reading is easy to spot.
 
 export type Intent =
-  | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
+  | 'help' | 'about' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
   | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'unknown';
 
 export interface Detail { label: string; text: string }
@@ -28,6 +30,7 @@ export interface Built {
 }
 
 const RULES: [Intent, RegExp][] = [
+  ['about', /software owner|who (owns|makes|made|built|builds|runs|developed|provides|supplies) (this|the|our) (software|apps?|system|platform|desk)|whose (software|app|platform|system)|(which|what) (company|business) (owns|makes|runs|provides) (this|the) (software|apps?|platform|system)|(which|what) business (is this|am i (in|on|using))|are we (a|the) customer/],
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?|how does (this|it) work|what (do|can) you (do|know))\b/],
   ['balance_sheet', /balance ?sheet|\bassets\b|liabilit|net worth|\bequity\b|what (do )?(we|i) own/],
   ['pnl', /profit (and|&|n|\/) ?loss|\bp ?(&|and|n|\/) ?l\b|\bpnl\b|income statement|how (much )?(did|do|have) (we|i) (make|made|earn|earned|do|done)|how are we doing|how.?s (the )?business|how is (the )?business|financial summary|financial position/],
@@ -55,7 +58,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'approvals_why', 'approvals_report', 'approvals_waiting', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'about', 'approvals_why', 'approvals_report', 'approvals_waiting', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -129,7 +132,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 }
 
 const NAMES: Record<Intent, string> = {
-  help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
+  help: 'Help', about: 'About this software', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
   gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
@@ -154,6 +157,7 @@ export function answerBuiltin(input: AskInput): Built {
   const base = (i: Intent, answer: string, extra: Partial<Built> = {}): Built => ({ intent: i, answer, details: [], understood: NAMES[i], period: null, open: null, notes: [], suggestions: [], ...extra });
 
   if (intent === 'help') return help(ctx);
+  if (intent === 'about') return about(ctx);
   if (intent === 'compliance') return complianceAnswer(ctx, question, base);
   if (intent === 'unknown') {
     const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
@@ -460,6 +464,17 @@ function complianceAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answer
     details: due.slice(0, 10).map((r) => ({ label: r.title, text: `${r.status} · next review ${niceDay(r.nextReviewOn)}` })), notes,
     suggestions: ['Any law updates waiting?'],
   });
+}
+
+/** Who owns the software and which customer business the person is working in. Names only; no figures. */
+function about(ctx: T.Ctx): Built {
+  const owner = getSettings().softwareOwnerName;
+  const b = one<{ business_name: string | null; name: string }>('SELECT business_name, name FROM users WHERE id = ?', ctx.ownerId);
+  const biz = b?.business_name || b?.name || 'this business';
+  return {
+    intent: 'about', answer: `${owner} owns and runs this software. ${biz} is a customer business on ${owner}. ${biz}'s bookings, customers, team and money are kept separate from every other business on it, and I only read ${biz}'s records.`,
+    details: [{ label: 'Software owner', text: owner }, { label: 'Customer business', text: biz }], understood: NAMES.about, period: null, open: null, notes: [], suggestions: [],
+  };
 }
 
 function help(ctx: T.Ctx): Built {

@@ -495,6 +495,8 @@ export interface PublicConfig {
   voiceEnabled?: boolean;
   /** Prices are given on enquiry: slots show no price, and picking one sends a pricing enquiry instead of a booking. */
   pricesOnEnquiry?: boolean;
+  /** Who owns and runs the software ("Daji OS"). The business customers book with is `brand` and each ground's owner. */
+  softwareOwner?: string;
   /** The Guppi booking assistant (any language) is switched on. Clients show its screen only when this is true. */
   guppiBookingEnabled?: boolean;
   /** The owner has switched the refundable security deposit on: screens show it separately from the booking advance. */
@@ -563,6 +565,10 @@ export interface GlobalSettings {
   voiceShortcutsEnabled: boolean;
   /** Customers see free slots but no prices, and send a pricing enquiry for a slot instead of booking online. The prices stay saved for the desk. */
   pricesOnEnquiry: boolean;
+  /** The name of the company that owns and runs the software ("Daji OS"). Every business on it is a customer. Only the software owner changes it. */
+  softwareOwnerName: string;
+  /** The customer business the main web address shows (an owner's id); empty shows every business. Software owner only. */
+  mainSiteBusinessId: string;
 }
 
 export interface AuditEntry {
