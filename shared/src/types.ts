@@ -413,6 +413,10 @@ export interface Enquiry {
   phone: string;
   email: string | null;
   preferredDate: string | null;
+  /** The slot a pricing enquiry is about: its start time, how many slots, and the session's name. */
+  preferredTime?: string | null;
+  preferredSlots?: number | null;
+  preferredLabel?: string | null;
   players: number | null;
   message: string;
   status: EnquiryStatus;
@@ -484,6 +488,8 @@ export interface PublicConfig {
   aiName?: string;
   /** Voice shortcuts are allowed for this business (Settings). Each person also turns them on for themselves. */
   voiceEnabled?: boolean;
+  /** Prices are given on enquiry: slots show no price, and picking one sends a pricing enquiry instead of a booking. */
+  pricesOnEnquiry?: boolean;
   /** The Guppi booking assistant (any language) is switched on. Clients show its screen only when this is true. */
   guppiBookingEnabled?: boolean;
   /** The owner has switched the refundable security deposit on: screens show it separately from the booking advance. */
@@ -550,6 +556,8 @@ export interface GlobalSettings {
   aiAssistantName: string;
   /** Voice shortcuts (Siri, phone assistant) allowed for this business. Speech is processed by the phone maker, so the owner can switch it off for everyone. */
   voiceShortcutsEnabled: boolean;
+  /** Customers see free slots but no prices, and send a pricing enquiry for a slot instead of booking online. The prices stay saved for the desk. */
+  pricesOnEnquiry: boolean;
 }
 
 export interface AuditEntry {

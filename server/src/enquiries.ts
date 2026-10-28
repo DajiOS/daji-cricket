@@ -11,10 +11,11 @@ import { notify, sendAlert } from './notifications.ts';
 import { getSettings } from './settings.ts';
 import { createStaffBlock, createStaffBooking, parseBlock, parseWalkIn, readName } from './hold.ts';
 import { isClosedDate } from './closures.ts';
+import './priceOnEnquiry.ts'; // registers the enquiry slot columns
 
 interface EnquiryRow {
   id: string; owner_id: string; ground_id: string | null; customer_id: string | null; name: string; phone: string; email: string | null; preferred_date: string | null;
-  players: number | null; message: string; status: EnquiryStatus; closed_reason: string | null; booking_id: string | null; created_at: number; updated_at: number;
+  players: number | null; message: string; status: EnquiryStatus; preferred_time?: string | null; preferred_slots?: number | null; preferred_label?: string | null; closed_reason: string | null; booking_id: string | null; created_at: number; updated_at: number;
 }
 
 const row = (id: string) => one<EnquiryRow>('SELECT * FROM enquiries WHERE id = ?', id);
@@ -29,7 +30,7 @@ function view(r: EnquiryRow, forCustomer: boolean): Enquiry {
   }));
   return {
     id: r.id, groundId: r.ground_id, groundName: g?.name ?? null, ownerId: r.owner_id, customerId: r.customer_id, name: r.name, phone: r.phone, email: r.email,
-    preferredDate: r.preferred_date, players: r.players, message: r.message, status: r.status, closedReason: r.closed_reason, bookingId: r.booking_id,
+    preferredDate: r.preferred_date, preferredTime: r.preferred_time ?? null, preferredSlots: r.preferred_slots ?? null, preferredLabel: r.preferred_label ?? null, players: r.players, message: r.message, status: r.status, closedReason: r.closed_reason, bookingId: r.booking_id,
     quotations, notes, createdAt: r.created_at, updatedAt: r.updated_at,
   };
 }
@@ -45,14 +46,19 @@ export function createEnquiry(user: UserRow | null, body: unknown): Enquiry {
   const kind = v.oneOf('kind', ['ground', 'academy'] as const);
   const players = v.int('players', { min: 1, max: 500 });
   const message = v.str('message', { required: true, min: 5, max: 2000 });
+  // a pricing enquiry names the slot it is about (prices on enquiry): the start time, how many slots and the session's name
+  const preferredTime = v.str('preferredTime', { max: 5 });
+  const preferredSlots = v.int('preferredSlots', { min: 1, max: 24 });
+  const preferredLabel = v.str('preferredLabel', { max: 80 });
   v.done();
+  if (preferredTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(preferredTime)) throw new HttpError(400, 'VALIDATION_FAILED', 'The slot time must look like 18:00', { fields: [{ field: 'preferredTime', message: 'A time like 18:00' }] });
   if (kind === 'academy' && preferredDate && isClosedDate(preferredDate, 'academy')) throw new HttpError(409, 'DATE_CLOSED', 'The academy is not taking enquiries for that day. Please pick another day.');
   const g = getGroundOr404(groundId!);
   const id = newId('enq');
   const t = now();
   tx(() => {
-    run(`INSERT INTO enquiries(id, owner_id, ground_id, customer_id, name, phone, email, preferred_date, players, message, status, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,'new',?,?)`,
-      id, g.owner_id, g.id, user?.role === 'customer' ? user.id : null, name!, phone!, email ?? null, preferredDate ?? null, players ?? null, message!, t, t);
+    run(`INSERT INTO enquiries(id, owner_id, ground_id, customer_id, name, phone, email, preferred_date, preferred_time, preferred_slots, preferred_label, players, message, status, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?)`,
+      id, g.owner_id, g.id, user?.role === 'customer' ? user.id : null, name!, phone!, email ?? null, preferredDate ?? null, preferredTime ?? null, preferredSlots ?? null, preferredLabel ?? null, players ?? null, message!, t, t);
     audit(user ? { id: user.id, role: user.role } : { id: null, role: 'anonymous' }, 'enquiry.create', 'enquiry', id, { groundId: g.id }, g.owner_id);
   });
   if (user?.role === 'customer') notify(user.id, 'enquiry_received', { name: name });
@@ -200,7 +206,9 @@ export function convertEnquiry(user: UserRow, id: string, body: unknown): Enquir
   const r = access(user, id, true);
   open(r);
   const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
-  const input = parseWalkIn({ ...b, groundId: b.groundId ?? r.ground_id, customer: { name: r.name, phone: r.phone, email: r.email ?? undefined } });
+  // the slot the customer asked about is the booking's slot unless staff pick another
+  const slot = { ...(r.preferred_date ? { date: r.preferred_date } : {}), ...(r.preferred_time ? { startTime: r.preferred_time } : {}), ...(r.preferred_slots ? { slots: r.preferred_slots } : {}) };
+  const input = parseWalkIn({ ...slot, ...b, groundId: b.groundId ?? r.ground_id, customer: { name: r.name, phone: r.phone, email: r.email ?? undefined } });
   const quotationId = typeof b.quotationId === 'string' ? b.quotationId : undefined;
   let total: number | undefined;
   if (quotationId) {

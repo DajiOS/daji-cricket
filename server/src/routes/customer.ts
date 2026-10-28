@@ -1,3 +1,4 @@
+import { pricesFor, refuseOnlineBooking } from '../priceOnEnquiry.ts';
 import { myDashboard } from '../mydash.ts';
 import { Router, ok, created } from '../http.ts';
 import { U, page } from './helpers.ts';
@@ -160,15 +161,16 @@ export function customerRoutes(r: Router): void {
     return ok({ code: promo.code, label: promo.label, discountPaise, totalPaise: plan.totalPaise - discountPaise, fullPricePaise: plan.totalPaise });
   }, { auth: ['customer'] });
   // What holding this selection would take now (advance or full price, promo, account credit), from the same functions as the hold. Signed out: no promo or credit.
-  r.post('/api/bookings/quote', (c) => ok({ quote: quoteHold(c.user ?? null, c.json()) }));
+  r.post('/api/bookings/quote', (c) => { refuseOnlineBooking(c.user); return ok({ quote: quoteHold(c.user ?? null, c.json()) }); });
   r.post('/api/bookings', async (c) => {
+    refuseOnlineBooking(c.user);
     const body = c.json();
     const viaOption = !!body && typeof body === 'object' && 'optionId' in (body as object);
     return created(await (viaOption ? holdFromOption(c.cfg, U(c), body) : holdSlots(c.cfg, U(c), body)));
   }, { idempotent: true, auth: ['customer'] });
   r.post('/api/availability/options', (c) => {
     const q = parseOptionRequest(c.json());
-    return ok(searchOptions(c.cfg, U(c), q, q.max));
+    return ok(pricesFor(c.user, searchOptions(c.cfg, U(c), q, q.max)));
   }, { auth: ['customer', 'owner', 'staff'] });
 
   r.get('/api/bookings', (c) => {

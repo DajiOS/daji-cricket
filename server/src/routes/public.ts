@@ -1,3 +1,4 @@
+import { pricesFor } from '../priceOnEnquiry.ts';
 import { MAX_DAYS_AHEAD } from '../hold.ts';
 import { BRAND, type PublicConfig } from '@daji/shared';
 import { Router, ok, created } from '../http.ts';
@@ -77,19 +78,21 @@ export function publicRoutes(r: Router): void {
       mediaBase: c.cfg.mediaCdn || null,
       aiName: s.aiAssistantName,
       voiceEnabled: s.voiceShortcutsEnabled,
-      guppiBookingEnabled: s.guppiAssistEnabled,
+      pricesOnEnquiry: s.pricesOnEnquiry,
+      // the booking assistant books and quotes online, so it rests while prices are given on enquiry
+      guppiBookingEnabled: s.guppiAssistEnabled && !s.pricesOnEnquiry,
       securityDepositEnabled: s.securityDepositEnabled,
       customerRescheduleEnabled: s.customerRescheduleEnabled && s.rescheduleCutoffHours !== null && s.rescheduleMaxMoves !== null,
     };
     return ok(cfg);
   });
 
-  r.get('/api/grounds', (c) => ok({ items: listGrounds({ city: c.query.get('city') ?? undefined, q: c.query.get('q') ?? undefined }) }));
+  r.get('/api/grounds', (c) => ok({ items: pricesFor(c.user, listGrounds({ city: c.query.get('city') ?? undefined, q: c.query.get('q') ?? undefined })) }));
 
   r.get('/api/grounds/:id', (c) => {
     const g = getGroundOr404(c.params.id!);
     if (!g.active) throw new HttpError(404, 'NOT_FOUND', 'Ground not found');
-    return ok(toGround(g));
+    return ok(pricesFor(c.user, toGround(g)));
   });
 
   r.get('/api/grounds/:id/availability', (c) => {
@@ -97,7 +100,7 @@ export function publicRoutes(r: Router): void {
     if (!g.active) throw new HttpError(404, 'NOT_FOUND', 'Ground not found');
     const date = c.query.get('date');
     if (!isValidDate(date)) throw new HttpError(400, 'VALIDATION_FAILED', 'Send a date like 2026-10-21', { fields: [{ field: 'date', message: 'Must be a date like 2026-10-21' }] });
-    return ok(availability(g, date));
+    return ok(pricesFor(c.user, availability(g, date)));
   });
 
   r.post('/api/enquiries', (c) => created(createEnquiry(c.user?.role === 'customer' ? c.user : null, c.json())), { rate: 'auth' });

@@ -154,6 +154,7 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
     case 'price': {
       const list = named ? [named] : grounds;
       if (!list.length) return out('There are no grounds listed at the moment.');
+      if (s.pricesOnEnquiry) return out('Prices are given on enquiry. Pick a free slot on the Book page and send an enquiry for it, and the ground will reply with the price.', { open: 'book' });
       const parts = list.map((g) => {
         const wk = g.weekendPricePaise && g.weekendPricePaise !== g.pricePaise ? `, ${formatPaise(g.weekendPricePaise)} at weekends` : '';
         const ev = g.eveningSurchargePaise ? `, plus ${formatPaise(g.eveningSurchargePaise)} from ${hhmm(g.eveningFrom)}` : '';
@@ -179,7 +180,7 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
       const pick = eve ? free.filter((x) => x.time >= g0.eveningFrom) : free;
       if (!pick.length) return out(`${g0.name} has no free${eve ? ' evening' : ''} slots on ${niceDay(date)}.`, { open: 'book', suggestions: [`Is ${g0.name} free on ${niceDay(addDays(date, 1), false)}?`] });
       const shown = pick.slice(0, 12).map((x) => x.time).join(', ');
-      return out(`${g0.name} has ${pick.length} free ${pick.length === 1 ? 'slot' : 'slots'} on ${niceDay(date)}${eve ? ' in the evening' : ''}: ${shown}${pick.length > 12 ? ' and more' : ''}. From ${formatPaise(Math.min(...pick.map((x) => x.pricePaise)))} an hour.`, { open: 'book' });
+      return out(`${g0.name} has ${pick.length} free ${pick.length === 1 ? 'slot' : 'slots'} on ${niceDay(date)}${eve ? ' in the evening' : ''}: ${shown}${pick.length > 12 ? ' and more' : ''}.${s.pricesOnEnquiry ? ' Pick one on the Book page and send an enquiry for its price.' : ` From ${formatPaise(Math.min(...pick.map((x) => x.pricePaise)))} an hour.`}`, { open: 'book' });
     }
     case 'directions': {
       if (!g0) return out('There are no grounds listed at the moment.');

@@ -3,7 +3,7 @@ export interface User { id: string; role: 'customer' | 'owner' | 'staff' | 'supe
   /** The assistant's name as this person sees it (their pick, else the business default), their own pick, and a notice when it was reserved later. A label only. */
   aiName?: string; aiNameOwn?: string | null; aiNameNotice?: string | null }
 export type Ball = 'leather' | 'tennis' | 'practice';
-export interface Ground { id: string; name: string; city: string; address?: string; pricePaise: number; weekendPricePaise: number | null; amenities?: string[]; directionsUrl?: string | null; maxSlots?: number; rates?: { id: string; label: string; ball: Ball; mode: 'fixed' | 'hourly' }[]; ratesNote?: string | null }
+export interface Ground { id: string; name: string; city: string; address?: string; pricePaise: number; weekendPricePaise: number | null; amenities?: string[]; directionsUrl?: string | null; maxSlots?: number; rates?: { id: string; label: string; ball: Ball; mode: 'fixed' | 'hourly' }[]; ratesNote?: string | null; slotMinutes?: number }
 /** One line of the price list for a day: a fixed session, or an hourly price with its own hours. */
 export interface RateOption { ruleId: string; label: string; ball: Ball; mode: 'fixed' | 'hourly'; state: Slot['state']; time: string; endTime: string; start: number; pricePaise: number; proRated?: boolean; hoursLeft?: number; slots?: Slot[]; bundleDays?: number }
 export interface Availability { slots: Slot[]; rates?: RateOption[]; closed?: boolean }
@@ -29,7 +29,7 @@ export interface HoldQuote {
   creditUsedPaise: number; dueNowPaise: number;
 }
 export interface HoldResponse { booking: Booking; payment: PaymentInstructions; creditAppliedPaise: number; series?: { id: string; frequency: RepeatFrequency; created: number; skipped: { date: string; reason: string }[] } }
-export interface AppConfig { freeCancelHours: number; maxDaysAhead: number; contact: { name: string; phone: string }; demoMode: boolean; bookingsOpenFrom?: string; bookingsCloseFrom?: string; closedDates?: { ground: string[]; practice: string[]; academy: string[] }; autoDebitEnabled?: boolean; autoDebitHoursBefore?: number; guppiBookingEnabled?: boolean; securityDepositEnabled?: boolean; customerRescheduleEnabled?: boolean }
+export interface AppConfig { freeCancelHours: number; maxDaysAhead: number; contact: { name: string; phone: string }; demoMode: boolean; bookingsOpenFrom?: string; bookingsCloseFrom?: string; closedDates?: { ground: string[]; practice: string[]; academy: string[] }; autoDebitEnabled?: boolean; autoDebitHoursBefore?: number; guppiBookingEnabled?: boolean; pricesOnEnquiry?: boolean; securityDepositEnabled?: boolean; customerRescheduleEnabled?: boolean }
 export interface Dashboard {
   spentPaise: number; sessions: number; slots: number; cancelled: number; noShows: number; paidAheadPaise: number; upcoming: number; creditPaise: number; firstPlayed: string | null;
   byGround: { groundId: string; groundName: string; sessions: number; spentPaise: number }[]; byMonth: { month: string; sessions: number; spentPaise: number }[];

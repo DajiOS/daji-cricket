@@ -77,6 +77,23 @@ function Calendar({ s }: { s: { bookingsOpenFrom: string | null; bookingsCloseFr
   );
 }
 
+/** Prices on enquiry: customers see free slots without prices and send the slot to the ground, which replies with the price from Enquiries. */
+function PriceMode({ on: start }: { on: boolean }) {
+  const [on, setOn] = useState(start);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  async function flip(v: boolean) {
+    setMsg(null);
+    try { await put('/api/admin/settings', { pricesOnEnquiry: v }); setOn(v); setMsg({ ok: true, text: v ? 'Saved. Customers see no prices and send an enquiry for a slot.' : 'Saved. Customers see the prices and book and pay online.' }); } catch (e) { setMsg({ ok: false, text: errText(e) }); }
+  }
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <label className="row" style={{ gap: 8 }}><input type="checkbox" checked={on} onChange={(e) => flip(e.target.checked)} /> <b>Prices on enquiry</b></label>
+      <div className="hint" style={{ margin: 0 }}>On: the website, the app and the assistant show free slots but no prices. A customer picks a slot and sends it as an enquiry; you reply with the price from Enquiries and confirm it as a booking. Your saved prices stay in Prices and timings and are used on the desk. Off: customers see the prices and book and pay online.</div>
+      {msg && <div className={msg.ok ? 'ok-text' : 'err-text'}>{msg.text}</div>}
+    </div>
+  );
+}
+
 export default function Booking() {
   const [s, error] = useApi<any>('/api/admin/settings');
   if (error) return <ErrorBox msg={error} />;
@@ -87,6 +104,7 @@ export default function Booking() {
         <DateRow label="Bookings open from" field="bookingsOpenFrom" value={s.bookingsOpenFrom} okText={(v) => `Saved. Customers can book from ${fmtDate(v)}.`} clearText="Saved. Bookings are open now." />
         <DateRow label="Bookings closed from" field="bookingsCloseFrom" value={s.bookingsCloseFrom} okText={(v) => `Saved. Customers cannot book on or after ${fmtDate(v)} until you clear this.`} clearText="Saved. No closing day: bookings are open as far ahead as allowed." />
       </Panel>
+      <Panel title="Prices"><PriceMode on={!!s.pricesOnEnquiry} /></Panel>
       <Panel title="Switch days on or off"><Calendar s={s} /></Panel>
     </div>
   );
