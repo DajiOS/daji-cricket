@@ -1,39 +1,30 @@
 import { PageHead } from '../ui';
-import { useSession } from '../App';
 import { sectionOf } from '../parts/admin/common';
 import Prices from '../parts/admin/Prices';
 import Booking from '../parts/admin/Booking';
 import Payments from '../parts/admin/Payments';
 import Website from '../parts/admin/Website';
 import Festivals from '../parts/admin/Festivals';
-import Backups from '../parts/admin/Backups';
-import People from '../parts/admin/People';
-import { Connections, Services } from '../parts/admin/Platform';
+import { Connections } from '../parts/admin/Platform';
 import GoLive from '../parts/admin/GoLive';
 
-const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['backups', 'Backups'], ['people', 'People'], ['connections', 'Connections'], ['services', 'Services'], ['golive', 'Go-live check']];
-
-/** These tabs call software-owner-only endpoints, so the ground owner is not shown them (they would only say "no access"). */
-const SOFTWARE_OWNER_ONLY = ['backups', 'people', 'services'];
+// The ground's own settings. People, Services and Backups are the software owner's, so they live on the Platform page only; their old
+// addresses here open them there (routes.ts, MERGED). Connections stays here for everyone (Settings, Connections: CLAUDE.md).
+const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['connections', 'Connections'], ['golive', 'Go-live check']];
 
 export default function Settings({ sub }: { sub: string }) {
-  const { me } = useSession();
-  const tabs = TABS.filter(([k]) => me.role === 'super_admin' || !SOFTWARE_OWNER_ONLY.includes(k));
   // Admin, Settings opens on a list of every setting, rather than on prices (which already has its own menu item)
-  if (!sub.split('/')[0]) return <Hub tabs={tabs} />;
-  const tab = sectionOf(sub, tabs.map(([k]) => k));
+  if (!sub.split('/')[0]) return <Hub tabs={TABS} />;
+  const tab = sectionOf(sub, TABS.map(([k]) => k));
   return (
     <div className="stack">
-      <PageHead eyebrow="Settings" title={tabs.find(([k]) => k === tab)?.[1] ?? 'Settings'} />
+      <PageHead eyebrow="Settings" title={TABS.find(([k]) => k === tab)?.[1] ?? 'Settings'} />
       {tab === 'prices' && <Prices />}
       {tab === 'booking' && <Booking />}
       {tab === 'payments' && <Payments />}
       {tab === 'website' && <Website />}
       {tab === 'festivals' && <Festivals />}
-      {tab === 'backups' && <Backups />}
-      {tab === 'people' && <People />}
       {tab === 'connections' && <Connections />}
-      {tab === 'services' && <Services />}
       {tab === 'golive' && <GoLive />}
     </div>
   );
@@ -45,10 +36,7 @@ const ABOUT: Record<string, string> = {
   payments: 'Razorpay online payments, UPI AutoPay and who customers contact about money.',
   website: 'The website design pack and how it looks.',
   festivals: 'Festival looks and offers that switch on by themselves on the day.',
-  backups: 'Copies of the data and restoring one.',
-  people: 'Every login on the platform.',
   connections: 'The services the server is connected to, and what each one still needs.',
-  services: 'Outside services the platform pays for.',
   golive: 'Everything to tick off before the ground opens for real bookings.',
 };
 

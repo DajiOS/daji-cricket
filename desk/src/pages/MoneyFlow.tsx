@@ -55,9 +55,9 @@ export default function MoneyFlow({ sub }: { sub: string }) {
         <div className="flow">
           <Stage step={1} title="Earned" tone="blue" total={c.earned.totalPaise} href="/bookings" lines={[['Sessions booked this month', c.earned.bookingsPaise], ['Of these, played so far (as in the P&L)', c.earned.playedPaise ?? 0], ['Memberships sold', c.earned.membershipsPaise], ['Academy fees billed', c.earned.academyPaise]]} />
           <Gap label="still to collect" value={c.toCollectPaise} hint="Booking balances and academy fees for this month that are not paid yet" />
-          <Stage step={2} title="Collected" tone="teal" total={c.collected.totalPaise} href="/bookings/payments" lines={[['Booking payments', c.collected.bookingsPaise], ['Memberships', c.collected.membershipsPaise], ['Academy fees', c.collected.academyPaise]]} />
+          <Stage step={2} title="Collected" tone="teal" total={c.collected.totalPaise} href="/approvals/upi" lines={[['Booking payments', c.collected.bookingsPaise], ['Memberships', c.collected.membershipsPaise], ['Academy fees', c.collected.academyPaise]]} />
           <Gap label="not yet in the books" value={c.collected.totalPaise - c.banked.totalPaise} hint="Collected this month but not yet seen in an imported bank statement or the cash book" />
-          <Stage step={3} title="Banked" tone="green" total={c.banked.totalPaise} href="/bank" lines={[['Into the bank', c.banked.bankPaise], ['Into the cash book', c.banked.cashPaise]]} />
+          <Stage step={3} title="Banked" tone="green" total={c.banked.totalPaise} href="/transactions/import" lines={[['Into the bank', c.banked.bankPaise], ['Into the cash book', c.banked.cashPaise]]} />
           <Gap label="kept this month" value={c.banked.totalPaise - c.paidOut.totalPaise} hint="Money in less money out this month" />
           <Stage step={4} title="Paid out" tone="amber" total={c.paidOut.totalPaise} href="/bills" lines={[['Bills paid', c.paidOut.billsPaise], ['Salaries paid', c.paidOut.payrollPaise], ['Other spending in the books', c.paidOut.otherPaise]]} />
         </div>

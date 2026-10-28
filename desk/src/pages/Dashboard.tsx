@@ -114,8 +114,8 @@ export default function Dashboard({ sub }: { sub: string }) {
   type Alert = { tone: string; mark: string; title: string; detail: string; when: string; href: string };
   const alerts: Alert[] = [];
   if (alertGaps.length) alerts.push({ tone: '#E5484D', mark: '!', title: 'Some alerts could not be loaded', detail: `Could not load: ${alertGaps.join(', ')}. Refresh the page to try again.`, when: 'Now', href: '#/' });
-  if (waitingBookings) alerts.push({ tone: '#E5484D', mark: '!', title: `${waitingBookings} booking${waitingBookings === 1 ? '' : 's'} need${waitingBookings === 1 ? 's' : ''} approval`, detail: 'Paid online, waiting for your decision', when: 'Now', href: '#/bookings/approvals' });
-  if (today?.awaitingVerification) alerts.push({ tone: '#F28C18', mark: '!', title: 'Payment verification pending', detail: `${today.awaitingVerification} UPI payment${today.awaitingVerification === 1 ? '' : 's'} to match with the bank`, when: 'Now', href: '#/bookings/payments' });
+  if (waitingBookings) alerts.push({ tone: '#E5484D', mark: '!', title: `${waitingBookings} booking${waitingBookings === 1 ? '' : 's'} need${waitingBookings === 1 ? 's' : ''} approval`, detail: 'Paid online, waiting for your decision', when: 'Now', href: '#/approvals/book' });
+  if (today?.awaitingVerification) alerts.push({ tone: '#F28C18', mark: '!', title: 'Payment verification pending', detail: `${today.awaitingVerification} UPI payment${today.awaitingVerification === 1 ? '' : 's'} to match with the bank`, when: 'Now', href: '#/approvals/upi' });
   if (today?.needsReview) alerts.push({ tone: '#F28C18', mark: '!', title: `${today.needsReview} booking${today.needsReview === 1 ? '' : 's'} to review`, detail: 'Late payment, extended hold or amount mismatch', when: 'Now', href: '#/bookings/review' });
   if (appr?.count) alerts.push({ tone: '#E5484D', mark: '!', title: `${appr.count} approval${appr.count === 1 ? '' : 's'} waiting`, detail: 'Bills, pay runs, refunds, discounts or expenses', when: 'Now', href: '#/approvals' });
   if (packs?.reminder) alerts.push({ tone: '#2F7FE6', mark: 'i', title: 'Website design pack', detail: packs.reminder, when: 'Soon', href: '#/settings/website' });
@@ -127,7 +127,7 @@ export default function Dashboard({ sub }: { sub: string }) {
   type Quick = { icon: string; label: string; href?: string; run?: () => void };
   const quick: Quick[] = [];
   if (canBookings) quick.push({ icon: 'calendar', label: 'New booking', href: '#/bookings/new' }, { icon: 'users', label: 'Walk-in booking', href: '#/bookings/new' }, { icon: 'clock', label: 'Block time', href: '#/bookings/block' }, { icon: 'ball', label: 'Manage grounds', href: '#/grounds' });
-  if (can(me, 'verify_payments') || can(me, 'record_payments')) quick.push({ icon: 'payments', label: 'Verify payment', href: '#/bookings/payments' });
+  if (can(me, 'verify_payments') || can(me, 'record_payments')) quick.push({ icon: 'payments', label: 'Verify payment', href: '#/approvals/upi' });
   if (can(me, 'send_broadcasts')) quick.push({ icon: 'chat', label: 'Send message', href: '#/reminders' });
   if (canMoney) quick.push({ icon: 'accounts', label: 'View reports', href: '#/accounting/reports' });
   quick.push({ icon: 'ai', label: 'Ask Guppi', run: () => askAssistant() });
@@ -154,7 +154,7 @@ export default function Dashboard({ sub }: { sub: string }) {
         {canBookings && <StatCard icon="calendar" tone="blue" label="Today's bookings" value={today ? live.length : todayErr ? '—' : '…'} foot={today ? `${upcoming} upcoming` : todayErr ? 'could not load' : ' '} href="#/bookings/day" />}
         {canMoney && canBookings && <StatCard icon="payroll" tone="green" label="Today's revenue" value={today?.money ? inr(today.money.soldPaise) : todayErr ? '—' : '…'} foot={today?.money ? `${inr(today.money.collectedPaise)} collected so far` : todayErr ? 'could not load' : ' '} href="#/accounting/reports" />}
         {canPeople && <StatCard icon="users" tone="violet" label="Customers" value={people ? people.total : peopleErr ? '—' : '…'} foot={peopleErr ? 'could not load' : 'on your customer list'} href="#/contacts" />}
-        {(canBookings || can(me, 'manage_accounting')) && <StatCard icon="clock" tone="orange" label="Pending approvals" value={waitingFailed ? '—' : waitingKnown ? waiting : '…'} foot={waitingFailed ? 'could not load' : !waitingKnown ? ' ' : waiting ? 'require action' : 'nothing waiting'} alert={waitingFailed || (waitingKnown && waiting > 0)} href={waitingBookings || !can(me, 'manage_accounting') ? '#/bookings/approvals' : '#/approvals'} />}
+        {(canBookings || can(me, 'manage_accounting')) && <StatCard icon="clock" tone="orange" label="Pending approvals" value={waitingFailed ? '—' : waitingKnown ? waiting : '…'} foot={waitingFailed ? 'could not load' : !waitingKnown ? ' ' : waiting ? 'require action' : 'nothing waiting'} alert={waitingFailed || (waitingKnown && waiting > 0)} href={waitingBookings || !can(me, 'manage_accounting') ? '#/approvals/book' : '#/approvals'} />}
         {canBookings && <StatCard icon="ball" tone="green" label="Grounds in use" value={grounds && today ? `${busyNow.size} / ${active.length}` : groundsErr || todayErr ? '—' : '…'} foot="right now" href="#/grounds" />}
       </div>
 
@@ -193,7 +193,7 @@ export default function Dashboard({ sub }: { sub: string }) {
           <div className="xtwo">
             {canPay && (
               <section className="xpanel" aria-label="Recent payments">
-                <div className="xpanel-hd"><h2>Recent payments</h2><a href={can(me, 'verify_payments') || can(me, 'record_payments') ? '#/bookings/payments' : '#/money'}>View all →</a></div>
+                <div className="xpanel-hd"><h2>Recent payments</h2><a href={can(me, 'verify_payments') || can(me, 'record_payments') ? '#/approvals/upi' : '#/money'}>View all →</a></div>
                 {paysErr ? <p className="xempty err" role="alert">Payments could not be loaded: {paysErr}</p> : !pays ? <p className="xempty">Loading…</p> : !pays.items.length ? <p className="xempty">No payments yet.</p> : (
                   <div className="tbl-wrap"><table className="xtbl">
                     <thead><tr><th>Time</th><th>Customer</th><th className="r">Amount</th><th>Status</th></tr></thead>

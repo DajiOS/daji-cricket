@@ -56,7 +56,7 @@ export function GroundPicker() {
                 <span><b>{g.name}</b>{st && <span className="small muted">{st[1]}</span>}</span>
               </button>);
           })}
-          {bookings && <button className="gpick-row gpick-foot" onClick={() => { setOpen(false); go('/compare/grounds'); }}><Icon name="pie" size={15} />Compare the grounds</button>}
+          {bookings && <button className="gpick-row gpick-foot" onClick={() => { setOpen(false); go('/booking-report/compare/grounds'); }}><Icon name="pie" size={15} />Compare the grounds</button>}
         </div>)}
     </div>
   );

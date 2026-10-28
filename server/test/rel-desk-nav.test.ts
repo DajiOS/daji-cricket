@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { startHarness, grounds, bookAndPay, dayFromNow, type Harness, type GroundLite } from './helpers.ts';
 import { one, run } from '../src/db.ts';
-import { REGISTER, resolveRoute } from '../../desk/src/routes.ts';
+import { REGISTER, MERGED, resolveRoute } from '../../desk/src/routes.ts';
 import { rel, ev } from './rel.ts';
 
 // Daji Admin left panel and tabs correction (27 Oct 2026). The register's 82 routes now open real desk pages, a register route that nothing serves
@@ -41,7 +41,7 @@ rel('REL-DESK-001', 'every one of the register\'s 82 routes resolves: to a desk 
   assert.equal(resolveRoute('/bookings/new').path, '/bookings/new');
   assert.equal(resolveRoute('/bookings/bk_9/money').path, '/bookings/bk_9/money');
   assert.equal(resolveRoute('/customers/u_7/activity').path, '/contacts/u_7/activity');
-  assert.equal(resolveRoute('/matches/live').path, '/live'); // Live score has its own page now
+  assert.equal(resolveRoute('/matches/live').path, '/matches/live'); // Live score is the Live now tab of Fixtures
   assert.equal(resolveRoute('/finance/gst').path, '/accounting/gst');
   // older addresses still open what they always opened
   for (const old of ['/accounting/gst', '/bookings/day', '/settings/prices', '/payroll/attendance', '/hub/finance', '/']) assert.equal(resolveRoute(old).path, old);
@@ -270,4 +270,34 @@ rel('REL-DESK-014', 'every menu item opens a page: its address is a register rou
     assert.ok(served(resolveRoute(i.to).path), `${i.label}: its page ${i.to} does not exist`);
   }
   ev('menu items', items.length);
+});
+
+rel('REL-DESK-015', 'pages that showed the same things are merged, and every old address opens the page that now holds it', () => {
+  // Asked for by the owner (28 Oct 2026, all seven): Month end and the Month-end tab, Reconcile and Books review, Banking and Bank import,
+  // Approvals and the two booking queues, the software owner's pages, Live score and Fixtures, Compare and the Bookings report.
+  const reg = read('desk/src/registry.ts');
+  const pages = [...reg.matchAll(/\{ path: '([^']+)', page: \w+ \}/g)].map((m) => m[1]!);
+  const served = (p: string) => p === '/' || pages.some((x) => p === x || p.startsWith(x + '/'));
+  const want: [string, string][] = [
+    ['/accounting/close', '/close'], ['/accounting/review', '/accounting/reconcile'], ['/bank', '/transactions/import'],
+    ['/bookings/approvals', '/approvals/book'], ['/bookings/payments', '/approvals/upi'],
+    ['/settings/people', '/platform/people'], ['/settings/services', '/platform/services'], ['/settings/backups', '/platform/settings'], ['/platform/connections', '/settings/connections'],
+    ['/live', '/matches/live'], ['/operations/live', '/matches/live'], ['/compare', '/booking-report/compare'], ['/compare/grounds', '/booking-report/compare/grounds'], ['/compare/months/2026-09/2026-08', '/booking-report/compare/months/2026-09/2026-08'],
+  ];
+  for (const [old, now] of want) { assert.equal(resolveRoute(old).path, now, old); assert.ok(served(now), `${now} has a page`); }
+  for (const [from, to] of MERGED) assert.ok(served(resolveRoute(to).path) && resolveRoute(from).path === to, `${from} → ${to}`);
+  // the merged-away pages are gone from the page table and the menu; their neighbours keep their own addresses
+  for (const gone of ['/bank', '/live', '/compare']) assert.ok(!pages.includes(gone), `${gone} is no longer its own page`);
+  const nav = reg.slice(reg.indexOf('export const NAV'), reg.indexOf('export const hrefOf'));
+  for (const label of ['Bank import', 'Books review', 'Bookings to approve', 'UPI to verify', 'Compare months']) assert.ok(!nav.includes(`label: '${label}'`), `${label} left the menu`);
+  for (const p of ['/bookings/day', '/bookings/bk_9', '/transactions/pending', '/settings/prices', '/settings/connections', '/platform/people', '/matches/m_1', '/approvals/rules']) assert.equal(resolveRoute(p).path, p);
+  // the merged page holds what the old one showed
+  assert.match(read('desk/src/pages/CloseWizard.tsx'), /<SignedOffMonths /);
+  assert.match(read('desk/src/parts/books/Ledgers.tsx'), /export function Reconcile\(\)[\s\S]*<Review \/>/);
+  assert.match(read('desk/src/pages/Transactions.tsx'), /<Importer \/>/);
+  assert.match(read('desk/src/pages/Approvals.tsx'), /<Queues kind=\{filter\}/);
+  assert.match(read('desk/src/pages/Matches.tsx'), /<LiveNow \/>/);
+  assert.match(read('desk/src/pages/BookingsReport.tsx'), /<Compare sub=/);
+  assert.doesNotMatch(read('desk/src/pages/Settings.tsx'), /<People \/>|<Services \/>|<Backups \/>/);
+  ev('merged', MERGED);
 });

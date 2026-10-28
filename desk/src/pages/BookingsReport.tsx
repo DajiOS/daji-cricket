@@ -1,8 +1,10 @@
-// Reports, Bookings: the last six months of bookings side by side (played, no-shows, cancellations, customers) and how full each ground was.
+// Reports, Bookings: the last six months of bookings side by side (played, no-shows, cancellations, customers) and how full each ground was,
+// and its Compare tab (two months of the books, a month against its budget, or the grounds), which used to be the Compare months page.
 import { useState } from 'react';
 import { useSession } from '../App';
-import { PageHead, Loading, ErrorBox, Table, Stat } from '../ui';
-import { useApi, inr, monthLabel, can } from '../lib';
+import { PageHead, Loading, ErrorBox, Table, Stat, Tabs } from '../ui';
+import { useApi, inr, monthLabel, can, go, type Me } from '../lib';
+import Compare, { modesFor } from '../parts/reports/Compare';
 
 interface Count { count: number; totalPaise: number; paidPaise: number }
 interface Overview {
@@ -13,7 +15,24 @@ interface Overview {
 const n = (o: Overview, s: string) => o.bookings.byStatus[s]?.count ?? 0;
 const value = (o: Overview) => ['confirmed', 'completed', 'no_show'].reduce((t, s) => t + (o.bookings.byStatus[s]?.totalPaise ?? 0), 0);
 
-export default function BookingsReport() {
+/** The month-by-month report reads the money totals, so it needs the reports and revenue rights; Compare shows what the login may compare. */
+export const seesBookingsReport = (me: Me) => can(me, 'view_reports') && can(me, 'view_revenue');
+
+export default function BookingsReport({ sub }: { sub: string }) {
+  const { me } = useSession();
+  const [tab, ...rest] = sub.split('/');
+  const tabs: [string, string][] = [...(seesBookingsReport(me) ? [['', 'Month by month'] as [string, string]] : []), ...(modesFor(me).length ? [['compare', 'Compare'] as [string, string]] : [])];
+  const t = tabs.some(([k]) => k === tab) ? tab! : tabs[0]?.[0] ?? '';
+  return (
+    <div className="stack">
+      <PageHead eyebrow="Reports" title="Bookings" lede="Bookings month by month: sessions on the books, no-shows, cancellations and customers, and how full each ground was. A booking counts in the month it is played. Compare puts two months, a budget or the grounds side by side." />
+      {tabs.length > 1 && <div><Tabs value={t} onChange={(k) => go(k ? '/booking-report/' + k : '/booking-report')} items={tabs} label="Report" /></div>}
+      {t === 'compare' ? <Compare sub={rest.join('/')} /> : seesBookingsReport(me) ? <MonthByMonth /> : <p className="muted">Your login has no booking report to show.</p>}
+    </div>
+  );
+}
+
+function MonthByMonth() {
   const { me, ownerId } = useSession();
   const [d, err] = useApi<{ items: { period: string; overview: Overview }[] }>('/api/staff/reports/overview-series?months=6', [ownerId]);
   const months = d?.items ?? [];
@@ -21,7 +40,6 @@ export default function BookingsReport() {
   const sel = months.find((m) => m.period === pick) ?? months[months.length - 1];
   return (
     <div className="stack">
-      <PageHead eyebrow="Reports" title="Bookings" lede="Bookings month by month: sessions on the books, no-shows, cancellations and customers, and how full each ground was. A booking counts in the month it is played." />
       <ErrorBox msg={err} />
       {!d ? (!err && <Loading h={320} />) : (<>
         {sel && <div className="grid g4">

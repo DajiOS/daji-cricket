@@ -19,7 +19,7 @@ interface Folders { items: Folder[]; waiting: number; aiReady: boolean }
 const READING: Record<Doc['reading'], [Parameters<typeof Chip>[0]['tone'], string]> = {
   text: ['good', 'Every page searchable'], ai: ['good', 'Read by Platform AI'], waiting: ['warn', 'Waiting for Platform AI'], none: ['mute', 'Nothing to read'],
 };
-const LINK_TO: Record<string, (id: string) => string> = { booking: (id) => '/bookings/' + id, customer: (id) => '/contacts/' + id, vendor: () => '/bills/vendors', bank_account: () => '/transactions', bank_import: () => '/bank' };
+const LINK_TO: Record<string, (id: string) => string> = { booking: (id) => '/bookings/' + id, customer: (id) => '/contacts/' + id, vendor: () => '/bills/vendors', bank_account: () => '/transactions', bank_import: () => '/transactions/import' };
 const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 export default function Documents({ sub }: { sub: string }) {

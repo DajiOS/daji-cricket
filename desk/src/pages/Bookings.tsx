@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSession } from '../App';
-import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Status, Icon, Filters, Modal, useToast, DateInput } from '../ui';
-import { useApi, api, post, go, inr, fmtDay, fmtDateTime, formatPhone, can, qs, todayISO, addDaysISO } from '../lib';
-import { type Booking, type Page, BookingChip, METHOD_LABEL, PAY_STATUS, STATUS_LABEL, errText, timeRange, whatOf } from '../parts/dash/common';
+import { PageHead, Tabs, Table, Loading, ErrorBox, Chip, Icon, Filters, Modal, DateInput } from '../ui';
+import { useApi, go, inr, fmtDay, formatPhone, qs, todayISO, addDaysISO } from '../lib';
+import { type Booking, type Page, BookingChip, STATUS_LABEL, timeRange, whatOf } from '../parts/dash/common';
 import { BookingDetail } from '../parts/dash/Detail';
 import { NewBooking } from '../parts/dash/NewBooking';
 import { BlockBooking } from '../parts/dash/BlockBooking';
@@ -10,26 +10,25 @@ import { DayView } from '../parts/dash/DayView';
 import { MonthCalendar, ViewToggle, useView } from '../parts/dash/BookingCalendar';
 import { RefundApprovals } from '../parts/admin/Refunds';
 
-type Tab = 'list' | 'day' | 'approvals' | 'payments' | 'refunds';
-const SECTIONS = ['day', 'approvals', 'payments'];
+// Bookings to approve and UPI to verify are on the Approvals board now (/approvals/book and /approvals/upi); the old addresses open it there.
+type Tab = 'list' | 'day' | 'refunds';
+const SECTIONS = ['day'];
 const PAGE = 25;
 
-/** Bookings: the list with filters, the day view, approvals and UPI payments to verify. The path after /bookings picks the section or opens a booking. */
+/** Bookings: the list with filters and the day view. The path after /bookings picks the section or opens a booking. */
 export default function Bookings({ sub }: { sub: string }) {
   const { me } = useSession();
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
   const key = sub.split('/')[0] || '';
   const filterPreset = key === 'review' ? 'review' : key === 'choosing' ? 'choosing' : '';
-  const tab: Tab = key === 'day' ? 'day' : key === 'approvals' ? 'approvals' : key === 'payments' ? 'payments' : key === 'refunds' ? 'refunds' : 'list';
+  const tab: Tab = key === 'day' ? 'day' : key === 'refunds' ? 'refunds' : 'list';
   const showAdd = key === 'add';
   const showNew = key === 'new';
   const showBlock = key === 'block';
   const openId = key && !SECTIONS.includes(key) && !['new', 'block', 'add', 'review', 'choosing', 'refunds'].includes(key) ? key : null;
   const asDay = sub.split('/')[1] === 'day';
-  const canVerify = can(me, 'verify_payments') || can(me, 'record_payments');
-  const [pendingN] = useApi<Page<Booking>>('/api/staff/bookings?approval=pending&limit=1', [version]);
-  const tabs: [Tab, string][] = [['list', 'All bookings'], ['day', 'Day view'], ['approvals', `Approvals${pendingN?.total ? ` (${pendingN.total})` : ''}`], ...(canVerify ? [['payments', 'UPI to verify'] as [Tab, string]] : []), ...(me.role === 'super_admin' ? [['refunds', 'Refund approvals'] as [Tab, string]] : [])];
+  const tabs: [Tab, string][] = [['list', 'All bookings'], ['day', 'Day view'], ...(me.role === 'super_admin' ? [['refunds', 'Refund approvals'] as [Tab, string]] : [])];
   const toList = () => go('/bookings');
 
   return (
@@ -42,9 +41,7 @@ export default function Bookings({ sub }: { sub: string }) {
       {filterPreset !== 'review' && <div><Tabs value={tab} onChange={(t) => go(t === 'list' ? '/bookings' : `/bookings/${t}`)} items={tabs} label="Sections" /></div>}
       {tab === 'list' && <List version={version} preset={filterPreset} />}
       {tab === 'day' && <DayView version={version} onChanged={bump} />}
-      {tab === 'approvals' && <Approvals version={version} onChanged={bump} />}
       {tab === 'refunds' && <RefundApprovals />}
-      {tab === 'payments' && <UpiQueue version={version} onChanged={bump} />}
       {openId && <BookingDetail key={openId} id={openId} asDay={asDay} tab={sub.split('/')[1]} onClose={toList} onChanged={bump} />}
       {showAdd && (
         <Modal title="Add booking" onClose={toList}>
@@ -124,70 +121,6 @@ function List({ version, preset }: { version: number; preset: string }) {
               <span className="row"><button className="btn sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button><button className="btn sm" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>Next</button></span>
             </div>)}
         </>)}
-    </div>
-  );
-}
-
-function Approvals({ version, onChanged }: { version: number; onChanged: () => void }) {
-  const toast = useToast();
-  const [d, err, reload] = useApi<Page<Booking>>('/api/staff/bookings?approval=pending&limit=100', [version]);
-  const [msg, setMsg] = useState<string | null>(null);
-  const approve = async (b: Booking) => {
-    setMsg(null);
-    try { await post(`/api/staff/bookings/${encodeURIComponent(b.id)}/approve`, {}); toast('Approved. The customer has been told.'); reload(); onChanged(); } catch (e) { setMsg(errText(e)); }
-  };
-  if (err) return <ErrorBox msg={err} />;
-  if (!d) return <Loading h={200} />;
-  const rows = d.items.slice().sort((a, b) => a.startAt - b.startAt);
-  return (
-    <div className="card">
-      <div className="card-head"><h3>Waiting for your approval</h3><span className="muted small">The advance is holding the slot</span></div>
-      {msg && <div className="card-pad"><ErrorBox msg={msg} /></div>}
-      <Table rows={rows} empty="Nothing is waiting. New paid bookings appear here." cols={[
-        { head: 'When', cell: (b) => <><div className="strong">{fmtDay(b.date)}</div><div className="small muted tabular">{timeRange(b)}</div></> },
-        { head: 'Customer', cell: (b) => <><div className="strong">{b.customerName}</div><div className="small muted">{formatPhone(b.customerPhone)}</div></> },
-        { head: 'Ground', cell: (b) => <>{b.groundName}<div className="small muted">{whatOf(b)}</div></> },
-        { head: 'Paid', num: true, cell: (b) => <>{inr(b.paidPaise)}<div className="small muted">of {inr(b.totalPaise)}</div></> },
-        { head: '', cell: (b) => <span className="row" style={{ gap: 6, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
-          <button className="btn sm ghost" onClick={() => go(`/bookings/${b.id}`)}>Open</button><button className="btn sm primary" onClick={() => approve(b)}>Approve</button></span> },
-      ]} />
-    </div>
-  );
-}
-
-interface Pay { id: string; bookingId: string; method: string; status: string; amountPaise: number; reference: string | null; submittedAt: number | null; createdAt: number }
-function UpiQueue({ version, onChanged }: { version: number; onChanged: () => void }) {
-  const { me } = useSession();
-  const toast = useToast();
-  const [d, err, reload] = useApi<Page<Pay>>('/api/staff/payments?status=submitted&limit=50', [version]);
-  const [books, setBooks] = useState<Record<string, Booking>>({});
-  const [msg, setMsg] = useState<string | null>(null);
-  useEffect(() => {
-    if (!d) return;
-    const ids = [...new Set(d.items.map((p) => p.bookingId))].filter((i) => !books[i]);
-    ids.forEach((id) => api<{ booking: Booking }>(`/api/staff/bookings/${encodeURIComponent(id)}`).then((r) => setBooks((s) => ({ ...s, [id]: r.booking }))).catch(() => {}));
-  }, [d]); // eslint-disable-line
-  const verify = async (p: Pay, approve: boolean) => {
-    setMsg(null);
-    try { await post(`/api/staff/payments/${encodeURIComponent(p.id)}/verify`, approve ? { approve: true } : { approve: false, reason: 'Not received' }); toast(approve ? 'Payment verified.' : 'Payment rejected.'); reload(); onChanged(); } catch (e) { setMsg(errText(e)); }
-  };
-  if (err) return <ErrorBox msg={err} />;
-  if (!d) return <Loading h={200} />;
-  const ok = can(me, 'verify_payments');
-  return (
-    <div className="card">
-      <div className="card-head"><h3>UPI payments to verify</h3><span className="muted small">Check your bank for each one, then verify</span></div>
-      {msg && <div className="card-pad"><ErrorBox msg={msg} /></div>}
-      <Table rows={d.items} empty="No UPI payments are waiting." cols={[
-        { head: 'Sent', cell: (p) => fmtDateTime(p.submittedAt || p.createdAt) },
-        { head: 'Booking', cell: (p) => { const b = books[p.bookingId]; return b ? <><div className="strong">{b.customerName}</div><div className="small muted">{fmtDay(b.date)}, {timeRange(b)} · {b.groundName}</div></> : <span className="muted">…</span>; } },
-        { head: 'Reference', cell: (p) => <span className="mono small">{p.reference || '—'}</span> },
-        { head: 'Status', cell: (p) => <Status s={p.status} map={PAY_STATUS} /> },
-        { head: 'Amount', num: true, cell: (p) => <><b>{inr(p.amountPaise)}</b><div className="small muted">{METHOD_LABEL[p.method]}</div></> },
-        { head: '', cell: (p) => <span className="row" style={{ gap: 6, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
-          <button className="btn sm ghost" onClick={() => go(`/bookings/${p.bookingId}`)}>Open</button>
-          {ok && <><button className="btn sm primary" onClick={() => verify(p, true)}>Verify</button><button className="btn sm" onClick={() => verify(p, false)}>Reject</button></>}</span> },
-      ]} />
     </div>
   );
 }

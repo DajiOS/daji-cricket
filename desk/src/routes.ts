@@ -22,7 +22,7 @@ const CONSTRUCTION = 'Construction projects are a separate Daji Admin package wi
 
 export const REGISTER: RegisterRoute[] = [
   R(1, 'Today', 'Today Command Center', '/today', '/', 'MATCHES'),
-  R(2, 'Today', 'Live Score', '/operations/live', '/live', 'MATCHES', 'Renamed from Live Board at the owner\'s request: every match being scored now, updating by itself. The day view stays under Bookings.'),
+  R(2, 'Today', 'Live Score', '/operations/live', '/matches/live', 'MATCHES', 'Renamed from Live Board at the owner\'s request: every match being scored now, updating by itself. It is the Live now tab of Fixtures. The day view stays under Bookings.'),
   R(3, 'Today', 'Check-in', '/operations/check-in', '/bookings/day', 'PARTIAL', 'Staff see who is due and can mark a no-show. The server has no "arrived" record yet, so a check-in cannot be saved.'),
   R(4, 'Today', 'Ground Status', '/operations/grounds', '/grounds', 'MATCHES'),
   R(5, 'Today', 'Incidents', '/operations/incidents', null, 'MISSING', 'The server has no incident record. Faults on a ground or net are tracked on the status board and as jobs.'),
@@ -38,7 +38,7 @@ export const REGISTER: RegisterRoute[] = [
   R(15, 'Bookings & Matches', 'Booking: Timeline', '/bookings/:id/timeline', '/bookings/:id/timeline', 'MATCHES'),
   R(16, 'Bookings & Matches', 'Move Booking', '/bookings/:id/move', '/bookings/:id/move', 'MATCHES'),
   R(17, 'Bookings & Matches', 'Fixtures', '/matches', '/matches', 'MATCHES'),
-  R(18, 'Bookings & Matches', 'Live Score', '/matches/live', '/live', 'MATCHES', 'The same Live score page as Today, Live score.'),
+  R(18, 'Bookings & Matches', 'Live Score', '/matches/live', '/matches/live', 'MATCHES', 'The Live now tab of Fixtures, the same as Today, Live score.'),
   R(19, 'Bookings & Matches', 'Tournament', '/tournaments', '/tournaments', 'MATCHES'),
   R(20, 'Bookings & Matches', 'Settlement', '/matches/settlement', null, 'MISSING', 'The server has no match fee split or team settlement. Booking money settles on the booking.'),
   R(21, 'Bookings & Matches', 'Resources', '/resources', '/grounds/layout', 'MATCHES'),
@@ -117,6 +117,23 @@ function matchPattern(pattern: string, route: string): Record<string, string> | 
   return got;
 }
 
+/** Pages merged into another (28 Oct 2026, the owner chose all seven): the old address opens the page that now holds it, with the rest of the
+ *  path carried across, so bookmarks, server links and the activity feed keep working. Longer addresses first. */
+export const MERGED: [string, string][] = [
+  ['/accounting/close', '/close'], // Month end: the step-by-step close, with the signed-off months under it
+  ['/accounting/review', '/accounting/reconcile'], // Books review is the top of Reconcile
+  ['/bank', '/transactions/import'], // Bank import is a tab of Banking
+  ['/bookings/approvals', '/approvals/book'], ['/bookings/payments', '/approvals/upi'], // the Approvals board, filtered
+  ['/settings/people', '/platform/people'], ['/settings/services', '/platform/services'], ['/settings/backups', '/platform/settings'], ['/platform/connections', '/settings/connections'],
+  ['/live', '/matches/live'], // Live score is the Live now tab of Fixtures
+  ['/compare', '/booking-report/compare'], // Compare is a tab of Reports, Bookings
+];
+/** The address a merged page now lives at; any other address is returned as it is. */
+export function mergedPath(path: string): string {
+  for (const [from, to] of MERGED) if (path === from || path.startsWith(from + '/')) return to + path.slice(from.length);
+  return path;
+}
+
 /** A register route that this desk cannot serve, with its reason. */
 export interface Unserved { row: RegisterRoute }
 /** What an address opens: the desk path, or the register row that nothing serves yet. Addresses outside the register pass through.
@@ -130,8 +147,8 @@ export function resolveRoute(route: string): { path: string; unserved?: Register
       // a booking or customer id never looks like one of the fixed words beside it
       return m && !fixed.some((f) => f.route === clean);
     });
-  if (!hit) return { path: clean };
+  if (!hit) return { path: mergedPath(clean) };
   if (!hit.to) return { path: clean, unserved: hit, row: hit };
   const params = matchPattern(hit.route, clean) ?? {};
-  return { path: hit.to.replace(/:(\w+)/g, (_, k: string) => params[k] ?? ''), row: hit };
+  return { path: mergedPath(hit.to.replace(/:(\w+)/g, (_, k: string) => params[k] ?? '')), row: hit };
 }

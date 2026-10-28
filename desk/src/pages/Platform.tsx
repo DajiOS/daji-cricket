@@ -1,6 +1,6 @@
 import { PageHead } from '../ui';
 import { SectionTabs, sectionOf } from '../parts/admin/common';
-import { Leads, Connections, Services } from '../parts/admin/Platform';
+import { Leads, Services } from '../parts/admin/Platform';
 import People from '../parts/admin/People';
 import Payments from '../parts/admin/Payments';
 import Backups from '../parts/admin/Backups';
@@ -9,7 +9,9 @@ import { YodleeSettings } from '../parts/admin/Yodlee';
 import { AggregatorSettings } from '../parts/admin/Aggregator';
 import { SoftwareCosts } from '../parts/admin/Costs';
 
-const TABS: [string, string][] = [['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings'], ['connections', 'Connections'], ['bank', 'Bank connection'], ['services', 'Services'], ['refunds', 'Refunds'], ['costs', 'Software costs']];
+// The software owner's page: People, Services and Backups (in Platform settings) live only here. Connections is in Settings, Connections,
+// and /platform/connections opens it there (routes.ts, MERGED).
+const TABS: [string, string][] = [['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings and backups'], ['bank', 'Bank connection'], ['services', 'Services'], ['refunds', 'Refunds'], ['costs', 'Software costs']];
 
 export default function Platform({ sub }: { sub: string }) {
   const tab = sectionOf(sub, TABS.map(([k]) => k));
@@ -20,7 +22,6 @@ export default function Platform({ sub }: { sub: string }) {
       {tab === 'requests' && <Leads />}
       {tab === 'people' && <People />}
       {tab === 'settings' && <div className="stack"><Payments /><Backups /></div>}
-      {tab === 'connections' && <Connections />}
       {tab === 'bank' && <div className="stack"><YodleeSettings /><AggregatorSettings /></div>}
       {tab === 'services' && <Services />}
       {tab === 'refunds' && <RefundApprovals />}

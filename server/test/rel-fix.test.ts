@@ -431,7 +431,7 @@ rel('REL-FIX-008-001', 'the booking advance is never called a "deposit" on the w
   const ROOT = new URL('../../', import.meta.url).pathname;
   const read = (f: string) => readFileSync(ROOT + f, 'utf8');
   const wrong = /your deposit of|deposit is holding|pays the deposit|its deposit paid|· deposit \$|· deposit \{|head: 'Deposit'/i;
-  const files = ['server/src/notifications.ts', 'server/src/bookings.ts', 'web/public/app.js', 'desk/src/pages/Approvals.tsx', 'desk/src/pages/Bookings.tsx', 'desk/src/parts/dash/Today.tsx', 'mobile/src/MeScreen.tsx', 'mobile/src/PayScreen.tsx', 'mobile/src/ManageBooking.tsx'];
+  const files = ['server/src/notifications.ts', 'server/src/bookings.ts', 'web/public/app.js', 'desk/src/pages/Approvals.tsx', 'desk/src/pages/Bookings.tsx', 'desk/src/parts/dash/Queues.tsx', 'desk/src/parts/dash/Today.tsx', 'mobile/src/MeScreen.tsx', 'mobile/src/PayScreen.tsx', 'mobile/src/ManageBooking.tsx'];
   const hits = files.flatMap((f) => read(f).split('\n').map((l, i) => (wrong.test(l) ? `${f}:${i + 1}` : '')).filter(Boolean));
   assert.deepEqual(hits, [], 'these lines call the booking advance a deposit');
   assert.match(read('mobile/src/ManageBooking.tsx'), /Booking advance/, 'the app screen labels the advance as the advance');
