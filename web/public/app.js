@@ -624,7 +624,7 @@ async function apiDownload(path, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-window.DAJI = { refreshCoaches: () => fillCoaches(), h, clear, $, $$, api, apiFile, apiDownload, ApiError, fieldErrors: null, toast, openModal, closeModal, field, input, inr, niceDate, todayIst, addDays, hhmm, niceDateTime, state, can, MON,
+window.DAJI = { refreshCoaches: () => fillCoaches(), formatPhone, h, clear, $, $$, api, apiFile, apiDownload, ApiError, fieldErrors: null, toast, openModal, closeModal, field, input, inr, niceDate, todayIst, addDays, hhmm, niceDateTime, state, can, MON,
   deskSub: (tab, sub, quiet) => deskNav(tab, sub, quiet), registerDeskTab: (t) => deskTabs.push(t), registerBookingsExtra: (f) => bookingsExtras.push(f), registerAdminPanel: (f) => adminPanels.push(f) };
 
 const fieldErrors = (e) => Object.fromEntries(((e.details && e.details.fields) || []).map((f) => [f.field, f.message]));
@@ -1219,7 +1219,15 @@ function fillStatic() {
   }
   paintPics();
 }
-function formatPhone(p) { const d = String(p).replace(/\D/g, '').slice(-10); return d.length === 10 ? `+91 ${d.slice(0, 5)} ${d.slice(5)}` : p; }
+// Every phone number is shown with its country code: Indian numbers (stored as 10 digits) get +91, others keep their own +code.
+function formatPhone(phone) {
+  const p = (phone ?? '').trim();
+  if (!p) return '';
+  const d = p.replace(/\D/g, '');
+  const m = /^(?:91|0)?(\d{5})(\d{5})$/.exec(d);
+  if (m && (!p.startsWith('+') || d.startsWith('91'))) return `+91 ${m[1]} ${m[2]}`;
+  return p; // already has its own +code, or is not a phone number we can read
+}
 
 // ------------------------------------------------------------------ booking panel
 
@@ -2299,7 +2307,7 @@ function renderServices(view) {
       const r = await api('/api/admin/services'); clear(list);
       for (const s of r.items) list.append(h('div', { class: 'li', style: 'align-items:flex-start;gap:14px' },
         h('span', { style: 'min-width:0' }, h('b', {}, s.name), s.purpose ? h('span', { class: 'hint' }, `  ·  ${s.purpose}`) : null,
-          h('div', { class: 'hint', style: 'margin-top:4px' }, [s.accountEmail ? 'Email: ' + s.accountEmail : '', s.phone ? 'Phone: ' + s.phone : ''].filter(Boolean).join('   ·   ') || 'No account details yet'),
+          h('div', { class: 'hint', style: 'margin-top:4px' }, [s.accountEmail ? 'Email: ' + s.accountEmail : '', s.phone ? 'Phone: ' + formatPhone(s.phone) : ''].filter(Boolean).join('   ·   ') || 'No account details yet'),
           s.loginUrl ? h('div', { class: 'hint' }, h('a', { href: s.loginUrl, target: '_blank', rel: 'noopener' }, 'Open ' + s.name)) : null,
           s.notes ? h('div', { class: 'hint', style: 'margin-top:4px;white-space:pre-wrap' }, s.notes) : null),
         h('span', { class: 'acts' }, h('b', { style: s.status === 'problem' ? 'color:#e07a5f' : '' }, SERVICE_STATUS[s.status] || s.status), h('button', { class: 'btn ghost sm', type: 'button', onclick: () => editService(s, load) }, 'Edit'))));
@@ -2367,7 +2375,7 @@ function renderTeam(pane) {
         const boxes = r.allPermissions.map((p) => { const c = h('input', { type: 'checkbox', checked: (m.permissions || []).includes(p) }); perms.append(h('label', { class: 'check' }, c, h('span', {}, p.replace(/_/g, ' ')))); return [p, c]; });
         const save = async (body) => { try { await api('/api/staff/team/' + encodeURIComponent(m.id), { method: 'PATCH', body }); toast('Saved'); load(); } catch (e) { toast(e.message, true); } };
         list.append(h('div', { class: 'li', style: 'flex-wrap:wrap' },
-          h('span', {}, h('b', {}, m.name), `  ·  ${m.email || ''}${m.phone ? '  ·  ' + m.phone : ''}`, h('br'), h('span', { class: 'hint' }, `${(m.permissions || []).length} permissions${m.active ? '' : '  ·  switched off'}`)),
+          h('span', {}, h('b', {}, m.name), `  ·  ${m.email || ''}${m.phone ? '  ·  ' + formatPhone(m.phone) : ''}`, h('br'), h('span', { class: 'hint' }, `${(m.permissions || []).length} permissions${m.active ? '' : '  ·  switched off'}`)),
           h('span', { class: 'acts' },
             h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { perms.style.display = perms.style.display === 'none' ? 'grid' : 'none'; } }, 'Rights'),
             h('button', { class: 'btn ghost sm', type: 'button', onclick: () => save({ active: !m.active }) }, m.active ? 'Switch off' : 'Switch on')),

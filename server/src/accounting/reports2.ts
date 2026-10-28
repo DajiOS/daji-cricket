@@ -1,4 +1,5 @@
 import { many } from '../db.ts';
+import { formatPhone } from '@daji/shared';
 import { addDays, istDate, monthRange } from '../time.ts';
 import { profitAndLoss, type DateRange } from './statements.ts';
 import { now } from '../clock.ts';
@@ -77,7 +78,7 @@ export function customerBalances(ownerId: string, asOf: string, view: 'summary' 
   const bucket = (d: string) => { const a = ageDays(d); return a <= 30 ? 0 : a <= 60 ? 1 : a <= 90 ? 2 : 3; };
   const notes = ['Counts sessions already played where the customer has not paid in full. Money for sessions still to come is not listed here; it is held as an advance.'];
   if (view === 'detail') {
-    const out: TableRow[] = rows.map((r) => ({ kind: 'row', cells: [istLabel(r.date), r.ref, r.customer_name, r.customer_phone ?? '', r.ground_name, r.total_paise, r.paid_paise, r.total_paise - r.paid_paise, ageDays(r.date)] }));
+    const out: TableRow[] = rows.map((r) => ({ kind: 'row', cells: [istLabel(r.date), r.ref, r.customer_name, formatPhone(r.customer_phone), r.ground_name, r.total_paise, r.paid_paise, r.total_paise - r.paid_paise, ageDays(r.date)] }));
     const tot = rows.reduce((s, r) => s + r.total_paise - r.paid_paise, 0);
     out.push({ kind: 'sub', cells: ['Total owed', '', '', '', '', rows.reduce((s, r) => s + r.total_paise, 0), rows.reduce((s, r) => s + r.paid_paise, 0), tot, null] });
     return { title: 'Customer balance detail', sub: `As of ${asOf}`, columns: [{ label: 'Session' }, { label: 'Ref' }, { label: 'Customer' }, { label: 'Phone' }, { label: 'Ground' }, { label: 'Total', money: true }, { label: 'Paid', money: true }, { label: 'Owed', money: true }, { label: 'Days' }], rows: out, notes };
@@ -85,7 +86,7 @@ export function customerBalances(ownerId: string, asOf: string, view: 'summary' 
   const by = new Map<string, { name: string; phone: string; n: number; b: number[] }>();
   for (const r of rows) {
     const key = `${r.customer_name}|${r.customer_phone ?? ''}`;
-    const x = by.get(key) ?? { name: r.customer_name, phone: r.customer_phone ?? '', n: 0, b: [0, 0, 0, 0] };
+    const x = by.get(key) ?? { name: r.customer_name, phone: formatPhone(r.customer_phone), n: 0, b: [0, 0, 0, 0] };
     x.n++; x.b[bucket(r.date)]! += r.total_paise - r.paid_paise; by.set(key, x);
   }
   const list = [...by.values()].sort((a, b) => b.b.reduce((s, v) => s + v, 0) - a.b.reduce((s, v) => s + v, 0));

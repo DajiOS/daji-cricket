@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import { Badge, Chip, Loading, s } from './ui';
-import { C, inr } from './theme';
+import { C, formatPhone, inr } from './theme';
 
 interface Row { id: string; title: string; sub?: string; right?: string; tag?: string; bad?: boolean }
 interface Sec { id: string; label: string; path: string; head?: (r: any) => string; rows: (r: any) => Row[] }
@@ -19,12 +19,12 @@ const SECTIONS: Sec[] = [
   {
     id: 'memberships', label: 'Memberships', path: '/api/desk/memberships/members',
     head: (r) => `${r.total ?? (r.items ?? []).length} members`,
-    rows: (r) => (r.items ?? []).map((m: any) => ({ id: m.id, title: m.name, sub: `${m.planName}  ·  ${day(m.startDate)} to ${day(m.endDate)}  ·  ${m.phone ?? ''}`, right: inr(m.paidPaise), tag: words(String(m.status)), bad: m.status === 'expired' })),
+    rows: (r) => (r.items ?? []).map((m: any) => ({ id: m.id, title: m.name, sub: `${m.planName}  ·  ${day(m.startDate)} to ${day(m.endDate)}  ·  ${formatPhone(m.phone)}`, right: inr(m.paidPaise), tag: words(String(m.status)), bad: m.status === 'expired' })),
   },
   {
     id: 'contacts', label: 'Contacts', path: '/api/staff/contacts?limit=100',
     head: (r) => `${r.total ?? (r.items ?? []).length} people`,
-    rows: (r) => (r.items ?? []).map((c: any) => ({ id: c.id, title: c.name, sub: `${[c.phone, c.email].filter(Boolean).join('  ·  ')}  ·  played ${c.timesPlayed} time${c.timesPlayed === 1 ? '' : 's'}`, right: inr(c.paidPaise) })),
+    rows: (r) => (r.items ?? []).map((c: any) => ({ id: c.id, title: c.name, sub: `${[formatPhone(c.phone), c.email].filter(Boolean).join('  ·  ')}  ·  played ${c.timesPlayed} time${c.timesPlayed === 1 ? '' : 's'}`, right: inr(c.paidPaise) })),
   },
   {
     id: 'bills', label: 'Bills', path: '/api/accounting/bills?limit=100',
