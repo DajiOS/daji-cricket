@@ -313,7 +313,15 @@ rel('REL-DESK-016', 'the dashboard Upcoming count matches the bookings still to 
   const tours = await h.get('/api/staff/bookings?kind=tournament&upcoming=1&group=1', owner);
   assert.ok(tours.body.items.every((t: any) => ahead.body.items.some((b: any) => b.id === t.id)), 'every upcoming tournament is counted under Upcoming');
   const dash = read('desk/src/pages/Dashboard.tsx');
-  assert.match(dash, /'\/api\/staff\/bookings\?upcoming=1&group=1&limit=100'/, 'the Upcoming tab reads the bookings still to come');
+  assert.match(dash, /'\/api\/staff\/bookings\?upcoming=1&group=1&limit=20'/, 'the Upcoming tab reads the bookings still to come');
+  assert.match(dash, /aheadRows\.slice\(0, 10\)/, 'it lists the next ten');
+  assert.match(dash, /href="#\/bookings\/upcoming"/, 'More opens the whole list of what is booked');
+  assert.match(read('desk/src/pages/Bookings.tsx'), /preset === 'upcoming' \? \{ upcoming: 1 \}/, 'that list holds the bookings still to come');
+  // soonest first: the list of what is booked runs by date
+  const soon = await bookAndPay(h, cust, g.id, dayFromNow(4), '07:00', 1);
+  const order = (await h.get('/api/staff/bookings?upcoming=1&group=1&limit=20', owner)).body.items.map((b: any) => b.startAt);
+  assert.deepEqual(order, [...order].sort((x: number, y: number) => x - y), 'sorted by date');
+  assert.ok((await h.get('/api/staff/bookings?upcoming=1&group=1&limit=20', owner)).body.items.findIndex((b: any) => b.id === soon.id) < (await h.get('/api/staff/bookings?upcoming=1&group=1&limit=20', owner)).body.items.findIndex((b: any) => b.id === later.id));
   assert.match(dash, /k === 'upcoming' \? upcoming/, 'its count is that list, not today\'s');
   ev('upcoming', { ahead: ahead.body.total, today: today.body.bookings.length });
 });

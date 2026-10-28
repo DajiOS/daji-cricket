@@ -21,12 +21,12 @@ export default function Bookings({ sub }: { sub: string }) {
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
   const key = sub.split('/')[0] || '';
-  const filterPreset = key === 'review' ? 'review' : key === 'choosing' ? 'choosing' : '';
+  const filterPreset = key === 'review' ? 'review' : key === 'choosing' ? 'choosing' : key === 'upcoming' ? 'upcoming' : '';
   const tab: Tab = key === 'day' ? 'day' : key === 'refunds' ? 'refunds' : 'list';
   const showAdd = key === 'add';
   const showNew = key === 'new';
   const showBlock = key === 'block';
-  const openId = key && !SECTIONS.includes(key) && !['new', 'block', 'add', 'review', 'choosing', 'refunds'].includes(key) ? key : null;
+  const openId = key && !SECTIONS.includes(key) && !['new', 'block', 'add', 'review', 'choosing', 'upcoming', 'refunds'].includes(key) ? key : null;
   const asDay = sub.split('/')[1] === 'day';
   const tabs: [Tab, string][] = [['list', 'All bookings'], ['day', 'Day view'], ...(me.role === 'super_admin' ? [['refunds', 'Refund approvals'] as [Tab, string]] : [])];
   const toList = () => go('/bookings');
@@ -65,10 +65,12 @@ function List({ version, preset }: { version: number; preset: string }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(0);
-  const [view, setView] = useView();
+  const [saved, setView] = useView();
+  // the bookings still to come are a list by date, whichever view was used last
+  const view = preset === 'upcoming' ? 'list' : saved;
   const [grounds] = useApi<{ items: { id: string; name: string }[] }>('/api/staff/grounds');
   useEffect(() => { const t = setTimeout(() => { setDq(q.trim()); setPage(0); }, 300); return () => clearTimeout(t); }, [q]);
-  const params = { group: 1, q: dq, status, groundId, from, to, ...(preset === 'review' ? { needsReview: 1 } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}), limit: PAGE, offset: page * PAGE };
+  const params = { group: 1, q: dq, status, groundId, from, to, ...(preset === 'review' ? { needsReview: 1 } : {}), ...(preset === 'choosing' ? { resolution: 'awaiting' } : {}), ...(preset === 'upcoming' ? { upcoming: 1 } : {}), limit: PAGE, offset: page * PAGE };
   const [d, err] = useApi<Page<Booking>>(`/api/staff/bookings${qs(params)}`, [version]);
   const set = (f: (v: string) => void) => (e: any) => { f(e.target.value); setPage(0); };
   const filtered = !!(dq || status || groundId || from || to || preset);
@@ -91,11 +93,11 @@ function List({ version, preset }: { version: number; preset: string }) {
         </Filters>
       </div>
       <div className="card-pad row filters-foot">
-        <ViewToggle value={view} onChange={setView} />
+        {preset !== 'upcoming' && <ViewToggle value={view} onChange={setView} />}
         {view === 'list' && <><button className="btn sm" onClick={() => quick(todayISO(), todayISO())}>Today</button>
         <button className="btn sm" onClick={() => quick(todayISO(), addDaysISO(todayISO(), 7))}>Next 7 days</button>
         <button className="btn sm" onClick={() => quick(addDaysISO(todayISO(), -30), todayISO())}>Last 30 days</button></>}
-        {preset === 'review' && <Chip tone="warn">Needs review</Chip>}{preset === 'choosing' && <Chip tone="info">Customers yet to choose</Chip>}
+        {preset === 'review' && <Chip tone="warn">Needs review</Chip>}{preset === 'choosing' && <Chip tone="info">Customers yet to choose</Chip>}{preset === 'upcoming' && <Chip tone="info">Still to come, soonest first</Chip>}
         {filtered && <button className="btn ghost sm" onClick={clear}>Clear filters</button>}
         {view === 'list' && <span className="muted small" style={{ marginLeft: 'auto' }}>{d ? `${d.total} ${d.total === 1 ? 'booking' : 'bookings'}` : ''}</span>}
       </div>

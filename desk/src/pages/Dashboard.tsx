@@ -59,7 +59,7 @@ export default function Dashboard({ sub }: { sub: string }) {
   const [today, todayErr] = useApi<TodayData>(canBookings ? '/api/staff/today' : null, [version, ownerId]);
   const [cancelled, cancelledErr] = useApi<Page<Booking>>(canBookings ? `/api/staff/bookings?from=${day}&to=${day}&status=cancelled&limit=50` : null, [version, ownerId]);
   // everything still to come, not only today's: the same list the Bookings page and Upcoming tournaments read, a multi-day booking as one row
-  const [ahead, aheadErr] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?upcoming=1&group=1&limit=100' : null, [version, ownerId]);
+  const [ahead, aheadErr] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?upcoming=1&group=1&limit=20' : null, [version, ownerId]);
   const [pending, pendingErr] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?approval=pending&limit=1' : null, [version, ownerId]);
   const [grounds, groundsErr] = useApi<{ items: Ground[] }>(canBookings ? '/api/staff/grounds' : null, [ownerId]);
   // the same people the Contacts page opens on (confirmed or played customers), so the tile and the page agree
@@ -90,7 +90,7 @@ export default function Dashboard({ sub }: { sub: string }) {
   const aheadRows = (ahead?.items ?? []).filter((b) => b.block || b.startAt > t);
   const upcoming = ahead ? ahead.total - (ahead.items.length - aheadRows.length) : 0;
   const count = (k: Tab) => (k === 'all' ? all.length : k === 'upcoming' ? upcoming : all.filter((b) => phase(b, t) === k).length);
-  const rows = tab === 'all' ? all : tab === 'upcoming' ? aheadRows : all.filter((b) => phase(b, t) === tab);
+  const rows = tab === 'all' ? all : tab === 'upcoming' ? aheadRows.slice(0, 10) : all.filter((b) => phase(b, t) === tab);
   const live = all.filter((b) => phase(b, t) !== 'cancelled');
   const waitingBookings = pending?.total ?? 0;
   // the approvals count is a number only when every source it needs has answered; a failed or pending source is never shown as "0, nothing waiting"
@@ -187,6 +187,7 @@ export default function Dashboard({ sub }: { sub: string }) {
                       </tr>);
                   })}</tbody>
                 </table></div>)}
+              {tab === 'upcoming' && upcoming > rows.length && <p className="xempty"><a href="#/bookings/upcoming">More: all {upcoming} bookings still to come →</a></p>}
             </section>)}
 
           {(canBookings || can(me, 'manage_matches')) && (
