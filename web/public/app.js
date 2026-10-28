@@ -1930,7 +1930,36 @@ function manageButtons(b) {
   if (b.moveDifferenceDuePaise > 0) out.push(h('button', { class: 'btn primary sm pay-diff', type: 'button', onclick: (e) => payDifference(b, e.currentTarget) }, `Pay ${inr(b.moveDifferenceDuePaise)} online`));
   if ((cfg.customerRescheduleEnabled || cfg.pricesOnEnquiry) && upcoming && !b.seriesId) out.push(h('button', { class: 'btn outline sm change-time', type: 'button', onclick: () => openReschedule(b) }, cfg.pricesOnEnquiry ? 'Ask to move' : 'Change time'));
   if (cfg.securityDepositEnabled && ['confirmed', 'completed', 'no_show'].includes(b.status)) out.push(h('button', { class: 'btn ghost sm view-deposit', type: 'button', onclick: () => openDepositView(b) }, 'Security deposit'));
+  if (b.status === 'confirmed' && b.endAt > Date.now() && !b.block) out.push(h('button', { class: 'btn ghost sm team-list', type: 'button', onclick: () => openTeamList(b.id, b.ref) }, 'Team list'));
   return out;
+}
+
+/** A booking's team list: who is playing, and (for the person who booked) adding players. Players check in at the ground in the Daji app. */
+async function openTeamList(id, ref) {
+  const body = h('div', {}, h('div', { class: 'skeleton' }, 'Loading…'));
+  openModal([h('div', { class: 'eyebrow' }, 'Booking ' + ref), h('h3', {}, 'Team list'), body]);
+  const draw = async (msg) => {
+    let t; try { t = await api(`/api/bookings/${encodeURIComponent(id)}/players`); } catch (e) { clear(body).append(h('div', { class: 'fe' }, e.message)); return; }
+    const err = h('div', { class: 'fe' });
+    clear(body).append(
+      h('p', { class: 'muted' }, `Every player who checks in at the ground earns this game toward the waitlist tiers. Check-in is in the Daji app on your own phone, from ${new Date(t.checkIn.opensAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })} on the day: unlock the phone, take a selfie, share your location once. Guests without a Daji profile can be on the list for the live score, but the game does not count for them.`),
+      h('ul', { class: 'plain', style: 'list-style:none;padding:0;margin:0' }, ...t.players.map((p) => h('li', { class: 'row', style: 'justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)' },
+        h('span', {}, p.name, p.isYou ? ' (you)' : '', !p.hasProfile ? h('span', { class: 'muted' }, ' · guest') : null),
+        h('span', { class: p.checkedIn ? 'ok-text' : 'muted' }, p.checkedIn ? 'Checked in' : p.undone ? 'Undone by staff' : 'Not yet', t.canEdit && p.id && !p.isBooker && !p.checkedIn && !p.undone
+          ? h('a', { href: '#', style: 'margin-left:10px', onclick: async (e) => { e.preventDefault(); try { await api(`/api/bookings/${encodeURIComponent(id)}/players/${encodeURIComponent(p.id)}/remove`, { method: 'POST', body: {} }); draw(`${p.name} is off the list.`); } catch (x) { err.textContent = x.message; } } }, 'Remove') : null)))),
+      msg ? h('p', { class: 'ok-text' }, msg) : null, err);
+    if (t.canEdit && t.players.length < t.checkIn.maxPlayers) {
+      const name = h('input', { class: 'inp', maxlength: 60, placeholder: 'Name', 'aria-label': 'Player name' });
+      const phone = h('input', { class: 'inp', maxlength: 14, inputmode: 'tel', placeholder: 'Mobile (optional)', 'aria-label': 'Player mobile' });
+      body.append(h('div', { class: 'row', style: 'gap:8px;margin-top:12px;flex-wrap:wrap' }, name, phone, h('button', { class: 'btn primary sm', type: 'button', onclick: async () => {
+        err.textContent = '';
+        if (name.value.trim().length < 2) { err.textContent = 'Enter the player\'s name.'; return; }
+        try { const r = await api(`/api/bookings/${encodeURIComponent(id)}/players`, { method: 'POST', body: { name: name.value.trim(), ...(phone.value.trim() ? { phone: phone.value.trim() } : {}) } }); draw(r.profile ? 'Added. The game counts for them when they check in.' : r.note || 'Added as a guest.'); }
+        catch (x) { err.textContent = x.message; }
+      } }, 'Add')), h('p', { class: 'muted small' }, 'With their mobile number and a Daji profile, the game counts for them too.'));
+    }
+  };
+  draw();
 }
 
 async function loadBookings() {
@@ -2001,6 +2030,19 @@ async function cancelSeriesOf(b) {
 }
 
 /** Auto-debit card in My bookings: approve once, and the balance is charged shortly before each booking. */
+// games other people booked that this customer is on the team list for
+bookingsExtras.push((ex) => {
+  if (!state.user || state.user.role !== 'customer') return;
+  const card = h('div', { class: 'card', style: 'margin:0 0 14px' });
+  api('/api/my/team-games').then((r) => {
+    if (!r.items.length) return;
+    ex.append(card);
+    card.append(h('h4', { style: 'margin:0 0 4px' }, 'Games you are playing in'), ...r.items.map((g) => h('div', { class: 'row', style: 'justify-content:space-between;padding:6px 0' },
+      h('span', {}, `${g.groundName}, ${new Date(g.startAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })} · booked by ${g.bookedBy}`),
+      h('span', {}, g.checkedIn ? h('span', { class: 'ok-text' }, 'Checked in ') : null, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => openTeamList(g.id, g.ref) }, 'Team list')))));
+  }).catch(() => {});
+});
+
 bookingsExtras.push((ex) => {
   if (!state.config.autoDebitEnabled || !state.user || state.user.role !== 'customer') return;
   const card = h('div', { class: 'card', style: 'margin:0 0 14px' }); ex.append(card);
@@ -2236,7 +2278,9 @@ function renderConnections(view) {
         const test = c.canTest ? h('button', { class: 'btn outline sm', type: 'button', onclick: async (e) => { const b = e.currentTarget; b.disabled = true; b.textContent = 'Testing…'; try { const t = await api(`/api/admin/integrations/${encodeURIComponent(c.id)}/test`, { method: 'POST', body: {} }); res.textContent = (t.ok ? '✓ ' : '✗ ') + t.message; res.style.color = t.ok ? '' : '#e07a5f'; } catch (er) { res.textContent = er.message; } b.disabled = false; b.textContent = 'Test'; } }, 'Test') : null;
         list.append(h('div', { class: 'li', style: 'align-items:flex-start;gap:14px' },
           h('span', { style: 'min-width:0' }, h('b', {}, c.name), h('span', { class: 'hint' }, `  ·  ${c.what}`),
-            c.status === 'ready' ? null : h('div', { class: 'hint', style: 'margin-top:4px' }, c.note || (c.missing.length ? `Missing: ${c.missing.join(', ')}. ` : '') + c.setup), res),
+            c.status === 'ready' ? null : h('div', { class: 'hint', style: 'margin-top:4px' }, c.note || (c.missing.length ? `Missing: ${c.missing.join(', ')}.` : '')),
+            (c.steps || []).length ? h('details', { style: 'margin-top:4px', ...(c.status === 'ready' ? {} : { open: '' }) }, h('summary', { class: 'hint', style: 'cursor:pointer' }, `How to connect (${c.steps.length} steps)`),
+              h('ol', { class: 'hint', style: 'margin:4px 0 0;padding-left:20px' }, ...c.steps.map((st) => h('li', {}, st.text, st.link ? h('span', {}, ' ', h('a', { href: st.link.url, target: '_blank', rel: 'noreferrer' }, `${st.link.label} ↗`)) : null)))) : null, res),
           h('span', { class: 'acts' }, h('b', { style: c.status === 'ready' ? 'color:#7fb685' : c.status === 'partial' ? '#d9bb73' : '' }, CONN_LABEL[c.status] || c.status), test)));
       }
     } catch (e) { clear(list); list.append(h('p', { class: 'fe' }, e.message)); }

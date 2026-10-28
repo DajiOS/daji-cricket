@@ -42,6 +42,7 @@ export const TOOL_DEFS = [
   { name: 'get_approvals_decided', description: 'How many approvals (bills, staff pay, refunds, discounts, fee waivers, expenses) were signed off, approved, sent back or rejected in a period.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_compliance', description: 'The compliance register (owner only): each Indian legal rule the software enforces, what it is set to, when it was last reviewed and is next due, the last changes in the law recorded, and law and policy updates waiting for a look.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_waitlist', description: 'The weekly waitlist (Sunday leather ball unless the owner changed it): how many people wait and for which day, each request (no names), how many games each has played and their tier, the session offered to them now and the rules (hours before, priority waves).', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_check_ins', description: 'Team lists and check-ins at the ground for one day (today unless a date is given): games, players on the lists, how many checked in (by phone at the ground or by staff), guests without a profile, check-ins undone. Counts only, no names.', input_schema: { type: 'object', properties: { date: { type: 'string', description: 'YYYY-MM-DD, IST' } } } },
   { name: 'list_grounds', description: 'The names and ids of the grounds.', input_schema: { type: 'object', properties: {} } },
   { name: 'search_documents', description: 'Searches every page of the uploaded documents (statements, bills, agreements, licences, scans) for words, and gives each matching document with its best page and the words around the match.', input_schema: { type: 'object', properties: { text: { type: 'string', description: 'The words to look for, for example "ground lease Arvindbhai".' } }, required: ['text'] } },
 ] as const;
@@ -85,6 +86,7 @@ export function runTool(ctx: T.Ctx, name: string, i: Input): unknown {
     case 'get_approvals_decided': return T.approvalsDecided(ctx, range(i));
     case 'get_compliance': return T.compliance(ctx);
     case 'get_waitlist': return T.waitlist(ctx, false);
+    case 'get_check_ins': return T.checkIns(ctx, false, typeof i.date === 'string' ? i.date : undefined);
     case 'list_grounds': return T.grounds(ctx);
     case 'search_documents': if (!seesDocs(ctx.user)) throw new Error('This login cannot see documents'); return { documents: searchDocs(ctx.ownerId, typeof i.text === 'string' ? i.text.slice(0, 200) : '', 5) };
     default: throw new Error(`There is no tool called ${name}`);

@@ -81,6 +81,13 @@
       "question": "Am I on the waitlist?"
     },
     {
+      "id": "games",
+      "title": "My games and tier",
+      "phrase": "Ask APP how many games I have played",
+      "personal": "Ask NAME how many games I have played",
+      "question": "How many games have I played?"
+    },
+    {
       "id": "live",
       "title": "Live score",
       "phrase": "Show the live score in APP",

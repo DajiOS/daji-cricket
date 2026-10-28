@@ -5,6 +5,7 @@ import type { AppConfig, Booking, Child, Dashboard, User } from './types';
 import { Badge, Btn, Chip, KV, Loading, Segmented, s } from './ui';
 import { AutoDebit } from './AutoDebit';
 import { Waitlist } from './Waitlist';
+import { MyTeamGames, TeamList } from './TeamList';
 import { PayScreen } from './PayScreen';
 import { DepositScreen, RescheduleScreen, differenceAsHold } from './ManageBooking';
 import type { HoldResponse } from './types';
@@ -95,8 +96,10 @@ export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; us
             {flags.deposit && ['confirmed', 'completed', 'no_show'].includes(b.status) && <Btn kind="ghost" label="Security deposit" onPress={() => setManage({ kind: 'deposit', b })} style={{ marginBottom: 0 }} />}
             {!b.block && ((b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now()) && <Btn kind="outline" label="Cancel" onPress={() => cancel(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
             {b.seriesId && !b.block && (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() && <Btn kind="ghost" label="Cancel unpaid repeats" onPress={() => cancelRepeats(b)} style={{ marginBottom: 0 }} />}
+            {!b.block && b.status === 'confirmed' && b.endAt > Date.now() && <TeamList bookingId={b.id} />}
           </View>
         ))}
+        <MyTeamGames />
         {flags.waitlist && <Waitlist onPay={setPayHold} />}
         <Text style={[s.h2, { marginTop: 10, color: C.head }]}>Your cricket</Text>
         <View style={s.card}>

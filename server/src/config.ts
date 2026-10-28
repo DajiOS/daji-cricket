@@ -57,6 +57,8 @@ export interface Config {
   whatsapp: { token: string; phoneId: string; otpTemplate: string; alertTemplate: string; waitlistTemplate: string; lang: string; apiUrl: string };
   /** MSG91 text-message sign-in codes: the back-up when WhatsApp is not set up or fails. Needs a DLT-approved OTP template in MSG91. */
   msg91: { authKey: string; templateId: string; apiUrl: string };
+  /** Optional face check at check-in through Amazon Rekognition (faceMatch.ts). Off until the key id and secret are set. `endpoint` is for tests. */
+  faceMatch: { region: string; keyId: string; secret: string; collection: string; endpoint: string };
   /** Email through Gmail SMTP with an App Password. The address defaults to the ground's own Gmail; GMAIL_APP_PASSWORD switches sending on. */
   email: { user: string; appPassword: string; fromName: string; host: string; port: number; tls: boolean };
   ai: { apiKey: string; model: string; apiUrl: string; mode: 'builtin' | 'auto' | 'claude'; limitPerHour: number; timeoutMs: number };
@@ -193,6 +195,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       lang: env.WHATSAPP_LANG || 'en',
       apiUrl: (env.WHATSAPP_API_URL || 'https://graph.facebook.com/v21.0').replace(/\/+$/, ''),
     },
+    faceMatch: { region: env.REKOGNITION_REGION || 'ap-south-1', keyId: env.REKOGNITION_KEY_ID || '', secret: env.REKOGNITION_SECRET || '', collection: env.REKOGNITION_COLLECTION || 'daji-players', endpoint: env.REKOGNITION_ENDPOINT || '' },
     msg91: {
       authKey: env.MSG91_AUTH_KEY || '',
       templateId: env.MSG91_TEMPLATE_ID || '',

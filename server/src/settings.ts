@@ -76,7 +76,9 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   waitlistConfirmHours: 72,
   waitlistTierPriority: false,
   waitlistWaveMinutes: 120,
-  waitlistTiers: [{ name: 'Diamond', minGames: 40 }, { name: 'Platinum', minGames: 30 }, { name: 'Gold', minGames: 20 }, { name: 'Silver', minGames: 10 }, { name: 'Bronze', minGames: 5 }],
+  waitlistTiers: [{ name: 'Diamond', minGames: 150 }, { name: 'Platinum', minGames: 100 }, { name: 'Gold', minGames: 75 }, { name: 'Silver', minGames: 50 }, { name: 'Bronze', minGames: 25 }],
+  checkInRadiusMeters: 150,
+  checkInOpensMinutes: 60,
 };
 
 /** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
@@ -110,6 +112,8 @@ const INT_RANGES: Record<string, [number, number]> = {
   waitlistDay: [0, 6],
   waitlistConfirmHours: [1, 336],
   waitlistWaveMinutes: [5, 1440],
+  checkInRadiusMeters: [50, 2000],
+  checkInOpensMinutes: [15, 240],
 };
 
 /** Validates and stores a partial update. Returns the keys that actually changed (with old/new values). */

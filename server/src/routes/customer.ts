@@ -33,6 +33,9 @@ import { beginSetup, checkCode, confirmSetup, disable as disableMfa, mfaEnabled 
 import { scopeOwnerId } from '../auth.ts';
 import { checkAiName, setOwnAiName } from '../aiNames.ts';
 import { acceptOffer, joinWaitlist, myWaitlist, parseJoin, withdrawEntry } from '../waitlist.ts';
+import { addPlayer, checkIn, enrollMyFace, faceCheck, moveCode, myFace, myTeamGames, parseCheckIn, removeMyFace, removePlayer, teamList } from '../players.ts';
+import { faceMatchReady } from '../faceMatch.ts';
+import { MAX_TASK_PHOTO_BYTES } from '../tasks.ts';
 
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
 
@@ -174,6 +177,20 @@ export function customerRoutes(r: Router): void {
   r.post('/api/waitlist', (c) => { const u = U(c); const res = joinWaitlist({ id: u.id, role: u.role }, u, parseJoin(c.json())); return res.created ? created(res) : ok(res); }, { idempotent: true, auth: ['customer'] });
   r.post('/api/waitlist/:id/withdraw', (c) => ok({ entry: withdrawEntry(U(c), c.params.id!, c.json()) }), { auth: ['customer'] });
   r.post('/api/waitlist/offers/:id/accept', async (c) => ok(await acceptOffer(c.cfg, U(c), c.params.id!)), { idempotent: true, auth: ['customer'] });
+
+  // ---- the team list and check-in at the ground: every player who checks in earns the game (players.ts)
+  r.get('/api/my/team-games', (c) => ok(myTeamGames(U(c))), { auth: ['customer'] });
+  r.get('/api/bookings/:id/players', (c) => ok(teamList(U(c), c.params.id!, faceMatchReady(c.cfg))), { auth: ['customer'] });
+  r.post('/api/bookings/:id/players', (c) => created(addPlayer(U(c), c.params.id!, c.json())), { auth: ['customer'] });
+  r.post('/api/bookings/:id/players/:pid/remove', (c) => ok(removePlayer(U(c), c.params.id!, c.params.pid!)), { auth: ['customer'] });
+  // the selfie for the face check is sent on to the face service and never stored here, so it is not kept as an upload
+  const shotAt = (c: { req: { headers: Record<string, string | string[] | undefined> } }) => (c.req.headers['x-app-shot-at'] ? Number(c.req.headers['x-app-shot-at']) : undefined);
+  r.post('/api/bookings/:id/check-in/face', async (c) => created(await faceCheck(c.cfg, U(c), c.params.id!, c.raw, shotAt(c))), { auth: ['customer'], maxBody: MAX_TASK_PHOTO_BYTES + 1024 });
+  r.get('/api/me/face', (c) => ok(myFace(c.cfg, U(c))), { auth: ['customer'] });
+  r.post('/api/me/face', async (c) => created(await enrollMyFace(c.cfg, U(c), c.raw, c.req.headers['x-face-consent'] === 'yes', shotAt(c))), { auth: ['customer'], maxBody: MAX_TASK_PHOTO_BYTES + 1024 });
+  r.post('/api/me/face/remove', (c) => ok(removeMyFace(U(c))), { auth: ['customer'] });
+  r.post('/api/bookings/:id/check-in', (c) => ok(checkIn(c.cfg, U(c), c.params.id!, parseCheckIn(c.json()))), { auth: ['customer'] });
+  r.post('/api/me/check-in-phone/code', async (c) => ok(await moveCode(c.cfg, U(c))), { auth: ['customer'] });
   r.post('/api/availability/options', (c) => {
     const q = parseOptionRequest(c.json());
     return ok(pricesFor(c.user, searchOptions(c.cfg, U(c), q, q.max)));

@@ -13,7 +13,7 @@ import { niceDay, parseRange } from './dates.ts';
 import { parseBooking } from '../guppiLang.ts';
 import { say } from '../guppiText.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
-import { myWaitlist } from '../waitlist.ts';
+import { myWaitlist, tierFor } from '../waitlist.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -38,11 +38,13 @@ export const CUSTOMER_EXAMPLES = [
   'How much does an evening slot cost?',
   'How do I get there?',
   'Am I on the Sunday waitlist?',
+  'How many games have I played?',
 ];
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const RULES: [string, RegExp][] = [
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?)\b/],
+  ['games', /how many games|games (have i|i have|i've) played|games? played|my tier|which tier|what tier|check.?in|kitne (match|game)|કેટલી મેચ|कितने मैच/],
   ['waitlist', /wait.?list|waiting list|on the list|my (place|turn|request)|વેઇટિંગ|વેટિંગ|वेटिंग|प्रतीक्षा/],
   ['cancel_policy', /cancel|refund policy|refund rules?|can i get (a|my) refund/],
   ['credit', /\bcredits?\b|wallet|account balance/],
@@ -119,6 +121,18 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
       if (n!.status === 'held') bits.push('It is held for you until you pay the advance.');
       else if (balanceOf(n!) > 0) bits.push(`${formatPaise(balanceOf(n!))} is still to pay.`);
       return out(bits.join(' '), { details: rest.slice(0, 5).map((b) => ({ label: 'Then', text: fmtBooking(b) })), open: 'bookings' });
+    }
+    case 'games': {
+      // games the customer played (checked in at the ground), their tier and the next one; their own numbers only
+      const w = myWaitlist(user);
+      const tiers = [...w.settings.tiers].sort((a, b) => a.minGames - b.minGames);
+      const next = tiers.find((t) => t.minGames > w.games);
+      const bits = [`You have played ${w.games} ${w.games === 1 ? 'game' : 'games'} here in the last 12 months.`];
+      const tier = tierFor(w.games).tier;
+      bits.push(tier ? `That makes you ${tier}.` : 'You are not in a tier yet.');
+      if (next) bits.push(`${next.minGames - w.games} more to reach ${next.name} (${next.minGames} games).`);
+      bits.push('A game counts when you check in at the ground in the Daji app on your own phone (unlock, selfie, location), or the ground staff check you in. The person who booked adds you to the team list with your mobile number.');
+      return out(bits.join(' '), { details: tiers.slice().reverse().map((t) => ({ label: t.name, text: `${t.minGames} games or more` })) });
     }
     case 'waitlist': {
       // the customer's own requests only, and how the waitlist works; accepting is done on the Waitlist screen, never here

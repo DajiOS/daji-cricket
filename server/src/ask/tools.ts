@@ -13,6 +13,7 @@ import { listOpen, getFlow, describe, looksAfterAny, APPROVAL_KINDS, KIND_INFO }
 import { changes as lawChanges, lastChecks, register } from '../compliance.ts';
 import { alerts as lawAlerts, lastFeedRun } from '../lawUpdates.ts';
 import { staffWaitlist } from '../waitlist.ts';
+import { checkInsOn } from '../players.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
 // can never disagree with a report. They are read-only, scoped to one owner and checked against the asker's permissions.
@@ -364,4 +365,13 @@ export function waitlist(ctx: Ctx, names: boolean) {
     people: live.map((e) => ({ ...(show ? { name: e.customerName } : {}), ground: e.groundName, session: e.session, nextDate: e.nextDate, status: e.status === 'won' ? 'accepted a slot' : 'waiting', everyWeek: e.everyWeek, weeksRolled: e.rollovers, gamesPlayed: e.games, tier: e.tier })),
     offers: w.offers.filter((o) => o.status !== 'closed').map((o) => ({ ground: o.groundName, session: o.session, date: o.date, time: `${o.time} to ${o.endTime}`, status: o.status === 'open' ? 'offered, nobody has accepted yet' : 'accepted', peopleTold: o.told, people: o.people, ...(show && o.takenBy ? { acceptedBy: o.takenBy } : {}) })),
   };
+}
+
+/** Team lists and check-ins at the ground for one day (today unless given): games, players, how many checked in, by phone or by staff. */
+export function checkIns(ctx: Ctx, names: boolean, date?: string) {
+  need(ctx, 'bookings');
+  if (!hasPermission(ctx.user, 'manage_bookings')) throw forbidden('You do not have access to team lists. Ask the owner to give you the "manage_bookings" permission.');
+  const day = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : istDate(now());
+  const from = istMidnight(day);
+  return { date: day, ...checkInsOn(ctx.ownerId, from, from + 24 * 3600 * 1000, names && can(ctx, 'customers')) };
 }

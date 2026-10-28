@@ -18,6 +18,7 @@ import { bookingOr404, viewBooking } from './bookings.ts';
 import { createEnquiry } from './enquiries.ts';
 import { pricesHidden } from './priceOnEnquiry.ts';
 import type { Config } from './config.ts';
+import { gamesPlayed } from './players.ts';
 
 // The weekly waitlist (the owner's deal for Sunday leather ball, 28 Oct 2026). A customer asks for a session on the waitlist day and keeps
 // rolling to the next week, for up to a year, until one is free for them. Normal bookings come first: a session still free
@@ -130,10 +131,8 @@ export function waitlistSessions(g: Pick<GroundRow, 'rates'>): RateRule[] {
 /** The first waitlist day on or after `from`. */
 export function waitlistDayFrom(from: string): string { return addDays(from, (getSettings().waitlistDay - dayOfWeek(from) + 7) % 7); }
 
-/** Games actually played here in the last 12 months: completed, or confirmed and already over. No-shows and cancellations do not count. */
-export function gamesPlayed(customerId: string, ownerId: string, t = now()): number {
-  return one<{ n: number }>("SELECT COUNT(*) n FROM bookings WHERE customer_id = ? AND owner_id = ? AND deleted_at IS NULL AND start_at >= ? AND (status = 'completed' OR (status = 'confirmed' AND end_at <= ?))", customerId, ownerId, t - 365 * DAY, t)!.n;
-}
+/** Games played here in the last 12 months by every player who checked in, not only the booker (players.ts). */
+export { gamesPlayed };
 
 /** Which wave someone is in: 1 for the top tier, then each tier in turn, and everyone below every tier last. All 1 when tier priority is off. */
 export function tierFor(games: number, s = getSettings()): { wave: number; tier: string | null } {

@@ -18,6 +18,7 @@ import { runBackupIfDue } from './backup.ts';
 import type { Config } from './config.ts';
 import { chargeDue } from './autodebit.ts';
 import { sweepQuarantine } from './intake.ts';
+import { sweepFaceForgets } from './players.ts';
 import { sweepWaitlist, type WaitlistSweep } from './waitlist.ts';
 
 export interface ExpiryResult { released: number; confirmed: number; extended: number }
@@ -111,10 +112,11 @@ export async function runFastSweeps(cfg: Config): Promise<SweepResult> {
   return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done, waitlist };
 }
 
-/** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries, the compliance check and the law updates feed. */
+/** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries, faces players removed (asked of the face service), the compliance check and the law updates feed. */
 export async function runSlowSweeps(cfg: Config): Promise<void> {
   await chargeDue(cfg).catch(logErr('autodebit'));
   try { sweepQuarantine(cfg.dataDir); } catch (e) { logErr('quarantine')(e); }
+  await sweepFaceForgets(cfg).catch(logErr('face-forget'));
   runRecurring(null, null);
   runDepreciation(null, SYSTEM);
   await runFeedSync(cfg, logErr('bank-feed'));

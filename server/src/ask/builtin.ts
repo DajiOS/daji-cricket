@@ -13,7 +13,7 @@ import { hasPermission } from '../auth.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'fixtures' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -38,6 +38,7 @@ const RULES: [Intent, RegExp][] = [
   ['approvals_report', /(how many|report|summary|history|stats|statistics)\b.*\b(approvals?|sign.?offs?|signed off|sent back)|\b(approvals?|sign.?offs?) (report|summary|history)\b/],
   ['approvals_waiting', /\b(whom|who)\b.*\b(waiting|holding|pending)|(waiting|pending|stuck|open|outstanding) (on|for)? ?(whom|who|which)\b|\bapprovals?\b|sign.?offs?|waiting (for|on) (my )?(sign|approval)|bills? (waiting|pending)|pay ?roll (waiting|pending)|(discounts?|waivers?|expenses?|refunds?) (waiting|pending) (for |on )?(sign|approv)/],
   ['waitlist', /wait.?list|waiting list|on the list for|standing (request|booking)s?/],
+  ['checkins', /^(?!.*\b(staff|employees?|team members?|attendance)\b).*\b(check(ed)?[ -]?ins?|team lists?|who played|players? (came|turned up))\b/],
   ['compliance', /complian|\blaws?\b|legal (rules?|updates?|changes?)|regulat|\bpolic(y|ies) (check|changes?|updates?)|statutory|rules? (are |is )?(due|overdue|past|to review)|review dates?|law.?change|\b(dpdp|cert.?in|esic?|professional tax)\b/],
   ['awaiting', /awaiting|to verify|verification|waiting for (me|us|approval|verification)|payments? (to|waiting|pending) (verify|check|approv)|upi (proof|screenshot)s?/],
   ['outstanding', /outstanding|\bowe[ds]?\b|\bdues?\b|unpaid|pending (payment|balance|amount|dues)|to collect|receivables?|balance (due|pending|remaining|left|owed)|yet to (pay|collect)|hasn.?t paid|haven.?t paid|not (yet )?paid|who (still )?owes/],
@@ -59,7 +60,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'waitlist', 'approvals_why', 'approvals_report', 'approvals_waiting', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -134,13 +135,13 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', fixtures: 'Tournament fixtures', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
 export const EXAMPLES = {
   reports: ['What was the revenue for the past 37 days?', 'What is my account balance?', 'What was our profit last month?', 'How much did we spend on electricity this financial year?', 'Compare this month with last month', 'Show the balance sheet'],
-  bookings: ['Who is on the Sunday waitlist?', 'How many bookings did we have last week?', "What's booked for tomorrow?", 'Who still owes us money?', 'How busy was the cricket ground in September?', 'How many no-shows this month?', 'How much account credit do customers hold?'],
+  bookings: ['Who is on the Sunday waitlist?', 'Who checked in today?', 'How many bookings did we have last week?', "What's booked for tomorrow?", 'Who still owes us money?', 'How busy was the cricket ground in September?', 'How many no-shows this month?', 'How much account credit do customers hold?'],
   customers: ['How many new customers played this month?'],
   compliance: ['Which compliance rules are due for review?', 'Any law updates waiting?'],
 };
@@ -160,6 +161,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'help') return help(ctx);
   if (intent === 'compliance') return complianceAnswer(ctx, question, base);
   if (intent === 'waitlist') return waitlistAnswer(ctx, base);
+  if (intent === 'checkins') return checkInsAnswer(ctx, base);
   if (intent === 'fixtures') return fixturesAnswer(ctx, base);
   if (intent === 'unknown') {
     const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
@@ -469,6 +471,19 @@ function complianceAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answer
 }
 
 /** The waitlist in words: how many wait and for which day, the session offered now, and who (for those who may see customers). */
+function checkInsAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  if (!T.can(ctx, 'bookings') || !hasPermission(ctx.user, 'manage_bookings')) return base('checkins', 'You do not have access to team lists. Ask the owner to give you the "manage_bookings" permission.');
+  const c = T.checkIns(ctx, true);
+  const notes = ['A game counts toward a player\'s waitlist tier only when they checked in at the ground on their own phone, or staff checked them in. Guests (no profile) never count.'];
+  if (!c.games) return base('checkins', 'No games with a team list today.', { notes, open: { tab: 'bookings' } });
+  const head = `${c.checkedIn} of ${count(c.players, 'player')} checked in today across ${count(c.games, 'game')}${c.guests ? ` (${count(c.guests, 'guest')} without a profile)` : ''}.`;
+  const tail = `${c.byStaff ? ` ${c.byStaff} checked in by staff.` : ''}${c.undone ? ` ${count(c.undone, 'check-in')} undone by staff.` : ''}`;
+  return base('checkins', head + tail, {
+    details: (c.list ?? []).slice(0, 15).map((p) => ({ label: p.name, text: `${p.ref}, ${p.ground}: ${p.undone ? 'check-in undone' : p.checkedIn ? `checked in${p.via === 'staff' ? ' by staff' : ''}` : 'not checked in'}${p.guest ? ', guest' : ''}` })),
+    notes, open: { tab: 'bookings' },
+  });
+}
+
 function waitlistAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
   if (!T.can(ctx, 'bookings') || !hasPermission(ctx.user, 'manage_bookings')) return base('waitlist', 'You do not have access to the waitlist. Ask the owner to give you the "manage_bookings" permission.');
   const w = T.waitlist(ctx, true);

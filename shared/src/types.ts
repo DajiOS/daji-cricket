@@ -503,6 +503,8 @@ export interface PublicConfig {
   customerRescheduleEnabled?: boolean;
   /** The weekly waitlist (Sunday leather ball unless changed) is switched on: clients show its screens only when this is true. */
   waitlistEnabled?: boolean;
+  /** Check-in asks for a selfie matched against the player's enrolled face (the face-match connection is set up). */
+  faceCheckIn?: boolean;
 }
 
 /** A professional coach shown on the website's academy section. */
@@ -576,6 +578,9 @@ export interface GlobalSettings {
   waitlistTierPriority: boolean;
   /** Minutes each priority wave has to itself before the next group is told. */
   waitlistWaveMinutes: number;
+  /** Check-in at the ground: how close (metres) the phone must be, and how many minutes before the start it opens. */
+  checkInRadiusMeters: number;
+  checkInOpensMinutes: number;
   /** The tiers, earned by games played here in the last 12 months. Anyone below every tier is in the last wave. */
   waitlistTiers: WaitlistTier[];
 }

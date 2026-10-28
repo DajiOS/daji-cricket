@@ -33,12 +33,13 @@ const mine = async (token: string) => (await h.get('/api/waitlist', token)).body
 const accept = (token: string, offerId: string) => h.post(`/api/waitlist/offers/${offerId}/accept`, {}, token);
 const offerOf = () => one<any>("SELECT * FROM waitlist_offers WHERE ground_id = ? AND date = ? ORDER BY created_at DESC LIMIT 1", g.id, SUNDAY);
 const sent = (userId: string, template: string) => many<any>('SELECT channel, status, skip_reason FROM notifications WHERE user_id = ? AND template = ?', userId, template);
-/** Games played: confirmed sessions already over, written straight into the books for the test. */
+/** Games played: completed sessions the player checked in to, written straight into the tables for the test. */
 function played(customerId: string, count: number): void {
   for (let i = 0; i < count; i++) {
     const at = T0 - (i + 2) * DAY;
     run(`INSERT INTO bookings(id, ref, ground_id, owner_id, customer_id, date, start_at, end_at, slot_count, status, source, total_paise, advance_paise, paid_paise, created_at, updated_at)
          VALUES(?,?,?,?,?,?,?,?,1,'completed','walk_in',100000,0,100000,?,?)`, `bkg_played_${customerId}_${i}`, `PL${customerId.slice(-4)}${i}`, g.id, g.ownerId, customerId, istDate(at), at, at + HOUR, at, at);
+    run("INSERT INTO booking_players(id, booking_id, owner_id, user_id, name, checked_in_at, check_in_via, created_at) VALUES(?,?,?,?,?,?,'phone',?)", `bp_played_${customerId}_${i}`, `bkg_played_${customerId}_${i}`, g.ownerId, customerId, 'Player', at, at);
   }
 }
 
@@ -58,7 +59,7 @@ test('the shipped defaults: off, Sunday leather ball, 72 hours, five tiers ready
   assert.equal(DEFAULT_SETTINGS.waitlistEnabled, false);
   assert.equal(DEFAULT_SETTINGS.waitlistDay, 0); assert.equal(DEFAULT_SETTINGS.waitlistBall, 'leather');
   assert.equal(DEFAULT_SETTINGS.waitlistConfirmHours, 72); assert.equal(DEFAULT_SETTINGS.waitlistTierPriority, false);
-  assert.deepEqual(DEFAULT_SETTINGS.waitlistTiers.map((t) => `${t.name} ${t.minGames}`), ['Diamond 40', 'Platinum 30', 'Gold 20', 'Silver 10', 'Bronze 5']);
+  assert.deepEqual(DEFAULT_SETTINGS.waitlistTiers.map((t) => `${t.name} ${t.minGames}`), ['Diamond 150', 'Platinum 100', 'Gold 75', 'Silver 50', 'Bronze 25']);
   assert.equal(new Date(SUNDAY + 'T00:00:00Z').getUTCDay(), 0);
   assert.equal(waitlistDayFrom(istDate(T0)), SUNDAY);
 });
