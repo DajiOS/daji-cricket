@@ -1,6 +1,6 @@
 // The desk's menu and routes in one place. To add a page: create src/pages/<Name>.tsx that exports a default component, then add one line to PAGES and one to NAV.
 import { lazy, type ComponentType } from 'react';
-import { can, type Me } from './lib';
+import { aiName, can, type Me } from './lib';
 import { resolveRoute } from './routes';
 import Dashboard from './pages/Dashboard';
 const Compliance = lazy(() => import('./pages/Compliance'));
@@ -89,7 +89,7 @@ export const SECTIONS: { key: string; title: string; icon: string }[] = [
   { key: 'finance', title: 'Revenue & Accounting', icon: 'accounts' },
   { key: 'work', title: 'Work', icon: 'tasks' },
   { key: 'reports', title: 'Reports', icon: 'pie' },
-  { key: 'guppi', title: 'Guppi', icon: 'ai' },
+  { key: 'guppi', get title() { return aiName(); }, icon: 'ai' },
   { key: 'admin', title: 'Admin', icon: 'settings' },
 ];
 const books = { perm: 'view_revenue' }, acct = { perm: 'manage_accounting' }, owner = { ownerOnly: true }, sup = { superOnly: true };
@@ -178,7 +178,7 @@ export const NAV: NavGroup[] = [
     { to: '/compliance/changes', href: '/compliance/change-log', label: 'Change log', icon: 'book', ...owner },
   ] },
 
-  { section: 'guppi', group: 'Guppi', items: [
+  { section: 'guppi', get group() { return aiName(); }, items: [
     { to: '/guppi', label: 'Ask', icon: 'ai' },
     { to: '/guppi/history', label: 'History', icon: 'clock' },
     { to: '/guppi/actions', label: 'Available actions', icon: 'list' },
@@ -217,12 +217,12 @@ const ALL = () => NAV.flatMap((g) => g.items);
 export interface RailItem { key: string; label: string; short: string; icon: string; sep?: string; to?: string; section?: string; hub?: boolean; eyebrow?: string; desc?: string; perm?: string; anyPerm?: string[]; ownerOnly?: boolean }
 export const RAIL: RailItem[] = [
   { key: 'today', label: 'Today', short: 'Today', icon: 'dashboard', to: '/' },
-  ...SECTIONS.filter((x) => x.key !== 'today').map((x) => ({ key: x.key, label: x.title, short: x.title, icon: x.icon, section: x.key, hub: x.key === 'finance', eyebrow: x.title, desc: '' })),
+  ...SECTIONS.filter((x) => x.key !== 'today').map((x) => ({ key: x.key, get label() { return x.title; }, get short() { return x.title; }, icon: x.icon, section: x.key, hub: x.key === 'finance', get eyebrow() { return x.title; }, desc: '' })),
 ];
 /** The left sidebar: one entry per register section. Each opens its first page this login can see; its pages show beneath it while it is open.
  *  `pages` are menu addresses (hrefOf). Every menu item sits under exactly one entry. */
 export interface SideItem { key: string; label: string; icon: string; to?: string; pages?: string[]; action?: 'ask'; anyPerm?: string[]; count?: 'approvals' }
-export const SIDE: SideItem[] = SECTIONS.map((x) => ({ key: x.key, label: x.title, icon: x.icon, pages: NAV.filter((g) => g.section === x.key).flatMap((g) => g.items.map(hrefOf)), ...(x.key === 'work' ? { count: 'approvals' as const } : {}) }));
+export const SIDE: SideItem[] = SECTIONS.map((x) => ({ key: x.key, get label() { return x.title; }, icon: x.icon, pages: NAV.filter((g) => g.section === x.key).flatMap((g) => g.items.map(hrefOf)), ...(x.key === 'work' ? { count: 'approvals' as const } : {}) }));
 
 /** The menu item for an address: first the item whose own address the address starts with (the longest), then the item whose page serves it. */
 export const itemFor = (route: string, items: NavItem[] = ALL()): NavItem | undefined => {
@@ -241,7 +241,7 @@ export const sideOf = (route: string): SideItem | undefined => {
 /** The menu item for a sidebar page address. */
 export const navItem = (href: string): NavItem | undefined => ALL().find((i) => hrefOf(i) === href);
 
-/** One line under each job in a hub. */
+/** One line under each job in a hub (by group name; the assistant's group, whose name each person picks, is under 'ai'). */
 export const BLURBS: Record<string, string> = {
   'Today': 'What is happening now and what needs you.',
   'Bookings': 'Every booking, the calendar and what is waiting on you.',
@@ -256,7 +256,7 @@ export const BLURBS: Record<string, string> = {
   'Work': 'Tasks, approvals, documents and what needs a second look.',
   'Reports': 'How the ground, the bookings and the money are doing.',
   'Compliance': 'Rules, review dates and the law-change log.',
-  'Guppi': 'Ask about the business in your own words.',
+  ai: 'Ask about the business in your own words.',
   'Staff & payroll': 'The team, their access, attendance and pay.',
   'Settings': 'Payments, website, festivals and connections.',
   'Audit & media': 'What happened, photos and the live cameras.',

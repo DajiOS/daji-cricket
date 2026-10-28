@@ -988,12 +988,15 @@ function openProfile() {
   const [ccNow, phoneNow] = splitPhone(u.phone), cc = countrySelect(ccNow), phone = h('input', { type: 'tel', value: phoneNow, autocomplete: 'tel-national', style: 'flex:1 1 auto;min-width:0' });
   const biz = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.businessName || '' }) : null, upi = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.upiId || '', placeholder: 'name@bank' }) : null;
   const f = (l, el) => { el.style.width = '100%'; return h('label', { class: 'lbl', style: 'display:grid;gap:6px;margin-top:12px' }, l, el); };
+  // Preferences: the name this person sees the assistant called. Empty = the ground's default. Reserved names (Siri, Alexa, ...) are refused by the server.
+  const aiName = h('input', { type: 'text', maxlength: '200', value: u.aiNameOwn || '', placeholder: (state.config && state.config.aiName) || 'Ask AI' });
   const save = h('button', { class: 'btn primary block', type: 'button', style: 'margin-top:16px', onclick: async () => {
     formClear(null, err); busyBtn(save, true, 'Saving…');
     if (!first.value.trim()) { busyBtn(save, false); formFail(null, err, new ApiError(400, 'VALIDATION_FAILED', 'Enter your first name.')); first.classList.add('bad'); first.focus(); return; }
     try {
       const body = { firstName: first.value.trim(), lastName: last.value.trim(), ...(phone.value.trim() ? { countryCode: cc.value, phone: phone.value.trim() } : {}), email: email.value.trim() || undefined };
       if (biz) { body.businessName = biz.value.trim(); body.upiId = upi.value.trim(); }
+      if (aiName.value.trim() !== (u.aiNameOwn || '')) body.aiName = aiName.value.trim() || null;
       const r = await api('/api/me', { method: 'PATCH', body }); busyBtn(save, false); state.user = r.user; renderAuth(); toast('Profile saved.'); closeModal();
     } catch (e) { busyBtn(save, false); formFail(null, err, e); }
   } }, 'Save profile');
@@ -1011,7 +1014,9 @@ function openProfile() {
       h('button', { class: 'btn outline sm', type: 'button', onclick: () => file.click() }, 'Choose a picture'),
       h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { closeModal(); signOut(); } }, 'Sign out'),
       u.avatarUrl ? h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { await api('/api/me/avatar', { method: 'DELETE' }); state.user = { ...state.user, avatarUrl: null }; refreshPic(); } catch (e) { err.textContent = e.message; } } }, 'Use my initial') : null, file)),
-    f('First name', first), f('Last name', last), f('Email', email), f('Mobile number', phoneRow(cc, phone)), biz ? f('Business name', biz) : null, upi ? f('UPI ID for payments', upi) : null, err, save,
+    f('First name', first), f('Last name', last), f('Email', email), f('Mobile number', phoneRow(cc, phone)), biz ? f('Business name', biz) : null, upi ? f('UPI ID for payments', upi) : null,
+    h('div', { class: 'eyebrow', style: 'margin:22px 0 4px' }, 'Preferences'), f('AI assistant name', aiName),
+    h('p', { class: 'hint', style: 'margin:6px 0 0' }, 'Any name you like, shown exactly as you type it, on your screens only. Leave it empty for the ground\'s default. It changes only the name, not what the assistant can see or do.'), err, save,
     h('div', { class: 'eyebrow', style: 'margin:22px 0 4px' }, 'Password'), u.hasPassword === false ? h('p', { class: 'hint', style: 'margin:4px 0 0' }, 'Set a password to sign in with your email or mobile number.') : f('Current password', cur), f('New password', nw), pwErr, pwBtn,
     h('button', { class: 'btn ghost block', type: 'button', style: 'margin-top:18px', onclick: () => { closeModal(); signOut(); } }, 'Sign out')]);
 }
@@ -2106,6 +2111,8 @@ function subPages(pane, tabId, items) {
   open(want || items[0][0], true);
 }
 
+/** The assistant's name as this person sees it: their own pick (Profile), else the ground's default (Settings), else "Ask AI". Shown exactly as given; a label only. */
+const aiLabel = () => (state.user && state.user.aiName) || (state.config && state.config.aiName) || 'Ask AI';
 const roleName = (u) => u.role === 'super_admin' ? 'Software owner' : u.role === 'owner' ? 'Owner' : (u.permissions || []).includes('manage_accounting') ? 'Accountant' : 'Team';
 
 const SERVICE_STATUS = { not_started: 'Not started', account_created: 'Account created', connected: 'Connected', live: 'Live', problem: 'Needs attention' };
@@ -2407,7 +2414,7 @@ async function loadDesk() {
   const sa = u.role === 'super_admin';
   $('#dk-eyebrow').textContent = sa ? 'Software owner' : u.role === 'owner' ? 'Owner desk' : 'Team desk';
   const slot = clear($('#dk-ask-slot'));
-  if (!sa) slot.append(h('button', { class: 'iconbtn', type: 'button', title: 'Ask AI', 'aria-label': 'Ask AI', onclick: openAskDialog }, sparkIcon()));
+  if (!sa) slot.append(h('button', { class: 'iconbtn', type: 'button', title: aiLabel(), 'aria-label': aiLabel(), onclick: openAskDialog }, sparkIcon()));
   const t = clear($('#dk-title'));
   if (sa) { t.append('The platform, ', h('em', {}, 'in one place.')); $('#dk-sub').textContent = 'Settings and people for the whole platform. Choose an owner to see their bookings and accounting.'; }
   else { t.append('Today, ', h('em', {}, 'at a glance.')); }
@@ -2503,7 +2510,7 @@ function sparkIcon() {
   return svg;
 }
 function openAskDialog() {
-  const out = h('div'); openModal([h('h3', {}, 'Ask AI'), askBox(out), out]);
+  const out = h('div'); openModal([h('h3', {}, aiLabel()), askBox(out), out]);
 }
 
 /** The ground cancels a booking: the owner must explain why. The customer reads it, then chooses a full refund, credit or another slot. */
@@ -3019,7 +3026,7 @@ async function renderMyDash(el) {
       d.creditPaise > 0 ? h('p', { class: 'hint', style: 'margin:6px 0 0' }, `Account credit available: ${inr(d.creditPaise)}.`) : null));
   }
   const out = h('div');
-  el.append(h('div', { class: 'box', style: 'margin-bottom:28px' }, h('div', { class: 'eyebrow', style: 'margin-bottom:6px' }, 'Ask about your bookings'),
+  el.append(h('div', { class: 'box', style: 'margin-bottom:28px' }, h('div', { class: 'eyebrow', style: 'margin-bottom:6px' }, aiLabel()),
     askBox(out, { base: '/api/ask', examples: '/api/ask/examples', placeholder: 'e.g. When is my next booking?' }), out));
   el.append(h('div', { class: 'eyebrow', style: 'margin:8px 0 14px' }, 'Your bookings'));
 }

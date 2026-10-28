@@ -10,8 +10,9 @@ import Backups from '../parts/admin/Backups';
 import People from '../parts/admin/People';
 import { Connections, Services } from '../parts/admin/Platform';
 import GoLive from '../parts/admin/GoLive';
+import AiName from '../parts/admin/AiName';
 
-const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['backups', 'Backups'], ['people', 'People'], ['connections', 'Connections'], ['services', 'Services'], ['golive', 'Go-live check']];
+const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['backups', 'Backups'], ['people', 'People'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['services', 'Services'], ['golive', 'Go-live check']];
 
 /** These tabs call software-owner-only endpoints, so the ground owner is not shown them (they would only say "no access"). */
 const SOFTWARE_OWNER_ONLY = ['backups', 'people', 'services'];
@@ -32,6 +33,7 @@ export default function Settings({ sub }: { sub: string }) {
       {tab === 'festivals' && <Festivals />}
       {tab === 'backups' && <Backups />}
       {tab === 'people' && <People />}
+      {tab === 'ai' && <AiName />}
       {tab === 'connections' && <Connections />}
       {tab === 'services' && <Services />}
       {tab === 'golive' && <GoLive />}
@@ -47,6 +49,7 @@ const ABOUT: Record<string, string> = {
   festivals: 'Festival looks and offers that switch on by themselves on the day.',
   backups: 'Copies of the data and restoring one.',
   people: 'Every login on the platform.',
+  ai: 'The name everyone sees the assistant called, voice shortcuts, and the reserved names no one may use.',
   connections: 'The services the server is connected to, and what each one still needs.',
   services: 'Outside services the platform pays for.',
   golive: 'Everything to tick off before the ground opens for real bookings.',

@@ -6,6 +6,7 @@ import type { User } from './types';
 import { Avatar, Btn, Field, PhoneField, Section, s, NameFields, splitName, splitPhone } from './ui';
 import { C } from './theme';
 import { biometricName, lockOn, setLockOn, unlock } from './lock';
+import { VoiceShortcuts } from './VoiceShortcuts';
 
 const ROLE: Record<string, string> = { customer: 'Customer', staff: 'Team member', owner: 'Owner', super_admin: 'Super admin' };
 
@@ -18,6 +19,20 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const [err, setErr] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
   const owner = user.role === 'owner';
   const [bio, setBio] = useState<string | null>(null); const [bioOn, setBioOn] = useState(false);
+  const [aiName, setAiName] = useState(user.aiNameOwn ?? ''); const [aiWarn, setAiWarn] = useState('');
+  // checked as it is typed, so a reserved name ("Hey Siri") is refused before Save
+  useEffect(() => {
+    const t = aiName.trim(); if (!t) { setAiWarn(''); return; }
+    let live = true;
+    const timer = setTimeout(() => { api<{ ok: boolean; message?: string }>('/api/ai-name/check', { method: 'POST', body: { name: t } }).then((r) => { if (live) setAiWarn(r.ok ? '' : r.message ?? ''); }).catch(() => { if (live) setAiWarn(''); }); }, 300); // the server checks again on save
+    return () => { live = false; clearTimeout(timer); };
+  }, [aiName]);
+  const saveAi = async () => {
+    setErr(''); setNote('');
+    if (aiWarn) { setErr(aiWarn); return; }
+    try { const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { aiName: aiName.trim() || null } }); onUser(r.user); setNote(`The assistant is now called ${r.user.aiName ?? aiName.trim()} for you.`); }
+    catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
+  };
   useEffect(() => { void biometricName().then(setBio); void lockOn().then(setBioOn); }, []);
 
   const save = async () => {
@@ -73,6 +88,13 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
         <Text style={[s.muted, { marginBottom: 10 }]}>{bioOn ? `On. The app asks for ${bio} when it opens and when you come back to it.` : `Ask for ${bio} when the app opens, so nobody else can use it on this phone.`}</Text>
         <Btn kind="outline" label={bioOn ? `Turn off ${bio} unlock` : `Turn on ${bio} unlock`} onPress={flipBio} />
       </>}
+      <Section>Preferences</Section>
+      <Field label="AI assistant name" value={aiName} onChangeText={setAiName} placeholder="Ask AI" autoCapitalize="words" />
+      {!!aiWarn && <Text style={s.err}>{aiWarn}</Text>}
+      {!!user.aiNameNotice && <Text style={[s.muted, { color: C.gold, marginBottom: 6 }]}>{user.aiNameNotice}</Text>}
+      <Text style={[s.muted, { marginBottom: 10 }]}>Any name you like, shown exactly as you type it, on your screens only. Leave it empty for the business default. It changes only the name, not what the assistant can see or do.</Text>
+      <Btn kind="outline" label="Save assistant name" onPress={saveAi} disabled={aiName.trim() === (user.aiNameOwn ?? '')} />
+      <VoiceShortcuts user={user} />
       <Section>Password</Section>
       {user.hasPassword === false ? <Text style={[s.muted, { marginBottom: 10 }]}>Set a password to sign in with your email or mobile number.</Text>
         : <Field label="Current password" value={cur} onChangeText={setCur} secureTextEntry />}

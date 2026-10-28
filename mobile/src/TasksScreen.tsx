@@ -13,12 +13,13 @@ const when = (ms: number): string => new Date(ms).toLocaleString('en-IN', { time
 
 /** Jobs for the team. A task is closed with photos taken with the camera on the spot (never from the gallery).
  *  A job can repeat (closing it adds the next one) and carry a checklist the team ticks off step by step. */
-export function TasksScreen({ user }: { user: User }) {
+/** `draftTitle` comes from a voice shortcut ("create a task"): the form starts filled in, and nothing is saved until Add is pressed. */
+export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: string }) {
   const manager = user.role !== 'staff' || (user.permissions ?? []).includes('manage_tasks');
   const [filter, setFilter] = useState<'open' | 'done' | 'cancelled'>('open');
   const [items, setItems] = useState<Task[] | null>(null); const [team, setTeam] = useState<TeamMember[]>([]);
   const [err, setErr] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false); const [working, setWorking] = useState('');
-  const [title, setTitle] = useState(''); const [details, setDetails] = useState(''); const [need, setNeed] = useState('1'); const [who, setWho] = useState('');
+  const [title, setTitle] = useState(draftTitle ?? ''); const [details, setDetails] = useState(''); const [need, setNeed] = useState('1'); const [who, setWho] = useState('');
   const [due, setDue] = useState(''); const [repeat, setRepeat] = useState<TaskRepeat | ''>(''); const [prio, setPrio] = useState<(typeof PRIORITIES)[number]>('medium'); const [steps, setSteps] = useState(''); const [q, setQ] = useState('');
 
   const load = useCallback(async () => {

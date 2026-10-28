@@ -1,6 +1,6 @@
 import { Router, ok } from '../http.ts';
 import { U, ownerOrFail } from './helpers.ts';
-import { ask, examplesFor } from '../ask/index.ts';
+import { ask, examplesFor, readVia } from '../ask/index.ts';
 import { aiConfigured } from '../config.ts';
 import { many } from '../db.ts';
 import { askCustomer, CUSTOMER_EXAMPLES } from '../ask/customer.ts';
@@ -11,7 +11,8 @@ export function askRoutes(r: Router): void {
   // POST { "question": "What was the revenue for the past 37 days?" }
   r.post('/api/staff/ask', async (c) => {
     const owner = ownerOrFail(c, 'ask a question');
-    return ok(await ask(c.cfg, U(c), owner, (c.json() as { question?: unknown }).question));
+    const b = c.json() as { question?: unknown; via?: unknown };
+    return ok(await ask(c.cfg, U(c), owner, b.question, fetch, { via: readVia(b.via) }));
   }, A);
 
   r.get('/api/staff/ask/examples', (c) => {
@@ -29,6 +30,6 @@ export function askRoutes(r: Router): void {
   }, A);
 
   // Customers: only their own bookings and credit, plus public ground details. Built-in answerer only.
-  r.post('/api/ask', (c) => ok(askCustomer(U(c), (c.json() as { question?: unknown }).question)), { auth: ['customer'], maxBody: 4096 });
+  r.post('/api/ask', (c) => { const b = c.json() as { question?: unknown; via?: unknown }; return ok(askCustomer(U(c), b.question, readVia(b.via))); }, { auth: ['customer'], maxBody: 4096 });
   r.get('/api/ask/examples', () => ok({ items: CUSTOMER_EXAMPLES }), { auth: ['customer'] });
 }

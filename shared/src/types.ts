@@ -69,6 +69,12 @@ export interface User {
   businessName: string | null;
   upiId: string | null;
   createdAt: number;
+  /** The assistant's name as this person sees it (their own pick, else the business default, else "Ask AI"). Shown exactly as given. A label only: Platform AI underneath is the same for everyone. */
+  aiName?: string;
+  /** This person's own pick, or null when they use the business default. */
+  aiNameOwn?: string | null;
+  /** Set when the name in use was put on the reserved list after it was saved: it keeps working for a grace period, and this says until when. */
+  aiNameNotice?: string | null;
 }
 
 export interface AuthResult {
@@ -474,6 +480,10 @@ export interface PublicConfig {
   publicUrl: string;
   /** Where photos, videos and the background films load from when a CDN is set up (MEDIA_CDN); null = this server. */
   mediaBase?: string | null;
+  /** The assistant's display name the business set (Settings), for visitors who are not signed in. A signed-in person sees user.aiName. */
+  aiName?: string;
+  /** Voice shortcuts are allowed for this business (Settings). Each person also turns them on for themselves. */
+  voiceEnabled?: boolean;
   /** The Guppi booking assistant (any language) is switched on. Clients show its screen only when this is true. */
   guppiBookingEnabled?: boolean;
   /** The owner has switched the refundable security deposit on: screens show it separately from the booking advance. */
@@ -536,6 +546,10 @@ export interface GlobalSettings {
   siteDesign: string;
   /** How often the rotating design changes: daypart (four times a day), daily or weekly. */
   designPace: 'daypart' | 'daily' | 'weekly';
+  /** The assistant's default display name for everyone at this business ("Ask AI" unless changed). Each person can pick their own in Profile. A label only; reserved names (Siri, Alexa, ...) are refused. */
+  aiAssistantName: string;
+  /** Voice shortcuts (Siri, phone assistant) allowed for this business. Speech is processed by the phone maker, so the owner can switch it off for everyone. */
+  voiceShortcutsEnabled: boolean;
 }
 
 export interface AuditEntry {
