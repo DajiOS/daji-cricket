@@ -16,6 +16,7 @@ import { resolveOption, searchOptions, type BookingOption } from './options.ts';
 import { guppiOn, strict } from './guppi.ts';
 import { groundKind, matchGrounds, parseBooking, settleClock, wantsKind, type Choice, type Lang, type RawClock } from './guppiLang.ts';
 import { dateText, durText, inr, LABELS, say, time12, whenText, type Key, type Labels } from './guppiText.ts';
+import { mainSiteBusinessId } from './businesses.ts';
 
 // Guppi booking conversation. The customer writes in English, Gujarati, Hindi, romanized Gujarati or Hindi, or a mix; Guppi reads it (guppiLang.ts) into one of a few plain
 // commands and runs it through the booking system's own commands: the option search (searchOptions, the same call the normal screens use), the issued option ids, and the hold
@@ -185,7 +186,8 @@ export async function guppiUnderstand(cfg: Config, user: UserRow, body: unknown,
   };
   const emptyCriteria = (): Criteria => ({ groundId: draft.groundId ?? null, groundName: null, anyGround: !!draft.anyGround, date: draft.date ?? null, weekday: draft.date ? weekdayName(draft.date) : null, startTime: draft.startTime ?? null, endTime: null, durationMinutes: draft.durationMinutes ?? null, minDurationMinutes: draft.minDurationMinutes ?? null, slots: null });
 
-  const grounds: GroundLite[] = listGrounds().map((g) => ({ id: g.id, name: g.name, city: g.city }));
+  // the booking assistant runs on the main website and its app: only the main site's business's grounds
+  const grounds: GroundLite[] = listGrounds({ ownerId: mainSiteBusinessId() ?? undefined }).map((g) => ({ id: g.id, name: g.name, city: g.city }));
 
   // ---- things that are never a booking: waivers, payment statements, balance, price
   const f = parsed.flags;

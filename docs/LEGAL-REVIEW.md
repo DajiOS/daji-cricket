@@ -14,6 +14,7 @@ The public pages (legal.html, privacy.html, the Terms window) are drafts written
 7b. India tax rules (server/src/taxrules.ts, invoices.ts): cash limits and the GST invoice. Confirm the SAC (default 997212), the GST rate and when the business must register.
 8. Messaging: WhatsApp (Meta template rules), TRAI DLT registration for SMS, consent records.
 9. Trademark: file Daji Cricket Ground (Class 41 sports, Class 39 ground booking) and check MP13 licence from Munaf Patel in writing.
+9a. Software owner (28 Oct 2026): Daji OS owns and runs the software; Daji Cricket Ground and every other business on it (Antroli Cricket Ground next) are its customers. Needed: the legal entity behind Daji OS, a software licence and data processing agreement between Daji OS and each business (Daji OS as processor, each business as data fiduciary under the DPDP Act), and a review of the new wording in web/public/legal.html (Intellectual property) and privacy.html (Who we are). Trademark search for "Daji OS" before using it as a brand.
 10. Patents: ask for a freedom-to-operate opinion only if you plan to claim novelty. Ordinary booking, payments and calendar features use standard, widely licensed methods.
 
 ## What we did to keep the software clean

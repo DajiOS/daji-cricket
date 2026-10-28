@@ -1201,7 +1201,7 @@ function fillStatic() {
     $('#ct-open-sub').textContent = [seasonal ? `Summer. Winter (Nov–Feb): ${g0.winterOpenTime} – ${clock(g0.winterCloseTime)}.` : '', g0.closedDays && g0.closedDays.length ? `Closed on ${g0.closedDays.map((d) => DAY_FULL[d] + 's').join(' and ')}.` : 'Every day.', g0.eveningSurchargePaise > 0 ? `Floodlights from ${g0.eveningFrom}.` : ''].filter(Boolean).join(' ');
   } else { $('#ct-open').textContent = ''; $('#ct-open-sub').textContent = ''; }
   $('#tagline').textContent = c.tagline;
-  $('#foot-l').textContent = `© Daji Cricket Ground & Daji Sports  ·  ${c.tagline}`;
+  $('#foot-l').textContent = `© Daji Cricket Ground & Daji Sports  ·  ${c.tagline}${c.softwareOwner ? `  ·  Software by ${c.softwareOwner}` : ''}`;
   $('#foot-r').textContent = `${c.contact.email}  ·  dajicricket.com`;
   // grounds
   const list = clear($('#grounds-list'));

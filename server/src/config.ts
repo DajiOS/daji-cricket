@@ -6,6 +6,8 @@ export interface Config {
   dataDir: string;
   dbPath: string;
   webDir: string;
+  /** The software owner's own address (PLATFORM_HOST, e.g. dajios.in). Each customer business gets <slug>.<this> as its booking page. Empty: not set up. */
+  platformHost: string;
   /** The website people visit (on Wix): https://dajicricket.com. Used in links inside messages. */
   publicUrl: string;
   /** Where this API is reachable from the internet, e.g. https://api.dajicricket.com. Razorpay webhooks and the Wix widgets call it. */
@@ -146,6 +148,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     dataDir,
     dbPath: env.DB_PATH || join(dataDir, 'daji.db'),
     webDir: env.WEB_DIR || join(process.cwd(), '..', 'web', 'public'),
+    platformHost: (env.PLATFORM_HOST ?? '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[/:].*$/, '').replace(/^www\./, ''),
     publicUrl: origin,
     apiUrl,
     frameAncestors,

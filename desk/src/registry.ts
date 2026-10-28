@@ -42,6 +42,16 @@ const BookingsReport = lazy(() => import('./pages/BookingsReport'));
 
 export interface NavItem { to: string; href?: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
 /** Who may see a menu entry: the same rules the server applies to the page behind it. */
+// Platform-wide settings (payments, website, festivals, integrations, go-live) belong to the business on the main website. Every other
+// customer business gets 403 there, so its menu does not show them. App sets this from /api/desk/brand.
+let mainBiz = true;
+export const setMainBusiness = (v: boolean) => { mainBiz = v; };
+export const isMainBusiness = () => mainBiz;
+const mainOnly = { check: () => mainBiz };
+// the sections of those pages that only the main business can open (Settings keeps Your business and Prices; Compliance keeps GST and terms)
+const MAIN_ONLY_SUBS = new Set(['/settings/booking', '/settings/payments', '/settings/website', '/settings/festivals', '/settings/ai', '/settings/connections', '/settings/golive', '/compliance/rules', '/compliance/renewals', '/compliance/updates', '/compliance/changes']);
+export const subOpen = (href: string) => mainBiz || !MAIN_ONLY_SUBS.has(href);
+
 export const navVisible = (me: Me, i: NavItem) => can(me, i.perm) && (!i.ownerOnly || me.role !== 'staff') && (!i.superOnly || me.role === 'super_admin') && (!i.check || i.check(me));
 /** The books and the money reports: "view_reports" or "manage_accounting", and "Can see revenue". */
 export const seesMoney = (me: Me) => (can(me, 'view_reports') || can(me, 'manage_accounting')) && can(me, 'view_revenue');
@@ -53,13 +63,13 @@ export const SUBS: Record<string, [string, string][]> = {
   '/booking-report': [['', 'Month by month'], ['compare', 'Compare']],
   '/academy': [['students', 'Students'], ['attendance', 'Attendance'], ['fees', 'Fees'], ['skills', 'Skills'], ['coaches', 'Coaches']],
   '/accounting': [['overview', 'Overview'], ['reports', 'Reports'], ['reconcile', 'Reconcile'], ['recurring', 'Recurring'], ['journals', 'Journals'], ['cashflow', 'Cash flow'], ['budget', 'Budget'], ['gst', 'GST'], ['assets', 'Fixed assets'], ['setup', 'Setup']],
-  '/settings': [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']],
+  '/settings': [['business', 'Your business'], ['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']],
   '/bills': [['', 'Bills'], ['vendors', 'Vendors']],
   '/compliance': [['rules', 'Rules and review dates'], ['renewals', 'Renewals'], ['updates', 'Law updates'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']],
   '/payroll': [['run', 'Payroll run'], ['attendance', 'Attendance'], ['advances', 'Advances and deductions'], ['staff', 'Staff']],
   '/memberships': [['', 'Members'], ['expiring', 'Expiring soon'], ['plans', 'Plans'], ['activity', 'Activity']],
   '/reminders': [['', 'Queue'], ['templates', 'Templates'], ['one', 'Send one'], ['history', 'History']],
-  '/platform': [['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings and backups'], ['bank', 'Bank connection'], ['services', 'Services'], ['refunds', 'Refunds'], ['costs', 'Software costs']],
+  '/platform': [['customers', 'Customers'], ['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings and backups'], ['bank', 'Bank connection'], ['services', 'Services'], ['refunds', 'Refunds'], ['costs', 'Software costs']],
 };
 export const subHref = (to: string, k: string): string => (k ? `${to}/${k}` : to);
 
@@ -171,9 +181,9 @@ export const NAV: NavGroup[] = [
   ] },
   { section: 'reports', group: 'Compliance', items: [
     { to: '/compliance', label: 'Register', icon: 'audit', ...owner },
-    { to: '/compliance/renewals', label: 'Renewals', icon: 'calendar', ...owner },
-    { to: '/compliance/updates', label: 'Law updates', icon: 'bell', ...owner },
-    { to: '/compliance/changes', href: '/compliance/change-log', label: 'Change log', icon: 'book', ...owner },
+    { to: '/compliance/renewals', label: 'Renewals', icon: 'calendar', ...owner, ...mainOnly },
+    { to: '/compliance/updates', label: 'Law updates', icon: 'bell', ...owner, ...mainOnly },
+    { to: '/compliance/changes', href: '/compliance/change-log', label: 'Change log', icon: 'book', ...owner, ...mainOnly },
   ] },
 
   { section: 'guppi', get group() { return aiName(); }, items: [
@@ -189,11 +199,11 @@ export const NAV: NavGroup[] = [
   ] },
   { section: 'admin', group: 'Settings', items: [
     { to: '/settings', href: '/admin/settings', label: 'Settings', icon: 'settings', ...owner },
-    { to: '/settings/payments', label: 'Payment settings', icon: 'payments', ...owner },
-    { to: '/settings/website', label: 'Website', icon: 'globe', ...owner },
-    { to: '/settings/festivals', label: 'Festivals', icon: 'calendar', ...owner },
-    { to: '/settings/connections', href: '/admin/integrations', label: 'Integrations', icon: 'key', ...owner },
-    { to: '/settings/golive', label: 'Go-live check', icon: 'check', ...owner },
+    { to: '/settings/payments', label: 'Payment settings', icon: 'payments', ...owner, ...mainOnly },
+    { to: '/settings/website', label: 'Website', icon: 'globe', ...owner, ...mainOnly },
+    { to: '/settings/festivals', label: 'Festivals', icon: 'calendar', ...owner, ...mainOnly },
+    { to: '/settings/connections', href: '/admin/integrations', label: 'Integrations', icon: 'key', ...owner, ...mainOnly },
+    { to: '/settings/golive', label: 'Go-live check', icon: 'check', ...owner, ...mainOnly },
   ] },
   { section: 'admin', group: 'Audit & media', items: [
     { to: '/activity', href: '/admin/audit', label: 'Audit', icon: 'bell' },
@@ -269,11 +279,11 @@ export const SUB_ICONS: Record<string, string> = {
   '/academy:students': 'users', '/academy:attendance': 'clock', '/academy:fees': 'payroll', '/academy:skills': 'star', '/academy:coaches': 'grad',
   '/accounting:overview': 'dashboard', '/accounting:reports': 'accounts', '/accounting:reconcile': 'swap', '/accounting:recurring': 'repeat',
   '/accounting:journals': 'book', '/accounting:cashflow': 'payments', '/accounting:budget': 'pie', '/accounting:gst': 'percent', '/accounting:assets': 'warehouse', '/accounting:setup': 'settings',
-  '/settings:prices': 'tag', '/settings:booking': 'calendar', '/settings:payments': 'payments', '/settings:website': 'globe', '/settings:festivals': 'calendar', '/settings:ai': 'ai', '/settings:connections': 'key',
+  '/settings:business': 'map', '/settings:prices': 'tag', '/settings:booking': 'calendar', '/settings:payments': 'payments', '/settings:website': 'globe', '/settings:festivals': 'calendar', '/settings:ai': 'ai', '/settings:connections': 'key',
   '/bills:': 'billing', '/bills:vendors': 'warehouse',
   '/compliance:rules': 'audit', '/compliance:updates': 'bell', '/compliance:changes': 'book', '/compliance:gst': 'percent', '/compliance:terms': 'shield',
   '/payroll:run': 'payroll', '/payroll:attendance': 'clock', '/payroll:advances': 'swap', '/payroll:staff': 'users',
   '/memberships:': 'users', '/memberships:expiring': 'bell', '/memberships:plans': 'tag', '/memberships:activity': 'list',
   '/reminders:': 'inbox', '/reminders:templates': 'edit', '/reminders:one': 'chat', '/reminders:history': 'clock',
-  '/platform:requests': 'inbox', '/platform:people': 'users', '/platform:settings': 'settings', '/platform:bank': 'bank', '/platform:services': 'plug', '/platform:refunds': 'swap', '/platform:costs': 'billing',
+  '/platform:customers': 'users', '/platform:requests': 'inbox', '/platform:people': 'users', '/platform:settings': 'settings', '/platform:bank': 'bank', '/platform:services': 'plug', '/platform:refunds': 'swap', '/platform:costs': 'billing',
 };

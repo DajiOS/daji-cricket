@@ -3,13 +3,14 @@ import { feedLog, feedStatus, linkAccount, syncAccount } from '../accounting/fee
 import { aaWebhookAuthorised, createConsent, handleAaWebhook, listConsents, mapAccount, revokeLocal, syncConsent, viewAaSettings } from '../accounting/aa.ts';
 import { autoLinkAccounts, disconnectProviderAccount, fastLinkSession, listProviderAccounts, ownersInWebhook, refreshProviderAccount, webhookAuthorised } from '../accounting/yodlee.ts';
 import { askExpense, expenseNeedsSignoff } from '../money-asks.ts';
+import { businessName } from '../businesses.ts';
 import { Router, ok, created } from '../http.ts';
 import type { Ctx, Reply } from '../http.ts';
 import { U, page, ownerOrFail } from './helpers.ts';
 import { HttpError, forbidden } from '../errors.ts';
 import { audit, SYSTEM } from '../audit.ts';
 import { hasPermission, requireRevenue } from '../auth.ts';
-import { many, one, run } from '../db.ts';
+import { many, run } from '../db.ts';
 import { now } from '../clock.ts';
 import { istDate, monthRange, addDays as addDaysIst } from '../time.ts';
 import { balanceSheet, accountLedger, financialYear, profitAndLoss, rangeFrom, requireDate, trialBalance } from '../accounting/statements.ts';
@@ -47,7 +48,8 @@ function formatOf(c: Ctx): Format {
   return f;
 }
 
-const business = (ownerId: string): string => one<{ name: string }>('SELECT name FROM users WHERE id = ?', ownerId)?.name ?? 'Daji Cricket Ground';
+// the business's own name on its exported reports, never another business's
+const business = (ownerId: string): string => businessName(ownerId);
 
 function download(c: Ctx, ownerId: string, format: 'csv' | 'xlsx' | 'pdf', file: string, sheets: SheetSpec[], csvSheet = 0): Reply {
   audit(actor(c), 'acct.export', 'acct_report', file, { format }, ownerId);
