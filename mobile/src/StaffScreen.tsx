@@ -2,17 +2,17 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { PaymentRow, StaffBooking, User } from './types';
-import { Badge, Btn, Chip, Field, KV, Loading, s } from './ui';
+import { Badge, Btn, Chip, Field, KV, Loading, Segmented, s } from './ui';
 import { C, inr, niceDate } from './theme';
 import { BlockForm } from './BlockForm';
 
 const hhmm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
-type View_ = 'today' | 'upcoming' | 'approvals' | 'payments' | 'block';
+export type View_ = 'today' | 'upcoming' | 'approvals' | 'payments' | 'block';
 const can = (u: User, perm: string) => u.role !== 'staff' || (u.permissions ?? []).includes(perm);
 
 /** Bookings for the team: today, what is coming, approvals, and UPI payments waiting to be checked. */
-export function StaffScreen({ user }: { user: User }) {
-  const [view, setView] = useState<View_>('today');
+export function StaffScreen({ user, start = 'today' }: { user: User; start?: View_ }) {
+  const [view, setView] = useState<View_>(start);
   const [books, setBooks] = useState<StaffBooking[] | null>(null); const [pays, setPays] = useState<PaymentRow[]>([]);
   const [open, setOpen] = useState(''); const [mode, setMode] = useState<'' | 'pay' | 'cancel'>('');
   const [amount, setAmount] = useState(''); const [method, setMethod] = useState<'cash' | 'upi' | 'card' | 'bank_transfer'>('cash');
@@ -85,9 +85,9 @@ export function StaffScreen({ user }: { user: User }) {
   const tabs: [View_, string][] = [['today', 'Today'], ['upcoming', 'Upcoming'], ['approvals', 'Approvals'], ['payments', 'Payments']];
   if (can(user, 'manage_bookings')) tabs.push(['block', 'Multi-day']);
   return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
       <Text style={s.eyebrow}>Bookings</Text><Text style={s.h1}>{view === 'today' ? 'Today' : view === 'upcoming' ? 'Coming up' : view === 'approvals' ? 'Waiting for approval' : view === 'block' ? 'Multi-day booking' : 'Payments to check'}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>{tabs.map(([id, l]) => <Chip key={id} label={l} on={view === id} onPress={() => setView(id)} />)}</ScrollView>
+      <Segmented items={tabs} value={view} onChange={setView} />
       {view === 'today' && (counts.awaiting > 0 || counts.review > 0) && <Text style={[s.muted, { color: C.gold, marginBottom: 8 }]}>{counts.awaiting} payment{counts.awaiting === 1 ? '' : 's'} to check · {counts.review} to review</Text>}
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       {view === 'block' ? <BlockForm onDone={(m) => { setNote(m); setView('upcoming'); }} /> : view === 'payments' ? (!pays.length ? <Text style={s.muted}>Nothing waiting. All UPI payments are checked.</Text> : pays.map((p) => (

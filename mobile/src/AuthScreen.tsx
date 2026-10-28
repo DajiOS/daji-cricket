@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { api, setToken } from './api';
 import type { User } from './types';
 import { Btn, Field, PhoneField, s, NameFields, splitName } from './ui';
-import { C, mode as look } from './theme';
+import { C } from './theme';
+import { useAppearance, useGroundPhoto } from './photo';
 
 export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) => void; admin?: boolean; onBack?: () => void; note?: string }) {
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [f, setF] = useState({ name: '', countryCode: '+91', phone: '', email: '', password: '', code: '' });
   const [needCode, setNeedCode] = useState(false);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const pic = useGroundPhoto(); const look = useAppearance();
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
 
   const go = async () => {
@@ -25,8 +27,14 @@ export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) 
 
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={[s.pad, { paddingTop: 70 }]} keyboardShouldPersistTaps="handled">
-        <Image source={look === 'light' ? require('../assets/logo-green.png') : require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 240, height: 82, marginBottom: 18, marginLeft: -6 }} />
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <View style={{ height: 250, backgroundColor: '#0F3A22', justifyContent: 'flex-end', padding: 18, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, overflow: 'hidden', marginBottom: 18 }}>
+          {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: pic ? 'rgba(6,22,13,.55)' : 'transparent' }]} />
+          <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 220, height: 76, marginLeft: -6 }} />
+          <Text style={{ color: 'rgba(255,255,255,.9)', fontSize: 13, fontWeight: '700', letterSpacing: 2, marginTop: 6 }}>{admin ? 'DAJI ADMIN' : 'PLAY · PRACTICE · GROW'}</Text>
+        </View>
+        <View style={s.pad}>
         <Text style={s.h1}>{mode === 'in' ? 'Sign in' : 'Create your account'}</Text>
         <Text style={[s.muted, { marginBottom: 22 }]}>{note ?? (admin ? 'For the ground team and owners.' : 'Book the ground, see what you have played and spent, and follow your child at the academy.')}</Text>
         {mode === 'up' && (<><NameFields value={f.name} onChange={set('name')} /><PhoneField code={f.countryCode} number={f.phone} onCode={set('countryCode')} onNumber={set('phone')} /></>)}
@@ -40,6 +48,8 @@ export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) 
         {!admin && <Btn kind="ghost" label={mode === 'in' ? 'New here? Create an account' : 'Have an account? Sign in'} onPress={() => { setMode(mode === 'in' ? 'up' : 'in'); setErr(''); }} />}
         {onBack && <Btn kind="ghost" label="Back to booking" onPress={onBack} />}
         <View style={{ height: 1, backgroundColor: C.line, marginVertical: 14 }} />
+        <Btn kind="ghost" label={look.mode === 'dark' ? 'Use the light look' : 'Use the dark look'} onPress={look.flip} />
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );

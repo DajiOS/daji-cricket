@@ -9,7 +9,9 @@ import { BookScreen } from './src/BookScreen';
 import { PayScreen } from './src/PayScreen';
 import { MeScreen } from './src/MeScreen';
 import { AskScreen } from './src/AskScreen';
-import { StaffScreen } from './src/StaffScreen';
+import { StaffScreen, type View_ as StaffView } from './src/StaffScreen';
+import { HomeScreen, type HomeGo } from './src/HomeScreen';
+import { LiveScreen } from './src/LiveScreen';
 import { TasksScreen } from './src/TasksScreen';
 import { ProfileScreen } from './src/ProfileScreen';
 import { TeamScreen } from './src/TeamScreen';
@@ -26,10 +28,10 @@ import { CostsScreen } from './src/CostsScreen';
 import { RemindersScreen } from './src/RemindersScreen';
 import { CardsScreen } from './src/CardsScreen';
 import { SettingsScreen } from './src/SettingsScreen';
-import { Avatar, Btn, Chip, Loading, Section, Steps, s, refreshStyles } from './src/ui';
+import { Avatar, Btn, Chip, Icon, type IconName, ListCard, ListRow, Loading, Steps, s, refreshStyles } from './src/ui';
+import { Appearance } from './src/photo';
 import * as SecureStore from 'expo-secure-store';
 import { Intro } from './src/Intro';
-import { ThemeButton } from './src/ThemeButton';
 import { registerForPush, unregisterPush, onNotificationTap } from './src/push';
 import { C, inr, mode, niceDate, setMode, type Mode } from './src/theme';
 import { ADMIN_APP } from './src/variant';
@@ -39,26 +41,32 @@ import { LockScreen } from './src/LockScreen';
 import { parseVoiceLink, voiceOn, type VoiceRequest } from './src/voice';
 
 // One app for everyone. What each person sees depends on who signed in:
-//   customer     Book, Bookings (My Bookings and academy), the assistant (shown under the name the person picked), Profile
-//   staff        Bookings, Tasks, Books, the assistant, More, each only if their permissions allow it
+//   guest        Book, Live, Sign in
+//   customer     Book, Bookings (My Bookings and academy), Live score, the assistant (shown under the name the person picked), Profile
+//   staff        Home, Bookings, Tasks, the assistant, More (Books is under More and on Home), each only if their permissions allow it
 //   coach        (staff with manage_academy / manage_matches) Academy and Matches under More
 //   messages     (staff with send_broadcasts / view_customers) WhatsApp reminders and Business cards under More
 //   owner        the same, plus Promo codes, Team, Booking controls, Staff pay and Compliance under More
 //   super admin  the same as the owner, working inside the owner chosen under More, plus Refunds and Software costs
-type Tab = 'book' | 'me' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'accounts' | 'more';
-type More = null | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings';
+type Tab = 'home' | 'book' | 'me' | 'live' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'more' | 'signin';
+type More = null | 'accounts' | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings';
 
-/** The bar of tabs along the bottom. The open tab sits on a green pill. */
+const TAB_ICON: Record<string, IconName> = { home: 'home', book: 'calendar', me: 'receipt', live: 'radio', ask: 'sparkles', profile: 'person-circle', bookings: 'calendar', tasks: 'checkbox', more: 'grid', signin: 'log-in' };
+/** The bar of tabs along the bottom: an icon over each name; the open tab is filled green. */
 function TabBar({ tabs, on, onPick, bottom }: { tabs: [string, string][]; on: string; onPick: (id: string) => void; bottom: number }) {
   return (
-    <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingHorizontal: 8, paddingTop: 8, paddingBottom: Math.max(14, bottom) }}>
-      {tabs.map(([id, name]) => (
-        <Pressable key={id} accessibilityRole="tab" accessibilityState={{ selected: on === id }} onPress={() => onPick(id)} style={{ flex: 1, alignItems: 'center' }}>
-          <View style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: on === id ? C.soft : 'transparent' }}>
-            <Text style={{ color: on === id ? C.gold : C.muted, fontSize: 12.5, fontWeight: on === id ? '800' : '600' }}>{name}</Text>
-          </View>
-        </Pressable>
-      ))}
+    <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingHorizontal: 6, paddingTop: 8, paddingBottom: Math.max(12, bottom) }}>
+      {tabs.map(([id, name]) => {
+        const sel = on === id, icon = TAB_ICON[id] ?? 'ellipse';
+        return (
+          <Pressable key={id} accessibilityRole="tab" accessibilityState={{ selected: sel }} accessibilityLabel={name} onPress={() => onPick(id)} style={{ flex: 1, alignItems: 'center', gap: 3 }}>
+            <View style={{ paddingVertical: 4, paddingHorizontal: 14, borderRadius: 999, backgroundColor: sel ? C.soft : 'transparent' }}>
+              <Icon name={(sel ? icon : `${icon}-outline`) as IconName} size={22} color={sel ? C.gold : C.muted} />
+            </View>
+            <Text numberOfLines={1} style={{ color: sel ? C.gold : C.muted, fontSize: 11, fontWeight: sel ? '800' : '600' }}>{name}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -80,6 +88,7 @@ function AppInner({ theme }: { theme: Mode }) {
   const [voiceLink, setVoiceLink] = useState<VoiceRequest | null>(null);
   const [voiceAsk, setVoiceAsk] = useState<{ q: string; n: number } | null>(null);
   const [taskDraft, setTaskDraft] = useState<{ title: string; n: number } | null>(null);
+  const [staffView, setStaffView] = useState<{ v: StaffView; n: number }>({ v: 'today', n: 0 }); // Home can open Bookings on one of its tabs
   const [voiceNote, setVoiceNote] = useState('');
   useEffect(() => {
     const take = (url: string | null) => { const v = parseVoiceLink(url); if (v) setVoiceLink(v); };
@@ -98,7 +107,7 @@ function AppInner({ theme }: { theme: Mode }) {
       setVoiceNote(''); setHold(null); setDone(null); setMore(null);
       const a = v.action;
       if (a.screen === 'tasks') { setTaskDraft({ title: v.title ?? '', n: Date.now() }); setTab('tasks'); }
-      else if (a.screen === 'book') setTab('book');
+      else if (a.screen === 'book' || a.screen === 'live') setTab(a.screen);
       else { setVoiceAsk(a.question || v.question ? { q: (v.question ?? a.question)!, n: Date.now() } : null); setTab('ask'); }
     })();
   }, [voiceLink, user?.id]);
@@ -109,8 +118,8 @@ function AppInner({ theme }: { theme: Mode }) {
       try { const me = (await api<{ user: User }>('/api/me')).user; if (await lockOn()) lockNow(); setUser(me); } catch { await setToken(null); await setLockOn(false); setUser(null); }
     })();
   }, []);
-  // once signed in, people who work for the ground land on their own first tab
-  useEffect(() => { if (user && user.role !== 'customer') setTab((t) => (t === 'book' ? 'tasks' : t)); }, [user?.id]);
+  // once signed in, people who work for the ground land on their own Home
+  useEffect(() => { if (user && user.role !== 'customer') setTab((t) => (t === 'book' ? 'home' : t)); }, [user?.id]);
   useEffect(() => { if (user) void registerForPush(); }, [user?.id]);
   // the super admin works inside one owner's desk at a time
   useEffect(() => {
@@ -130,9 +139,10 @@ function AppInner({ theme }: { theme: Mode }) {
     return (
       <View style={s.screen}>
         <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
-        <View style={{ flex: 1, display: signin ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
+        <View style={{ flex: 1, display: signin || tab === 'live' ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
+        {!signin && tab === 'live' && <LiveScreen />}
         {signin && <AuthScreen onUser={(u) => { setSignin(false); setUser(u); }} onBack={() => setSignin(false)} note="Sign in to hold your slot. Your day and time stay as you left them." />}
-        <TabBar tabs={[['book', 'Book'], ['signin', 'Sign in']]} on={signin ? 'signin' : 'book'} onPick={(id) => (id === 'signin' ? ask() : setSignin(false))} bottom={insets.bottom} />
+        <TabBar tabs={[['book', 'Book'], ['live', 'Live'], ['signin', 'Sign in']]} on={signin ? 'signin' : tab === 'live' ? 'live' : 'book'} onPick={(id) => { if (id === 'signin') ask(); else { setSignin(false); setTab(id as Tab); } }} bottom={insets.bottom} />
       </View>
     );
   }
@@ -155,14 +165,21 @@ function AppInner({ theme }: { theme: Mode }) {
   const deskKey = viewOwner ?? 'self'; // a different owner reloads the screen
   // the assistant's tab shows the name this person picked, exactly as given; a long one is cut to fit the bar
   const aiName = user.aiName || 'Ask AI';
-  const aiTab = aiName.length > 14 ? `${aiName.slice(0, 13)}…` : aiName;
+  const aiTab = aiName.length > 10 ? `${aiName.slice(0, 9)}…` : aiName;
 
   let body: React.ReactNode;
   if (!customer) {
-    if (tab === 'bookings' && bookingsOk) body = <StaffScreen key={deskKey} user={user} />;
-    else if (tab === 'accounts' && accountsOk) body = <AccountsScreen key={deskKey} />;
+    const homeGo = (to: HomeGo) => {
+      setMore(null);
+      if (to === 'bookings' || to === 'payments' || to === 'block') { setStaffView((x) => ({ v: to === 'bookings' ? 'today' : to, n: x.n + 1 })); setTab('bookings'); }
+      else if (to === 'tasks' || to === 'ask') setTab(to);
+      else { setTab('more'); setMore(to); }
+    };
+    if (tab === 'home') body = <HomeScreen key={deskKey} user={user} aiName={aiName} go={homeGo} />;
+    else if (tab === 'bookings' && bookingsOk) body = <StaffScreen key={`${deskKey}:${staffView.n}`} user={user} start={staffView.v} />;
     else if (tab === 'more') {
-      if (more === 'promo') body = <PromoScreen key={deskKey} />;
+      if (more === 'accounts' && accountsOk) body = <AccountsScreen key={deskKey} />;
+      else if (more === 'promo') body = <PromoScreen key={deskKey} />;
       else if (more === 'team') body = <TeamScreen key={deskKey} />;
       else if (more === 'platform') body = <PlatformScreen />;
       else if (more === 'desk' && boss) body = <DeskScreen key={deskKey} />;
@@ -177,33 +194,39 @@ function AppInner({ theme }: { theme: Mode }) {
       else if (more === 'matches' && perm('manage_matches')) body = <MatchesScreen key={deskKey} />;
       else if (more === 'profile') body = <ProfileScreen user={user} onUser={setUser} onSignOut={signOut} />;
       else body = (
-        <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>
+        <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]}>
           <Text style={s.eyebrow}>{user.role === 'super_admin' ? 'Super admin' : user.role === 'owner' ? 'Owner' : 'Team'}</Text>
           <Text style={s.h1}>More</Text>
-          <Pressable onPress={() => setMore('profile')} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
+          <Pressable accessibilityRole="button" onPress={() => setMore('profile')} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 }]}>
             <Avatar name={user.name} url={user.avatarUrl} size={48} />
-            <View style={{ marginLeft: 12 }}><Text style={s.text}>{user.name}</Text><Text style={s.muted}>Your profile and sign out</Text></View>
+            <View style={{ flex: 1 }}><Text style={[s.text, { fontWeight: '700' }]}>{user.name}</Text><Text style={s.muted}>Profile, appearance, voice and sign out</Text></View>
+            <Icon name="chevron-forward" size={18} color={C.muted} />
           </Pressable>
           {user.role === 'super_admin' && owners.length > 0 && (
             <><Text style={s.muted}>Working inside</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 8 }}>{owners.map((o) => <Chip key={o.id} label={o.name} on={viewOwner === o.id} onPress={() => { setView(o.id); setViewOwner(o.id); }} />)}</View></>
           )}
-          {perm('manage_academy') && <Btn kind="outline" label="Academy: attendance and report cards" onPress={() => setMore('academy')} />}
-          {perm('manage_matches') && <Btn kind="outline" label="Matches and live scoring" onPress={() => setMore('matches')} />}
-          {boss && <Btn kind="outline" label="Desk: tournaments, members, contacts, bills, transactions" onPress={() => setMore('desk')} />}
-          {boss && <Btn kind="outline" label="Promo codes" onPress={() => setMore('promo')} />}
-          {boss && <Btn kind="outline" label="Team" onPress={() => setMore('team')} />}
-          {boss && <Btn kind="outline" label="Booking controls" onPress={() => setMore('platform')} />}
-          {boss && <Btn kind="outline" label="Settings: booking rules, contact and UPI" onPress={() => setMore('settings')} />}
-          {(perm('send_broadcasts') || perm('view_customers')) && <Section>People</Section>}
-          {perm('send_broadcasts') && <Btn kind="outline" label="WhatsApp reminders" onPress={() => setMore('reminders')} />}
-          {perm('view_customers') && <Btn kind="outline" label="Business cards" onPress={() => setMore('cards')} />}
-          {boss && <><Section>Money</Section>
-            <Btn kind="outline" label="Staff pay and attendance" onPress={() => setMore('payroll')} />
-            <Btn kind="outline" label="Compliance" onPress={() => setMore('compliance')} />
-            {user.role === 'super_admin' && <Btn kind="outline" label="Refunds to authorise" onPress={() => setMore('refunds')} />}
-            {user.role === 'super_admin' && <Btn kind="outline" label="Software costs" onPress={() => setMore('costs')} />}</>}
-          <Btn kind="ghost" label="Sign out" onPress={signOut} />
+          <MenuGroup title="Ground" rows={[
+            perm('manage_matches') && ['trophy-outline', 'Matches and live scoring', 'Score ball by ball; customers see it under Live', 'matches'],
+            perm('manage_academy') && ['school-outline', 'Academy', 'Attendance and report cards', 'academy'],
+            boss && ['briefcase-outline', 'Desk', 'Tournaments, members, contacts, bills, transactions', 'desk'],
+            boss && ['pricetag-outline', 'Promo codes', '', 'promo'],
+            boss && ['people-outline', 'Team', 'People and what they may do', 'team'],
+            boss && ['options-outline', 'Booking controls', '', 'platform'],
+            boss && ['settings-outline', 'Settings', 'Booking rules, contact and UPI', 'settings'],
+          ]} onPick={setMore} />
+          <MenuGroup title="People" rows={[
+            perm('send_broadcasts') && ['logo-whatsapp', 'WhatsApp reminders', '', 'reminders'],
+            perm('view_customers') && ['id-card-outline', 'Business cards', '', 'cards'],
+          ]} onPick={setMore} />
+          <MenuGroup title="Money" rows={[
+            accountsOk && ['wallet-outline', 'Books', 'Accounts, money in and out', 'accounts'],
+            boss && ['cash-outline', 'Staff pay and attendance', '', 'payroll'],
+            boss && ['shield-checkmark-outline', 'Compliance', '', 'compliance'],
+            user.role === 'super_admin' && ['return-down-back-outline', 'Refunds to authorise', '', 'refunds'],
+            user.role === 'super_admin' && ['receipt-outline', 'Software costs', '', 'costs'],
+          ]} onPick={setMore} />
+          <ListCard><ListRow icon="log-out-outline" title="Sign out" tone="danger" onPress={signOut} right={<View />} last /></ListCard>
         </ScrollView>
       );
     } else if (tab === 'ask') body = <AskScreen user={user} onUser={setUser} voice={voiceAsk} />;
@@ -225,11 +248,12 @@ function AppInner({ theme }: { theme: Mode }) {
   else if (tab === 'book') body = <BookScreen onHold={setHold} />;
   else if (tab === 'me') body = <MeScreen onSignOut={signOut} user={user} />;
   else if (tab === 'profile') body = <ProfileScreen user={user} onUser={setUser} onSignOut={signOut} />;
+  else if (tab === 'live') body = <LiveScreen />;
   else body = <AskScreen user={user} onUser={setUser} voice={voiceAsk} />;
 
   const tabs: [Tab, string][] = customer
-    ? [['book', 'Book'], ['me', 'Bookings'], ['ask', aiTab], ['profile', 'Profile']]
-    : [...(bookingsOk ? [['bookings', 'Bookings'] as [Tab, string]] : []), ['tasks', 'Tasks'], ...(accountsOk ? [['accounts', 'Books'] as [Tab, string]] : []), ['ask', aiTab], ['more', 'More']];
+    ? [['book', 'Book'], ['me', 'Bookings'], ['live', 'Live'], ['ask', aiTab], ['profile', 'Profile']]
+    : [['home', 'Home'], ...(bookingsOk ? [['bookings', 'Bookings'] as [Tab, string]] : []), ['tasks', 'Tasks'], ['ask', aiTab], ['more', 'More']];
   return (
     <View style={s.screen}>
       <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
@@ -239,6 +263,16 @@ function AppInner({ theme }: { theme: Mode }) {
       {locked && <LockScreen name={user.name} onUnlock={unlocked} onSignOut={signOut} />}
     </View>
   );
+}
+
+/** One group of the More list; rows the person may not use are left out, and a group with none is not drawn. */
+function MenuGroup({ title, rows, onPick }: { title: string; rows: (false | [IconName, string, string, More])[]; onPick: (m: More) => void }) {
+  const shown = rows.filter(Boolean) as [IconName, string, string, More][];
+  if (!shown.length) return null;
+  return (<>
+    <Text style={[s.muted, { fontWeight: '700', marginTop: 8, marginBottom: 6 }]}>{title}</Text>
+    <ListCard>{shown.map(([icon, label, sub, to], i) => <ListRow key={String(to)} icon={icon} title={label} sub={sub || undefined} onPress={() => onPick(to)} last={i === shown.length - 1} />)}</ListCard>
+  </>);
 }
 
 const THEME_KEY = 'daji.theme';
@@ -252,11 +286,12 @@ export default function App() {
   if (!ready) return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;
   return (
     <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: C.bg }}>
-        <AppInner theme={m} />
-        {!intro && <ThemeButton onPress={flip} />}
-        {intro && <Intro onDone={() => setIntro(false)} />}
-      </View>
+      <Appearance.Provider value={{ mode: m, flip }}>
+        <View style={{ flex: 1, backgroundColor: C.bg }}>
+          <AppInner theme={m} />
+          {intro && <Intro onDone={() => setIntro(false)} />}
+        </View>
+      </Appearance.Provider>
     </SafeAreaProvider>
   );
 }

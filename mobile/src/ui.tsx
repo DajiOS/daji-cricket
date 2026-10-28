@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { C, tint } from './theme';
 import { API_URL } from './api';
 
@@ -12,7 +13,7 @@ const build = () => StyleSheet.create({
   text: { color: C.text, fontSize: 15 },
   muted: { color: C.muted, fontSize: 13, lineHeight: 19 },
   err: { color: C.danger, fontSize: 13, marginVertical: 6 },
-  card: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 14 },
+  card: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#0B2A18', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 1 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, gap: 10 },
   input: { backgroundColor: C.bg, borderColor: C.line, borderWidth: 1, borderRadius: 12, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
 });
@@ -176,3 +177,80 @@ export function MonthBar({ month, onChange, max }: { month: string; onChange: (m
     </View>
   );
 }
+
+export type IconName = React.ComponentProps<typeof Ionicons>['name'];
+/** One of the app's line icons (Ionicons, shipped inside the app, so nothing is fetched). */
+export const Icon = ({ name, size = 20, color }: { name: IconName; size?: number; color?: string }) => <Ionicons name={name} size={size} color={color ?? C.text} />;
+
+/** Tabs inside a screen, drawn as one segmented bar; the open one is filled green. A long set scrolls sideways. */
+export function Segmented<T extends string>({ items, value, onChange }: { items: [T, string][]; value: T; onChange: (v: T) => void }) {
+  const row = (
+    <View style={{ flexDirection: 'row', backgroundColor: C.soft, borderRadius: 12, padding: 4, gap: 4 }}>
+      {items.map(([id, label]) => {
+        const on = id === value;
+        return (
+          <Pressable key={id} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onChange(id)}
+            style={{ flexGrow: 1, alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 9, backgroundColor: on ? C.strong : 'transparent' }}>
+            <Text style={{ color: on ? C.onStrong : C.muted, fontSize: 13, fontWeight: on ? '700' : '600' }}>{label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+  return items.length > 4 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, flexGrow: 0 }}>{row}</ScrollView> : <View style={{ marginBottom: 12 }}>{row}</View>;
+}
+
+/** A row in a settings-style list: an icon on a soft tile, a title, a line under it, and an arrow (or whatever goes on the right). */
+export function ListRow({ icon, title, sub, onPress, right, last, tone }: { icon: IconName; title: string; sub?: string; onPress?: () => void; right?: React.ReactNode; last?: boolean; tone?: 'danger' }) {
+  const col = tone === 'danger' ? C.danger : C.gold;
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: last ? 0 : 1, borderBottomColor: C.line }}>
+      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: tint(col, 0.12), alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={19} color={col} /></View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: tone === 'danger' ? C.danger : C.text, fontSize: 15, fontWeight: '600' }}>{title}</Text>
+        {!!sub && <Text style={[s.muted, { fontSize: 12.5, marginTop: 1 }]}>{sub}</Text>}
+      </View>
+      {right ?? (onPress ? <Icon name="chevron-forward" size={18} color={C.muted} /> : null)}
+    </Pressable>
+  );
+}
+/** A card that holds ListRows, edge to edge. */
+export const ListCard = ({ children }: { children: React.ReactNode }) => <View style={[s.card, { padding: 0, overflow: 'hidden' }]}>{children}</View>;
+
+/** A square button with an icon over its name, four to a row on the home screens. */
+export const ActionTile = ({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) => (
+  <Pressable accessibilityRole="button" onPress={onPress} style={[s.card, { flexBasis: '22%', flexGrow: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 6, marginBottom: 0 }]}>
+    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: C.soft, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}><Icon name={icon} size={22} color={C.gold} /></View>
+    <Text style={{ color: C.text, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>{label}</Text>
+  </Pressable>
+);
+
+/** A figure on the home screens: an icon in a tinted circle, the number, and what it counts. */
+export const StatTile = ({ icon, value, label, tone, onPress }: { icon: IconName; value: string; label: string; tone?: 'warn' | 'danger'; onPress?: () => void }) => {
+  const col = tone === 'warn' ? C.warn : tone === 'danger' ? C.danger : C.gold;
+  return (
+    <Pressable accessibilityRole="button" disabled={!onPress} onPress={onPress} style={[s.card, { flexBasis: '30%', flexGrow: 1, padding: 12, marginBottom: 0 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: tint(col, 0.14), alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={16} color={col} /></View>
+        <Text style={{ color: C.text, fontSize: 20, fontWeight: '800' }}>{value}</Text>
+      </View>
+      <Text style={[s.muted, { fontSize: 12, lineHeight: 15, marginTop: 6 }]}>{label}</Text>
+    </Pressable>
+  );
+};
+
+/** A section title with an optional link on the right ("See all"). */
+export const SectionHead = ({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) => (
+  <View style={[s.row, { marginTop: 14, marginBottom: 6 }]}>
+    <Text style={{ color: C.text, fontSize: 17, fontWeight: '800' }}>{title}</Text>
+    {!!action && <Pressable accessibilityRole="button" onPress={onAction}><Text style={{ color: C.gold, fontSize: 13, fontWeight: '700' }}>{action}</Text></Pressable>}
+  </View>
+);
+
+/** The top of an inner page: a back arrow and the page's name. */
+export const BackBar = ({ title, onBack }: { title: string; onBack: () => void }) => (
+  <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+    <Icon name="chevron-back" size={24} color={C.text} />
+    <Text style={{ color: C.text, fontSize: 20, fontWeight: '800' }}>{title}</Text>
+  </Pressable>
+);

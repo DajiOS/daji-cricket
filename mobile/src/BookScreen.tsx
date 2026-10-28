@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { api, API_URL } from './api';
+import { api } from './api';
 import type { AppConfig, Availability, Ball, Ground, HoldQuote, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
-import { Btn, Chip, Field, GuppiMark, KV, Loading, MonthBar, Steps, s } from './ui';
-import { C, inr, MON } from './theme';
+import { Btn, Chip, Field, GuppiMark, Icon, KV, ListCard, ListRow, Loading, MonthBar, Segmented, Steps, s } from './ui';
+import { useGroundPhoto } from './photo';
+import { C, inr } from './theme';
 import { GuppiBookScreen } from './GuppiBookScreen';
 
 const istToday = (): string => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
@@ -13,16 +14,9 @@ const BALLS: Record<Ball, string> = { leather: 'Leather ball', tennis: 'Tennis b
 const REPEATS: Record<RepeatFrequency, { word: string; def: number; max: number }> = { daily: { word: 'every day', def: 5, max: 60 }, weekly: { word: 'every week', def: 4, max: 52 }, monthly: { word: 'every month', def: 3, max: 12 }, yearly: { word: 'every year', def: 2, max: 3 } };
 const hm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
 
-interface LibItem { kind: 'image' | 'video'; tag: string; url: string; thumb?: string | null; poster?: string | null }
-/** The opening band: the ground's own photo (the first hero or gallery picture, or a drone video's still, uploaded in the desk), or plain green when there is none. */
+/** The opening band: the ground's own photo (uploaded in the desk), or plain green when there is none. */
 function Hero() {
-  const [pic, setPic] = useState<string | null>(null);
-  useEffect(() => {
-    api<{ items: LibItem[] }>('/api/library/public').then((r) => {
-      const it = ['hero', 'gallery'].flatMap((tag) => r.items.filter((x) => x.tag === tag).reverse()).map((x) => (x.kind === 'video' ? x.poster || x.thumb : x.url)).find(Boolean);
-      if (it) setPic(/^https:\/\//.test(it) ? it : API_URL + it);
-    }).catch(() => { /* the green band is enough */ });
-  }, []);
+  const pic = useGroundPhoto();
   return (
     <View style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: '#123D24', padding: 20, paddingTop: 64, marginBottom: 4 }}>
       {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
@@ -33,6 +27,17 @@ function Hero() {
         <Text style={{ color: 'rgba(255,255,255,.88)', fontSize: 14, lineHeight: 20, marginTop: 8 }}>Floodlit ground and practice nets. Pick a free slot, pay a small advance and the time is yours.</Text>
       </View>
     </View>
+  );
+}
+/** One time or session to pick, three to a row (sessions two to a row); the chosen one is filled green. */
+function SlotTile({ title, line, price, on, disabled, wide, onPress }: { title: string; line?: string; price: string; on: boolean; disabled: boolean; wide?: boolean; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: on, disabled }} disabled={disabled} onPress={onPress}
+      style={{ flexBasis: wide ? '47%' : '30%', flexGrow: 1, borderRadius: 12, borderWidth: 1, borderColor: on ? C.strong : C.line, backgroundColor: on ? C.strong : C.panel, paddingVertical: 10, paddingHorizontal: 10, alignItems: 'center', opacity: disabled ? 0.4 : 1 }}>
+      <Text style={{ color: on ? C.onStrong : C.text, fontSize: 14, fontWeight: '700' }}>{title}</Text>
+      {!!line && <Text style={{ color: on ? C.onStrong : C.muted, fontSize: 12, marginTop: 2 }}>{line}</Text>}
+      <Text style={{ color: on ? C.onStrong : C.muted, fontSize: 12, marginTop: 2, textTransform: 'capitalize' }}>{price}</Text>
+    </Pressable>
   );
 }
 const Label = ({ children }: { children: React.ReactNode }) => <Text style={{ color: C.text, fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>{children}</Text>;
@@ -46,7 +51,7 @@ function DayPicker({ open, value, onPick }: { open: string[]; value: string; onP
   const inMonth = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate();
   const cells: (string | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: inMonth }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
   return (
-    <View style={{ marginVertical: 8 }}>
+    <View style={[s.card, { paddingVertical: 6, paddingHorizontal: 8 }]}>
       <MonthBar month={month} onChange={setMonth} max={open[open.length - 1]?.slice(0, 7)} />
       <View style={{ flexDirection: 'row' }}>{DOW.map((d) => <Text key={d} style={[s.muted, { width: '14.28%', textAlign: 'center', fontSize: 11 }]}>{d[0]}</Text>)}</View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -79,7 +84,6 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const [promo, setPromo] = useState('');
   const [rep, setRep] = useState<{ f: RepeatFrequency; n: number } | null>(null);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
-  const [cal, setCal] = useState(false); // the month calendar for dates further ahead
   const [guppi, setGuppi] = useState(false); // the Guppi booking screen (any language), when the release switch is on
 
   const loadGrounds = useCallback(async () => {
@@ -174,7 +178,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   };
 
   if (!cfg) return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 86 }]}>
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]}>
       <Hero />
       {err ? (<><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={() => void loadGrounds()} style={{ marginTop: 16 }} /></>) : (<><Loading /><Text style={[s.muted, { textAlign: 'center' }]}>Loading today's slots…</Text></>)}
     </ScrollView>
@@ -186,50 +190,49 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const days = Array.from({ length: Math.min(cfg?.maxDaysAhead ?? 30, 366) }, (_, i) => addDays(first, i)).filter((d) => !(cfg?.bookingsCloseFrom && d >= cfg.bookingsCloseFrom) && !shut.has(d));
   const fixed = opts.filter((o) => o.mode === 'fixed'), hourly = opts.filter((o) => o.mode === 'hourly');
   return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 86 }]}>
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]}>
       <Hero />
       <Steps at={body ? 2 : 1} />
       {!!cfg.guppiBookingEnabled && (
         <Pressable accessibilityRole="button" onPress={() => setGuppi(true)} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 4 }]}>
           <GuppiMark />
           <View style={{ flex: 1 }}><Text style={[s.text, { fontWeight: '700' }]}>Book with DCG</Text><Text style={s.muted}>Just say it · ગુજરાતી · हिन्दी · English</Text></View>
-          <Text style={{ color: C.gold, fontSize: 22 }}>›</Text>
+          <Icon name="chevron-forward" size={18} color={C.muted} />
         </Pressable>
       )}
       <Label>Ground</Label>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{grounds.map((g) => <Chip key={g.id} label={g.name} on={g.id === gid} onPress={() => setGid(g.id)} />)}</View>
+      <ListCard>
+        {grounds.map((g, i) => (
+          <ListRow key={g.id} icon="location-outline" title={g.name} sub={[g.city, g.amenities?.slice(0, 2).join(', ')].filter(Boolean).join(' · ')} last={i === grounds.length - 1} onPress={() => setGid(g.id)}
+            right={<Icon name={g.id === gid ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={g.id === gid ? C.gold : C.line} />} />
+        ))}
+      </ListCard>
       <Label>Day</Label>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
-        {days.slice(0, 14).map((d) => { const dt = new Date(d + 'T00:00:00Z'); return <Chip key={d} on={d === date} onPress={() => setDate(d)} label={`${DOW[dt.getUTCDay()]} ${dt.getUTCDate()} ${MON[dt.getUTCMonth()]}`} />; })}
-        <Chip label={cal ? 'Hide calendar' : 'More dates…'} on={cal} onPress={() => setCal(!cal)} />
-      </ScrollView>
-      {cal && <DayPicker open={days} value={date} onPick={(d) => { setDate(d); setCal(false); }} />}
+      <DayPicker open={days} value={date} onPick={setDate} />
 
       {av === null ? (err ? <Btn kind="outline" label="Try again" onPress={() => void loadSlots()} /> : <Loading />) : av.closed ? <Text style={s.muted}>The ground is closed on this day. Please pick another day.</Text> : hasRates ? (<>
         <Label>Play with</Label>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{balls.map((b) => <Chip key={b} label={BALLS[b]} on={b === ball} onPress={() => { setBall(b); setWin(null); setHr(null); }} />)}</View>
+        <Segmented items={balls.map((b) => [b, BALLS[b]] as [Ball, string])} value={ball as Ball} onChange={(b) => { setBall(b); setWin(null); setHr(null); }} />
         {!ball ? <Text style={s.muted}>Choose the ball you want to play with.</Text> : !opts.length ? <Text style={s.muted}>Nothing is on sale for this ball on this day. Pick another day, or call us.</Text> : (<>
           {fixed.length > 0 && <Label>Sessions</Label>}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {fixed.map((o) => <Chip key={o.ruleId} label={`${o.label}\n${o.time} – ${o.endTime}\n${o.state === 'available' ? inr(o.pricePaise) : o.state}${o.proRated ? '\n(part session)' : ''}`} on={win === o.ruleId} disabled={o.state !== 'available'} onPress={() => { setWin(o.ruleId); setHr(null); }} />)}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {fixed.map((o) => <SlotTile key={o.ruleId} wide title={o.label} line={`${o.time} – ${o.endTime}`} price={o.state === 'available' ? `${inr(o.pricePaise)}${o.proRated ? ' · part session' : ''}` : o.state} on={win === o.ruleId} disabled={o.state !== 'available'} onPress={() => { setWin(o.ruleId); setHr(null); }} />)}
           </View>
           {hourly.map((o) => (
             <View key={o.ruleId}>
               <Text style={[s.muted, { marginVertical: 6 }]}>{o.label} · {inr(o.pricePaise)} per hour · up to {maxSlots} hours in a row</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                {(o.slots ?? []).map((sl, i) => <Chip key={sl.start} label={`${sl.time}\n${sl.state === 'available' ? inr(sl.pricePaise) : sl.state}`} on={!!hr && hr.ruleId === o.ruleId && hr.idx.includes(i)} disabled={sl.state !== 'available'} onPress={() => toggleHour(o, i)} />)}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {(o.slots ?? []).map((sl, i) => <SlotTile key={sl.start} title={sl.time} price={sl.state === 'available' ? inr(sl.pricePaise) : sl.state} on={!!hr && hr.ruleId === o.ruleId && hr.idx.includes(i)} disabled={sl.state !== 'available'} onPress={() => toggleHour(o, i)} />)}
               </View>
             </View>
           ))}
         </>)}
-        {!!ground?.ratesNote && <Text style={s.muted}>{ground.ratesNote}</Text>}
+        {!!ground?.ratesNote && <Text style={[s.muted, { marginTop: 10 }]}>{ground.ratesNote}</Text>}
       </>) : (<>
         <Label>Time</Label>
         <Text style={[s.muted, { marginBottom: 10 }]}>Choose up to {maxSlots} slots in a row.</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {av.slots.map((sl) => (
-            <View key={sl.start} style={{ width: '23%' }}><Chip label={`${sl.time}\n${inr(sl.pricePaise)}`} on={pick.includes(sl.start)} disabled={sl.state !== 'available'} onPress={() => toggleSlot(sl)} /></View>
-          ))}
+          {av.slots.map((sl) => <SlotTile key={sl.start} title={sl.time} price={inr(sl.pricePaise)} on={pick.includes(sl.start)} disabled={sl.state !== 'available'} onPress={() => toggleSlot(sl)} />)}
           {!av.slots.length && <Text style={s.muted}>No slots on this day.</Text>}
         </View>
       </>)}
