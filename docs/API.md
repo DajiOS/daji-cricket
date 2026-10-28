@@ -289,3 +289,27 @@ Settings › Connections, Shared spreadsheet. A business shares a workbook with 
 
 ## Sign-out and revenue
 `POST /api/auth/logout` revokes the token on the server; `POST /api/auth/logout-all` ends every session. The `view_revenue` permission ("Can see revenue") gates reports, the books, bills and the dashboard money tiles for team members; the owner always sees them.
+
+## Weekly waitlist (Sunday leather ball unless changed)
+Switched on in Settings › Waitlist (`waitlistEnabled`, `waitlistDay` 0 to 6, `waitlistBall`, `waitlistConfirmHours` 1 to 336, default 72, `waitlistTierPriority`, `waitlistWaveMinutes` 5 to 1440, `waitlistTiers [{name, minGames}]` up to 5). `GET /api/config` carries `waitlistEnabled`. When off, every route below returns 503 `FEATURE_OFF`.
+
+- `GET /api/waitlist` (customer): settings, own entries, offers open to them, sessions they can join, games played in the last 12 months and tier.
+- `POST /api/waitlist` `{groundId, ruleId?, everyWeek?}`: join. 201 when added, 200 with the same entry when already on the list. At most 3 live requests (409 `TOO_MANY_WAITLIST`).
+- `POST /api/waitlist/:id/withdraw`: leave.
+- `POST /api/waitlist/offers/:id/accept`: one statement claims the offer, so of many at once exactly one wins; the others get 409 `OFFER_GONE`. The winner gets the normal 15-minute hold (`via: "booking"`, `hold`) or, while prices are on enquiry, a pricing enquiry for that slot (`via: "enquiry"`). Repeating it returns the same result with `already: true`. 409 `OFFER_NOT_FOR_YOU`, 409 `NOT_YOUR_WAVE_YET`; staff get 403.
+- `GET /api/staff/waitlist`, `POST /api/staff/waitlist` `{groundId, ruleId?, everyWeek?, customer:{name, phone}}`, `POST /api/staff/waitlist/:id/withdraw` `{reason}` (`manage_bookings`).
+
+The scheduler (`sweepWaitlist`, every fast sweep) offers a session still free `waitlistConfirmHours` before it starts, sends tier groups one at a time when tier priority is on, reopens an offer whose hold expired or was cancelled, closes it when the session is booked another way or starts, and moves every waiting request on to the next week (up to 52 weeks). Messages go by app, email and, with the customer's WhatsApp consent, WhatsApp (Settings › Connections, WhatsApp messages to customers: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_WAITLIST_TEMPLATE`). Ask AI answers about the waitlist (`get_waitlist` in Claude mode, counts only).
+
+## Team list and check-in at the ground
+A booking's team list holds up to 30 players. A player with a Daji profile (linked by mobile number) earns the game toward their waitlist tier only when they check in; a guest (no profile) can be on the list for the live score and never earns. The booker is always on the list. Settings › Check-in: `checkInRadiusMeters` 50 to 2000 (default 150, about 500 feet), `checkInOpensMinutes` 15 to 240 (default 60); each ground's check-in point is its `lat`/`lng`.
+
+- `GET /api/bookings/:id/players`, `POST /api/bookings/:id/players` `{name, phone?}`, `POST /api/bookings/:id/players/:pid/remove` (the booker edits; players on the list read). `GET /api/my/team-games`: games other people booked that you are on.
+- `POST /api/bookings/:id/check-in` `{lat, lng, accuracy, deviceId, mocked, unlocked, faceCheckId?, moveCode?}`: only inside the radius, with a precise, unmocked location, on an unlocked phone, during the window. One phone checks in one player (30 days), one profile uses one phone; `PROFILE_ON_ANOTHER_PHONE` asks for a code sent with `POST /api/me/check-in-phone/code`.
+- Face check (Settings › Connections, Amazon Rekognition, off until `REKOGNITION_KEY_ID` and `REKOGNITION_SECRET` are set; `GET /api/config` `faceCheckIn`): `POST /api/me/face` (raw camera JPEG, header `x-face-consent: yes`) enrols once; `POST /api/bookings/:id/check-in/face` (raw JPEG) returns `{faceCheckId}` when the selfie matches at 90 or more, else 403 `FACE_MISMATCH` or 422 `FACE_NOT_FOUND`; `GET /api/me/face`, `POST /api/me/face/remove`. No photo is stored: Rekognition keeps a face template, Daji keeps its id and each answer with its score.
+- Staff of the booking's business: `GET/POST /api/staff/bookings/:id/players`, `.../players/:pid/remove`, `.../players/:pid/check-in` `{reason}`, `.../players/:pid/undo-check-in` `{reason}`, `POST /api/staff/players/:uid/face-reset` `{reason}`, `POST /api/staff/players/:uid/release-phone` `{reason}`.
+
+Ask AI answers who checked in (`get_check_ins`, counts only) and a player's own games and tier.
+
+## Connections: steps to connect
+`GET /api/admin/integrations` gives every connection numbered plain-English `steps [{text, link?: {label, url}}]` from nothing to connected; Settings › Connections shows them under "How to connect". A test checks that every connection has them.

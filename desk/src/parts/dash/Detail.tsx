@@ -6,6 +6,7 @@ import { useApi, post, api, go, inr, toPaise, rupees, fmtDay, fmtDateTime, forma
 import { useSession } from '../../App';
 import { DepositPanel } from './Deposit';
 import { MoveBookingDialog } from './MoveBooking';
+import { TeamList } from './TeamList';
 import { type Booking, type Block, type RefundItem, RefundList, BookingChip, CancelDialog, SettleChoice, HAND_METHODS, METHOD_LABEL, PAY_STATUS, SOURCE_LABEL, STATUS_LABEL, cancellable, errText, timeRange, whatOf } from './common';
 
 interface Pay { id: string; method: string; status: string; purpose: string; amountPaise: number; refundedPaise: number; reference: string | null; createdAt: number; rejectReason: string | null }
@@ -21,7 +22,7 @@ function DeleteBooking({ id, onDone, onError }: { id: string; onDone: () => void
 const ACTION_LABEL = (a: string) => a.replace(/^booking\./, '').replace(/[._]/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 /** The workspace tabs of one booking. Each has its own address, /bookings/<id>/<tab>, so a link opens the booking on that tab. */
-export const BOOKING_TABS: [string, string][] = [['summary', 'Summary'], ['customer', 'Customer'], ['money', 'Money'], ['match', 'Match'], ['messages', 'Messages'], ['documents', 'Documents'], ['timeline', 'Timeline']];
+export const BOOKING_TABS: [string, string][] = [['summary', 'Summary'], ['customer', 'Customer'], ['money', 'Money'], ['match', 'Match'], ['team', 'Team list'], ['messages', 'Messages'], ['documents', 'Documents'], ['timeline', 'Timeline']];
 
 export function BookingDetail({ id, asDay, tab: tabIn, onClose, onChanged }: { id: string; asDay?: boolean; tab?: string; onClose: () => void; onChanged: () => void }) {
   // opened from its own address (the Bookings page passes the tab), a tab change also updates the address so a reload or a copied link lands on it
@@ -139,6 +140,8 @@ export function BookingDetail({ id, asDay, tab: tabIn, onClose, onChanged }: { i
         {tab === 'match' && (d.block?.tournament
           ? <div className="stack" style={{ gap: 8 }}><div>Part of the tournament <b>{d.block.tournament.name}</b>.</div><div><a className="btn sm" href={`#/tournaments/${encodeURIComponent(d.block.tournament.id)}`}>Open the tournament</a></div></div>
           : <div data-state="empty" className="small muted">This booking is not linked to a match or tournament. Matches are created on the Fixtures page and tournaments with a multi-day booking.</div>)}
+
+        {tab === 'team' && <TeamList bookingId={b.id} />}
 
         {tab === 'messages' && <BookingMessages id={b.id} />}
 

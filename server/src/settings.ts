@@ -6,6 +6,7 @@ import { normalizePhone } from './input.ts';
 import { SITE_DESIGN_CHOICES } from './packs.ts';
 import { DESIGN_PACES } from './design.ts';
 import { DEFAULT_AI_NAME, checkAiName } from './aiNames.ts';
+import { SOFTWARE_OWNER } from '@daji/shared';
 
 export const DEFAULT_SETTINGS: GlobalSettings = {
   razorpayEnabled: true,
@@ -69,6 +70,20 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   voiceShortcutsEnabled: true,
   /** Customers see free slots without prices and send a pricing enquiry for a slot instead of paying online (priceOnEnquiry.ts). The saved prices are kept. */
   pricesOnEnquiry: false,
+  /** Off until the owner switches it on: the weekly waitlist for one day's sessions (waitlist.ts). The details below are the owner's to change. */
+  waitlistEnabled: false,
+  waitlistDay: 0,
+  waitlistBall: 'leather',
+  waitlistConfirmHours: 72,
+  waitlistTierPriority: false,
+  waitlistWaveMinutes: 120,
+  waitlistTiers: [{ name: 'Diamond', minGames: 150 }, { name: 'Platinum', minGames: 100 }, { name: 'Gold', minGames: 75 }, { name: 'Silver', minGames: 50 }, { name: 'Bronze', minGames: 25 }],
+  checkInRadiusMeters: 150,
+  checkInOpensMinutes: 60,
+  /** The company that owns and runs the software. Daji Cricket Ground and every other business are its customers. Software owner only. */
+  softwareOwnerName: SOFTWARE_OWNER.name,
+  /** The customer business the main web address and app show. Empty: every business, as before there was more than one. Software owner only. */
+  mainSiteBusinessId: '',
 };
 
 /** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
@@ -99,6 +114,11 @@ const INT_RANGES: Record<string, [number, number]> = {
   creditExpiryDays: [1, 3650],
   noShowGraceMinutes: [0, 600],
   autoDebitHoursBefore: [1, 168],
+  waitlistDay: [0, 6],
+  waitlistConfirmHours: [1, 336],
+  waitlistWaveMinutes: [5, 1440],
+  checkInRadiusMeters: [50, 2000],
+  checkInOpensMinutes: [15, 240],
 };
 
 /** Validates and stores a partial update. Returns the keys that actually changed (with old/new values). */
@@ -108,13 +128,21 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
   const next: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULT_SETTINGS)) { fields.push({ field: k, message: 'Unknown setting' }); continue; }
-    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled' || k === 'voiceShortcutsEnabled' || k === 'pricesOnEnquiry') {
+    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled' || k === 'voiceShortcutsEnabled' || k === 'pricesOnEnquiry' || k === 'waitlistEnabled' || k === 'waitlistTierPriority') {
       if (typeof v !== 'boolean') fields.push({ field: k, message: 'Must be true or false' }); else next[k] = v;
     } else if (k === 'rescheduleCutoffHours' || k === 'rescheduleMaxMoves') {
       const [lo, hi] = k === 'rescheduleCutoffHours' ? [0, 720] : [0, 10];
       if (v !== null && (!Number.isInteger(v) || (v as number) < lo || (v as number) > hi)) fields.push({ field: k, message: `A whole number from ${lo} to ${hi}, or null to leave it not configured` }); else next[k] = v;
     } else if (k === 'rescheduleCheaperTreatment') {
       if (v !== 'credit' && v !== 'refund_request') fields.push({ field: k, message: "Must be 'credit' or 'refund_request'" }); else next[k] = v;
+    } else if (k === 'waitlistBall') {
+      if (v !== 'leather' && v !== 'combo' && v !== 'tennis') fields.push({ field: k, message: "Must be 'leather', 'combo' or 'tennis'" }); else next[k] = v;
+    } else if (k === 'waitlistTiers') {
+      // up to five tiers, each a name and the games it takes; kept highest first, no two alike
+      const bad = !Array.isArray(v) || v.length > 5 || v.some((t) => !t || typeof t !== 'object' || typeof t.name !== 'string' || t.name.trim().length < 1 || t.name.trim().length > 30 || !Number.isInteger(t.minGames) || t.minGames < 1 || t.minGames > 500);
+      const list = bad ? [] : (v as { name: string; minGames: number }[]).map((t) => ({ name: t.name.trim(), minGames: t.minGames })).sort((a, b) => b.minGames - a.minGames);
+      if (bad || new Set(list.map((t) => t.minGames)).size !== list.length || new Set(list.map((t) => t.name.toLowerCase())).size !== list.length) fields.push({ field: k, message: 'Up to 5 tiers, each with a name (1 to 30 characters) and a different number of games from 1 to 500' });
+      else next[k] = list;
     } else if (k === 'siteDesign') {
       if (typeof v !== 'string' || !(SITE_DESIGN_CHOICES as readonly string[]).includes(v)) fields.push({ field: k, message: `One of ${SITE_DESIGN_CHOICES.join(', ')}` }); else next[k] = v;
     } else if (k === 'designPace') {
@@ -126,6 +154,10 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
     } else if (k === 'upiId') {
       if (typeof v !== 'string' || (v !== '' && !/^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/.test(v))) fields.push({ field: k, message: 'Must look like name@bank' });
       else next[k] = v;
+    } else if (k === 'mainSiteBusinessId') {
+      if (typeof v !== 'string' || (v !== '' && !one("SELECT 1 FROM users WHERE id = ? AND role = 'owner'", v))) fields.push({ field: k, message: 'Must be one of the customer businesses, or empty for all' }); else next[k] = v;
+    } else if (k === 'softwareOwnerName') {
+      if (typeof v !== 'string' || v.trim().length < 2 || v.trim().length > 60) fields.push({ field: k, message: 'Between 2 and 60 characters' }); else next[k] = v.trim();
     } else if (k === 'upiPayee') {
       if (typeof v !== 'string' || v.trim().length < 1 || v.length > 60) fields.push({ field: k, message: 'Between 1 and 60 characters' }); else next[k] = v.trim();
     } else if (k === 'contactName' || k === 'academyName' || k === 'academyRunBy') {

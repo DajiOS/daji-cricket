@@ -23,7 +23,7 @@ beforeEach(async () => {
   cust = await h.login('customer');
 });
 
-const MAP = 'https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7';
+const MAP = 'https://maps.app.goo.gl/wGawo7LdNzKT8k4Y9';
 
 // ------------------------------------------------------------------ the map link
 
@@ -34,10 +34,10 @@ test('only real Google Maps links are accepted', () => {
     'https://google.com/maps?q=21.18,72.91',
     'https://maps.google.com/?q=21.18,72.91',
     'https://goo.gl/maps/abc123',
-    '  https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7  ',
+    '  https://maps.app.goo.gl/wGawo7LdNzKT8k4Y9  ',
   ]) assert.ok(cleanMapUrl(ok), `should accept ${ok}`);
   for (const bad of [
-    'http://maps.app.goo.gl/Qs2Wivwv76jt9zjG7', // not https
+    'http://maps.app.goo.gl/wGawo7LdNzKT8k4Y9', // not https
     'https://maps.app.goo.gl/', // no place in it
     'https://maps.app.goo.gl.evil.com/abc',
     'https://evil.com/?u=maps.app.goo.gl/abc',

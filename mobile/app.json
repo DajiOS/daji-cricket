@@ -10,9 +10,10 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.dajicricket.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Daji Cricket Ground uses the camera to take photos that prove a task is done.",
+        "NSCameraUsageDescription": "Daji Cricket Ground uses the camera to take photos that prove a task is done, and your selfie when you check in at the ground.",
         "NSPhotoLibraryUsageDescription": "Daji Cricket Ground uses your photos so you can choose a profile picture.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Daji Cricket Ground uses your location only when you check in, to confirm you are at the ground."
       },
       "config": {
         "usesNonExemptEncryption": false
@@ -22,7 +23,9 @@
       "package": "com.dajicricket.app",
       "permissions": [
         "CAMERA",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -53,7 +56,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Daji Cricket Ground uses the camera to take photos that prove a task is done.",
+          "cameraPermission": "Daji Cricket Ground uses the camera to take photos that prove a task is done, and your selfie when you check in at the ground.",
           "photosPermission": "Daji Cricket Ground uses your photos so you can choose a profile picture.",
           "microphonePermission": false
         }
@@ -67,7 +70,15 @@
           }
         }
       ],
-      "./plugins/withDajiVoice"
+      "./plugins/withDajiVoice",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Daji Cricket Ground uses your location only when you check in, to confirm you are at the ground.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "icon": "./assets/icon.png",
     "splash": {

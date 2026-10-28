@@ -495,12 +495,18 @@ export interface PublicConfig {
   voiceEnabled?: boolean;
   /** Prices are given on enquiry: slots show no price, and picking one sends a pricing enquiry instead of a booking. */
   pricesOnEnquiry?: boolean;
+  /** Who owns and runs the software ("Daji OS"). The business customers book with is `brand` and each ground's owner. */
+  softwareOwner?: string;
   /** The Guppi booking assistant (any language) is switched on. Clients show its screen only when this is true. */
   guppiBookingEnabled?: boolean;
   /** The owner has switched the refundable security deposit on: screens show it separately from the booking advance. */
   securityDepositEnabled?: boolean;
   /** Customers may move their own bookings (switched on and both policy numbers set). */
   customerRescheduleEnabled?: boolean;
+  /** The weekly waitlist (Sunday leather ball unless changed) is switched on: clients show its screens only when this is true. */
+  waitlistEnabled?: boolean;
+  /** Check-in asks for a selfie matched against the player's enrolled face (the face-match connection is set up). */
+  faceCheckIn?: boolean;
 }
 
 /** A professional coach shown on the website's academy section. */
@@ -563,7 +569,30 @@ export interface GlobalSettings {
   voiceShortcutsEnabled: boolean;
   /** Customers see free slots but no prices, and send a pricing enquiry for a slot instead of booking online. The prices stay saved for the desk. */
   pricesOnEnquiry: boolean;
+  /** The weekly waitlist (waitlist.ts): customers ask for a session on one day of the week and roll to the next week until a slot is free. Off until switched on. */
+  waitlistEnabled: boolean;
+  /** Which day of the week the waitlist is for (0 = Sunday … 6 = Saturday) and which ball's whole sessions on the price list. */
+  waitlistDay: number;
+  waitlistBall: 'leather' | 'combo' | 'tennis';
+  /** A free session is offered to the waitlist this many hours before it starts; until then it stays open to normal bookings. */
+  waitlistConfirmHours: number;
+  /** Players who have played most hear about a free session first, a wave at a time (waitlistTiers, highest first); off = everyone at once. */
+  waitlistTierPriority: boolean;
+  /** Minutes each priority wave has to itself before the next group is told. */
+  waitlistWaveMinutes: number;
+  /** Check-in at the ground: how close (metres) the phone must be, and how many minutes before the start it opens. */
+  checkInRadiusMeters: number;
+  checkInOpensMinutes: number;
+  /** The tiers, earned by games played here in the last 12 months. Anyone below every tier is in the last wave. */
+  waitlistTiers: WaitlistTier[];
+  /** The name of the company that owns and runs the software ("Daji OS"). Every business on it is a customer. Only the software owner changes it. */
+  softwareOwnerName: string;
+  /** The customer business the main web address shows (an owner's id); empty shows every business. Software owner only. */
+  mainSiteBusinessId: string;
 }
+
+/** A waitlist tier: a name and the games played in the last 12 months it takes to earn it. */
+export interface WaitlistTier { name: string; minGames: number }
 
 export interface AuditEntry {
   id: number;

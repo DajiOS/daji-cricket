@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { aiName, api, can, fmtDate, go, inr, type Me } from './lib';
 import { Icon } from './ui';
-import { NAV, SUBS, SUB_ICONS, subHref, seesMoney, hrefOf, type NavItem } from './registry';
+import { NAV, SUBS, SUB_ICONS, subHref, subOpen, seesMoney, hrefOf, type NavItem } from './registry';
 
 // The starter kit's command search: type to jump to any page, to do something, or to ask a question about the business.
 // It lists only the pages and records the person can already open. Ctrl+K or ⌘K (or "/") opens it from anywhere in the desk.
@@ -96,7 +96,7 @@ function Palette({ me, visible, onClose }: { me: Me; visible: (i: NavItem) => bo
     const seen = new Set(NAV.flatMap((g) => g.items.map((i) => i.to)));
     for (const g of NAV) for (const i of g.items.filter(visible)) {
       out.push({ key: hrefOf(i), kind: 'Go to', label: i.label, hint: g.group, icon: i.icon, run: () => jump(hrefOf(i)), text: `${i.label} ${g.group}` });
-      for (const [k, l] of SUBS[i.to] ?? []) if (k && !seen.has(subHref(i.to, k)) && seen.add(subHref(i.to, k))) out.push({ key: `${i.to}/${k}`, kind: 'Go to', label: l, hint: `${g.group} › ${i.label}`, icon: SUB_ICONS[`${i.to}:${k}`] ?? 'chevron', run: () => jump(subHref(i.to, k)), text: `${l} ${i.label} ${g.group}` });
+      for (const [k, l] of SUBS[i.to] ?? []) if (k && subOpen(subHref(i.to, k)) && !seen.has(subHref(i.to, k)) && seen.add(subHref(i.to, k))) out.push({ key: `${i.to}/${k}`, kind: 'Go to', label: l, hint: `${g.group} › ${i.label}`, icon: SUB_ICONS[`${i.to}:${k}`] ?? 'chevron', run: () => jump(subHref(i.to, k)), text: `${l} ${i.label} ${g.group}` });
     }
     const acts = ACTIONS.filter(visible).map((a) => ({ key: 'do:' + a.to, kind: 'Do' as const, label: a.label, icon: a.icon, run: () => jump(a.to), text: `${a.label} ${a.words}` }));
     return { pages: out, acts };

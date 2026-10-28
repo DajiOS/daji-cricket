@@ -207,8 +207,8 @@ function fakeMicrosoft(opts: { requests?: string[][]; refreshFails?: boolean; ta
       refreshes++;
       return json({ access_token: `acc-r${refreshes}`, refresh_token: `refresh-secret-r${refreshes}`, expires_in: 3600 });
     }
-    if (url.startsWith('https://graph.test/v1.0/me')) return json({ mail: 'dipan@antroli.test' });
-    if (url.startsWith('https://graph.test/v1.0/shares/')) return json({ id: 'ITEM1', name: 'Antroli bookings.xlsx', webUrl: 'https://onedrive.live.com/edit?id=ITEM1', parentReference: { driveId: 'DRIVE1' } });
+    if (url.startsWith('https://graph.test/v1.0/me')) return json({ mail: 'partner@example.test' });
+    if (url.startsWith('https://graph.test/v1.0/shares/')) return json({ id: 'ITEM1', name: 'Ground bookings.xlsx', webUrl: 'https://onedrive.live.com/edit?id=ITEM1', parentReference: { driveId: 'DRIVE1' } });
     const base = 'https://graph.test/v1.0/drives/DRIVE1/items/ITEM1/workbook/worksheets';
     if (url.startsWith(`${base}?`)) return json({ value: [...tabs].map((name) => ({ name })) });
     if (url === `${base}/add`) { tabs.add(JSON.parse(init.body!).name); return json({}); }
@@ -247,13 +247,13 @@ test('Excel: sign in, link the workbook, send the tabs and read requests, with t
   assert.equal(stored.refresh_token.includes('refresh-secret-1'), false);
   assert.equal(await finishSignIn(h.cfg, new URLSearchParams({ state, code: 'good-code' }), fake.f), '/desk.html#/settings/connections/sheet-expired', 'a state works once');
   const card = (await h.get('/api/desk/sheets', o1)).body;
-  assert.equal(card.connected, true); assert.equal(card.account, 'dipan@antroli.test');
+  assert.equal(card.connected, true); assert.equal(card.account, 'partner@example.test');
   assert.equal(JSON.stringify(card).includes('refresh-secret'), false); assert.equal(JSON.stringify(card).includes('enc1:'), false);
 
   const bad = await h.post('/api/desk/sheets/file', { url: 'https://example.com/file.xlsx' }, o1);
   assert.equal(bad.status, 400); assert.match(bad.body.error.message, /not a OneDrive or SharePoint link/);
   const linked = await linkSheetFile(h.cfg, one<any>('SELECT * FROM users WHERE id = ?', id1), id1, { url: 'https://1drv.ms/x/s!AbCdEf' }, fake.f);
-  assert.deepEqual(linked.file, { name: 'Antroli bookings.xlsx', url: 'https://onedrive.live.com/edit?id=ITEM1' });
+  assert.deepEqual(linked.file, { name: 'Ground bookings.xlsx', url: 'https://onedrive.live.com/edit?id=ITEM1' });
   const share = fake.seen.find((s) => s.url.includes('/shares/'))!;
   assert.match(share.url, /\/shares\/u!aHR0cHM6Ly8xZHJ2Lm1zL3gvcyFBYkNkRWY\/driveItem/);
 
@@ -326,8 +326,8 @@ test('Google Sheets: values are written RAW so nothing becomes a formula, and on
     seen.push({ url, method: init.method, body: init.body, auth: init.headers.Authorization });
     const json = (o: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(o) });
     if (url === 'https://gtoken.test/token') return json({ access_token: 'g-acc', refresh_token: 'g-refresh', expires_in: 3600 });
-    if (url === 'https://gtoken.test/userinfo') return json({ email: 'dipan@gmail.test' });
-    if (url.includes('fields=properties.title')) return json({ properties: { title: 'Antroli' } });
+    if (url === 'https://gtoken.test/userinfo') return json({ email: 'partner@gmail.test' });
+    if (url.includes('fields=properties.title')) return json({ properties: { title: 'Ground bookings' } });
     if (url.includes('fields=sheets.properties.title')) return json({ sheets: [{ properties: { title: 'Booking requests' } }] });
     if (url.includes(encodeURIComponent("'Booking requests'")) && init.method === 'GET') return json({ values: [HEAD, [dayFromNow(3), '20:00', '1', '', 'Team River', '9811122233']] });
     return json({});
@@ -340,7 +340,7 @@ test('Google Sheets: values are written RAW so nothing becomes a formula, and on
   const bad = await linkSheetFile(h.cfg, one<any>('SELECT * FROM users WHERE id = ?', id2), id2, { url: 'https://docs.google.com/document/d/abc/edit' }, f).catch((e) => e);
   assert.match(bad.message, /not a Google Sheets address/);
   const ok = await linkSheetFile(h.cfg, one<any>('SELECT * FROM users WHERE id = ?', id2), id2, { url: 'https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit#gid=0' }, f);
-  assert.equal(ok.file!.name, 'Antroli');
+  assert.equal(ok.file!.name, 'Ground bookings');
   const push = await pushSheet(h.cfg, { id: id2, role: 'owner' }, id2, f);
   assert.equal(push.ok, true, push.message);
   const writes = seen.filter((s) => s.method === 'PUT');

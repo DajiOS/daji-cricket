@@ -13,10 +13,10 @@ import { readXlsx, writeXlsx, XlsxError, type Cell, type SheetSpec } from './acc
 import { decodeText, defuse, parseCsv } from './accounting/csv.ts';
 import { excelSerialToDate, parseDate } from './accounting/parse.ts';
 import { seal, unseal, vaultOn } from './vault.ts';
-import { registerIntegration, type Fetch } from './integrations.ts';
+import { registerIntegration, serverStep, type Fetch } from './integrations.ts';
 import './priceOnEnquiry.ts'; // the enquiry slot columns a booking request fills in
 
-// The shared spreadsheet: one business keeps a workbook with people outside the desk (Antroli's owner, a manager, an accountant).
+// The shared spreadsheet: one business keeps a workbook with people outside the desk (a partner, a manager, an accountant).
 // Daji SENDS its own tabs (bookings, open slots, customers, payments) and READS one tab people type into ("Booking requests").
 // Daji stays the authority: a row read from the sheet only ever lands in a review list; accepting it makes an ordinary enquiry,
 // which is then booked through the normal flow (availability, price, approval). Nothing read from a sheet creates a booking or
@@ -87,7 +87,7 @@ CREATE INDEX ix_sheet_inbox_owner ON sheet_inbox(owner_id, status, created_at);
 `);
 
 // Which of the business's grounds the sheet is about (a JSON list of ground ids; empty = every ground). A sheet kept with the people of one
-// ground (Antroli) then never carries the bookings, customers or money of the business's other grounds.
+// ground then never carries the bookings, customers or money of the business's other grounds.
 registerSchema('sheets-2', `ALTER TABLE sheet_links ADD COLUMN ground_ids TEXT NOT NULL DEFAULT '[]';`);
 
 // ------------------------------------------------------------------------------------------------ the platform side (Settings › Connections)
@@ -95,6 +95,12 @@ registerSchema('sheets-2', `ALTER TABLE sheet_links ADD COLUMN ground_ids TEXT N
 registerIntegration({
   id: 'sheet_excel', name: 'Shared spreadsheet: Microsoft Excel', what: 'Lets a business link an Excel workbook on OneDrive or SharePoint: Daji writes its bookings, open slots, customers and payments into it, and reads booking requests back for review.',
   setup: 'In Microsoft Entra (entra.microsoft.com) register an app for "Accounts in any organizational directory and personal Microsoft accounts", add the Web redirect address <API address>/api/sheets/oauth/callback, add the delegated permissions Files.ReadWrite, User.Read and offline_access, make a client secret, then put MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in the server settings (MICROSOFT_TENANT defaults to common). Each business then signs in from its own Shared spreadsheet card. Until then, download and upload still work.',
+  steps: [
+    { text: 'In Microsoft Entra, open App registrations and press New registration. Name it Daji, choose "Accounts in any organizational directory and personal Microsoft accounts", and add the Web redirect address {api}/api/sheets/oauth/callback.', link: { label: 'Entra app registrations', url: 'https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade' } },
+    { text: 'In the new app, open API permissions and add the Microsoft Graph delegated permissions Files.ReadWrite, User.Read and offline_access. Then open Certificates & secrets, make a new client secret and copy its value, and copy the Application (client) ID from the Overview page.' },
+    serverStep('MICROSOFT_CLIENT_ID=the application (client) ID and MICROSOFT_CLIENT_SECRET=the secret value'),
+    { text: 'Then each business opens Settings › Connections › Shared spreadsheet, picks Excel, signs in with the Microsoft account that owns the workbook and pastes its sharing link.' },
+  ],
   env: ['MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET'],
   have: (c) => ({ MICROSOFT_CLIENT_ID: !!c.sheets.microsoft.clientId, MICROSOFT_CLIENT_SECRET: !!c.sheets.microsoft.clientSecret }),
   // there is no free check of an app secret without a person signing in; each business's own "Check the link" is the live test
@@ -102,6 +108,12 @@ registerIntegration({
 registerIntegration({
   id: 'sheet_google', name: 'Shared spreadsheet: Google Sheets', what: 'Lets a business link a Google Sheet: Daji writes its bookings, open slots, customers and payments into it, and reads booking requests back for review.',
   setup: 'In Google Cloud Console create an OAuth client (Web application), add the redirect address <API address>/api/sheets/oauth/callback, switch on the Google Sheets API, add the scope https://www.googleapis.com/auth/spreadsheets to the consent screen, then put GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the server settings. Each business then signs in from its own Shared spreadsheet card. Until then, download and upload still work.',
+  steps: [
+    { text: 'In Google Cloud Console, pick or create a project and switch on the Google Sheets API.', link: { label: 'Google Sheets API', url: 'https://console.cloud.google.com/apis/library/sheets.googleapis.com' } },
+    { text: 'Open the OAuth consent screen and add the scope https://www.googleapis.com/auth/spreadsheets. Then open Credentials, create an OAuth client ID of type Web application, add the redirect address {api}/api/sheets/oauth/callback, and copy the client ID and secret.', link: { label: 'Google Cloud credentials', url: 'https://console.cloud.google.com/apis/credentials' } },
+    serverStep('GOOGLE_CLIENT_ID=the client ID and GOOGLE_CLIENT_SECRET=the client secret'),
+    { text: 'Then each business opens Settings › Connections › Shared spreadsheet, picks Google Sheets, signs in with the Google account that owns the sheet and pastes its link.' },
+  ],
   env: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
   have: (c) => ({ GOOGLE_CLIENT_ID: !!c.sheets.google.clientId, GOOGLE_CLIENT_SECRET: !!c.sheets.google.clientSecret }),
 });
