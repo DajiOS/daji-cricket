@@ -6,7 +6,6 @@ import { newId } from './ids.ts';
 import { Validator } from './input.ts';
 import { addDays, istDate, timeOfDay } from './time.ts';
 import { waNumber } from './whatsapp.ts';
-import { businessName } from './businesses.ts';
 
 // WhatsApp reminders without the WhatsApp API: a queue of people to remind, each with a ready wa.me link.
 // Nothing is sent from the server; staff press the link and then mark it sent, which writes the history.
@@ -50,12 +49,12 @@ CREATE INDEX ix_reminder_log_key ON reminder_log(owner_id, kind, item_key);
 export const KINDS = ['booking', 'payment', 'membership', 'fixture'] as const;
 export type Kind = typeof KINDS[number];
 export const KIND_LABEL: Record<Kind, string> = { booking: 'Booking reminder', payment: 'Payment due', membership: 'Membership expiring', fixture: 'Tournament fixture' };
-export const PLACEHOLDERS = ['name', 'date', 'time', 'amount', 'business'] as const;
+export const PLACEHOLDERS = ['name', 'date', 'time', 'amount'] as const;
 
 export const DEFAULT_TEMPLATES: Record<Kind, string> = {
-  booking: 'Hi {name}, a reminder of your booking at {business} on {date} at {time}. See you there!',
+  booking: 'Hi {name}, a reminder of your booking at Daji Cricket Ground on {date} at {time}. See you there!',
   payment: 'Hi {name}, a balance of {amount} is due for your booking on {date} at {time}. Please pay at the ground or by UPI. Thank you.',
-  membership: 'Hi {name}, your {business} membership ends on {date}. Reply here to renew and keep your benefits.',
+  membership: 'Hi {name}, your Daji Cricket Ground membership ends on {date}. Reply here to renew and keep your benefits.',
   fixture: 'Hi {name}, your tournament match is on {date} at {time}. Please reach 30 minutes early with your full team.',
 };
 
@@ -71,7 +70,7 @@ export const timeText = (hhmm: string): string => { const [h, m] = hhmm.split(':
 
 /** Replace {name} {date} {time} {amount}; unknown or empty values leave nothing behind but tidy spacing. */
 export function renderTemplate(body: string, v: Partial<Record<typeof PLACEHOLDERS[number], string>>): string {
-  return body.replace(/\{(name|date|time|amount|business)\}/g, (_m, k: string) => v[k as typeof PLACEHOLDERS[number]] ?? '').replace(/[ \t]{2,}/g, ' ').trim();
+  return body.replace(/\{(name|date|time|amount)\}/g, (_m, k: string) => v[k as typeof PLACEHOLDERS[number]] ?? '').replace(/[ \t]{2,}/g, ' ').trim();
 }
 export const waLink = (phone: string | null | undefined, message: string): string | null => {
   const n = phone ? waNumber(phone) : '';
@@ -88,8 +87,6 @@ export function listTemplates(owner: string): { kind: Kind; label: string; body:
   });
 }
 const bodyOf = (owner: string, kind: Kind): string => one<{ body: string }>('SELECT body FROM reminder_templates WHERE owner_id = ? AND kind = ? AND deleted_at IS NULL', owner, kind)?.body ?? DEFAULT_TEMPLATES[kind];
-/** {business} is the sending business's own name (white-label), so one business's reminders never carry another's name. */
-const biz = (owner: string) => ({ business: businessName(owner) });
 
 export function saveTemplate(owner: string, actor: Actor, kindIn: unknown, input: unknown): { kind: Kind; body: string } {
   const kind = kindOr400(kindIn);
@@ -123,7 +120,7 @@ function bookingItems(owner: string): QueueItem[] {
     FROM bookings b JOIN users u ON u.id = b.customer_id JOIN grounds g ON g.id = b.ground_id`;
   for (const b of many<any>(`${base} WHERE b.owner_id = ? AND b.status = 'confirmed' AND b.date = ? ORDER BY b.start_at`, owner, tomorrow)) {
     const bal = Math.max(0, b.total_paise - b.paid_paise);
-    const message = renderTemplate(bodyOf(owner, 'booking'), { name: b.name, date: dayText(b.date), time: timeText(timeOfDay(b.start_at)), amount: inrText(bal), ...biz(owner) });
+    const message = renderTemplate(bodyOf(owner, 'booking'), { name: b.name, date: dayText(b.date), time: timeText(timeOfDay(b.start_at)), amount: inrText(bal) });
     out.push({ kind: 'booking', key: b.id, customerId: b.cid, name: b.name, phone: b.phone, summary: `${b.gname}, ${dayText(b.date)} ${timeText(timeOfDay(b.start_at))} (${b.ref})`, message, link: waLink(b.phone, message), sentAt: lastSent(owner, 'booking', b.id) });
   }
   const from = addDays(t, -30);
@@ -138,7 +135,7 @@ function bookingItems(owner: string): QueueItem[] {
     if (b.block && !blockBal.has(b.block)) continue; // a later day of a block already listed
     const bal = b.block ? blockBal.get(b.block)! : b.total_paise - b.paid_paise;
     if (b.block) blockBal.delete(b.block);
-    const message = renderTemplate(bodyOf(owner, 'payment'), { name: b.name, date: dayText(b.date), time: timeText(timeOfDay(b.start_at)), amount: inrText(bal), ...biz(owner) });
+    const message = renderTemplate(bodyOf(owner, 'payment'), { name: b.name, date: dayText(b.date), time: timeText(timeOfDay(b.start_at)), amount: inrText(bal) });
     out.push({ kind: 'payment', key: b.id, customerId: b.cid, name: b.name, phone: b.phone, summary: `${inrText(bal)} due, ${dayText(b.date)} (${b.ref})`, message, link: waLink(b.phone, message), sentAt: lastSent(owner, 'payment', b.id) });
   }
   return out;
@@ -151,7 +148,7 @@ function membershipItems(owner: string): { items: QueueItem[]; available: boolea
     const t = today(); const limit = addDays(t, 7);
     const rows = many<any>('SELECT id, name, phone, end_date FROM memberships WHERE owner_id = ? AND deleted_at IS NULL AND end_date >= ? AND end_date <= ? ORDER BY end_date', owner, t, limit);
     const items = rows.map((r): QueueItem => {
-      const message = renderTemplate(bodyOf(owner, 'membership'), { name: r.name, date: dayText(r.end_date), time: '', amount: '', ...biz(owner) });
+      const message = renderTemplate(bodyOf(owner, 'membership'), { name: r.name, date: dayText(r.end_date), time: '', amount: '' });
       return { kind: 'membership', key: String(r.id), customerId: null as any, name: r.name, phone: r.phone, summary: `Ends ${dayText(r.end_date)}`, message, link: waLink(r.phone, message), sentAt: lastSent(owner, 'membership', String(r.id)) };
     });
     return { items, available: true };
@@ -176,7 +173,7 @@ export function preview(owner: string, input: unknown): { message: string; link:
   const date = v.str('date', { max: 40 }) ?? ''; const time = v.str('time', { max: 40 }) ?? ''; const amount = v.str('amount', { max: 40 }) ?? '';
   const body = v.str('body', { max: 1000 });
   v.done();
-  const message = renderTemplate(body ?? bodyOf(owner, kind), { name, date, time, amount, ...biz(owner) });
+  const message = renderTemplate(body ?? bodyOf(owner, kind), { name, date, time, amount });
   return { message, link: waLink(phone, message) };
 }
 

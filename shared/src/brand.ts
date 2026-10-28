@@ -13,12 +13,6 @@ export const BRAND = {
   tagline: 'Project by Daji Parivar',
 } as const;
 
-/** Who owns and runs the software. Daji Cricket Ground (BRAND) is a customer business on it, like every other business.
- *  The name shown is the software owner's setting (softwareOwnerName); this is its default. */
-export const SOFTWARE_OWNER = {
-  name: 'Daji OS',
-} as const;
-
 export interface ThemeColors {
   bg: string;
   bgRaised: string;
