@@ -73,40 +73,65 @@ function ResultForm({ d, fx, onClose, onSaved }: { d: Detail; fx: Fixture; onClo
   );
 }
 
-function GenerateForm({ d, onClose, onSaved }: { d: Detail; onClose: () => void; onSaved: () => void }) {
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const weekdayOf = (iso: string) => new Date(iso + 'T00:00:00Z').getUTCDay();
+const nextDay = (iso: string) => new Date(Date.parse(iso + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
+
+/** Builds fixtures into the days and match times given, and holds each match's time on the ground so customers cannot book it. */
+function BuildForm({ d, onClose, onSaved }: { d: Detail; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const has = d.fixtures.length > 0;
-  const { v, bind } = useForm({ startDate: d.tournament.startDate, time: '09:00', gap: '7', groundId: '', double: false });
+  const { v, bind } = useForm({ kind: has && d.tournament.format === 'knockout' ? 'knockout' : 'round_robin', day: '', weekday: '0', times: '09:00, 13:00, 17:00', minutes: '180', groundId: d.grounds[0]?.id ?? '', hold: true, dayNight: false, nightFrom: '18:00' });
+  const [days, setDays] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const n = d.teams.length, games = (n * (n - 1) / 2) * (v.double ? 2 : 1);
-  async function go_() {
+  const n = d.teams.length, knockout = v.kind === 'knockout';
+  const games = knockout ? null : (n * (n - 1) / 2) * (v.kind === 'double_round_robin' ? 2 : 1);
+  const times = v.times.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+  const add = (list: string[]) => setDays((cur) => [...new Set([...cur, ...list])].sort());
+  const everyWeekday = () => {
+    const out: string[] = []; const w = Number(v.weekday);
+    for (let x = d.tournament.startDate; x <= d.tournament.endDate; x = nextDay(x)) if (weekdayOf(x) === w) out.push(x);
+    if (!out.length) return setErr(`There is no ${WEEKDAYS[w]} between ${d.tournament.startDate} and ${d.tournament.endDate}.`);
+    setErr(null); add(out);
+  };
+  async function build() {
     if (n < 2) return setErr('Add at least two teams first. Fixtures need two teams to play.');
+    if (!days.length) return setErr('Add at least one day.');
+    if (!times.length) return setErr('Give at least one match time, like 09:00.');
+    if (!v.groundId) return setErr('Pick the ground.');
     setBusy(true); setErr(null);
     try {
-      const r = await post(`${API}/${d.tournament.id}/fixtures/generate`, { startDate: v.startDate || undefined, time: v.time, daysBetweenRounds: Number(v.gap), groundId: v.groundId || undefined, doubleRound: v.double, replace: has });
-      toast(`${r.created} fixtures over ${r.rounds} rounds`); onSaved();
+      const r = await post(`${API}/${d.tournament.id}/fixtures/schedule`, { kind: v.kind, days, times, matchMinutes: Number(v.minutes), groundId: v.groundId, holdGround: v.hold, dayNight: v.dayNight, nightFrom: v.dayNight ? v.nightFrom : undefined, replace: has && !knockout });
+      toast(`${r.created} fixtures made${r.held ? `; their times are blocked on the ground` : ''}`); onSaved();
     } catch (e: any) { setErr(e.message); setBusy(false); }
   }
+  const slots = days.length * times.length;
   return (
-    <Modal title="Generate round robin" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={go_}>{busy ? 'Generating…' : `Create ${games} fixtures`}</button></>}>
+    <Modal title="Build fixtures" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} aria-busy={busy || undefined} onClick={build}>{busy ? 'Building…' : games ? `Make ${games} fixtures` : 'Make the next round'}</button></>}>
       <ErrorBox msg={err} />
-      {n < 2 && <div className="err">Add at least two teams first.</div>}
-      {has && <div className="hint" style={{ marginBottom: 12 }}>This replaces the {d.fixtures.length} fixtures already here. It is only allowed while none has a result.</div>}
+      {has && !knockout && <div className="hint" style={{ marginBottom: 12 }}>This replaces the {d.fixtures.length} fixtures already here and frees their times on the ground. It is only allowed while none has a result.</div>}
+      {knockout && <div className="hint" style={{ marginBottom: 12 }}>{has ? 'Makes the next knockout round from the winners. Every match of the last round needs a winner first.' : 'Makes the first knockout round. If the number of teams is not 2, 4, 8 or 16, the teams entered first get a bye.'}</div>}
       <div className="form-grid">
-        <Field label="First round on"><DateInput className="inp" {...bind('startDate')} /></Field>
-        <Field label="Start time"><input className="inp" type="time" {...bind('time')} /></Field>
-        <Field label="Days between rounds"><input className="inp" type="number" min={0} max={60} {...bind('gap')} /></Field>
-        <Field label="Ground"><select className="inp" {...bind('groundId')}><option value="">Not set</option>{d.grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
-        <Field label="Home and away" full><label className="row" style={{ gap: 8 }}><input type="checkbox" checked={v.double} onChange={bind('double').onChange} /><span className="small">Everyone plays everyone twice</span></label></Field>
+        <Field label="Format"><select className="inp" {...bind('kind')}><option value="round_robin">Round robin (everyone plays everyone)</option><option value="double_round_robin">Round robin, home and away</option><option value="knockout">Knockout</option></select></Field>
+        <Field label="Ground"><select className="inp" {...bind('groundId')}>{d.grounds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
+        <Field label="Add a day"><span className="row" style={{ gap: 6 }}><DateInput className="inp" {...bind('day')} /><button className="btn sm" type="button" onClick={() => v.day && add([v.day])}>Add</button></span></Field>
+        <Field label="Or add every" hint={`Between ${d.tournament.startDate} and ${d.tournament.endDate}`}><span className="row" style={{ gap: 6 }}><select className="inp" {...bind('weekday')}>{WEEKDAYS.map((w, i) => <option key={w} value={i}>{w}</option>)}</select><button className="btn sm" type="button" onClick={everyWeekday}>Add</button></span></Field>
+        <Field label={`Days (${days.length})`} full>{days.length ? <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>{days.map((x) => <Chip key={x} tone="info">{x} <button type="button" className="btn ghost sm" aria-label={`Remove ${x}`} onClick={() => setDays(days.filter((y) => y !== x))}>×</button></Chip>)}</div> : <span className="small muted">No days yet.</span>}</Field>
+        <Field label="Match start times" hint="Each day, e.g. 09:00, 13:00, 17:00"><input className="inp" {...bind('times')} /></Field>
+        <Field label="Match length (minutes)"><input className="inp" type="number" min={30} max={720} step={15} {...bind('minutes')} /></Field>
+        <Field label="Day and night" full><label className="row" style={{ gap: 8 }}><input type="checkbox" checked={v.dayNight} onChange={bind('dayNight').onChange} /><span className="small">Every team plays at least one day match and one night match</span></label></Field>
+        {v.dayNight && <Field label="Night starts at"><input className="inp" type="time" {...bind('nightFrom')} /></Field>}
+        <Field label="Block the ground" full><label className="row" style={{ gap: 8 }}><input type="checkbox" checked={v.hold} onChange={bind('hold').onChange} /><span className="small">Block each match's time so customers cannot book it</span></label></Field>
       </div>
+      <p className="small muted" style={{ marginTop: 8 }}>{slots} match times{games ? ` for ${games} matches` : ''}. Matches fill the times in order, and a team plays at most once a day where the times allow it. If a time is already booked, nothing is made and you are told which one.</p>
     </Modal>
   );
 }
 
 export function FixturesTab({ d, reload }: { d: Detail; reload: () => void }) {
   const toast = useToast();
-  const [modal, setModal] = useState<{ k: 'add' } | { k: 'edit'; fx: Fixture } | { k: 'result'; fx: Fixture } | { k: 'gen' } | null>(null);
+  const [modal, setModal] = useState<{ k: 'add' } | { k: 'edit'; fx: Fixture } | { k: 'result'; fx: Fixture } | { k: 'build' } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const tid = d.tournament.id;
   async function act(fn: () => Promise<unknown>, msg: string) { setErr(null); try { await fn(); toast(msg); reload(); } catch (e: any) { setErr(e.message); } }
@@ -115,15 +140,15 @@ export function FixturesTab({ d, reload }: { d: Detail; reload: () => void }) {
     <div className="card">
       <div className="card-head"><h3>Fixtures ({d.fixtures.length})</h3>
         <span className="row">
-          <button className="btn sm" onClick={() => (d.teams.length < 2 ? toast('Add at least two teams first (Teams tab).') : setModal({ k: 'gen' }))}>Generate round robin</button>
+          <button className="btn sm" onClick={() => (d.teams.length < 2 ? toast('Add at least two teams first (Teams tab).') : setModal({ k: 'build' }))}>Build fixtures</button>
           <button className="btn primary sm" onClick={() => (d.teams.length < 2 ? toast('Add at least two teams first (Teams tab).') : setModal({ k: 'add' }))}>Add fixture</button>
         </span></div>
       <div className="card-pad" style={{ paddingBottom: err ? undefined : 0 }}><ErrorBox msg={err} /></div>
-      <Table rows={d.fixtures} empty={d.teams.length < 2 ? 'Add at least two teams, then create fixtures.' : 'No fixtures yet. Generate a round robin or add them one by one.'}
+      <Table rows={d.fixtures} empty={d.teams.length < 2 ? 'Add at least two teams, then create fixtures.' : 'No fixtures yet. Build them into your days and times, or add them one by one.'}
         cols={[
           { head: 'Round', cell: (f) => f.round },
           { head: 'Match', cell: (f) => <b>{f.teamA} <span className="muted">v</span> {f.teamB}</b> },
-          { head: 'When', cell: (f) => <>{fmtDateTime(f.startsAt)}{f.groundName && <div className="small muted">{f.groundName}</div>}</> },
+          { head: 'When', cell: (f) => <>{fmtDateTime(f.startsAt)}{f.groundName && <div className="small muted">{f.groundName}{f.blockedUntil ? ' · ground blocked' : ''}</div>}</> },
           { head: 'Result', cell: (f) => f.played
             ? <><Chip tone={f.outcome === 'no_result' ? 'mute' : f.outcome === 'tie' ? 'info' : 'good'}>{f.resultText || 'Played'}</Chip>{f.aRuns !== null && f.bRuns !== null && <div className="small muted">{f.teamA} {f.aRuns} ({f.aOvers}) · {f.teamB} {f.bRuns} ({f.bOvers})</div>}</>
             : f.matchStatus === 'live' ? <Chip tone="gold">Live</Chip> : f.matchStatus === 'completed' ? <Chip tone="warn">Scored, not copied</Chip> : <span className="muted">Not played</span> },
@@ -142,7 +167,7 @@ export function FixturesTab({ d, reload }: { d: Detail; reload: () => void }) {
       {modal?.k === 'add' && <FixtureForm d={d} onClose={() => setModal(null)} onSaved={done} />}
       {modal?.k === 'edit' && <FixtureForm d={d} fx={modal.fx} onClose={() => setModal(null)} onSaved={done} />}
       {modal?.k === 'result' && <ResultForm d={d} fx={modal.fx} onClose={() => setModal(null)} onSaved={done} />}
-      {modal?.k === 'gen' && <GenerateForm d={d} onClose={() => setModal(null)} onSaved={done} />}
+      {modal?.k === 'build' && <BuildForm d={d} onClose={() => setModal(null)} onSaved={done} />}
     </div>
   );
 }

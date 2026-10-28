@@ -53,11 +53,12 @@ beforeEach(async () => {
   setting({ waitlistEnabled: true });
 });
 
-test('the shipped defaults: off, Sunday leather ball, 72 hours, tiers off', async () => {
+test('the shipped defaults: off, Sunday leather ball, 72 hours, five tiers ready but off', async () => {
   const { DEFAULT_SETTINGS } = await import('../src/settings.ts');
   assert.equal(DEFAULT_SETTINGS.waitlistEnabled, false);
   assert.equal(DEFAULT_SETTINGS.waitlistDay, 0); assert.equal(DEFAULT_SETTINGS.waitlistBall, 'leather');
   assert.equal(DEFAULT_SETTINGS.waitlistConfirmHours, 72); assert.equal(DEFAULT_SETTINGS.waitlistTierPriority, false);
+  assert.deepEqual(DEFAULT_SETTINGS.waitlistTiers.map((t) => `${t.name} ${t.minGames}`), ['Diamond 40', 'Platinum 30', 'Gold 20', 'Silver 10', 'Bronze 5']);
   assert.equal(new Date(SUNDAY + 'T00:00:00Z').getUTCDay(), 0);
   assert.equal(waitlistDayFrom(istDate(T0)), SUNDAY);
 });

@@ -76,7 +76,7 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   waitlistConfirmHours: 72,
   waitlistTierPriority: false,
   waitlistWaveMinutes: 120,
-  waitlistTiers: [{ name: 'Gold', minGames: 20 }, { name: 'Silver', minGames: 10 }],
+  waitlistTiers: [{ name: 'Diamond', minGames: 40 }, { name: 'Platinum', minGames: 30 }, { name: 'Gold', minGames: 20 }, { name: 'Silver', minGames: 10 }, { name: 'Bronze', minGames: 5 }],
 };
 
 /** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */

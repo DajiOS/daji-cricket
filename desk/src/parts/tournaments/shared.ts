@@ -10,6 +10,8 @@ export interface Fixture {
   id: string; round: number; teamAId: string; teamBId: string; teamA: string; teamB: string; startsAt: number | null; groundId: string | null; groundName: string | null;
   played: boolean; outcome: string | null; winnerTeamId: string | null; winner: string | null; resultText: string | null;
   aRuns: number | null; aOvers: string | null; bRuns: number | null; bOvers: string | null; matchId: string | null; matchStatus: string | null;
+  /** End of the time this fixture holds on the ground (customers cannot book it); null when it holds none. */
+  blockedUntil?: number | null;
 }
 export interface TableRow { teamId: string; team: string; played: number; won: number; lost: number; tied: number; noResult: number; points: number; nrr: number | null }
 export interface Ground { id: string; name: string }
