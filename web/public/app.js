@@ -1842,6 +1842,28 @@ async function openDepositView(b) {
     h('p', { class: 'hint' }, 'Only the ground can change the security deposit. You can view it here.')]);
 }
 
+/** Prices on enquiry: the customer asks the ground to move a booking (an enquiry naming it and the time wanted); staff move it from the desk. */
+function askToMove(b, body) {
+  const date = h('input', { type: 'date', id: 'mv-date', value: b.date, min: todayIst(), required: true });
+  const time = h('input', { type: 'time', id: 'mv-time', value: hhmm(b.startAt), step: '3600', required: true });
+  const msg = h('textarea', { id: 'mv-msg', rows: 3 }, '');
+  const err = h('div', { class: 'hint err', id: 'mv-err', 'aria-live': 'assertive' });
+  const send = h('button', { class: 'btn primary', id: 'mv-send', type: 'button' }, 'Ask the ground to move it');
+  const key = 'mv-' + b.id.slice(-20) + '-' + Date.now().toString(36); // one key per open form: a retry after a lost answer files the request once
+  send.addEventListener('click', async () => {
+    err.textContent = '';
+    if (!date.value || !time.value) { err.textContent = 'Pick the day and time you would like instead.'; return; }
+    const extra = msg.value.trim();
+    busyBtn(send, true, 'Sending…');
+    try {
+      await api('/api/enquiries', { method: 'POST', headers: { 'idempotency-key': key }, body: { groundId: b.groundId, moveBookingId: b.id, preferredDate: date.value, preferredTime: time.value.slice(0, 5), preferredSlots: b.slotCount || undefined,
+        message: `Please move booking ${b.ref} to ${niceDate(date.value)} at ${time.value.slice(0, 5)}.${extra ? ' ' + extra : ''}` } });
+      busyBtn(send, false); closeModal(); toast('Sent. The ground will move your booking and let you know.');
+    } catch (e) { busyBtn(send, false); err.textContent = e.message; }
+  });
+  body.append(h('p', { class: 'hint', id: 'mv-note' }, 'Prices are given on enquiry, so the ground moves bookings for you. Tell them when you would like to play instead.'),
+    h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('New date', date), field('New start', time)), field('Anything else (optional)', msg), err, send);
+}
 /** Change a booking's time: eligibility from the server, options from the server, a preview of the effect, then the move. */
 async function openReschedule(b) {
   let st;
@@ -1849,9 +1871,10 @@ async function openReschedule(b) {
   const body = h('div', { id: 'rs-body' });
   const facts = [
     h('div', { class: 'row' }, h('span', {}, 'Now'), h('b', {}, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}`)),
-    st.maxMoves != null ? h('div', { class: 'row' }, h('span', {}, 'Moves left'), h('b', { id: 'rs-left' }, `${st.movesLeft} of ${st.maxMoves}`)) : null,
-    st.cutoffHours != null ? h('div', { class: 'row' }, h('span', {}, 'Allowed until'), h('b', {}, `${st.cutoffHours} hours before the start`)) : null];
-  openModal([h('div', { class: 'eyebrow' }, 'Booking ' + b.ref), h('h3', {}, 'Change the time'), h('div', { class: 'kv' }, ...facts), body], { wide: true });
+    !st.askToMove && st.maxMoves != null ? h('div', { class: 'row' }, h('span', {}, 'Moves left'), h('b', { id: 'rs-left' }, `${st.movesLeft} of ${st.maxMoves}`)) : null,
+    !st.askToMove && st.cutoffHours != null ? h('div', { class: 'row' }, h('span', {}, 'Allowed until'), h('b', {}, `${st.cutoffHours} hours before the start`)) : null];
+  openModal([h('div', { class: 'eyebrow' }, 'Booking ' + b.ref), h('h3', {}, st.askToMove ? 'Ask to move' : 'Change the time'), h('div', { class: 'kv' }, ...facts), body], { wide: true });
+  if (st.askToMove) { askToMove(b, body); return; }
   if (!st.allowed) { body.append(h('p', { class: 'hint err', id: 'rs-blocked', 'data-code': st.code }, st.message || 'This booking cannot be changed online.')); return; }
   const date = h('input', { type: 'date', id: 'rs-date', value: b.date, min: todayIst() });
   const time = h('input', { type: 'time', id: 'rs-time', value: hhmm(b.startAt), step: '3600' });
@@ -1905,7 +1928,7 @@ function manageButtons(b) {
   const cfg = state.config || {}, out = [];
   const upcoming = b.status === 'confirmed' && b.startAt > Date.now();
   if (b.moveDifferenceDuePaise > 0) out.push(h('button', { class: 'btn primary sm pay-diff', type: 'button', onclick: (e) => payDifference(b, e.currentTarget) }, `Pay ${inr(b.moveDifferenceDuePaise)} online`));
-  if (cfg.customerRescheduleEnabled && upcoming && !b.seriesId) out.push(h('button', { class: 'btn outline sm change-time', type: 'button', onclick: () => openReschedule(b) }, 'Change time'));
+  if ((cfg.customerRescheduleEnabled || cfg.pricesOnEnquiry) && upcoming && !b.seriesId) out.push(h('button', { class: 'btn outline sm change-time', type: 'button', onclick: () => openReschedule(b) }, cfg.pricesOnEnquiry ? 'Ask to move' : 'Change time'));
   if (cfg.securityDepositEnabled && ['confirmed', 'completed', 'no_show'].includes(b.status)) out.push(h('button', { class: 'btn ghost sm view-deposit', type: 'button', onclick: () => openDepositView(b) }, 'Security deposit'));
   return out;
 }

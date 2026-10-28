@@ -15,10 +15,22 @@ import './priceOnEnquiry.ts'; // registers the enquiry slot columns
 
 interface EnquiryRow {
   id: string; owner_id: string; ground_id: string | null; customer_id: string | null; name: string; phone: string; email: string | null; preferred_date: string | null;
-  players: number | null; message: string; status: EnquiryStatus; preferred_time?: string | null; preferred_slots?: number | null; preferred_label?: string | null; closed_reason: string | null; booking_id: string | null; created_at: number; updated_at: number;
+  players: number | null; message: string; status: EnquiryStatus; preferred_time?: string | null; preferred_slots?: number | null; preferred_label?: string | null; move_booking_id?: string | null; closed_reason: string | null; booking_id: string | null; created_at: number; updated_at: number;
 }
 
 const row = (id: string) => one<EnquiryRow>('SELECT * FROM enquiries WHERE id = ?', id);
+
+// a request to move a booking the customer already has: which booking, and when it is now
+function moveOf(r: EnquiryRow): { moveBookingId: string | null; moveBooking: { id: string; ref: string; date: string; startAt: number; endAt: number; status: string } | null } {
+  if (!r.move_booking_id) return { moveBookingId: null, moveBooking: null };
+  const b = one<{ id: string; ref: string; date: string; start_at: number; end_at: number; status: string }>('SELECT id, ref, date, start_at, end_at, status FROM bookings WHERE id = ?', r.move_booking_id);
+  return { moveBookingId: r.move_booking_id, moveBooking: b ? { id: b.id, ref: b.ref, date: b.date, startAt: b.start_at, endAt: b.end_at, status: b.status } : null };
+}
+
+/** A move request is answered by moving the booking it names (from the booking), never by making a second booking. */
+function notAMove(r: EnquiryRow): void {
+  if (r.move_booking_id) throw new HttpError(409, 'MOVE_REQUEST', 'This enquiry asks to move an existing booking. Move that booking from its page, then close this enquiry.');
+}
 
 function view(r: EnquiryRow, forCustomer: boolean): Enquiry {
   const g = r.ground_id ? one<{ name: string }>('SELECT name FROM grounds WHERE id = ?', r.ground_id) : undefined;
@@ -30,7 +42,7 @@ function view(r: EnquiryRow, forCustomer: boolean): Enquiry {
   }));
   return {
     id: r.id, groundId: r.ground_id, groundName: g?.name ?? null, ownerId: r.owner_id, customerId: r.customer_id, name: r.name, phone: r.phone, email: r.email,
-    preferredDate: r.preferred_date, preferredTime: r.preferred_time ?? null, preferredSlots: r.preferred_slots ?? null, preferredLabel: r.preferred_label ?? null, players: r.players, message: r.message, status: r.status, closedReason: r.closed_reason, bookingId: r.booking_id,
+    preferredDate: r.preferred_date, preferredTime: r.preferred_time ?? null, preferredSlots: r.preferred_slots ?? null, preferredLabel: r.preferred_label ?? null, ...moveOf(r), players: r.players, message: r.message, status: r.status, closedReason: r.closed_reason, bookingId: r.booking_id,
     quotations, notes, createdAt: r.created_at, updatedAt: r.updated_at,
   };
 }
@@ -50,16 +62,25 @@ export function createEnquiry(user: UserRow | null, body: unknown): Enquiry {
   const preferredTime = v.str('preferredTime', { max: 5 });
   const preferredSlots = v.int('preferredSlots', { min: 1, max: 24 });
   const preferredLabel = v.str('preferredLabel', { max: 80 });
+  const moveBookingId = v.str('moveBookingId', { max: 60 });
   v.done();
+  // a move request is about the customer's own confirmed booking, and goes to that booking's ground
+  let move: { id: string; ground_id: string } | undefined;
+  if (moveBookingId) {
+    if (user?.role !== 'customer') throw new HttpError(401, 'SIGN_IN_REQUIRED', 'Sign in to ask the ground to move your booking.');
+    move = one<{ id: string; ground_id: string }>("SELECT id, ground_id FROM bookings WHERE id = ? AND customer_id = ? AND status = 'confirmed' AND start_at > ?", moveBookingId, user.id, now());
+    if (!move) throw new HttpError(404, 'BOOKING_NOT_FOUND', 'That booking is not one of your bookings still to come.');
+    if (move.ground_id !== groundId) throw new HttpError(400, 'VALIDATION_FAILED', 'A move stays on the same ground.', { fields: [{ field: 'groundId', message: 'The booking\'s own ground' }] });
+  }
   if (preferredTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(preferredTime)) throw new HttpError(400, 'VALIDATION_FAILED', 'The slot time must look like 18:00', { fields: [{ field: 'preferredTime', message: 'A time like 18:00' }] });
   if (kind === 'academy' && preferredDate && isClosedDate(preferredDate, 'academy')) throw new HttpError(409, 'DATE_CLOSED', 'The academy is not taking enquiries for that day. Please pick another day.');
   const g = getGroundOr404(groundId!);
   const id = newId('enq');
   const t = now();
   tx(() => {
-    run(`INSERT INTO enquiries(id, owner_id, ground_id, customer_id, name, phone, email, preferred_date, preferred_time, preferred_slots, preferred_label, players, message, status, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?)`,
-      id, g.owner_id, g.id, user?.role === 'customer' ? user.id : null, name!, phone!, email ?? null, preferredDate ?? null, preferredTime ?? null, preferredSlots ?? null, preferredLabel ?? null, players ?? null, message!, t, t);
-    audit(user ? { id: user.id, role: user.role } : { id: null, role: 'anonymous' }, 'enquiry.create', 'enquiry', id, { groundId: g.id }, g.owner_id);
+    run(`INSERT INTO enquiries(id, owner_id, ground_id, customer_id, name, phone, email, preferred_date, preferred_time, preferred_slots, preferred_label, move_booking_id, players, message, status, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?)`,
+      id, g.owner_id, g.id, user?.role === 'customer' ? user.id : null, name!, phone!, email ?? null, preferredDate ?? null, preferredTime ?? null, preferredSlots ?? null, preferredLabel ?? null, move?.id ?? null, players ?? null, message!, t, t);
+    audit(user ? { id: user.id, role: user.role } : { id: null, role: 'anonymous' }, 'enquiry.create', 'enquiry', id, { groundId: g.id, ...(move ? { moveBookingId: move.id } : {}) }, g.owner_id);
   });
   if (user?.role === 'customer') notify(user.id, 'enquiry_received', { name: name });
   // the ground's people hear about it straight away: an app alert and email to the owner, and a WhatsApp to the contact number
@@ -179,6 +200,7 @@ export function closeEnquiry(user: UserRow, id: string, body: unknown): Enquiry 
 export function convertEnquiryToBlock(user: UserRow, id: string, body: unknown): Enquiry {
   const r = access(user, id, true);
   open(r);
+  notAMove(r);
   const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
   const quotationId = typeof b.quotationId === 'string' ? b.quotationId : undefined;
   let total = b.totalPaise;
@@ -205,6 +227,7 @@ export function convertEnquiryToBlock(user: UserRow, id: string, body: unknown):
 export function convertEnquiry(user: UserRow, id: string, body: unknown): Enquiry {
   const r = access(user, id, true);
   open(r);
+  notAMove(r);
   const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
   // the slot the customer asked about is the booking's slot unless staff pick another
   const slot = { ...(r.preferred_date ? { date: r.preferred_date } : {}), ...(r.preferred_time ? { startTime: r.preferred_time } : {}), ...(r.preferred_slots ? { slots: r.preferred_slots } : {}) };

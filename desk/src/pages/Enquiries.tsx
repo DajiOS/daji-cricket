@@ -10,7 +10,7 @@ import { errText, HAND_METHODS } from '../parts/dash/common';
 type St = 'new' | 'follow_up' | 'quoted' | 'converted' | 'closed';
 interface Quote { id: string; amountPaise: number; validUntil: number | null; details: string | null; status: string; createdAt: number }
 interface Note { id: string; kind: string; body: string; createdAt: number }
-interface Enquiry { id: string; groundName: string | null; name: string; phone: string; email: string | null; preferredDate: string | null; preferredTime?: string | null; preferredSlots?: number | null; preferredLabel?: string | null; players: number | null; message: string; status: St; closedReason: string | null; bookingId: string | null; quotations: Quote[]; notes: Note[]; createdAt: number; updatedAt: number }
+interface Enquiry { id: string; groundName: string | null; name: string; phone: string; email: string | null; preferredDate: string | null; preferredTime?: string | null; preferredSlots?: number | null; preferredLabel?: string | null; players: number | null; message: string; status: St; closedReason: string | null; bookingId: string | null; moveBookingId?: string | null; moveBooking?: { id: string; ref: string; date: string; startAt: number; endAt: number; status: string } | null; quotations: Quote[]; notes: Note[]; createdAt: number; updatedAt: number }
 const STATUS: Record<string, ['good' | 'warn' | 'bad' | 'mute' | 'info' | 'gold', string]> = { new: ['warn', 'New'], follow_up: ['info', 'Following up'], quoted: ['gold', 'Quoted'], converted: ['good', 'Booked'], closed: ['mute', 'Closed'] };
 const TABS: [string, string][] = [['all', 'All'], ['new', 'New'], ['follow_up', 'Following up'], ['quoted', 'Quoted'], ['converted', 'Booked'], ['closed', 'Closed']];
 const LIMIT = 50;
@@ -37,7 +37,7 @@ export default function Enquiries({ sub }: { sub: string }) {
             <>
               <Table rows={x.rows} rowKey={(e) => e.id} onRow={(e) => go(`/enquiries/${e.id}`)} cols={[
                 { head: 'From', cell: (e) => <><a className="strong" href={`#/enquiries/${e.id}`} onClick={(ev) => ev.stopPropagation()}>{e.name}</a><div className="small muted">{formatPhone(e.phone)}</div></> },
-                { head: 'For', cell: (e) => <>{e.groundName ?? 'Any ground'}{e.preferredDate && <div className="small muted">{fmtDay(e.preferredDate)}{e.players ? ` · ${e.players} players` : ''}</div>}</> },
+                { head: 'For', cell: (e) => <>{e.groundName ?? 'Any ground'}{e.moveBooking && <div className="small muted">Move {e.moveBooking.ref}</div>}{e.preferredDate && <div className="small muted">{fmtDay(e.preferredDate)}{e.players ? ` · ${e.players} players` : ''}</div>}</> },
                 { head: 'Message', cell: (e) => <span className="small">{e.message.slice(0, 90)}{e.message.length > 90 ? '…' : ''}</span> },
                 { head: 'Status', cell: (e) => <Status s={e.status} map={STATUS} /> },
                 { head: 'Received', cell: (e) => fmtDateTime(e.createdAt) },
@@ -77,6 +77,7 @@ function EnquiryDetail({ id, onClose, onChanged }: { id: string; onClose: () => 
           <div className="facts">
             <div><span>Phone</span><b>{formatPhone(e.phone)}</b></div>
             <div><span>Email</span><b>{e.email ?? '—'}</b></div>
+            {e.moveBooking && <div><span>Booking to move</span><b><a href={`#/bookings/${e.moveBooking.id}`}>{e.moveBooking.ref}</a></b><div className="small muted">Now {fmtDateTime(e.moveBooking.startAt)}{e.moveBooking.status !== 'confirmed' ? ` · ${e.moveBooking.status}` : ''}</div></div>}
             <div><span>Ground</span><b>{e.groundName ?? 'Any'}</b></div>
             <div><span>{e.preferredTime ? 'Slot wanted' : 'Date wanted'}</span><b>{e.preferredDate ? fmtDay(e.preferredDate) : '—'}{e.preferredTime ? ` · ${e.preferredTime}` : ''}</b>{(e.preferredSlots || e.preferredLabel || e.players) ? <div className="small muted">{[e.preferredLabel, e.preferredSlots ? `${e.preferredSlots} ${e.preferredSlots === 1 ? 'slot' : 'slots'}` : '', e.players ? `${e.players} players` : ''].filter(Boolean).join(' · ')}</div> : null}</div>
             <div><span>Received</span><b>{fmtDateTime(e.createdAt)}</b></div>
@@ -109,7 +110,7 @@ function EnquiryDetail({ id, onClose, onChanged }: { id: string; onClose: () => 
                 <div><button className="btn sm primary" disabled={busy} onClick={() => { const p = toPaise(amount); if (!p || p < 100) { setMsg('Enter the price in rupees.'); return; } act('quotations', { amountPaise: p, details: details.trim() || undefined }, 'Price sent to the customer.', () => { setAmount(''); setDetails(''); }); }}>Send price</button></div>
               </div>
               <div className="stack" style={{ gap: 6 }}>
-                {!bk ? <div><button className="btn sm" disabled={busy} onClick={() => setBk({ date: e.preferredDate ?? '', time: e.preferredTime ?? '', slots: String(e.preferredSlots ?? 1), method: 'cash', amount: '', reference: '' })}>Book it at the price sent</button></div> : (<>
+                {e.moveBooking ? <div className="small">The customer wants this booking moved. <a href={`#/bookings/${e.moveBooking.id}`}>Open {e.moveBooking.ref}</a> and change its time there, then close this request.</div> : !bk ? <div><button className="btn sm" disabled={busy} onClick={() => setBk({ date: e.preferredDate ?? '', time: e.preferredTime ?? '', slots: String(e.preferredSlots ?? 1), method: 'cash', amount: '', reference: '' })}>Book it at the price sent</button></div> : (<>
                   <div className="row" style={{ gap: 6 }}>
                     <Field label="Date"><input className="inp" type="date" value={bk.date} onChange={(ev) => setBk({ ...bk, date: ev.target.value })} /></Field>
                     <Field label="Start"><input className="inp" type="time" step={1800} value={bk.time} onChange={(ev) => setBk({ ...bk, time: ev.target.value })} /></Field>
