@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, loadToken, serverSignOut, setToken, setViewOwner } from './src/api';
@@ -36,10 +36,11 @@ import { ADMIN_APP } from './src/variant';
 import { useWake } from './src/fresh';
 import { lockOn, setLockOn, useLock } from './src/lock';
 import { LockScreen } from './src/LockScreen';
+import { parseVoiceLink, voiceOn, type VoiceRequest } from './src/voice';
 
 // One app for everyone. What each person sees depends on who signed in:
-//   customer     Book, Bookings (My Bookings and academy), Ask AI, Profile
-//   staff        Bookings, Tasks, Books, More, each only if their permissions allow it
+//   customer     Book, Bookings (My Bookings and academy), the assistant (shown under the name the person picked), Profile
+//   staff        Bookings, Tasks, Books, the assistant, More, each only if their permissions allow it
 //   coach        (staff with manage_academy / manage_matches) Academy and Matches under More
 //   messages     (staff with send_broadcasts / view_customers) WhatsApp reminders and Business cards under More
 //   owner        the same, plus Promo codes, Team, Booking controls, Staff pay and Compliance under More
@@ -75,6 +76,32 @@ function AppInner({ theme }: { theme: Mode }) {
   const [signin, setSignin] = useState(false); // customer app: the sign-in screen over the booking page
   const wake = useWake(!!hold); // back after a while: the open screen loads again (never in the middle of paying)
   const [locked, unlocked, lockNow] = useLock(!!user); // Face ID / fingerprint, when the person turned it on under Profile
+  // a voice shortcut (Siri, an Android shortcut) opens the app at a link; it waits here until someone is signed in
+  const [voiceLink, setVoiceLink] = useState<VoiceRequest | null>(null);
+  const [voiceAsk, setVoiceAsk] = useState<{ q: string; n: number } | null>(null);
+  const [taskDraft, setTaskDraft] = useState<{ title: string; n: number } | null>(null);
+  const [voiceNote, setVoiceNote] = useState('');
+  useEffect(() => {
+    const take = (url: string | null) => { const v = parseVoiceLink(url); if (v) setVoiceLink(v); };
+    void Linking.getInitialURL().then(take).catch(() => {});
+    const sub = Linking.addEventListener('url', (e) => take(e.url));
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    if (!voiceLink || !user) return;
+    const v = voiceLink; setVoiceLink(null);
+    (async () => {
+      // the business switch (Settings) and this phone's own switch (Profile) must both be on; a voice link never opens more than a tap would
+      const biz = await api<{ voiceEnabled?: boolean }>('/api/config').then((c) => c.voiceEnabled !== false).catch(() => true);
+      if (!biz) { setVoiceNote('Voice shortcuts are switched off for this business.'); return; }
+      if (!(await voiceOn())) { setVoiceNote('Voice shortcuts are off on this phone. Turn them on under Profile, Voice Shortcuts.'); return; }
+      setVoiceNote(''); setHold(null); setDone(null); setMore(null);
+      const a = v.action;
+      if (a.screen === 'tasks') { setTaskDraft({ title: v.title ?? '', n: Date.now() }); setTab('tasks'); }
+      else if (a.screen === 'book') setTab('book');
+      else { setVoiceAsk(a.question || v.question ? { q: (v.question ?? a.question)!, n: Date.now() } : null); setTab('ask'); }
+    })();
+  }, [voiceLink, user?.id]);
 
   useEffect(() => {
     (async () => {
@@ -126,6 +153,9 @@ function AppInner({ theme }: { theme: Mode }) {
   const accountsOk = perm('manage_accounting') || perm('view_reports');
   const boss = user.role === 'owner' || user.role === 'super_admin';
   const deskKey = viewOwner ?? 'self'; // a different owner reloads the screen
+  // the assistant's tab shows the name this person picked, exactly as given; a long one is cut to fit the bar
+  const aiName = user.aiName || 'Ask AI';
+  const aiTab = aiName.length > 14 ? `${aiName.slice(0, 13)}…` : aiName;
 
   let body: React.ReactNode;
   if (!customer) {
@@ -176,7 +206,8 @@ function AppInner({ theme }: { theme: Mode }) {
           <Btn kind="ghost" label="Sign out" onPress={signOut} />
         </ScrollView>
       );
-    } else body = <TasksScreen key={deskKey} user={user} />;
+    } else if (tab === 'ask') body = <AskScreen user={user} onUser={setUser} voice={voiceAsk} />;
+    else body = <TasksScreen key={`${deskKey}:${taskDraft?.n ?? 0}`} user={user} draftTitle={taskDraft?.title} />;
   } else if (done) {
     body = (
       <View style={[s.screen, s.pad, { paddingTop: 90 }]}>
@@ -194,14 +225,15 @@ function AppInner({ theme }: { theme: Mode }) {
   else if (tab === 'book') body = <BookScreen onHold={setHold} />;
   else if (tab === 'me') body = <MeScreen onSignOut={signOut} user={user} />;
   else if (tab === 'profile') body = <ProfileScreen user={user} onUser={setUser} onSignOut={signOut} />;
-  else body = <AskScreen />;
+  else body = <AskScreen user={user} onUser={setUser} voice={voiceAsk} />;
 
   const tabs: [Tab, string][] = customer
-    ? [['book', 'Book'], ['me', 'Bookings'], ['ask', 'Ask AI'], ['profile', 'Profile']]
-    : [...(bookingsOk ? [['bookings', 'Bookings'] as [Tab, string]] : []), ['tasks', 'Tasks'], ...(accountsOk ? [['accounts', 'Books'] as [Tab, string]] : []), ['more', 'More']];
+    ? [['book', 'Book'], ['me', 'Bookings'], ['ask', aiTab], ['profile', 'Profile']]
+    : [...(bookingsOk ? [['bookings', 'Bookings'] as [Tab, string]] : []), ['tasks', 'Tasks'], ...(accountsOk ? [['accounts', 'Books'] as [Tab, string]] : []), ['ask', aiTab], ['more', 'More']];
   return (
     <View style={s.screen}>
       <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
+      {!!voiceNote && <Pressable onPress={() => setVoiceNote('')} style={{ backgroundColor: C.soft, paddingTop: insets.top + 8, paddingBottom: 10, paddingHorizontal: 16 }}><Text style={s.text}>{voiceNote}</Text></Pressable>}
       <View key={wake} style={{ flex: 1 }}>{body}</View>
       {!hold && <TabBar tabs={tabs} on={tab} onPick={(id) => { setDone(null); setMore(null); setTab(id as Tab); }} bottom={insets.bottom} />}
       {locked && <LockScreen name={user.name} onUnlock={unlocked} onSignOut={signOut} />}

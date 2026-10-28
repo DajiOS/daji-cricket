@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, can, fmtDate, go, inr, type Me } from './lib';
+import { aiName, api, can, fmtDate, go, inr, type Me } from './lib';
 import { Icon } from './ui';
 import { NAV, SUBS, SUB_ICONS, subHref, seesMoney, hrefOf, type NavItem } from './registry';
 
@@ -125,7 +125,7 @@ function Palette({ me, visible, onClose }: { me: Me; visible: (i: NavItem) => bo
   const hits: Hit[] = useMemo(() => {
     const t = q.trim();
     const rank = <T extends { text: string }>(xs: T[], n: number) => xs.map((x) => [x, score(x.text, t)] as const).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).slice(0, n).map(([x]) => x);
-    const askRow: Hit[] = t.length >= 3 ? [{ key: 'ask', kind: 'Ask', label: t.endsWith('?') ? t : `${t}?`, hint: 'Asks Guppi', icon: 'ai', run: () => { onClose(); askAssistant(t); } }] : [];
+    const askRow: Hit[] = t.length >= 3 ? [{ key: 'ask', kind: 'Ask', label: t.endsWith('?') ? t : `${t}?`, hint: `Question for ${aiName()}`, icon: 'ai', run: () => { onClose(); askAssistant(t); } }] : [];
     const pages = rank(places.pages, t ? 8 : 6), acts = rank(places.acts, t ? 5 : 6);
     // a question goes first; otherwise the closest page or shortcut
     return t.endsWith('?') ? [...askRow, ...acts, ...pages, ...found] : [...acts, ...pages, ...found, ...askRow];

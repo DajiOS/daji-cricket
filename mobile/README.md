@@ -2,7 +2,7 @@
 
 One app for iPhone and Android, for everyone. What a person sees depends on who signs in (the same sign-in as the website: email or mobile number).
 
-- **Customer:** Book (ground, day inside the booking window, slots in a row, promo code, account credit, hold), Pay (Razorpay Checkout, a demo card on a demo server, or UPI with the reference), Mine (spend, history, cancel; for parents the Ground / Academy toggle and a switcher per child), Ask AI, Profile.
+- **Customer:** Book (ground, day inside the booking window, slots in a row, promo code, account credit, hold), Pay (Razorpay Checkout, a demo card on a demo server, or UPI with the reference), Mine (spend, history, cancel; for parents the Ground / Academy toggle and a switcher per child), the AI assistant (shown under the name each person picks; "Ask AI" by default), Profile.
 - **Staff:** Tasks (take photos with the camera to close a task), Bookings (today, upcoming, approvals, UPI payments to check; approve, record a payment, mark no-show, cancel), Books (the accounting overview) and More, each shown only if their permissions allow it.
 - **Owner:** the same, plus under More: Promo codes (typed or generated, one-time), Team (add people from a role, adjust permissions, switch off) and Booking controls (opening and closing day, close or open days for everything / ground / practice / academy, the Razorpay switch). Owners also create and assign tasks.
 - **Super admin:** the same as the owner, working inside the owner chosen under More.
@@ -35,3 +35,9 @@ See `docs/APP_REVIEW.md` for the Expo (EAS) setup, the preview-update workflow, 
 - The camera and profile-picture picker (`expo-image-picker`) need a real device or simulator with a camera; they could not be run here. The hosted preview replaces the camera with a file chooser.
 - Customers can repeat a booking (daily, weekly, monthly, yearly) and set up auto-debit under Mine. Staff with the right permissions get Academy (attendance, students, monthly report cards) and Matches (ball-by-ball scoring) under More; the owner switches auto-debit on under Booking controls.
 - Not in the app yet: entering expenses in the accounting module.
+
+## Voice shortcuts (Siri and Android)
+
+- The actions live in `voice-actions.json`; `src/voice.ts` handles them in the app and `plugins/withDajiVoice.js` generates the native side at build time (App Intents and App Shortcuts compiled into the iOS app target, `NSUserActivityTypes`, Android `res/xml/daji_voice_shortcuts.xml`). `modules/daji-voice` is the local Expo module behind Add to Siri.
+- Native changes reach phones only with a new store build (`eas build`), not an over-the-air update. Builds made before this keep working: the app checks for the native module and simply hides Add to Siri.
+- Every action only opens the app at `<scheme>://voice/<action>`; the screen does the rest with the person's own sign-in. Voice is off on a phone until the person turns it on (Profile, Voice Shortcuts), and the owner can turn it off for everyone (desk, Settings, Platform AI).

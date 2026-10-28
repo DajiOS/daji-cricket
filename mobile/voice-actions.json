@@ -1,0 +1,91 @@
+{
+  "_comment": "The voice actions of each app: one list read by src/voice.ts (the screens) and plugins/withDajiVoice.js (Siri App Shortcuts, Android shortcuts). phrase uses APP for the app's name (Apple requires it); personal uses NAME for the assistant name the person picked. An action asks `question`, or opens `screen`.",
+  "staff": [
+    {
+      "id": "attention",
+      "title": "What needs my attention",
+      "phrase": "Ask APP what needs my attention",
+      "personal": "Tell NAME what needs my attention",
+      "question": "What is waiting for approval?"
+    },
+    {
+      "id": "today",
+      "title": "Today's bookings",
+      "phrase": "Ask APP for today's bookings",
+      "personal": "Tell NAME to show today's bookings",
+      "question": "What's booked for today?"
+    },
+    {
+      "id": "payments",
+      "title": "Payments to check",
+      "phrase": "Ask APP which payments need checking",
+      "personal": "Tell NAME which payments need checking",
+      "question": "Which payments are waiting to be checked?"
+    },
+    {
+      "id": "revenue",
+      "title": "Today's revenue",
+      "phrase": "Ask APP for today's revenue",
+      "personal": "Tell NAME to show today's revenue",
+      "question": "What was the revenue today?"
+    },
+    {
+      "id": "owed",
+      "title": "Who owes us money",
+      "phrase": "Ask APP who owes us money",
+      "personal": "Tell NAME who owes us money",
+      "question": "Who still owes us money?"
+    },
+    {
+      "id": "task",
+      "title": "Create a task",
+      "phrase": "Create a task in APP",
+      "personal": "Tell NAME to create a task",
+      "screen": "tasks"
+    },
+    {
+      "id": "ask",
+      "title": "Ask a question",
+      "phrase": "Ask APP a question",
+      "personal": "Ask NAME",
+      "screen": "ask"
+    }
+  ],
+  "customer": [
+    {
+      "id": "next",
+      "title": "My next booking",
+      "phrase": "Ask APP when my next booking is",
+      "personal": "Tell NAME my next booking",
+      "question": "When is my next booking?"
+    },
+    {
+      "id": "free",
+      "title": "Is the ground free today",
+      "phrase": "Ask APP if the ground is free today",
+      "personal": "Ask NAME if the ground is free today",
+      "question": "Is the cricket ground free today?"
+    },
+    {
+      "id": "credit",
+      "title": "My credit",
+      "phrase": "Ask APP how much credit I have",
+      "personal": "Ask NAME how much credit I have",
+      "question": "How much credit do I have?"
+    },
+    {
+      "id": "book",
+      "title": "Book a slot",
+      "phrase": "Book a slot in APP",
+      "personal": "Tell NAME to book a slot",
+      "screen": "book"
+    },
+    {
+      "id": "ask",
+      "title": "Ask a question",
+      "phrase": "Ask APP a question",
+      "personal": "Ask NAME",
+      "screen": "ask"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, Suspense } from 'react';
-import { api, can, go, roleLabel, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
+import { api, can, go, roleLabel, setAiName, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
 import { Icon, ToastHost, Loading, Crest, ErrorBox } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
@@ -9,10 +9,11 @@ import { NotBuilt } from './parts/NotBuilt';
 import { CommandSearch, askAssistant } from './CommandSearch';
 import { AskPanel } from './AskPanel';
 import { GroundPicker } from './GroundPicker';
+import { AiNamePrefs } from './parts/admin/AiNamePrefs';
 
 // ---------- session shared by every page ----------
 export interface Owner { id: string; name: string; businessName: string | null }
-interface Session { me: Me; owners: Owner[]; ownerId: string | null; setOwner: (id: string) => void; refreshCounts: () => void }
+interface Session { me: Me; owners: Owner[]; ownerId: string | null; setOwner: (id: string) => void; refreshCounts: () => void; updateMe?: (me: Me) => void }
 const SessionCtx = createContext<Session>(null as unknown as Session);
 export const useSession = () => useContext(SessionCtx);
 
@@ -27,6 +28,7 @@ function Shell({ route }: { route: string }) {
   const s = useSession();
   const [open, setOpen] = useState(false);
   const [meOpen, setMeOpen] = useState(false);
+  const [prefs, setPrefs] = useState(false);
   const meBox = useRef<HTMLDivElement>(null);
   useEffect(() => { setOpen(false); setMeOpen(false); }, [route]);
   useEffect(() => {
@@ -91,6 +93,7 @@ function Shell({ route }: { route: string }) {
         </div>
       </nav>
       <AskPanel />
+      {prefs && <AiNamePrefs onClose={() => setPrefs(false)} onSaved={(m) => s.updateMe?.(m)} />}
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <div className="dmain">
         <header className="dtop">
@@ -112,6 +115,7 @@ function Shell({ route }: { route: string }) {
               <div className="duser-pop" role="menu">
                 <b>{s.me.name}</b>
                 <span className="muted small">{roleLabel(s.me)} · {groundLabel}</span>
+                <button type="button" role="menuitem" className="link" onClick={() => { setMeOpen(false); setPrefs(true); }}>Preferences</button>
                 <a role="menuitem" href="./">View website</a>
                 <button type="button" role="menuitem" className="link" onClick={signOut}>Sign out</button>
               </div>)}
@@ -172,6 +176,7 @@ export function App() {
     api<{ user: Me }>('/api/me').then(async (r) => {
       const u = r.user;
       if (u.role === 'customer') { location.replace('./'); return; }
+      setAiName(u.aiName);
       setIsSuper(u.role === 'super_admin');
       if (u.role === 'super_admin') {
         const list = await api<{ items: Owner[] }>('/api/admin/users?role=owner&limit=100').then((x) => x.items).catch(() => []);
@@ -194,7 +199,7 @@ export function App() {
   // the key makes every page reload its data when a super admin switches business
   return (
     <ToastHost>
-      <SessionCtx.Provider value={{ me, owners, ownerId, setOwner, refreshCounts: () => {} }}>
+      <SessionCtx.Provider value={{ me, owners, ownerId, setOwner, refreshCounts: () => {}, updateMe: (m) => setMe({ ...me, ...m }) }}>
         <Shell key={ownerId ?? 'none'} route={route} />
       </SessionCtx.Provider>
     </ToastHost>

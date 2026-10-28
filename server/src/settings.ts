@@ -5,6 +5,7 @@ import { HttpError } from './errors.ts';
 import { normalizePhone } from './input.ts';
 import { SITE_DESIGN_CHOICES } from './packs.ts';
 import { DESIGN_PACES } from './design.ts';
+import { DEFAULT_AI_NAME, checkAiName } from './aiNames.ts';
 
 export const DEFAULT_SETTINGS: GlobalSettings = {
   razorpayEnabled: true,
@@ -62,6 +63,10 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   /** The website's design for visitors who have not picked one: 'rotate' changes it through the day (design.ts), or one fixed design. */
   siteDesign: 'rotate',
   designPace: 'daypart',
+  /** What everyone here sees the assistant called, unless they pick their own name in Profile. Platform AI underneath never changes. */
+  aiAssistantName: DEFAULT_AI_NAME,
+  /** Siri and phone voice shortcuts for this business. Each person still turns voice on for themselves on their own phone; off here turns it off for everyone. */
+  voiceShortcutsEnabled: true,
 };
 
 /** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
@@ -101,7 +106,7 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
   const next: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULT_SETTINGS)) { fields.push({ field: k, message: 'Unknown setting' }); continue; }
-    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled') {
+    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled' || k === 'voiceShortcutsEnabled') {
       if (typeof v !== 'boolean') fields.push({ field: k, message: 'Must be true or false' }); else next[k] = v;
     } else if (k === 'rescheduleCutoffHours' || k === 'rescheduleMaxMoves') {
       const [lo, hi] = k === 'rescheduleCutoffHours' ? [0, 720] : [0, 10];
@@ -112,6 +117,8 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
       if (typeof v !== 'string' || !(SITE_DESIGN_CHOICES as readonly string[]).includes(v)) fields.push({ field: k, message: `One of ${SITE_DESIGN_CHOICES.join(', ')}` }); else next[k] = v;
     } else if (k === 'designPace') {
       if (typeof v !== 'string' || !(DESIGN_PACES as readonly string[]).includes(v)) fields.push({ field: k, message: `One of ${DESIGN_PACES.join(', ')}` }); else next[k] = v;
+    } else if (k === 'aiAssistantName') {
+      try { next[k] = checkAiName(v, k); } catch (e) { fields.push({ field: k, message: e instanceof HttpError ? e.message : 'Not a usable name' }); }
     } else if (k === 'bookingsOpenFrom' || k === 'bookingsCloseFrom') {
       if (typeof v !== 'string' || (v !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(v))) fields.push({ field: k, message: 'Must be a date like 2026-11-14, or empty' }); else next[k] = v;
     } else if (k === 'upiId') {

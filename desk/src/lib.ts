@@ -170,7 +170,15 @@ export const go = (path: string) => { location.hash = path; };
 export interface Me {
   id: string; role: 'owner' | 'staff' | 'super_admin' | 'customer'; name: string; email: string | null; phone: string | null; ownerId: string | null;
   permissions: string[]; businessName: string | null; avatarUrl: string | null;
+  /** The assistant's name as this person sees it, and their own pick (null = the business default). A label only. */
+  aiName?: string; aiNameOwn?: string | null;
 }
+// ---------- the assistant's display name ----------
+// Platform AI is the core feature; what each person sees it called is their own pick (Profile › Preferences) or the business default
+// (Settings). It is shown exactly as given ("Guppi", "Hey Guppi", "Ask AI"). Changing it changes labels only.
+let AI_NAME = 'Ask AI';
+export const setAiName = (n: string | undefined | null) => { if (n && n.trim()) AI_NAME = n.trim(); };
+export const aiName = () => AI_NAME;
 /** Owners and the super admin may do anything; staff need the named permission. */
 export const can = (me: Me | null, perm?: string) => !!me && (!perm || me.role === 'owner' || me.role === 'super_admin' || me.permissions.includes(perm));
 export const roleLabel = (me: Me) => (me.role === 'super_admin' ? 'Software owner' : me.role === 'owner' ? 'Owner' : 'Team');

@@ -12,6 +12,7 @@ import { cleanQuestion } from './index.ts';
 import { niceDay, parseRange } from './dates.ts';
 import { parseBooking } from '../guppiLang.ts';
 import { say } from '../guppiText.ts';
+import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -79,7 +80,7 @@ const hhmm = (t: string): string => t;
 const fmtBooking = (b: { groundName: string; startAt: number; slotCount: number; ref: string }): string =>
   `${b.groundName}, ${fmtDateTime(b.startAt)} (${b.slotCount} ${b.slotCount === 1 ? 'slot' : 'slots'}, ref ${b.ref})`;
 
-export function askCustomer(user: UserRow, rawQuestion: unknown): CustomerAnswer {
+export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 'voice' = 'typed'): CustomerAnswer {
   if (user.role !== 'customer') throw new HttpError(403, 'FORBIDDEN', 'This assistant is for customers');
   const question = cleanQuestion(rawQuestion);
   const intent = intentOf(question);
@@ -92,13 +93,15 @@ export function askCustomer(user: UserRow, rawQuestion: unknown): CustomerAnswer
     ?? null;
   const g0 = named ?? grounds[0] ?? null;
   const out = (answer: string, extra: Partial<CustomerAnswer> = {}): CustomerAnswer => {
-    audit({ id: user.id, role: user.role }, 'ask.customer', 'ask', null, { question: question.slice(0, 200), intent }, null);
+    audit({ id: user.id, role: user.role }, 'ask.customer', 'ask', null, { question: question.slice(0, 200), intent, ...(via === 'voice' ? { via } : {}) }, null);
     return { question, answer, details: [], open: null, suggestions: [], source: 'builtin', intent, ...extra };
   };
 
   // Asked in any language to pay, confirm or mark a payment, or to waive a deposit: the same Daji-native refusal Guppi gives when booking. This assistant only reads.
   const asked = parseBooking(question, today);
   if (asked.flags.payAct || asked.flags.waiver) return out(say(asked.language, asked.flags.waiver ? 'waiver' : 'payAct'), { intent: 'payment_boundary', open: 'bookings' });
+
+  if (isNameQuestion(question)) return out(aiNameAnswer(user.id), { intent: 'assistant_name' });
 
   switch (intent) {
     case 'next': {

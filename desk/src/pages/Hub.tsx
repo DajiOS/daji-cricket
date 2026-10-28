@@ -31,7 +31,7 @@ export default function Hub({ sub }: { sub: string }) {
             <div key={g.group} className="dorbit-card" style={{ left: `${POS[i]![0]}%`, top: `${POS[i]![1]}%`, borderTopColor: COL[i] }}>
               <a className="dorbit-name" href={`#${hrefOf(g.items[0]!)}`}>
                 <span className="dorbit-n" style={{ background: COL[i] }}>{i + 1}</span>
-                <span><b>{g.group}</b><span>{BLURBS[g.group]}</span></span>
+                <span><b>{g.group}</b><span>{BLURBS[g.section === 'guppi' ? 'ai' : g.group]}</span></span>
               </a>
               <div className="dorbit-pages">{g.items.map((p) => <a key={hrefOf(p)} className="dchip" href={`#${hrefOf(p)}`}>{p.label}</a>)}</div>
             </div>))}
