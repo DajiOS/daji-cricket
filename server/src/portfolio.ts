@@ -3,7 +3,7 @@ import { now } from './clock.ts';
 import { HttpError, notFound } from './errors.ts';
 import { audit, type Actor } from './audit.ts';
 import { userRow, type UserRow } from './auth.ts';
-import { addBusiness, businessName, mainSiteBusinessId, type Business } from './businesses.ts';
+import { businessName } from './businesses.ts';
 
 // A portfolio: one business owner's sign-in opens more than one business. The software owner puts a business in an owner's
 // portfolio (Platform > Customers); the owner then switches to it in the desk. While switched, every request is answered
@@ -76,22 +76,4 @@ export function removeFromPortfolio(actor: Actor, ownerId: string, userId: strin
   const changed = run('UPDATE business_portfolio SET removed_at = ?, removed_by = ? WHERE user_id = ? AND owner_id = ? AND removed_at IS NULL', now(), actor.id, userId, ownerId);
   if (changed.changes > 0) audit(actor, 'portfolio.remove', 'business', ownerId, { userId }, ownerId);
   return portfolioMembers(ownerId);
-}
-
-/**
- * The main website's business owner (Sunny, for Daji Cricket Ground) may add another ground straight into their own portfolio,
- * without the software owner's sign-in. It is a new, empty business with its own owner account (no password, nothing sent),
- * kept apart like any other; taking it out of the portfolio later is the whole split. No other owner may do this.
- */
-export function mayAddBusinesses(u: UserRow): boolean {
-  if (u.role !== 'owner' || !u.active) return false;
-  const main = mainSiteBusinessId() ?? one<{ id: string }>("SELECT id FROM users WHERE role = 'owner' ORDER BY created_at, rowid LIMIT 1")?.id;
-  return main === u.id;
-}
-
-export function addBusinessToOwnPortfolio(u: UserRow, src: unknown): Business {
-  if (!mayAddBusinesses(u)) throw new HttpError(403, 'FORBIDDEN', 'Only the main website\'s business owner or the software owner can add a business.');
-  const b = addBusiness({ id: u.id, role: u.role }, src);
-  addToPortfolio({ id: u.id, role: u.role }, b.id, u.id);
-  return b;
 }
