@@ -68,7 +68,7 @@ export function registerIntegration(i: Integration): void { const at = REGISTRY.
 export const integrationIds = (): string[] => REGISTRY.map((i) => i.id);
 
 /** The last step of every connection that needs server settings: where they go. Values never go into chat, email or the desk. */
-const serverStep = (lines: string): SetupStep => ({ text: `Give the values to whoever looks after the server. They add these lines to deploy/.env on the server and restart it (docker compose up -d): ${lines}. Never paste keys into chat, email or the desk notes. Then come back here and press Test where there is one.` });
+export const serverStep = (lines: string): SetupStep => ({ text: `Give the values to whoever looks after the server. They add these lines to deploy/.env on the server and restart it (docker compose up -d): ${lines}. Never paste keys into chat, email or the desk notes. Then come back here and press Test where there is one.` });
 
 const snip = (t: string): string => { try { const j = JSON.parse(t); return String(j?.error?.message ?? j?.error?.description ?? j?.message ?? '').slice(0, 160); } catch { return t.slice(0, 120); } };
 

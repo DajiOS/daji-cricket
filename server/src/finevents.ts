@@ -8,6 +8,7 @@ import './credits.ts';
 import './bookings.ts';
 import './appendOnly.ts';
 import './securityDeposit.ts';
+import './auctionDeposit.ts';
 
 // Financial events and the reconciliation that proves the books agree with the records.
 //
@@ -101,6 +102,8 @@ export function reconcile(ownerId: string | null, upTo = '9999-12-31'): Reconcil
   // 4b. The security deposit is its own money: its balance is never negative, and an entry never belongs to another business than its booking.
   for (const x of many<{ booking_id: string; held: number }>(`SELECT booking_id, SUM(CASE kind WHEN 'collect' THEN amount_paise WHEN 'reverse' THEN amount_paise ELSE -amount_paise END) held FROM security_deposit_entries WHERE 1=1 ${own} GROUP BY booking_id HAVING held < 0`, ...p)) add('DEPOSIT_NEGATIVE', 'booking', x.booking_id, `the security deposit held is ${x.held}`);
   for (const x of many<{ id: string }>(`SELECT e.id FROM security_deposit_entries e LEFT JOIN bookings b ON b.id = e.booking_id WHERE (b.id IS NULL OR b.owner_id <> e.owner_id) ${own.replace('owner_id', 'e.owner_id')}`, ...p)) add('DEPOSIT_BOOKING_MISMATCH', 'deposit', x.id, 'the booking is missing or belongs to another business');
+  // 4c. A tournament hosting deposit is never given back or kept beyond what was collected.
+  for (const x of many<{ auction_id: string; held: number }>(`SELECT auction_id, SUM(CASE kind WHEN 'collect' THEN amount_paise ELSE -amount_paise END) held FROM auction_deposit_entries WHERE 1=1 ${own} GROUP BY auction_id HAVING held < 0`, ...p)) add('TOURNAMENT_DEPOSIT_NEGATIVE', 'auction', x.auction_id, `the hosting deposit held is ${x.held}`);
 
   // 5. Customer credit: no lot is overspent or negative.
   for (const x of many<{ id: string; amount_paise: number; remaining_paise: number }>(`SELECT id, amount_paise, remaining_paise FROM credit_lots WHERE (remaining_paise < 0 OR remaining_paise > amount_paise) ${own}`, ...p)) add('CREDIT_LOT_INVALID', 'credit_lot', x.id, `remaining ${x.remaining_paise} of ${x.amount_paise}`);

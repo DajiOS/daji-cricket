@@ -1,7 +1,7 @@
 import { registerSchema } from './db.ts';
 
 // Two schema modules from a release that was rolled back (28 Oct 2026): separate customer businesses with their own brand, and
-// one sign-in opening several businesses. Daji runs as one business again, with Antroli as its second ground. The tables stay:
+// one sign-in opening several businesses. Daji runs as one business again. The tables stay:
 // a released module is never edited or removed (live databases already have it), and any rows in them are kept. Nothing reads them.
 registerSchema('business-brand-1', `
 CREATE TABLE business_brands (

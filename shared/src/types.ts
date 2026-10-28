@@ -495,6 +495,8 @@ export interface PublicConfig {
   voiceEnabled?: boolean;
   /** Prices are given on enquiry: slots show no price, and picking one sends a pricing enquiry instead of a booking. */
   pricesOnEnquiry?: boolean;
+  /** Customers can host auction tournaments and sign up as players (Settings). Clients show the Auctions screens only when true. */
+  auctionsEnabled?: boolean;
   /** The Guppi booking assistant (any language) is switched on. Clients show its screen only when this is true. */
   guppiBookingEnabled?: boolean;
   /** The owner has switched the refundable security deposit on: screens show it separately from the booking advance. */
@@ -567,6 +569,10 @@ export interface GlobalSettings {
   voiceShortcutsEnabled: boolean;
   /** Customers see free slots but no prices, and send a pricing enquiry for a slot instead of booking online. The prices stay saved for the desk. */
   pricesOnEnquiry: boolean;
+  /** Customers may host auction tournaments (points purse, no money) and players sign up with their profile. */
+  auctionTournamentsEnabled: boolean;
+  /** The refundable deposit (paise) a customer puts down to host a tournament; it opens to players once paid or waived. 0 = none. */
+  hostedTournamentDepositPaise: number;
   /** The weekly waitlist (waitlist.ts): customers ask for a session on one day of the week and roll to the next week until a slot is free. Off until switched on. */
   waitlistEnabled: boolean;
   /** Which day of the week the waitlist is for (0 = Sunday … 6 = Saturday) and which ball's whole sessions on the price list. */

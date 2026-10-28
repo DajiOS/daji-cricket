@@ -236,6 +236,25 @@ All need sign-in as owner, staff or super admin (super admin adds `?ownerId=`).
 (The phone app sends `x-app-shot-at` (epoch ms) with a task photo. It is used only when the saved file carries no camera time; a camera time inside the file always wins.)
 
 
+## Customer-hosted tournaments (player auction or teams entering directly)
+
+A customer hosts a tournament with `mode` `auction` (teams are picked at a live player auction; purses and bids are points, never money) or `teams` (teams enter directly for a round robin or knockout). Either way the host pays a refundable hosting deposit (Settings `hostedTournamentDepositPaise`, ₹5,000 to start; fixed when the tournament is made) or asks the ground to waive it; players see the tournament only once the deposit is settled. Switched off with Settings `auctionTournamentsEnabled` (`GET /api/config` carries `auctionsEnabled`).
+
+Customer (sign-in as a customer):
+- `GET /api/auctions`: `{open, hosting, playing, teamsYouOwn, defaultsInWords, grounds, depositPaise, depositHowToPay}`.
+- `POST /api/auctions` `{name, mode?, groundId, startDate, endDate, overs?, format?, rules?}` (idempotent). At most 3 active per host.
+- `GET /api/auctions/:id?since=version` (`{changed:false}` when nothing moved); `PATCH /api/auctions/:id`.
+- Rules: `POST /:id/rules` `{rules, expectVersion, source, request?}` (409 `RULES_CHANGED`); `POST /:id/rules/draft` `{text}` (the assistant drafts, nothing is saved; money is refused); `GET /:id/rules/history`.
+- Teams: `POST /:id/teams`, `PATCH|DELETE /:id/teams/:teamId`. Players (auction mode): `POST /:id/join` `{role}`, `POST /:id/leave`, `POST /:id/players/:playerId/remove`.
+- Bidding (auction mode): `POST /:id/start`, `/next`, `/bid` `{teamId, points, lotNo}` (idempotent), `/bid/retract`, `/hammer`, `/undo`. `POST /:id/finish` (in teams mode: confirm the teams), `/cancel` `{reason}`, `/fixtures`, `GET /:id/tournament`.
+- Deposit: `POST /:id/deposit/paid` `{reference}` (a claim only; staff record the money), `POST /:id/deposit/waiver` `{reason}` (10+ characters). Errors: 409 `DEPOSIT_DUE`, `DEPOSIT_SETTLED`, `DEPOSIT_PART_PAID`, `WAIVER_PENDING`, `WAIVER_DECLINED`.
+
+Staff (`manage_matches`):
+- `GET /api/staff/auctions`, `GET /api/staff/auctions/:id`, `GET /api/staff/auctions/deposits/summary`.
+- `POST /api/staff/auctions/:id/deposit/collect|refund` `{amountPaise?, method, reference?}` (owner or `record_payments`); `.../keep` `{amountPaise?, reason}` (owner only, 10+ character reason the host sees, only once the tournament finished or was cancelled). All idempotent; entries are append-only and post to the ledger (`tournament_deposits_held`, `tournament_deposits_kept`).
+- `POST /api/staff/auctions/:id/deposit/waiver` `{approve, note?}` (owner or software owner; a note is required to turn it down).
+- `POST /api/staff/auctions/:id/hide` `{reason}`, `POST /api/staff/auctions/:id/unhide`.
+
 ## Booking window and closed days
 
 - `GET /api/config` (public) carries `bookingsOpenFrom`, `bookingsCloseFrom`, `closedDates {ground, practice, academy}`, `autoDebitEnabled`, `autoDebitHoursBefore`.
@@ -288,6 +307,10 @@ Set `GMAIL_USER` (default dajicricket@gmail.com) and `GMAIL_APP_PASSWORD` (a Goo
 `GET /api/compliance` returns rules with review dates, the law-change log and past checks. `POST /api/compliance/:code/review`, `POST /api/compliance/changes`, `POST /api/compliance/:code/limit` (cash limits only, logs a change), `POST /api/compliance/check`. The check also runs by itself once a day (IST).
 
 Law and policy updates (owner): `GET /api/compliance` also returns `alerts` (news of a change in the law, waiting ones first) and `feed` (whether a feed is connected, its sources and the last read). `POST /api/compliance/alerts` `{ title, summary?, url?, publishedOn?, codes? }` adds one by hand (the same title on the same day is refused with 409). `POST /api/compliance/alerts/:id/handle` `{ status: "reviewed" | "not_relevant", note? }` (409 if already handled). `POST /api/compliance/feed/fetch` reads the feed now (409 when no feed is connected). The feed is set in Settings › Connections, Law and policy updates: `LAW_FEED_URL` (one or more RSS, Atom or JSON feeds, separated by spaces), optional `LAW_FEED_TOKEN` (sent as a Bearer token over https only) and `LAW_FEED_KEEP_ALL` (keep news that matches no rule). It is read once a day by the scheduler. Ask AI answers questions about the register and the updates waiting (`get_compliance` in Claude mode), for the owner only.
+
+## Shared spreadsheet (per business)
+Settings › Connections, Shared spreadsheet. A business shares a workbook with people outside the desk. Daji writes its own tabs (`Daji Bookings`, `Daji Open slots`, `Daji Customers`, `Daji Payments`, `Daji Request status`) and reads the `Booking requests` tab (Date, Start time, Hours, Ground, Name, Phone, Players, Note) into a review list. Every call is about one business (`?ownerId=` for the software owner). Accepting a row creates an ordinary enquiry; nothing read from a sheet creates a booking or touches money.
+`GET /api/desk/sheets` the card (kind, sign-in account, linked workbook, what is sent and read, last runs, counts; never a token). `PUT /api/desk/sheets` `{ provider?: "file"|"excel"|"google", pushTabs?, includeContacts?, pullRequests?, autoSync?, groundIds? }` (owner; `groundIds` limits the sheet to those grounds of the business, its bookings, slots, customers, payments and requests; empty = every ground). `POST /api/desk/sheets/signin` returns the Microsoft or Google sign-in address (owner); the browser comes back to `GET /api/sheets/oauth/callback` (public, one-time state) which redirects to the desk. `POST /api/desk/sheets/file` `{ url }` links the workbook by its sharing link (owner). `POST /api/desk/sheets/disconnect`. `GET /api/desk/sheets/download` the workbook (.xlsx; payments need "Can see revenue", customers need view_customers). `POST /api/desk/sheets/push` (owner) and `POST /api/desk/sheets/pull` write to and read from the linked sheet (409 `SHEET_BUSY` while another run for the business is going). `POST /api/desk/sheets/upload?filename=` an .xlsx or .csv back (virus-checked, not kept). `GET /api/desk/sheets/inbox?status=waiting|invalid|accepted|rejected`, `POST /api/desk/sheets/inbox/:id/accept`, `POST /api/desk/sheets/inbox/:id/reject` `{ reason? }` (owner or manage_bookings). With `autoSync` on, the scheduler sends and reads every 15 minutes. Platform settings: `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT` (default common) for Excel on OneDrive or SharePoint; `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` for Google Sheets; redirect address `<API address>/api/sheets/oauth/callback`. The sign-in is sealed with `FIELD_KEY`. Ask AI answers about it (`get_shared_sheet` in Claude mode).
 
 ## Team terms
 `GET /api/legal/staff-terms` returns the wording, version and SHA-256. `POST /api/legal/staff-terms/accept {version, sha256}` records the acceptance with time and IP. Until accepted, every other team request returns 403 `TERMS_REQUIRED`. `GET /api/legal/staff-terms/report` (owner) lists who accepted. Changing the wording requires bumping `STAFF_TERMS_VERSION` in `server/src/legal.ts`.

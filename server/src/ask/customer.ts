@@ -13,6 +13,8 @@ import { niceDay, parseRange } from './dates.ts';
 import { parseBooking } from '../guppiLang.ts';
 import { say } from '../guppiText.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
+import { customerAuctionFacts, editableHosted, rulesWordsOf } from '../auction.ts';
+import { draftRuleChange, rulesInWords } from '../auctionRules.ts';
 import { myWaitlist, tierFor } from '../waitlist.ts';
 import { myCricket } from '../playerStats.ts';
 
@@ -25,7 +27,9 @@ export interface CustomerAnswer {
   answer: string;
   details: { label: string; text: string }[];
   /** A page the customer can open to act on the answer. */
-  open: 'bookings' | 'book' | 'contact' | null;
+  open: 'bookings' | 'book' | 'contact' | 'auction' | null;
+  /** The auction the answer is about, when open is 'auction'. */
+  auctionId?: string;
   suggestions: string[];
   source: 'builtin';
   intent: string;
@@ -38,6 +42,7 @@ export const CUSTOMER_EXAMPLES = [
   'What is the cancellation policy?',
   'How much does an evening slot cost?',
   'How do I get there?',
+  'Was I picked in the auction?',
   'Am I on the Sunday waitlist?',
   'How many games have I played?',
   'What is my batting average?',
@@ -46,6 +51,7 @@ export const CUSTOMER_EXAMPLES = [
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const RULES: [string, RegExp][] = [
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?)\b/],
+  ['auction', /\bauctions?\b|\bsquads?\b|\bpurse\b|\bbid(s|ding)?\b|(was|am|have) i (been )?(picked|sold|bought|selected)|which team (picked|bought|got|has) me|who (picked|bought) me|base price/],
   ['games', /how many games|games (have i|i have|i've) played|games? played|my tier|which tier|what tier|check.?in|kitne (match|game)|કેટલી મેચ|कितने मैच/],
   ['cricket', /\b(career|cricket|my) (stats|statistics|record)\b|\bmy stats\b|\bbatting\b|\bbowling\b|\baverage\b|strike rate|\beconomy\b|how many (runs|wickets|catches|sixes|fours)|\bmy (runs|wickets|catches|highest|best)\b|highest score|best (score|figures)|centur(y|ies)|fift(y|ies)|\bducks?\b|stumpings?|કેટલા રન|કેટલી વિકેટ|कितने रन|कितने विकेट/],
   ['waitlist', /wait.?list|waiting list|on the list|my (place|turn|request)|વેઇટિંગ|વેટિંગ|वेटिंग|प्रतीक्षा/],
@@ -113,6 +119,7 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
   if (asked.flags.payAct || asked.flags.waiver) return out(say(asked.language, asked.flags.waiver ? 'waiver' : 'payAct'), { intent: 'payment_boundary', open: 'bookings' });
 
   if (isNameQuestion(question)) return out(aiNameAnswer(user.id), { intent: 'assistant_name' });
+  if (intent === 'auction') return auctionAnswer(user, question, today, out);
 
   switch (intent) {
     case 'next': {
@@ -239,4 +246,44 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
       return out('I can answer questions about your own bookings and credit, and about the grounds: prices, opening times, free slots and directions. I cannot make or change a booking, take or confirm a payment, or waive or refund anything, so use the booking panel or My bookings for that.',
         { suggestions: CUSTOMER_EXAMPLES, open: null, intent: 'help' });
   }
+}
+
+const CHANGE_WORDS = /\b(change|make|set|increase|decrease|raise|lower|reduce|put|switch|turn|add (a |this )?(house )?rule|update|instead)\b/;
+
+/**
+ * Auction tournaments. A host asking to change the rules gets Platform AI's draft, which is not saved: they confirm it on
+ * the auction page. Points only; anything about money is refused by the same draft rules.
+ */
+function auctionAnswer(user: UserRow, question: string, today: string, out: (answer: string, extra?: Partial<CustomerAnswer>) => CustomerAnswer): CustomerAnswer {
+  if (!getSettings().auctionTournamentsEnabled) return out('Auction tournaments are switched off for now. Please call the ground.', { intent: 'auction' });
+  const q = question.toLowerCase();
+  const editable = editableHosted(user);
+  const named = <T extends { name: string }>(list: T[]): T | null => list.find((a) => q.includes(a.name.toLowerCase())) ?? (list.length === 1 ? list[0]! : null);
+  if (CHANGE_WORDS.test(q) && editable.length) {
+    const a = named(editable);
+    if (!a) return out(`You host ${editable.length} auctions that can still change. Say which one, for example "${editable[0]!.name}: purse 20,000".`, { open: 'auction', intent: 'auction_rules_draft' });
+    const d = draftRuleChange(a.rules, question.replace(new RegExp(a.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), ''), today);
+    if (!d.rules) return out(d.message!, { open: 'auction', auctionId: a.id, intent: d.refused ? 'payment_boundary' : 'auction_rules_draft' });
+    return out(`Here is the change I drafted for ${a.name}. Nothing is saved yet: open the auction and confirm it.`, {
+      details: d.changes.map((c) => ({ label: c.label, text: `${c.from} → ${c.to}` })), open: 'auction', auctionId: a.id, intent: 'auction_rules_draft',
+    });
+  }
+  const f = customerAuctionFacts(user);
+  if (/\brules?\b|how does (the |an )?auction work|how (do|does) (the )?(bidding|auction)/.test(q)) {
+    const pool = [...f.hosting, ...f.playing, ...f.teamsYouOwn, ...f.open];
+    const a = pool.find((x) => q.includes(x.name.toLowerCase())) ?? pool[0];
+    if (!a) return out('Every auction starts from these rules, and the host can change them before the bidding starts.', { details: rulesInWords(f.defaults).map((t, i) => ({ label: String(i + 1), text: t })), open: 'auction', intent: 'auction_rules' });
+    return out(`The rules for ${a.name}:`, { details: rulesWordsOf(a.id).map((t, i) => ({ label: String(i + 1), text: t })), open: 'auction', auctionId: a.id, intent: 'auction_rules' });
+  }
+  const details: { label: string; text: string }[] = [];
+  for (const p of f.picks) details.push({ label: p.name, text: p.result === 'sold' ? `Picked by ${p.team} for ${p.points?.toLocaleString('en-IN')} points` : p.result === 'unsold' ? 'Not picked yet' : p.status === 'registration' ? 'Signed up; the bidding has not started' : p.status === 'live' ? 'Waiting for your turn in the bidding' : 'Not picked' });
+  for (const h of f.hosting.filter((x) => x.status === 'registration' || x.status === 'live')) details.push({ label: `${h.name} (you host)`, text: `${h.statusText} · ${h.teams} teams · ${h.players} players signed up` });
+  for (const t of f.teamsYouOwn.filter((x) => x.status !== 'cancelled')) details.push({ label: `${t.name} (you own a team)`, text: t.statusText });
+  const sold = f.picks.filter((p) => p.result === 'sold');
+  const join = f.open.filter((a) => a.signUpOpen && !a.youPlay);
+  const answer = sold.length ? `You were picked by ${sold[0]!.team} for ${sold[0]!.points?.toLocaleString('en-IN')} points in ${sold[0]!.name}.`
+    : f.picks.length ? `You are signed up for ${f.picks.length} ${f.picks.length === 1 ? 'auction' : 'auctions'}.`
+      : join.length ? `${join.length} ${join.length === 1 ? 'auction is' : 'auctions are'} open for players to sign up: ${join.slice(0, 3).map((a) => a.name).join(', ')}.`
+        : 'There is no auction open for sign-up right now. You can host one from the Auctions page.';
+  return out(`${answer}${join.length && f.picks.length ? ` ${join.length} more ${join.length === 1 ? 'is' : 'are'} open to join.` : ''} Points are not money: nothing is paid for a player.`, { details: details.slice(0, 8), open: 'auction', ...(f.picks[0] ? { auctionId: f.picks[0].auction_id } : join[0] ? { auctionId: join[0].id } : {}) });
 }
