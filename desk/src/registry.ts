@@ -4,6 +4,7 @@ import { can, type Me } from './lib';
 import { resolveRoute } from './routes';
 import Dashboard from './pages/Dashboard';
 const Compliance = lazy(() => import('./pages/Compliance'));
+const Documents = lazy(() => import('./pages/Documents'));
 const Bookings = lazy(() => import('./pages/Bookings'));
 const Promos = lazy(() => import('./pages/Promos'));
 const Tasks = lazy(() => import('./pages/Tasks'));
@@ -73,7 +74,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
   { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub }, { path: '/grounds', page: Spots },
-  { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/guppi', page: Guppi }, { path: '/live', page: LiveScore }, { path: '/booking-report', page: BookingsReport },
+  { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/guppi', page: Guppi }, { path: '/live', page: LiveScore }, { path: '/booking-report', page: BookingsReport }, { path: '/documents', page: Documents },
 ];
 export const HOME = Dashboard;
 
@@ -162,13 +163,14 @@ export const NAV: NavGroup[] = [
     { to: '/approvals', href: '/work/approvals', label: 'Approvals', icon: 'check', check: (me) => can(me, 'manage_accounting') || can(me, 'manage_bookings'), count: 'approvals' },
     { to: '/bookings/review', href: '/work/exceptions', label: 'Exceptions', icon: 'bell', perm: 'manage_bookings' },
     { to: '/calendar', href: '/work/calendar', label: 'Work calendar', icon: 'calendar' },
+    { to: '/documents', label: 'Documents', icon: 'book', check: (me) => me.role !== 'staff' || can(me, 'manage_accounting') },
   ] },
 
   { section: 'reports', group: 'Reports', items: [
     { to: '/health', href: '/reports/operations', label: 'Operations', icon: 'pulse' },
     { to: '/booking-report', href: '/reports/bookings', label: 'Bookings', icon: 'pie', check: (me) => can(me, 'view_reports') && can(me, 'view_revenue') },
     { to: '/accounting/reports', href: '/reports/finance', label: 'Finance', icon: 'accounts', ...books },
-    { to: '/compare', href: '/reports/compare', label: 'Compare months', icon: 'swap', check: seesMoney },
+    { to: '/compare', label: 'Compare months', icon: 'swap', check: seesMoney },
   ] },
   { section: 'reports', group: 'Compliance', items: [
     { to: '/compliance', label: 'Register', icon: 'audit', ...owner },
@@ -251,7 +253,7 @@ export const BLURBS: Record<string, string> = {
   'Money in': 'Make sure every rupee landed where it should.',
   'Books': 'The ledgers, GST and a step-by-step month end.',
   'Buy & pay': 'Order, receive the bill, approve and pay.',
-  'Work': 'Tasks, approvals and what needs a second look.',
+  'Work': 'Tasks, approvals, documents and what needs a second look.',
   'Reports': 'How the ground, the bookings and the money are doing.',
   'Compliance': 'Rules, review dates and the law-change log.',
   'Guppi': 'Ask about the business in your own words.',

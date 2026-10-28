@@ -7,6 +7,7 @@ import { answerBuiltin, classify, EXAMPLES, type Built, type Detail, type Intent
 import { askClaude, AiError } from './claude.ts';
 import { niceRange } from './dates.ts';
 import * as T from './tools.ts';
+import { isDocQuestion, searchDocs, searchWords, seesDocs, waitingCount, type SearchHit } from '../docs.ts';
 
 export const MAX_QUESTION = 500;
 
@@ -17,7 +18,7 @@ export interface AskAnswer {
   /** What the question was taken to mean: the topic, the dates and the basis. Shown under the answer so a wrong reading is easy to spot. */
   understood: string;
   period: Period | null;
-  intent: Intent | 'claude';
+  intent: Intent | 'claude' | 'documents';
   source: 'builtin' | 'claude';
   /** Built-in answers come straight from the reports. For Claude answers: false when a ₹ amount in the reply is not one the reports returned. */
   verified: boolean;
@@ -26,6 +27,8 @@ export interface AskAnswer {
   suggestions: string[];
   /** Claude mode: the reports it looked at. */
   sources?: { tool: string; input: Record<string, unknown>; error?: string }[];
+  /** Documents whose pages match, each with the page to show. */
+  documents?: SearchHit[];
 }
 
 // ---- a question costs money in Claude mode, so every person gets a fixed number an hour
@@ -65,6 +68,15 @@ export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuesti
   takeSlot(cfg, user.id);
   const actor: Actor = { id: user.id, role: user.role };
   const { intent } = classify(question);
+  // a question that asks for a document is answered from the pages of the uploaded documents, with the page itself to look at;
+  // a question nothing else understands is tried against the documents too
+  if (seesDocs(user) && (isDocQuestion(question) || intent === 'unknown')) {
+    const hits = searchDocs(ownerId, question, 5);
+    if (hits.length || isDocQuestion(question)) {
+      audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), source: 'builtin', intent: 'documents', found: hits.length }, ownerId);
+      return docAnswer(question, hits, waitingCount(ownerId));
+    }
+  }
   const useClaude = !!cfg.ai.apiKey && cfg.ai.mode !== 'builtin' && (cfg.ai.mode === 'claude' || intent === 'unknown');
 
   let claudeNote: string | null = null;
@@ -78,6 +90,7 @@ export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuesti
         understood: used.length ? `Answered by Claude from: ${[...new Set(used.map((s) => describeTool(s.tool, s.input)))].join('; ')}` : 'Answered by Claude without looking anything up',
         notes: r.verified ? ['This answer was written by Claude from your own reports. Check the dates it mentions.'] : [`Check these amounts against the reports before relying on them: ${r.unverified.join(', ')}.`],
         suggestions: [], sources: r.sources,
+        ...(r.sources.some((x) => x.tool === 'search_documents' && !x.error) ? { documents: r.sources.filter((x) => x.tool === 'search_documents' && !x.error).flatMap((x) => searchDocs(ownerId, String(x.input.text ?? ''), 3)).filter((h, i, a) => a.findIndex((y) => y.docId === h.docId) === i) } : {}),
       };
     } catch (e) {
       if (e instanceof HttpError) throw e;
@@ -98,4 +111,16 @@ function describeTool(tool: string, i: Record<string, unknown>): string {
   };
   const from = typeof i.from === 'string' ? i.from : null, to = typeof i.to === 'string' ? i.to : null;
   return `${names[tool] ?? tool}${from && to ? ` ${niceRange(from, to)}` : typeof i.as_of === 'string' ? ` as at ${i.as_of}` : ''}`;
+}
+
+function docAnswer(question: string, hits: SearchHit[], waiting: number): AskAnswer {
+  const words = searchWords(question);
+  const where = (h: SearchHit) => `${h.name}, page ${h.page} of ${h.pages}${h.folder ? ` (in ${h.folder})` : ''}`;
+  const answer = !hits.length ? `No document mentions ${words.length ? words.map((w) => `"${w}"`).join(' or ') : 'that'}.`
+    : hits.length === 1 ? `Found it: ${where(hits[0]!)}.` : `${hits.length} documents mention ${words.map((w) => `"${w}"`).join(' or ')}. The best match is ${where(hits[0]!)}.`;
+  const notes = waiting ? [`${waiting} photo${waiting === 1 ? ' or scan is' : 's or scans are'} not read yet, so ${waiting === 1 ? 'its pages are' : 'their pages are'} not searched. Set up Platform AI (the Claude connection in Settings › Connections) to read them.`] : [];
+  return {
+    question, answer, details: hits.map((h) => ({ label: where(h), text: h.snippet })), understood: `Searched every page of your documents for: ${words.join(', ') || question}`,
+    period: null, intent: 'documents', source: 'builtin', verified: true, open: null, notes, suggestions: hits.length ? [] : ['Upload it in Documents, and every page is searched from then on.'], documents: hits,
+  };
 }

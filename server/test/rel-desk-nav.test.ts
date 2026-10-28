@@ -254,3 +254,20 @@ rel('REL-DESK-013', 'the Accounting tabs run in the same order as the menu on th
   assert.deepEqual(tabs.filter((t) => menu.includes(t)), menu);
   ev('order', tabs);
 });
+
+rel('REL-DESK-014', 'every menu item opens a page: its address is a register route that is served, or a desk page itself', () => {
+  // Found while adding Documents: "Compare months" had the address /reports/compare, which is not a register route and not a page, so it opened the dashboard
+  const reg = read('desk/src/registry.ts');
+  const pages = [...reg.matchAll(/\{ path: '([^']+)', page: \w+ \}/g)].map((m) => m[1]!);
+  const nav = reg.slice(reg.indexOf('export const NAV'), reg.indexOf('export const hrefOf'));
+  const items = [...nav.matchAll(/\{ to: '([^']+)'(?:, href: '([^']+)')?, label: '([^']+)'/g)].map((m) => ({ to: m[1]!, href: m[2] ?? m[1]!, label: m[3]! }));
+  assert.ok(items.length > 50, `read ${items.length} menu items`);
+  const served = (p: string) => p === '/' || pages.some((x) => p === x || p.startsWith(x + '/'));
+  for (const i of items) {
+    const r = resolveRoute(i.href);
+    assert.ok(!r.unserved, `${i.label} (${i.href}) is a register row nothing serves`);
+    assert.ok(served(r.path), `${i.label}: ${i.href} resolves to ${r.path}, which no page serves`);
+    assert.ok(served(resolveRoute(i.to).path), `${i.label}: its page ${i.to} does not exist`);
+  }
+  ev('menu items', items.length);
+});

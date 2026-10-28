@@ -2,6 +2,7 @@ import type { Config } from '../config.ts';
 import { now } from '../clock.ts';
 import { isValidDate, istDate } from '../time.ts';
 import * as T from './tools.ts';
+import { searchDocs, seesDocs } from '../docs.ts';
 
 // Optional free-form mode. When ANTHROPIC_API_KEY is set, a question the built-in answerer cannot read is sent to Claude
 // together with a small set of read-only tools. Claude never sees the database: it can only call the tools below, which
@@ -39,6 +40,7 @@ export const TOOL_DEFS = [
   { name: 'why_cant_i_sign', description: 'Explains why the asker can or cannot sign a waiting approval, found by part of its title (for example a vendor name). Leave text empty for all waiting ones.', input_schema: { type: 'object', properties: { text: { type: 'string' } } } },
   { name: 'get_approvals_decided', description: 'How many approvals (bills, staff pay, refunds, discounts, fee waivers, expenses) were signed off, approved, sent back or rejected in a period.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'list_grounds', description: 'The names and ids of the grounds.', input_schema: { type: 'object', properties: {} } },
+  { name: 'search_documents', description: 'Searches every page of the uploaded documents (statements, bills, agreements, licences, scans) for words, and gives each matching document with its best page and the words around the match.', input_schema: { type: 'object', properties: { text: { type: 'string', description: 'The words to look for, for example "ground lease Arvindbhai".' } }, required: ['text'] } },
 ] as const;
 
 type Input = Record<string, unknown>;
@@ -79,6 +81,7 @@ export function runTool(ctx: T.Ctx, name: string, i: Input): unknown {
     case 'why_cant_i_sign': return T.whyCantISign(ctx, { text: typeof i.text === 'string' ? i.text.slice(0, 80) : '' });
     case 'get_approvals_decided': return T.approvalsDecided(ctx, range(i));
     case 'list_grounds': return T.grounds(ctx);
+    case 'search_documents': if (!seesDocs(ctx.user)) throw new Error('This login cannot see documents'); return { documents: searchDocs(ctx.ownerId, typeof i.text === 'string' ? i.text.slice(0, 200) : '', 5) };
     default: throw new Error(`There is no tool called ${name}`);
   }
 }

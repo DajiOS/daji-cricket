@@ -1,6 +1,7 @@
 // One booking: who, when, money, payments, and everything staff can do to it.
 import { useState } from 'react';
 import { Modal, Chip, Loading, ErrorBox, Field, Status, Table, Confirm, Load, useToast } from '../../ui';
+import { LinkedDocs } from '../docs/LinkedDocs';
 import { useApi, post, api, go, inr, toPaise, rupees, fmtDay, fmtDateTime, formatPhone, can } from '../../lib';
 import { useSession } from '../../App';
 import { DepositPanel } from './Deposit';
@@ -146,6 +147,7 @@ export function BookingDetail({ id, asDay, tab: tabIn, onClose, onChanged }: { i
             {(b.status === 'confirmed' || b.status === 'completed') && b.paidPaise > 0
               ? <div><button className="btn sm" onClick={async () => { try { setInv(await api<Invoice>(`/api/bookings/${encodeURIComponent(b.id)}/invoice`)); } catch (e) { toast(errText(e)); } }}>Open the invoice</button></div>
               : <div data-state="empty" className="small muted">An invoice is issued once a confirmed booking has a payment.</div>}
+            <LinkedDocs kind="booking" id={b.id} />
           </div>)}
 
         {tab === 'timeline' && (d.audit.length > 0

@@ -30,14 +30,14 @@ rel('REL-SEP-001', 'Daji project purity: no other-project name in any active fil
   const badNames = rows.filter((r) => OTHER.some((w) => r.toLowerCase().includes(w)));
   assert.deepEqual(badNames, [], 'no file or folder name carries another project\'s name');
   assert.ok(existsSync(join(ROOT, 'desk/styles/daji.css')), 'the desk stylesheet has the neutral Daji name'); assert.ok(!existsSync(join(ROOT, 'desk/styles/' + 'ak' + 'ea.css')));
-  // 2) text of every active file. Third-party minified code (server/vendor) is checked for the name as a word only, since ordinary code words can contain the letters by chance.
+  // 2) text of every active file. Third-party minified code (server/vendor, and its browser copy in web/public/vendor) is checked for the name as a word only, since ordinary code words can contain the letters by chance.
   const hits: { file: string; term: string; line: number }[] = [];
   let scanned = 0;
   for (const f of files) {
     const r = relative(ROOT, f);
     if (!TEXT.test(f) || statSync(f).size > 6_000_000) continue;
     scanned++;
-    const vendor = r.startsWith('server/vendor/');
+    const vendor = r.startsWith('server/vendor/') || r.startsWith('web/public/vendor/');
     const text = readFileSync(f, 'utf8');
     const lines = text.split('\n');
     for (const w of OTHER) {
