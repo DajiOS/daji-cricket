@@ -36,7 +36,7 @@ export const getViewOwner = () => viewOwner;
 export const setViewOwner = (id: string | null) => { viewOwner = id; store.set('daji.viewOwner', id); };
 let isSuper = false;
 export const setIsSuper = (v: boolean) => { isSuper = v; };
-const OWNER_SCOPED = ['/api/legal/staff-terms/report', '/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras'];
+const OWNER_SCOPED = ['/api/legal/staff-terms/report', '/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras', '/api/docs'];
 
 export interface ApiOptions { method?: string; body?: unknown; headers?: Record<string, string>; raw?: BodyInit }
 
@@ -70,6 +70,15 @@ export const patch = <T = any>(path: string, body: unknown = {}) => api<T>(path,
 export const del = <T = any>(path: string) => api<T>(path, { method: 'DELETE' });
 /** Sends a file as the whole request body (receipts, bank statements). */
 export const sendFile = <T = any>(path: string, file: Blob, headers?: Record<string, string>) => api<T>(path, { method: 'POST', raw: file, headers });
+
+/** The bytes of a file the server keeps (a document page to draw). The token travels in a header, so it is fetched rather than linked. */
+export async function fetchBytes(path: string): Promise<ArrayBuffer> {
+  if (isSuper && viewOwner && OWNER_SCOPED.some((p) => path.startsWith(p)) && !/[?&]ownerId=/.test(path)) path += (path.includes('?') ? '&' : '?') + 'ownerId=' + encodeURIComponent(viewOwner);
+  const t = getToken();
+  const res = await fetch(API + path, { headers: t ? { authorization: 'Bearer ' + t } : {} });
+  if (!res.ok) throw new ApiError(res.status, 'DOWNLOAD', 'Could not load that file.');
+  return res.arrayBuffer();
+}
 
 /** Downloads a file the server makes. The token travels in a header, so the file is fetched first and then saved. */
 export async function download(path: string, filename: string): Promise<void> {

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Chip, Load, PageHead, Status, Table } from '../../ui';
 import { useApi, fmtDateTime, fmtDay, formatPhone, inr } from '../../lib';
+import { LinkedDocs } from '../docs/LinkedDocs';
 import { type Booking, BookingChip, METHOD_LABEL, PAY_STATUS, timeRange } from '../dash/common';
 
 interface Pay { id: string; bookingId: string | null; method: string; status: string; amountPaise: number; createdAt: number }
@@ -11,7 +12,7 @@ interface Detail {
   customer: { id: string; name: string; phone: string | null; email: string | null; consent?: { email: boolean; sms: boolean; whatsapp: boolean } | null };
   bookings: Booking[]; payments: Pay[]; enquiries: Enq[]; creditBalancePaise: number;
 }
-export const CUSTOMER_TABS: [string, string][] = [['overview', 'Overview'], ['bookings', 'Bookings'], ['money', 'Money'], ['activity', 'Activity']];
+export const CUSTOMER_TABS: [string, string][] = [['overview', 'Overview'], ['bookings', 'Bookings'], ['money', 'Money'], ['documents', 'Documents'], ['activity', 'Activity']];
 
 export function CustomerWorkspace({ id, tab: tabIn }: { id: string; tab?: string }) {
   const [d, err, reload, status] = useApi<Detail>(`/api/staff/customers/${encodeURIComponent(id)}`);
@@ -71,6 +72,7 @@ export function CustomerWorkspace({ id, tab: tabIn }: { id: string; tab?: string
                 { head: 'Amount', num: true, cell: (p) => inr(p.amountPaise) },
               ]} /></div>
             </div>)}
+          {tab === 'documents' && <div className="card card-pad"><LinkedDocs kind="customer" id={id} /></div>}
           {tab === 'activity' && <Activity d={x} />}
         </>)}</Load>
     </div>

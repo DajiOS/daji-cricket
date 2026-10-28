@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, useApi } from './lib';
+import { api, go, useApi } from './lib';
+import { PagePicture, Snippet } from './parts/docs/PagePicture';
 import { Icon } from './ui';
 
 // Guppi, the staff assistant: a panel on the right that the top-bar button, the Home question box and the search all open. Each answer comes from the
 // desk's own reports through read-only tools on the server, limited to what this login may see. The key lives on the server only.
-interface Answer { question: string; answer: string; understood: string; details: { label: string; text: string }[]; notes: string[]; suggestions: string[]; source: 'builtin' | 'claude'; verified: boolean }
+interface Answer { question: string; answer: string; understood: string; details: { label: string; text: string }[]; notes: string[]; suggestions: string[]; source: 'builtin' | 'claude'; verified: boolean;
+  /** Documents whose pages match, each with the page to show. */
+  documents?: { docId: string; name: string; folder: string | null; mime: string; page: number; pages: number; snippet: string }[] }
 interface Turn { q: string; a?: Answer; err?: string }
 
 export function AskPanel() {
@@ -57,10 +60,15 @@ export function AskPanel() {
               {t.err ? <div className="err">{t.err}</div> : !t.a ? <div className="ai-a muted">Working it out…</div> : (
                 <div className="ai-a">
                   <p>{t.a.answer}</p>
-                  {t.a.details.length > 0 && <dl>{t.a.details.slice(0, 6).map((d) => <div key={d.label}><dt>{d.label}</dt><dd>{d.text}</dd></div>)}</dl>}
+                  {!!t.a.documents?.length && <div className="ai-docs">{t.a.documents.slice(0, 3).map((h) => (
+                    <button key={h.docId} type="button" className="ai-doc" onClick={() => { setOpen(false); go(`/documents/${h.docId}/${h.page}`); }}>
+                      {(h.mime === 'application/pdf' || h.mime.startsWith('image/')) && <PagePicture docId={h.docId} mime={h.mime} page={h.page} width={150} label={`${h.name}, page ${h.page}`} />}
+                      <span><b>{h.name}</b><span className="small muted">Page {h.page} of {h.pages}{h.folder ? ` · ${h.folder}` : ''}</span><Snippet text={h.snippet} /></span>
+                    </button>))}</div>}
+                  {t.a.details.length > 0 && !t.a.documents?.length && <dl>{t.a.details.slice(0, 6).map((d) => <div key={d.label}><dt>{d.label}</dt><dd>{d.text}</dd></div>)}</dl>}
                   <span className="small muted">{t.a.understood}</span>
                   {t.a.notes.map((n) => <span key={n} className="small muted">{n}</span>)}
-                  <span className="ai-src">{t.a.source === 'claude' ? 'Written by AI from your reports' : 'Built-in answer from your reports'}</span>
+                  <span className="ai-src">{t.a.documents ? 'Found on the pages of your documents' : t.a.source === 'claude' ? 'Written by AI from your reports' : 'Built-in answer from your reports'}</span>
                   {i === turns.length - 1 && t.a.suggestions.length > 0 && <div className="ai-ex">{t.a.suggestions.slice(0, 3).map((s) => <button key={s} type="button" onClick={() => send(s)}>{s}</button>)}</div>}
                 </div>)}
             </div>))}

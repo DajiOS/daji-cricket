@@ -1,0 +1,26 @@
+/* Documents: the drop box, folder chips, search hits with page pictures, the viewer, and pages in Guppi's answers */
+.doc-drop { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; border: 1.5px dashed var(--line); }
+.doc-drop.over { border-color: var(--accent); background: var(--surface2); }
+.doc-folders { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.doc-folders .dchip .muted { margin-left: 6px; font-size: 12px; }
+.doc-filed .row { flex-wrap: wrap; }
+.doc-hits { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.doc-hit { display: flex; flex-direction: column; gap: 6px; padding: 12px; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.doc-hit .page-pic { max-width: 100%; }
+.doc-snip { font-size: 13px; line-height: 1.45; color: var(--fg-2); }
+.doc-snip mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
+.page-pic { position: relative; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fff; max-width: 100%; }
+.page-pic canvas { max-width: 100%; height: auto; }
+.page-pic.loading { min-height: 120px; background: var(--surface2); }
+.page-pic-none { padding: 16px; }
+.doc-view { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 20px; align-items: start; }
+.doc-text { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; max-height: 320px; overflow: auto; background: var(--surface2); border-radius: 8px; padding: 10px; margin: 6px 0 0; }
+.ai-docs { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
+.ai-doc { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; font: inherit; color: inherit; }
+.ai-doc > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+@media (max-width: 720px) {
+  .doc-view { grid-template-columns: 1fr; }
+  .doc-view .page-pic, .doc-view canvas { width: 100% !important; }
+  .ai-doc .page-pic { width: 96px !important; }
+  .ai-doc canvas { width: 96px !important; }
+}

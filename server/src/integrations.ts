@@ -110,7 +110,7 @@ registerIntegration({
   env: [], have: () => ({}),
 });
 registerIntegration({
-  id: 'claude', name: 'Claude (Ask AI)', what: 'Answers questions in the owner desk when the built-in answerer cannot.',
+  id: 'claude', name: 'Claude (Ask AI)', what: 'Answers questions in the owner desk when the built-in answerer cannot, and reads the pages of photos and scans kept in Documents.',
   setup: 'Create an Anthropic API key and put it in ANTHROPIC_API_KEY. Set AI_MODE to auto or claude.',
   env: ['ANTHROPIC_API_KEY'],
   have: (c) => ({ ANTHROPIC_API_KEY: !!c.ai.apiKey }),

@@ -163,3 +163,26 @@ export async function readPdfStatement(buf: Buffer, password?: string): Promise<
     try { await doc.destroy(); } catch { /* ignore */ }
   }
 }
+
+/** The text of every page of any PDF, top to bottom, one line per printed line. A page that is a photo or scan comes back empty. Used by Documents. */
+export async function pdfPagesText(buf: Buffer, maxPages = 300): Promise<string[]> {
+  const lib = await loadPdfJs();
+  let doc: any;
+  try { doc = await lib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: false, disableFontFace: true, verbosity: 0 }).promise; }
+  catch (e: any) {
+    if (e?.name === 'PasswordException') throw new HttpError(422, 'PDF_PASSWORD_REQUIRED', 'This PDF is password protected. Save a copy without the password and upload that.');
+    throw new HttpError(422, 'PDF_UNREADABLE', 'That file could not be read as a PDF.');
+  }
+  try {
+    if (doc.numPages > maxPages) throw new HttpError(413, 'FILE_TOO_LARGE', `That PDF has ${doc.numPages} pages; at most ${maxPages} can be kept as one document.`);
+    const out: string[] = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const tc = await page.getTextContent();
+      const items: Item[] = (tc.items as any[]).filter((i) => typeof i.str === 'string').map((i) => ({ str: i.str, x: i.transform[4], y: i.transform[5], w: i.width || 0, size: Math.abs(i.height || i.transform[3] || 9) || 9 }));
+      out.push(pageLines(items, p).map((l) => l.cells.map((c) => c.text).join('  ')).join('\n'));
+      page.cleanup?.();
+    }
+    return out;
+  } finally { await doc.destroy?.(); }
+}
