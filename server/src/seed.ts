@@ -14,10 +14,11 @@ export const DEMO_ACCOUNTS = {
 } as const;
 
 /**
- * Where Daji Cricket Ground is, from the Google Maps link the owner sent (https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7).
+ * Where Daji Cricket Ground is: the pin the owner sent on 28 Oct 2026 (https://maps.app.goo.gl/wGawo7LdNzKT8k4Y9, 21°10'53.4"N 72°54'45.2"E).
+ * It is also the check-in point for players (players.ts).
  * The street address is not known yet: the owner can type it into the ground's settings.
  */
-export const DAJI_LOCATION = { lat: 21.1818855, lng: 72.9134859, mapUrl: 'https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7' } as const;
+export const DAJI_LOCATION = { lat: 21.1815, lng: 72.912556, mapUrl: 'https://maps.app.goo.gl/wGawo7LdNzKT8k4Y9' } as const;
 
 /**
  * Demo data with well-known passwords. It refuses to run unless DEMO_MODE is on, which defaults to off for any real domain.
@@ -25,7 +26,7 @@ export const DAJI_LOCATION = { lat: 21.1818855, lng: 72.9134859, mapUrl: 'https:
 export function seedDemo(cfg: Config): { created: boolean } {
   if (!cfg.demoMode) throw new Error('Refusing to create demo accounts: DEMO_MODE is off');
   if (one('SELECT 1 FROM users LIMIT 1')) return { created: false };
-  createUser({ role: 'super_admin', name: 'Platform Admin', email: DEMO_ACCOUNTS.admin.email, phone: '9000000001', password: DEMO_ACCOUNTS.admin.password });
+  createUser({ role: 'super_admin', name: 'Daji OS Admin', email: DEMO_ACCOUNTS.admin.email, phone: '9000000001', password: DEMO_ACCOUNTS.admin.password });
   const o1 = createUser({ role: 'owner', name: 'Daji Owner', email: DEMO_ACCOUNTS.owner1.email, phone: '9000000002', password: DEMO_ACCOUNTS.owner1.password, businessName: 'Daji Cricket Ground', upiId: 'dajicricket@okhdfcbank' });
   const o2 = createUser({ role: 'owner', name: 'Riverside Owner', email: DEMO_ACCOUNTS.owner2.email, phone: '9000000003', password: DEMO_ACCOUNTS.owner2.password, businessName: 'Riverside Sports', upiId: 'riverside@oksbi' });
   createUser({ role: 'staff', name: 'Ground Staff', email: DEMO_ACCOUNTS.staff1.email, phone: '9000000004', password: DEMO_ACCOUNTS.staff1.password, ownerId: o1.id, permissions: ['manage_bookings', 'verify_payments', 'record_payments', 'manage_enquiries', 'view_customers'] });

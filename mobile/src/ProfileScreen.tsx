@@ -2,14 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { api, setToken, upload } from './api';
 import { pickProfilePhoto } from './camera';
-import type { User } from './types';
+import type { AppConfig, User } from './types';
 import { Avatar, BackBar, Btn, Field, ListCard, ListRow, PhoneField, s, NameFields, splitName, splitPhone } from './ui';
 import { useAppearance } from './photo';
 import { C } from './theme';
 import { biometricName, lockOn, setLockOn, unlock } from './lock';
 import { VoiceShortcuts } from './VoiceShortcuts';
 
-const ROLE: Record<string, string> = { customer: 'Customer', staff: 'Team member', owner: 'Owner', super_admin: 'Super admin' };
+const ROLE: Record<string, string> = { customer: 'Customer', staff: 'Team member', owner: 'Owner', super_admin: 'Software owner' };
 type Page = null | 'edit' | 'voice' | 'password' | 'delete';
 const PAGES: Record<Exclude<Page, null>, string> = { edit: 'Edit profile', voice: 'Voice Shortcuts', password: 'Password', delete: 'Delete my account' };
 
@@ -24,6 +24,9 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const owner = user.role === 'owner';
   const [bio, setBio] = useState<string | null>(null); const [bioOn, setBioOn] = useState(false);
   const [aiName, setAiName] = useState(user.aiNameOwn ?? ''); const [aiWarn, setAiWarn] = useState('');
+  // who makes the software, for the "Software by" line (the software owner's setting; nothing shows until it loads)
+  const [by, setBy] = useState('');
+  useEffect(() => { let live = true; api<AppConfig>('/api/config').then((c) => { if (live) setBy(c.softwareOwner ?? ''); }).catch(() => {}); return () => { live = false; }; }, []);
   // checked as it is typed, so a reserved name ("Hey Siri") is refused before Save
   useEffect(() => {
     const t = aiName.trim(); if (!t) { setAiWarn(''); return; }
@@ -95,6 +98,7 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
           {user.role === 'customer' && <ListRow icon="trash-outline" title="Delete my account" onPress={() => go('delete')} last />}
         </ListCard>
         <ListCard><ListRow icon="log-out-outline" title="Sign out" tone="danger" onPress={onSignOut} right={<View />} last /></ListCard>
+        {!!by && <Text style={[s.muted, { textAlign: 'center', marginTop: 4 }]}>Software by {by}</Text>}
       </>)}
       {page === 'edit' && (<>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>

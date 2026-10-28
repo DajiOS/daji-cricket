@@ -6,6 +6,8 @@ export interface Config {
   dataDir: string;
   dbPath: string;
   webDir: string;
+  /** The software owner's own address (PLATFORM_HOST, e.g. dajios.in). Each customer business gets <slug>.<this> as its booking page. Empty: not set up. */
+  platformHost: string;
   /** The website people visit (on Wix): https://dajicricket.com. Used in links inside messages. */
   publicUrl: string;
   /** Where this API is reachable from the internet, e.g. https://api.dajicricket.com. Razorpay webhooks and the Wix widgets call it. */
@@ -54,9 +56,11 @@ export interface Config {
   sweepIntervalSeconds: number;
   /** Ask AI. The built-in answerer needs nothing; a Claude key adds free-form questions. */
   /** WhatsApp Business Cloud API (Meta), used to send sign-in codes. Set WHATSAPP_TOKEN and WHATSAPP_PHONE_ID to switch it on. */
-  whatsapp: { token: string; phoneId: string; otpTemplate: string; alertTemplate: string; lang: string; apiUrl: string };
+  whatsapp: { token: string; phoneId: string; otpTemplate: string; alertTemplate: string; waitlistTemplate: string; lang: string; apiUrl: string };
   /** MSG91 text-message sign-in codes: the back-up when WhatsApp is not set up or fails. Needs a DLT-approved OTP template in MSG91. */
   msg91: { authKey: string; templateId: string; apiUrl: string };
+  /** Optional face check at check-in through Amazon Rekognition (faceMatch.ts). Off until the key id and secret are set. `endpoint` is for tests. */
+  faceMatch: { region: string; keyId: string; secret: string; collection: string; endpoint: string };
   /** Email through Gmail SMTP with an App Password. The address defaults to the ground's own Gmail; GMAIL_APP_PASSWORD switches sending on. */
   email: { user: string; appPassword: string; fromName: string; host: string; port: number; tls: boolean };
   ai: { apiKey: string; model: string; apiUrl: string; mode: 'builtin' | 'auto' | 'claude'; limitPerHour: number; timeoutMs: number };
@@ -144,6 +148,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     dataDir,
     dbPath: env.DB_PATH || join(dataDir, 'daji.db'),
     webDir: env.WEB_DIR || join(process.cwd(), '..', 'web', 'public'),
+    platformHost: (env.PLATFORM_HOST ?? '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[/:].*$/, '').replace(/^www\./, ''),
     publicUrl: origin,
     apiUrl,
     frameAncestors,
@@ -188,9 +193,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       phoneId: env.WHATSAPP_PHONE_ID || '',
       otpTemplate: env.WHATSAPP_OTP_TEMPLATE || 'daji_otp',
       alertTemplate: env.WHATSAPP_ALERT_TEMPLATE || 'daji_enquiry_alert',
+      // no default: customer messages by WhatsApp stay off until a template for them is approved by Meta and named here
+      waitlistTemplate: env.WHATSAPP_WAITLIST_TEMPLATE || '',
       lang: env.WHATSAPP_LANG || 'en',
       apiUrl: (env.WHATSAPP_API_URL || 'https://graph.facebook.com/v21.0').replace(/\/+$/, ''),
     },
+    faceMatch: { region: env.REKOGNITION_REGION || 'ap-south-1', keyId: env.REKOGNITION_KEY_ID || '', secret: env.REKOGNITION_SECRET || '', collection: env.REKOGNITION_COLLECTION || 'daji-players', endpoint: env.REKOGNITION_ENDPOINT || '' },
     msg91: {
       authKey: env.MSG91_AUTH_KEY || '',
       templateId: env.MSG91_TEMPLATE_ID || '',

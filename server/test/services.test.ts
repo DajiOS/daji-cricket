@@ -65,7 +65,7 @@ test('a live test reports success or the reason, and a future service is one reg
   const down = await testIntegration(cfg, u, 'razorpay', async () => { throw new Error('ECONNRESET'); });
   assert.match(down.message, /Could not reach/);
   assert.match((await testIntegration(cfg, u, 'msg91')).message, /Not set up yet|no safe automatic test/);
-  registerIntegration({ id: 'sheets', name: 'Google Sheets', what: 'x', setup: 'y', env: ['SHEETS_KEY'], have: () => ({ SHEETS_KEY: false }) });
+  registerIntegration({ id: 'sheets', name: 'Google Sheets', what: 'x', setup: 'y', steps: [{ text: 'z' }], env: ['SHEETS_KEY'], have: () => ({ SHEETS_KEY: false }) });
   assert.equal(integrationStatuses(cfg).find((i) => i.id === 'sheets')!.status, 'missing');
   assert.equal(many('SELECT 1 FROM integration_tests WHERE integration_id = ?', 'razorpay').length, 1);
 });
@@ -74,4 +74,17 @@ test('a note can be tied to a connection, but only a known one', async () => {
   const a = await h.post('/api/admin/services', { name: 'Payments account', connector: 'razorpay' }, admin);
   assert.equal(a.status, 201); assert.equal(a.body.connector, 'razorpay');
   assert.equal((await h.post('/api/admin/services', { name: 'Made up', connector: 'nope' }, admin)).status, 400);
+});
+
+test('every connection has plain-English steps to connect, with links that open the right page', () => {
+  const cfg = { ...config(), apiUrl: 'https://api.example.test' } as any;
+  for (const i of integrationStatuses(cfg).filter((x) => x.id !== 'sheets')) {
+    assert.ok(i.steps.length >= 2, `${i.id}: at least two steps`);
+    assert.ok(i.steps.some((st) => st.link), `${i.id}: at least one link`);
+    for (const st of i.steps) {
+      assert.ok(st.text.length > 10 && !st.text.includes('{api}'), `${i.id}: ${st.text}`);
+      if (st.link) { assert.match(st.link.url, /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(\/|$)/, `${i.id}: ${st.link.url}`); assert.ok(st.link.label.length > 2); }
+    }
+  }
+  assert.ok(integrationStatuses(cfg).find((i) => i.id === 'razorpay')!.steps.some((st) => st.text.includes('https://api.example.test/api/webhooks/razorpay')));
 });

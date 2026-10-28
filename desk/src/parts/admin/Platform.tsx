@@ -31,7 +31,8 @@ export function Connections() {
           <div className="dl-line" key={c.id} style={{ alignItems: 'flex-start' }}>
             <div>
               <b>{c.name}</b> <span className="small muted">· {c.what}</span>
-              {c.status !== 'ready' && <div className="hint">{c.note || (c.missing.length ? `Missing: ${c.missing.join(', ')}. ` : '') + c.setup}</div>}
+              {c.status !== 'ready' && <div className="hint">{c.note || (c.missing.length ? `Missing: ${c.missing.join(', ')}.` : '')}</div>}
+              <HowToConnect steps={c.steps || []} open={c.status !== 'ready'} />
               {res ? <div className={res.ok ? 'ok-text' : 'err-text'} style={{ marginTop: 4 }}>{res.ok ? 'Passed: ' : 'Failed: '}{res.message}</div>
                 : c.lastTest && <div className="hint">Last test {fmtDateTime(c.lastTest.at)}: {c.lastTest.message}</div>}
               <AccountNotes id={c.id} notes={c.notes || ''} onSaved={reload} />
@@ -45,6 +46,19 @@ export function Connections() {
 }
 
 /** The owner's own record of a service's account: who signed up and with what, account names, what is still pending. Never keys. */
+/** Numbered plain-English steps from nothing to connected, each with the page to open. Open while not connected, folded once it is. */
+function HowToConnect({ steps, open }: { steps: { text: string; link?: { label: string; url: string } }[]; open: boolean }) {
+  if (!steps.length) return null;
+  return (
+    <details open={open} style={{ marginTop: 6 }}>
+      <summary className="small" style={{ fontWeight: 600, cursor: 'pointer' }}>How to connect ({steps.length} steps)</summary>
+      <ol className="small" style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+        {steps.map((st, i) => <li key={i} style={{ marginBottom: 4 }}>{st.text}{st.link && <> <a href={st.link.url} target="_blank" rel="noreferrer">{st.link.label} ↗</a></>}</li>)}
+      </ol>
+    </details>
+  );
+}
+
 function AccountNotes({ id, notes, onSaved }: { id: string; notes: string; onSaved: () => void }) {
   const toast = useToast();
   const [edit, setEdit] = useState<string | null>(null);

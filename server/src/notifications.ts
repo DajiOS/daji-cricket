@@ -115,6 +115,13 @@ const T: Record<string, (d: TemplateData) => { subject: string; body: string }> 
   enquiry_new: (d) => ({ subject: `New enquiry from ${d.name ?? 'a visitor'}`, body: `${d.name ?? 'Someone'}${d.contactPhone ? ' (' + d.contactPhone + ')' : ''} sent an enquiry${d.ground ? ' about ' + d.ground : ''}.${d.extra ? ' ' + d.extra : ''}` }),
   enquiry_received: (d) => ({ subject: 'We got your enquiry', body: `Thanks ${d.name ?? ''}, we have your enquiry and will get back to you soon.` }),
   quotation_sent: (d) => ({ subject: 'Your quotation', body: `We have sent you a quotation of ${formatPaise(d.amountPaise ?? 0)}.${d.extra ? ' ' + d.extra : ''}` }),
+  // the weekly waitlist (waitlist.ts): `extra` carries the session and its day, already in words
+  waitlist_joined: (d) => ({ subject: 'You are on the waitlist', body: `You are on the waitlist for ${d.extra} at ${d.ground}. If a slot is still free ${d.name}, we will message you and the first to accept gets it. Otherwise you move to the next week.` }),
+  waitlist_offer: (d) => ({ subject: `A slot is free — ${d.ground}`, body: `${d.extra} at ${d.ground} is free. The first person on the waitlist to accept gets it: open the app or website, My bookings › Waitlist.${venueTail(d)}` }),
+  waitlist_free_again: (d) => ({ subject: `The slot is free again — ${d.ground}`, body: `${d.extra} at ${d.ground} is free again. The first to accept gets it: My bookings › Waitlist.` }),
+  waitlist_taken: (d) => ({ subject: 'The waitlist slot has gone', body: `Someone else accepted ${d.extra} at ${d.ground} first. You stay on the waitlist.` }),
+  waitlist_rolled: (d) => ({ subject: 'Waitlist: moved to next week', body: `There was no free slot for you on ${d.reason}. You are on the waitlist for ${d.extra} at ${d.ground} now.` }),
+  waitlist_ended: (d) => ({ subject: 'Your waitlist request has ended', body: `Your waitlist request for ${d.extra} at ${d.ground} has ended${d.reason ? ` (${d.reason})` : ''}. You can join again any time.` }),
   enquiry_converted: (d) => ({ subject: `Booking created — ${d.ref}`, body: `Your enquiry is now booking ${d.ref} at ${d.ground} on ${fmtDateTime(d.startAt!)}.` }),
 };
 
@@ -139,6 +146,21 @@ export function notify(userId: string, template: keyof typeof T | string, data: 
   if (u.phone) ids.push(record(userId, 'sms', 'transactional', template, subject, body, bookingId, 'queued', null));
   scheduleDelivery(ids);
   pushNotify(userId, template, subject, body, bookingId);
+}
+
+/**
+ * A message about something the person asked us for (a waitlist slot), also by WhatsApp, but only when they agreed to WhatsApp messages.
+ * It is recorded either way: skipped with the reason, or queued (and stays queued until WhatsApp is connected in Settings › Connections).
+ */
+export function whatsappIfAgreed(userId: string, template: keyof typeof T | string, data: TemplateData, bookingId: string | null = null): { queued: boolean; reason?: string } {
+  const u = contact(userId);
+  const tpl = T[template];
+  if (!u || !tpl) return { queued: false, reason: 'no such user or message' };
+  const { subject, body } = tpl(data);
+  if (!u.consent_whatsapp) { record(userId, 'whatsapp', 'transactional', template, subject, body, bookingId, 'skipped', 'no WhatsApp consent'); return { queued: false, reason: 'no WhatsApp consent' }; }
+  if (!u.phone) { record(userId, 'whatsapp', 'transactional', template, subject, body, bookingId, 'skipped', 'no phone number'); return { queued: false, reason: 'no phone number' }; }
+  scheduleDelivery([record(userId, 'whatsapp', 'transactional', template, subject, body, bookingId, 'queued', null)]);
+  return { queued: true };
 }
 
 /** Marketing message: needs that channel's own consent, otherwise it is recorded as skipped. */

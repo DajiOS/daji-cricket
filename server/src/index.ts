@@ -6,7 +6,7 @@ import { seedDemo, hasAdmin } from './seed.ts';
 import { startScheduler, stopScheduler } from './jobs.ts';
 import { flushNotifications, registerProvider, setAlertSender, setOtpSender, setOtpSmsSender } from './notifications.ts';
 import { expoPushProvider } from './push.ts';
-import { whatsappOtpSender, whatsappAlertSender, msg91OtpSender } from './whatsapp.ts';
+import { whatsappOtpSender, whatsappAlertSender, whatsappCustomerProvider, msg91OtpSender } from './whatsapp.ts';
 import { gmailProvider } from './gmail.ts';
 import { applyYodleeSettings } from './yodleeSettings.ts';
 
@@ -33,6 +33,7 @@ if (cfg.demoMode) {
 
 registerProvider('push', expoPushProvider(cfg));
 registerProvider('email', gmailProvider(cfg));
+registerProvider('whatsapp', whatsappCustomerProvider(cfg));
 setOtpSender(whatsappOtpSender(cfg));
 setAlertSender(whatsappAlertSender(cfg));
 setOtpSmsSender(msg91OtpSender(cfg));

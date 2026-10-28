@@ -3,6 +3,7 @@ import { many, one } from '../db.ts';
 import { now } from '../clock.ts';
 import { forbidden, HttpError } from '../errors.ts';
 import { hasPermission, type UserRow } from '../auth.ts';
+import { mainSiteBusinessId } from '../businesses.ts';
 import { addDays, istDate, istMidnight } from '../time.ts';
 import { overview as opsOverview } from '../reports.ts';
 import { summarize } from '../contacts.ts';
@@ -14,6 +15,8 @@ import { changes as lawChanges, lastChecks, register } from '../compliance.ts';
 import { alerts as lawAlerts, lastFeedRun } from '../lawUpdates.ts';
 import { staffAuctionFacts } from '../auction.ts';
 import { depositsAt } from '../auctionDeposit.ts';
+import { staffWaitlist } from '../waitlist.ts';
+import { checkInsOn } from '../players.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
 // can never disagree with a report. They are read-only, scoped to one owner and checked against the asker's permissions.
@@ -32,8 +35,8 @@ export function can(ctx: Ctx, area: Area): boolean {
   if (area === 'tasks') return hasPermission(u, 'manage_tasks');
   if (area === 'team') return u.role !== 'staff';
   if (area === 'approvals') return looksAfterAny(u);
-  // the same people as the Compliance page: the owner and the software owner
-  if (area === 'compliance') return u.role === 'owner' || u.role === 'super_admin';
+  // the same people as the Compliance page: the software owner, and the owner of the main site's business (requireMainBusiness)
+  if (area === 'compliance') { const main = mainSiteBusinessId(); return u.role === 'super_admin' || (u.role === 'owner' && (!main || main === u.id)); }
   // the same people as the Tournaments page
   if (area === 'tournaments') return hasPermission(u, 'manage_matches');
   return hasPermission(u, 'view_customers');
@@ -356,4 +359,33 @@ export function auctionTournaments(ctx: Ctx) {
   const dep = depositsAt(ctx.ownerId);
   return withText({ count: items.length, running: items.filter((i) => i.status === 'Auction running').length, signingUp: items.filter((i) => i.status === 'Players signing up').length,
     depositsHeldPaise: dep.heldPaise, depositsDuePaise: dep.duePaise, waiverRequestsWaiting: dep.waiversWaiting, items: items.slice(0, 20) });
+}
+
+/**
+ * The weekly waitlist (Sunday leather ball unless changed): who is waiting and for which day, and the sessions offered now. The same list as the desk's
+ * Waitlist page. Names only when asked for by someone who may see customers; Claude mode never gets names.
+ */
+export function waitlist(ctx: Ctx, names: boolean) {
+  need(ctx, 'bookings');
+  if (!hasPermission(ctx.user, 'manage_bookings')) throw forbidden('You do not have access to the waitlist. Ask the owner to give you the "manage_bookings" permission.');
+  const w = staffWaitlist(ctx.user, ctx.ownerId);
+  const show = names && can(ctx, 'customers');
+  const live = w.entries.filter((e) => e.status === 'waiting' || e.status === 'won');
+  const byDate = new Map<string, number>();
+  for (const e of live) byDate.set(e.nextDate, (byDate.get(e.nextDate) ?? 0) + 1);
+  return {
+    name: w.settings.name, switchedOn: w.settings.enabled, confirmHours: w.settings.confirmHours, tierPriority: w.settings.tierPriority, waveMinutes: w.settings.waveMinutes, tiers: w.settings.tiers,
+    waiting: live.length, byDate: [...byDate].sort(([a], [b]) => a.localeCompare(b)).map(([date, people]) => ({ date, people })),
+    people: live.map((e) => ({ ...(show ? { name: e.customerName } : {}), ground: e.groundName, session: e.session, nextDate: e.nextDate, status: e.status === 'won' ? 'accepted a slot' : 'waiting', everyWeek: e.everyWeek, weeksRolled: e.rollovers, gamesPlayed: e.games, tier: e.tier })),
+    offers: w.offers.filter((o) => o.status !== 'closed').map((o) => ({ ground: o.groundName, session: o.session, date: o.date, time: `${o.time} to ${o.endTime}`, status: o.status === 'open' ? 'offered, nobody has accepted yet' : 'accepted', peopleTold: o.told, people: o.people, ...(show && o.takenBy ? { acceptedBy: o.takenBy } : {}) })),
+  };
+}
+
+/** Team lists and check-ins at the ground for one day (today unless given): games, players, how many checked in, by phone or by staff. */
+export function checkIns(ctx: Ctx, names: boolean, date?: string) {
+  need(ctx, 'bookings');
+  if (!hasPermission(ctx.user, 'manage_bookings')) throw forbidden('You do not have access to team lists. Ask the owner to give you the "manage_bookings" permission.');
+  const day = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : istDate(now());
+  const from = istMidnight(day);
+  return { date: day, ...checkInsOn(ctx.ownerId, from, from + 24 * 3600 * 1000, names && can(ctx, 'customers')) };
 }

@@ -23,6 +23,9 @@ import { completeManualRefund, requestRefund, listPayments, listRefunds, payment
 import { linksOf, setLinks } from '../groundLinks.ts';
 import { readDeposit, recordDeposit } from '../securityDeposit.ts';
 import { blockRange, createGround, listGrounds, toGround, unblockRange, updateGround } from '../grounds.ts';
+import { staffJoin, staffWaitlist, withdrawEntry } from '../waitlist.ts';
+import { faceMatchReady } from '../faceMatch.ts';
+import { addPlayer, resetFace, releasePhones, removePlayer, staffCheckIn, teamList, undoCheckIn } from '../players.ts';
 import { addEnquiryNote, closeEnquiry, convertEnquiry, convertEnquiryToBlock, getEnquiry, listEnquiries, sendQuotation } from '../enquiries.ts';
 import { customerList, overview, parseRange } from '../reports.ts';
 import * as credits from '../credits.ts';
@@ -342,6 +345,20 @@ export function staffRoutes(r: Router): void {
     audit({ id: u.id, role: u.role }, 'ground.unblock', 'ground', g.id, { date, startTime, endTime, slots: n }, g.owner_id);
     return ok({ unblocked: n });
   }, A);
+
+  // ---- the weekly waitlist: who is waiting, the offers, and adding or taking someone off (with a reason)
+  r.get('/api/staff/waitlist', (c) => ok(staffWaitlist(U(c), ownerOrFail(c, 'see the waitlist'))), A);
+  r.post('/api/staff/waitlist', (c) => { const res = staffJoin(U(c), ownerOrFail(c, 'add to the waitlist'), c.json()); return res.created ? created(res) : ok(res); }, { ...A, idempotent: true });
+  r.post('/api/staff/waitlist/:id/withdraw', (c) => ok({ entry: withdrawEntry(U(c), c.params.id!, c.json()) }), A);
+
+  // ---- team lists and check-in: see who played, check someone in by hand, undo a wrong check-in, release a player's phone
+  r.get('/api/staff/bookings/:id/players', (c) => ok(teamList(U(c), c.params.id!, faceMatchReady(c.cfg))), A);
+  r.post('/api/staff/bookings/:id/players', (c) => created(addPlayer(U(c), c.params.id!, c.json())), A);
+  r.post('/api/staff/bookings/:id/players/:pid/remove', (c) => ok(removePlayer(U(c), c.params.id!, c.params.pid!)), A);
+  r.post('/api/staff/bookings/:id/players/:pid/check-in', (c) => ok(staffCheckIn(U(c), c.params.id!, c.params.pid!, c.json())), A);
+  r.post('/api/staff/bookings/:id/players/:pid/undo-check-in', (c) => ok(undoCheckIn(U(c), c.params.id!, c.params.pid!, c.json())), A);
+  r.post('/api/staff/players/:uid/face-reset', (c) => ok(resetFace(U(c), ownerOrFail(c, 'reset a face'), c.params.uid!, c.json())), A);
+  r.post('/api/staff/players/:uid/release-phone', (c) => ok(releasePhones(U(c), ownerOrFail(c, 'release a phone'), c.params.uid!, c.json())), A);
 
   // ---- enquiries
   r.get('/api/staff/enquiries', (c) => {
