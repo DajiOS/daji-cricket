@@ -5,6 +5,7 @@ import { HttpError, conflict, notFound } from './errors.ts';
 import { newId } from './ids.ts';
 import { Validator } from './input.ts';
 import { addDays, istDate, istMidnight, minutesOf, MIN } from './time.ts';
+import { blockRange, groundRow } from './grounds.ts';
 import { createMatch } from './matches.ts';
 import { blockOf } from './bookings.ts';
 import { createStaffBlock, findOrCreateCustomer } from './hold.ts';
@@ -95,13 +96,17 @@ ALTER TABLE tournaments ADD COLUMN organiser_email TEXT;
 CREATE INDEX ix_tournaments_series ON tournaments(series_id);
 `);
 registerSchema('tournaments-2', `ALTER TABLE tournament_teams ADD COLUMN ledger_txn_id TEXT;`);
+// A scheduled fixture holds its time on the ground as a block (booking_slots kind 'block', no money), so customers cannot book it.
+// block_until is the end of that hold and block_note the note it was written with: only those slots are released again.
+registerSchema('tournament-fixture-blocks-1', `ALTER TABLE tournament_fixtures ADD COLUMN block_until INTEGER;
+ALTER TABLE tournament_fixtures ADD COLUMN block_note TEXT;`);
 
 const OUTCOMES = ['team_a', 'team_b', 'tie', 'no_result'] as const;
 const MAX_TEAMS = 32;
 
 interface TRow { id: string; owner_id: string; name: string; start_date: string; end_date: string; format: string; overs: number; entry_fee_paise: number; points_win: number; points_tie: number; status: string; notes: string | null; created_at: number; series_id: string | null; customer_id: string | null; organiser_first: string | null; organiser_last: string | null; organiser_phone: string | null; organiser_email: string | null }
 interface TeamRow { id: string; tournament_id: string; name: string; captain: string | null; phone: string | null; fee_paid: number; payment_ref: string | null; paid_at: number | null; ledger_txn_id: string | null }
-interface FxRow { id: string; tournament_id: string; round: number; team_a_id: string; team_b_id: string; starts_at: number | null; ground_id: string | null; outcome: string | null; winner_team_id: string | null; result_text: string | null; a_runs: number | null; a_balls: number | null; b_runs: number | null; b_balls: number | null; match_id: string | null }
+interface FxRow { id: string; tournament_id: string; round: number; team_a_id: string; team_b_id: string; starts_at: number | null; ground_id: string | null; block_until?: number | null; block_note?: string | null; outcome: string | null; winner_team_id: string | null; result_text: string | null; a_runs: number | null; a_balls: number | null; b_runs: number | null; b_balls: number | null; match_id: string | null }
 
 const bad = (field: string, message: string) => new HttpError(400, 'VALIDATION_FAILED', message, { fields: [{ field, message }] });
 const own = (ownerId: string, id: string): TRow => {
@@ -131,6 +136,8 @@ export interface FixtureOut {
   id: string; round: number; teamAId: string; teamBId: string; teamA: string; teamB: string; startsAt: number | null; groundId: string | null; groundName: string | null;
   played: boolean; outcome: string | null; winnerTeamId: string | null; winner: string | null; resultText: string | null;
   aRuns: number | null; aOvers: string | null; bRuns: number | null; bOvers: string | null; matchId: string | null; matchStatus: string | null;
+  /** The end of the time this fixture holds on the ground (customers cannot book it); null when it holds none. */
+  blockedUntil: number | null;
 }
 
 export interface TableRow { teamId: string; team: string; played: number; won: number; lost: number; tied: number; noResult: number; points: number; nrr: number | null }
@@ -146,6 +153,7 @@ function toFixtures(rows: FxRow[], teams: TeamRow[], ownerId: string): FixtureOu
     startsAt: f.starts_at, groundId: f.ground_id, groundName: f.ground_id ? grounds.get(f.ground_id) ?? null : null,
     played: f.outcome !== null, outcome: f.outcome, winnerTeamId: f.winner_team_id, winner: f.winner_team_id ? name.get(f.winner_team_id) ?? null : null, resultText: f.result_text,
     aRuns: f.a_runs, aOvers: ballsToOvers(f.a_balls), bRuns: f.b_runs, bOvers: ballsToOvers(f.b_balls), matchId: f.match_id, matchStatus: f.match_id ? mstat.get(f.match_id) ?? null : null,
+    blockedUntil: f.block_until ?? null,
   }));
 }
 
@@ -314,6 +322,7 @@ export function deleteTournament(actor: Actor, ownerId: string, id: string): voi
   own(ownerId, id);
   if (one('SELECT 1 FROM tournament_teams WHERE tournament_id = ? AND deleted_at IS NULL AND fee_paid = 1', id)) throw conflict('HAS_PAID_TEAMS', 'Teams have paid their entry fee. Mark the tournament cancelled instead of deleting it.');
   tx(() => {
+    for (const f of fixturesOf(id)) releaseHold(f);
     for (const t of ['tournaments', 'tournament_teams', 'tournament_fixtures']) run(`UPDATE ${t} SET deleted_at = ?, deleted_by = ? WHERE ${t === 'tournaments' ? 'id' : 'tournament_id'} = ? AND deleted_at IS NULL`, now(), actor.id, id);
   });
   audit(actor, 'tournament.delete', 'tournament', id, null, ownerId);
@@ -470,8 +479,16 @@ export function updateFixture(actor: Actor, ownerId: string, tid: string, id: st
     if (given('bRuns')) br = bRuns ?? null;
     if (given('bOvers')) bb = bBalls ?? null;
   }
-  run(`UPDATE tournament_fixtures SET round = ?, team_a_id = ?, team_b_id = ?, starts_at = ?, ground_id = ?, outcome = ?, winner_team_id = ?, result_text = ?, a_runs = ?, a_balls = ?, b_runs = ?, b_balls = ?, updated_at = ?, updated_by = ? WHERE id = ?`,
-    round ?? cur.round, teamA, teamB, startsAt === undefined ? cur.starts_at : startsAt, groundId === undefined ? cur.ground_id : groundId, o, winner, text, ar, ab, br, bb, now(), actor.id, id);
+  const at = startsAt === undefined ? cur.starts_at : startsAt, gid = groundId === undefined ? cur.ground_id : groundId;
+  tx(() => {
+    run(`UPDATE tournament_fixtures SET round = ?, team_a_id = ?, team_b_id = ?, starts_at = ?, ground_id = ?, outcome = ?, winner_team_id = ?, result_text = ?, a_runs = ?, a_balls = ?, b_runs = ?, b_balls = ?, updated_at = ?, updated_by = ? WHERE id = ?`,
+      round ?? cur.round, teamA, teamB, at, gid, o, winner, text, ar, ab, br, bb, now(), actor.id, id);
+    // a fixture that holds its time on the ground moves its hold with it (or gives it up when it no longer has a time and a ground)
+    if (cur.block_until && cur.starts_at && (at !== cur.starts_at || gid !== cur.ground_id || teamA !== cur.team_a_id || teamB !== cur.team_b_id)) {
+      releaseHold(cur);
+      if (at && gid) holdFixture(own(ownerId, tid), { ...cur, team_a_id: teamA, team_b_id: teamB, starts_at: at, ground_id: gid }, (cur.block_until - cur.starts_at) / MIN);
+    }
+  });
   audit(actor, o && o !== cur.outcome ? 'tournament.result' : 'tournament.fixture_update', 'tournament', tid, { fixture: id, outcome: o }, ownerId);
   return fxOut(ownerId, tid, id);
 }
@@ -480,7 +497,7 @@ export function removeFixture(actor: Actor, ownerId: string, tid: string, id: st
   own(ownerId, tid);
   const f = fxOr404(tid, id);
   if (f.outcome) throw conflict('FIXTURE_PLAYED', 'This fixture has a result. Clear the result first.');
-  run('UPDATE tournament_fixtures SET deleted_at = ?, deleted_by = ? WHERE id = ?', now(), actor.id, id);
+  tx(() => { releaseHold(f); run('UPDATE tournament_fixtures SET deleted_at = ?, deleted_by = ? WHERE id = ?', now(), actor.id, id); });
   audit(actor, 'tournament.fixture_remove', 'tournament', tid, { fixture: id }, ownerId);
 }
 
@@ -521,7 +538,7 @@ export function generateFixtures(actor: Actor, ownerId: string, tid: string, src
   }
   const rounds = roundRobin(teams.map((t) => t.id), double);
   tx(() => {
-    for (const f of existing) run('UPDATE tournament_fixtures SET deleted_at = ?, deleted_by = ? WHERE id = ?', now(), actor.id, f.id);
+    for (const f of existing) { releaseHold(f); run('UPDATE tournament_fixtures SET deleted_at = ?, deleted_by = ? WHERE id = ?', now(), actor.id, f.id); }
     rounds.forEach((pairs, r) => {
       const at = startDate ? istMidnight(addDays(startDate, r * gap)) + minutesOf(time)! * MIN : null;
       for (const [a, b] of pairs) run(`INSERT INTO tournament_fixtures(id, tournament_id, owner_id, round, team_a_id, team_b_id, starts_at, ground_id, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -572,4 +589,165 @@ export function syncFixtureResult(actor: Actor, ownerId: string, tid: string, id
     outcome === 'no_result' ? null : aInn.runs, outcome === 'no_result' ? null : aInn.balls, outcome === 'no_result' ? null : bInn.runs, outcome === 'no_result' ? null : bInn.balls, now(), actor.id, id);
   audit(actor, 'tournament.result', 'tournament', tid, { fixture: id, outcome, from: 'scorer' }, ownerId);
   return fxOut(ownerId, tid, id);
+}
+
+// ------------------------------------------------------------------ fixture builder: the days and match times you give, held on the ground
+
+export const SCHEDULE_KINDS = ['round_robin', 'double_round_robin', 'knockout'] as const;
+const MAX_DAYS = 120, MAX_TIMES = 12;
+
+/** Releases the ground time a fixture holds: only the block slots written for it (same ground, its time, its note), never a booking or another block. */
+function releaseHold(f: FxRow): void {
+  if (!f.block_until || !f.starts_at || !f.ground_id) return;
+  run("DELETE FROM booking_slots WHERE ground_id = ? AND kind = 'block' AND note IS ? AND slot_start >= ? AND slot_start < ?", f.ground_id, f.block_note ?? null, f.starts_at, f.block_until);
+  run('UPDATE tournament_fixtures SET block_until = NULL, block_note = NULL WHERE id = ?', f.id);
+}
+
+const hhmm = (min: number): string => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+/** Holds a fixture's time on its ground as a block so it cannot be booked. All or nothing, with the reason when a slot is taken. */
+function holdFixture(t: TRow, f: Pick<FxRow, 'id' | 'team_a_id' | 'team_b_id' | 'starts_at' | 'ground_id'>, minutes: number): void {
+  const g = groundRow(f.ground_id!);
+  if (!g) throw notFound('Ground not found');
+  const names = new Map(teamsOf(t.id).map((x) => [x.id, x.name]));
+  const note = `Tournament: ${t.name} · ${names.get(f.team_a_id) ?? 'Team'} v ${names.get(f.team_b_id) ?? 'Team'}`.slice(0, 200);
+  const date = istDate(f.starts_at!), from = (f.starts_at! - istMidnight(date)) / MIN, to = from + minutes;
+  if (to > 24 * 60) throw bad('times', `The match at ${hhmm(from)} on ${date} would run past midnight`);
+  const clash = one<{ kind: string; note: string | null; slot_start: number }>("SELECT kind, note, slot_start FROM booking_slots WHERE ground_id = ? AND slot_start >= ? AND slot_start < ? ORDER BY slot_start LIMIT 1", g.id, f.starts_at!, f.starts_at! + minutes * MIN);
+  if (clash) throw conflict('SLOT_TAKEN', `${date} at ${hhmm((clash.slot_start - istMidnight(date)) / MIN)} on ${g.name} is already ${clash.kind === 'block' ? `blocked${clash.note ? ` (${clash.note})` : ''}` : 'booked'}. Pick another time or day.`);
+  try { blockRange(g, date, hhmm(from), hhmm(to), note); }
+  catch (e) { if (e instanceof HttpError && e.code === 'NO_SLOTS') throw bad('days', `${g.name} has no bookable slots on ${date} between ${hhmm(from)} and ${hhmm(to)} (closed, or outside its hours)`); throw e; }
+  run('UPDATE tournament_fixtures SET block_until = ?, block_note = ? WHERE id = ?', f.starts_at! + minutes * MIN, note, f.id);
+}
+
+/** Knockout: the first round from the teams (the first ones entered get the byes, so the next round is a power of two), or, once every
+ *  match of the last knockout round has a winner, the next round from the winners and the teams that had a bye. */
+export function knockoutPairs(teamIds: string[], fixtures: Pick<FxRow, 'round' | 'team_a_id' | 'team_b_id' | 'winner_team_id' | 'outcome'>[]): { round: number; pairs: [string, string][] } {
+  if (!fixtures.length) {
+    let p = 1; while (p < teamIds.length) p *= 2;
+    const byes = p - teamIds.length, rest = teamIds.slice(byes), pairs: [string, string][] = [];
+    for (let i = 0; i < rest.length / 2; i++) pairs.push([rest[i]!, rest[rest.length - 1 - i]!]);
+    return { round: 1, pairs };
+  }
+  const last = Math.max(...fixtures.map((f) => f.round));
+  const cur = fixtures.filter((f) => f.round === last);
+  if (cur.some((f) => !f.winner_team_id)) throw conflict('ROUND_NOT_FINISHED', `Every match of round ${last} needs a winner before the next knockout round can be made.`);
+  const out = new Set(fixtures.filter((f) => f.winner_team_id).map((f) => (f.winner_team_id === f.team_a_id ? f.team_b_id : f.team_a_id)));
+  const alive = teamIds.filter((id) => !out.has(id));
+  if (alive.length < 2) throw conflict('KNOCKOUT_DONE', 'The knockout is finished: there is a winner.');
+  const pairs: [string, string][] = [];
+  for (let i = 0; i + 1 < alive.length; i += 2) pairs.push([alive[i]!, alive[i + 1]!]);
+  return { round: last + 1, pairs };
+}
+
+/**
+ * Builds fixtures into the days and match times given: round robin (once or home and away) or knockout. Matches fill the slots in order,
+ * a team plays at most once a day where the slots allow it, and with `holdGround` (the default) each match's time is blocked on the ground
+ * so customers cannot book it. All or nothing: if a slot is taken or there are not enough slots, nothing is written and the reason is given.
+ */
+export function scheduleFixtures(actor: Actor, ownerId: string, tid: string, src: unknown): { created: number; rounds: number; held: number; fixtures: FixtureOut[] } {
+  const t = own(ownerId, tid);
+  const v = new Validator(src);
+  const kind = v.oneOf('kind', SCHEDULE_KINDS, true);
+  const groundId = v.str('groundId', { required: true, max: 60 });
+  const minutes = v.int('matchMinutes', { min: 30, max: 720 }) ?? 180;
+  const hold = v.bool('holdGround') ?? true;
+  const replace = v.bool('replace') ?? false;
+  // day and night: every team plays at least one match in the day and one at night (a match starting at or after nightFrom is a night match)
+  const dayNight = v.bool('dayNight') ?? false;
+  const nightFromIn = v.time('nightFrom');
+  const rawDays = Array.isArray(v.src.days) ? v.src.days : null, rawTimes = Array.isArray(v.src.times) ? v.src.times : null;
+  if (!rawDays || !rawDays.length) v.fail('days', 'Pick at least one day');
+  else if (rawDays.length > MAX_DAYS) v.fail('days', `At most ${MAX_DAYS} days at once`);
+  if (!rawTimes || !rawTimes.length) v.fail('times', 'Give at least one match time, like 09:00');
+  else if (rawTimes.length > MAX_TIMES) v.fail('times', `At most ${MAX_TIMES} match times a day`);
+  const days = [...new Set((rawDays ?? []).map(String))].sort(), times = [...new Set((rawTimes ?? []).map(String))].map((x) => ({ x, m: minutesOf(x) }));
+  for (const d of days) if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || istDate(istMidnight(d)) !== d) { v.fail('days', `${d} is not a date like 2026-11-08`); break; }
+  for (const { x, m } of times) if (m === null) { v.fail('times', `${x} is not a time like 09:00`); break; }
+  v.done();
+  groundOk(ownerId, groundId);
+  const today = istDate(now());
+  if (days[0]! < today) throw bad('days', `${days[0]} has already passed`);
+  const mins = times.map((x) => x.m!).sort((a, b) => a - b);
+  for (let i = 1; i < mins.length; i++) if (mins[i]! - mins[i - 1]! < minutes) throw bad('times', `${hhmm(mins[i - 1]!)} and ${hhmm(mins[i]!)} are less than ${minutes} minutes apart, so the matches would overlap on one ground`);
+
+  const teams = teamsOf(tid);
+  if (teams.length < 2) throw bad('teams', 'Add at least two teams first');
+  const existing = fixturesOf(tid);
+  let rounds: [string, string][][]; let firstRound = 1; let clear: FxRow[] = [];
+  if (kind === 'knockout') {
+    const k = knockoutPairs(teams.map((x) => x.id), replace ? [] : existing);
+    if (replace && existing.some((f) => f.outcome)) throw conflict('FIXTURES_PLAYED', 'Some fixtures already have results, so they cannot be replaced.');
+    rounds = [k.pairs]; firstRound = k.round; clear = replace ? existing : [];
+  } else {
+    if (existing.length && !replace) throw conflict('FIXTURES_EXIST', 'This tournament already has fixtures. Build again with replace to start over.');
+    if (existing.some((f) => f.outcome)) throw conflict('FIXTURES_PLAYED', 'Some fixtures already have results, so they cannot be replaced.');
+    rounds = roundRobin(teams.map((x) => x.id), kind === 'double_round_robin'); clear = existing;
+  }
+  const matches = rounds.flatMap((pairs, r) => pairs.map(([a, b]) => ({ a, b, round: firstRound + r })));
+  const slots = days.flatMap((d) => mins.map((m) => ({ d, at: istMidnight(d) + m * MIN }))).filter((x) => x.at > now());
+  if (slots.length < matches.length) throw bad('days', `${matches.length} matches need ${matches.length} match times; these days and times give ${slots.length}. Add ${matches.length - slots.length} more (another day or another time).`);
+
+  const nightFrom = minutesOf(nightFromIn ?? groundRow(groundId!)!.evening_from ?? '18:00') ?? 18 * 60;
+  const isNight = (at: number) => (at - istMidnight(istDate(at))) / MIN >= nightFrom;
+  if (dayNight) {
+    if (!mins.some((m) => m >= nightFrom)) throw bad('times', `Day and night needs at least one match time at or after ${hhmm(nightFrom)} (night)`);
+    if (!mins.some((m) => m < nightFrom)) throw bad('times', `Day and night needs at least one match time before ${hhmm(nightFrom)} (day)`);
+  }
+  // fill the slots in order: the earliest-round match whose teams have not played that day, else the earliest-round match left.
+  // With day and night, a match that gives a team its first game of that kind (day or night) goes first.
+  const left = [...matches], placed: { a: string; b: string; round: number; at: number }[] = [];
+  const had = { day: new Set<string>(), night: new Set<string>() };
+  for (const sl of slots) {
+    if (!left.length) break;
+    const busy = new Set(placed.filter((p) => istDate(p.at) === sl.d).flatMap((p) => [p.a, p.b]));
+    const free = (m: (typeof left)[number]) => !busy.has(m.a) && !busy.has(m.b);
+    const kindOf = isNight(sl.at) ? 'night' : 'day';
+    const need = (m: (typeof left)[number]) => (dayNight ? Number(!had[kindOf].has(m.a)) + Number(!had[kindOf].has(m.b)) : 0);
+    const minRound = Math.min(...left.map((m) => m.round));
+    const best = (pool: number[]) => pool.length ? pool.reduce((x, y) => (need(left[y]!) > need(left[x]!) ? y : x)) : -1;
+    const idx = left.map((_, k) => k);
+    let i = best(idx.filter((k) => left[k]!.round === minRound && free(left[k]!)));
+    if (dayNight && (i < 0 || need(left[i]!) === 0)) { const j = best(idx.filter((k) => free(left[k]!))); if (j >= 0 && (i < 0 || need(left[j]!) > need(left[i]!))) i = j; }
+    if (i < 0) i = best(idx.filter((k) => free(left[k]!)));
+    if (i < 0) i = 0;
+    const m = left.splice(i, 1)[0]!;
+    had[kindOf].add(m.a); had[kindOf].add(m.b);
+    placed.push({ ...m, at: sl.at });
+  }
+  if (dayNight) {
+    const games = new Map<string, number>(); for (const p of placed) for (const x of [p.a, p.b]) games.set(x, (games.get(x) ?? 0) + 1);
+    const kinds = () => { had.day.clear(); had.night.clear(); for (const p of placed) for (const x of [p.a, p.b]) had[isNight(p.at) ? 'night' : 'day'].add(x); };
+    const shortCount = () => { kinds(); return teams.filter((x) => (games.get(x.id) ?? 0) >= 2 && (!had.day.has(x.id) || !had.night.has(x.id))).length; };
+    // the in-order fill can leave a team without one kind: swap a day match with a night match while that helps
+    let cur = shortCount();
+    for (let pass = 0; cur > 0 && pass < 20; pass++) {
+      let improved = false;
+      for (let i = 0; i < placed.length && cur > 0; i++) for (let j = i + 1; j < placed.length && cur > 0; j++) {
+        const x = placed[i]!, y = placed[j]!;
+        if (isNight(x.at) === isNight(y.at)) continue;
+        [x.at, y.at] = [y.at, x.at];
+        const n = shortCount();
+        if (n < cur) { cur = n; improved = true; } else [x.at, y.at] = [y.at, x.at];
+      }
+      if (!improved) break;
+    }
+    kinds();
+    const short = teams.filter((x) => (games.get(x.id) ?? 0) >= 2 && (!had.day.has(x.id) || !had.night.has(x.id)));
+    if (short.length) throw conflict('DAY_NIGHT', `These teams would not get both a day and a night match: ${short.map((x) => `${x.name} (no ${had.day.has(x.id) ? 'night' : 'day'} match)`).join(', ')}. Add more ${short.some((x) => !had.night.has(x.id)) ? 'night' : 'day'} match times or days.`);
+  }
+
+  let held = 0;
+  tx(() => {
+    for (const f of clear) { releaseHold(f); run('UPDATE tournament_fixtures SET deleted_at = ?, deleted_by = ? WHERE id = ?', now(), actor.id, f.id); }
+    for (const p of placed) {
+      const id = newId('trf');
+      run(`INSERT INTO tournament_fixtures(id, tournament_id, owner_id, round, team_a_id, team_b_id, starts_at, ground_id, created_at, created_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+        id, tid, ownerId, p.round, p.a, p.b, p.at, groundId!, now(), actor.id, now(), actor.id);
+      if (hold) { holdFixture(t, { id, team_a_id: p.a, team_b_id: p.b, starts_at: p.at, ground_id: groundId! }, minutes); held++; }
+    }
+  });
+  const nRounds = new Set(placed.map((p) => p.round)).size;
+  audit(actor, 'tournament.schedule', 'tournament', tid, { kind, dayNight, nightFrom: hhmm(nightFrom), created: placed.length, rounds: nRounds, held, days: days.length, times: mins.map(hhmm), matchMinutes: minutes, replaced: clear.length }, ownerId);
+  return { created: placed.length, rounds: nRounds, held, fixtures: toFixtures(fixturesOf(tid), teams, ownerId) };
 }
