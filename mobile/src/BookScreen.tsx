@@ -10,6 +10,7 @@ import { GuppiBookScreen } from './GuppiBookScreen';
 const istToday = (): string => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 const addDays = (d: string, n: number): string => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DOW_LONG = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
 const BALLS: Record<Ball, string> = { leather: 'Leather ball', tennis: 'Tennis ball', practice: 'Practice nets' };
 const REPEATS: Record<RepeatFrequency, { word: string; def: number; max: number }> = { daily: { word: 'every day', def: 5, max: 60 }, weekly: { word: 'every week', def: 4, max: 52 }, monthly: { word: 'every month', def: 3, max: 12 }, yearly: { word: 'every year', def: 2, max: 3 } };
 const hm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
@@ -149,6 +150,15 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const balls = (['leather', 'tennis', 'practice'] as Ball[]).filter((b) => ground?.rates?.some((r) => r.ball === b));
   useEffect(() => { if (hasRates && (!ball || !balls.includes(ball))) setBall(balls.length === 1 ? balls[0]! : null); }, [gid, hasRates]);
 
+  // days inside the booking window, skipping days the ground has switched off for online booking and its weekly closed days
+  const first = cfg?.bookingsOpenFrom && cfg.bookingsOpenFrom > istToday() ? cfg.bookingsOpenFrom : istToday();
+  const shut = new Set(cfg?.closedDates?.ground ?? []);
+  const weekly = new Set(ground?.closedDays ?? []);
+  const days = Array.from({ length: Math.min(cfg?.maxDaysAhead ?? 30, 366) }, (_, i) => addDays(first, i))
+    .filter((d) => !(cfg?.bookingsCloseFrom && d >= cfg.bookingsCloseFrom) && !shut.has(d) && !weekly.has(new Date(d + 'T00:00:00Z').getUTCDay()));
+  // a day that cannot be booked (a weekly closed day, say) is never left chosen; the next open day is
+  useEffect(() => { if (days.length && !days.includes(date)) setDate(days[0]!); }, [days.join(), date]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // what the customer has chosen, in one shape for both kinds of ground
   let chosenText = '', body: Record<string, unknown> | null = null;
   const opts: RateOption[] = (av?.rates ?? []).filter((o) => o.ball === ball);
@@ -242,10 +252,6 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
     </ScrollView>
   );
   if (guppi && cfg.guppiBookingEnabled) return <View style={s.screen}><GuppiBookScreen onHold={onHold} onBack={() => setGuppi(false)} signedIn={!onNeedSignIn} onNeedSignIn={onNeedSignIn} /></View>;
-  // days inside the booking window, skipping days the ground has switched off for online booking
-  const first = cfg?.bookingsOpenFrom && cfg.bookingsOpenFrom > istToday() ? cfg.bookingsOpenFrom : istToday();
-  const shut = new Set(cfg?.closedDates?.ground ?? []);
-  const days = Array.from({ length: Math.min(cfg?.maxDaysAhead ?? 30, 366) }, (_, i) => addDays(first, i)).filter((d) => !(cfg?.bookingsCloseFrom && d >= cfg.bookingsCloseFrom) && !shut.has(d));
   const fixed = opts.filter((o) => o.mode === 'fixed'), hourly = opts.filter((o) => o.mode === 'hourly');
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]}>
@@ -262,6 +268,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       {grounds.map((g) => <GroundCard key={g.id} g={g} on={g.id === gid} onPress={() => setGid(g.id)} />)}
       <Label>Day</Label>
       <DayPicker open={days} value={date} onPick={setDate} />
+      {weekly.size > 0 && <Text style={[s.note, { marginTop: -6, marginBottom: 6 }]}>{ground?.name ?? 'The ground'} is closed on {[...weekly].sort().map((n) => DOW_LONG[n]).join(' and ')}.</Text>}
 
       {av === null ? (err ? <Btn kind="outline" label="Try again" onPress={() => void loadSlots()} /> : <Loading />) : av.closed ? <Text style={s.note}>The ground is closed on this day. Please pick another day.</Text> : hasRates ? (<>
         <Label>Play with</Label>

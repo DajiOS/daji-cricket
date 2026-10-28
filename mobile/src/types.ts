@@ -5,7 +5,7 @@ export interface User { id: string; role: 'customer' | 'owner' | 'staff' | 'supe
   /** A team member the owner marked "Read only": every screen opens, but the server refuses changes (READ_ONLY). */
   readOnly?: boolean }
 export type Ball = 'leather' | 'tennis' | 'practice';
-export interface Ground { id: string; name: string; city: string; address?: string; pricePaise: number; weekendPricePaise: number | null; amenities?: string[]; directionsUrl?: string | null; maxSlots?: number; rates?: { id: string; label: string; ball: Ball; mode: 'fixed' | 'hourly' }[]; ratesNote?: string | null; slotMinutes?: number }
+export interface Ground { id: string; name: string; city: string; address?: string; pricePaise: number; weekendPricePaise: number | null; amenities?: string[]; directionsUrl?: string | null; maxSlots?: number; closedDays?: number[]; rates?: { id: string; label: string; ball: Ball; mode: 'fixed' | 'hourly' }[]; ratesNote?: string | null; slotMinutes?: number }
 /** One line of the price list for a day: a fixed session, or an hourly price with its own hours. */
 export interface RateOption { ruleId: string; label: string; ball: Ball; mode: 'fixed' | 'hourly'; state: Slot['state']; time: string; endTime: string; start: number; pricePaise: number; proRated?: boolean; hoursLeft?: number; slots?: Slot[]; bundleDays?: number }
 export interface Availability { slots: Slot[]; rates?: RateOption[]; closed?: boolean }
