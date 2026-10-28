@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { useSession } from '../App';
 import { PageHead, Loading, ErrorBox, Icon, useToast } from '../ui';
 import { api, post, put, useApi, go, can, addDaysISO, thisMonth } from '../lib';
+import { SignedOffMonths } from '../parts/books/Ledgers';
 
-// The starter kit's guided month-end close: eight checks in order, each worked out from the books, ending with the sign-off.
+// Month end: the starter kit's guided close (eight checks in order, each worked out from the books, ending with the sign-off), and under it
+// every month signed off so far with its Re-open. The Accounting page's old Month-end tab opens here.
 type State = 'done' | 'todo' | 'warn' | 'na';
 interface Step { key: string; title: string; state: State; count: number; text: string; href: string | null; blocks: boolean }
 interface Close { month: string; over: boolean; signedOff: boolean; steps: Step[] }
@@ -20,6 +22,7 @@ export default function CloseWizard({ sub }: { sub: string }) {
   const [memo, setMemo] = useState('');
   const [busy, setBusy] = useState(false);
   const [fail, setFail] = useState<string | null>(null);
+  const [signed, setSigned] = useState(0);
   useEffect(() => { let live = true; api(`/api/accounting/memos/${month}`).then((m) => live && setMemo(m.body || '')).catch(() => live && setMemo('')); return () => { live = false; }; }, [month]);
   // open on the first step that still needs doing
   useEffect(() => { if (d && at === null) { const i = d.steps.findIndex((s) => s.state === 'todo' || s.state === 'warn'); setAt(i < 0 ? d.steps.length - 1 : i); } }, [d, at]);
@@ -39,7 +42,7 @@ export default function CloseWizard({ sub }: { sub: string }) {
     try {
       if (memo.trim()) await put(`/api/accounting/memos/${month}`, { body: memo.trim() });
       await post('/api/accounting/signoffs', { month });
-      toast(`${name(month)} signed off`); reload();
+      toast(`${name(month)} signed off`); reload(); setSigned((n) => n + 1);
     } catch (e: any) { setFail(e.message); }
     finally { setBusy(false); }
   }
@@ -70,7 +73,7 @@ export default function CloseWizard({ sub }: { sub: string }) {
               <p className="wiz-text">{cur.text}</p>
               {cur.blocks && cur.state !== 'done' && <p className="small" style={{ color: 'var(--i-amber)' }}>The month cannot be signed off until this is done.</p>}
               {cur.key === 'signoff' ? (
-                d.signedOff ? <p className="muted">To change something in {name(month)}, re-open it from Accounting, Month-end.</p> : <>
+                d.signedOff ? <p className="muted">To change something in {name(month)}, re-open it in Signed-off months below.</p> : <>
                   <label className="f full"><span>Month note (for you and your accountant)</span><textarea className="inp" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Anything to remember about this month" /></label>
                   <ErrorBox msg={fail} />
                   {!writer && <p className="small muted">Signing off needs the "manage_accounting" permission. Ask the owner.</p>}
@@ -89,6 +92,7 @@ export default function CloseWizard({ sub }: { sub: string }) {
               )}
             </section>)}
         </div>)}
+      {can(me, 'view_revenue') && <SignedOffMonths version={signed} />}
     </div>
   );
 }

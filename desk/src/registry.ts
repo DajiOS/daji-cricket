@@ -1,7 +1,7 @@
 // The desk's menu and routes in one place. To add a page: create src/pages/<Name>.tsx that exports a default component, then add one line to PAGES and one to NAV.
 import { lazy, type ComponentType } from 'react';
 import { aiName, can, type Me } from './lib';
-import { resolveRoute } from './routes';
+import { resolveRoute, mergedPath } from './routes';
 import Dashboard from './pages/Dashboard';
 const Compliance = lazy(() => import('./pages/Compliance'));
 const Documents = lazy(() => import('./pages/Documents'));
@@ -14,7 +14,6 @@ const Cards = lazy(() => import('./pages/Cards'));
 const Academy = lazy(() => import('./pages/Academy'));
 const Accounting = lazy(() => import('./pages/Accounting'));
 const Transactions = lazy(() => import('./pages/Transactions'));
-const BankImport = lazy(() => import('./pages/BankImport'));
 const Approvals = lazy(() => import('./pages/Approvals'));
 const Bills = lazy(() => import('./pages/Bills'));
 const Payroll = lazy(() => import('./pages/Payroll'));
@@ -31,7 +30,6 @@ const MoneyFlow = lazy(() => import('./pages/MoneyFlow'));
 const Pipeline = lazy(() => import('./pages/Pipeline'));
 const Activity = lazy(() => import('./pages/Activity'));
 const CloseWizard = lazy(() => import('./pages/CloseWizard'));
-const Compare = lazy(() => import('./pages/Compare'));
 const Health = lazy(() => import('./pages/Health'));
 const Explorer = lazy(() => import('./pages/Explorer'));
 const Spots = lazy(() => import('./pages/Spots'));
@@ -39,7 +37,6 @@ const Hub = lazy(() => import('./pages/Hub'));
 const Enquiries = lazy(() => import('./pages/Enquiries'));
 const Blocks = lazy(() => import('./pages/Blocks'));
 const Guppi = lazy(() => import('./pages/Guppi'));
-const LiveScore = lazy(() => import('./pages/LiveScore'));
 const BookingsReport = lazy(() => import('./pages/BookingsReport'));
 
 export interface NavItem { to: string; href?: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
@@ -49,16 +46,19 @@ export const navVisible = (me: Me, i: NavItem) => can(me, i.perm) && (!i.ownerOn
 export const seesMoney = (me: Me) => (can(me, 'view_reports') || can(me, 'manage_accounting')) && can(me, 'view_revenue');
 /** The sections inside a page (the pills at its top), so the side menu can list them too. The first one is the page's own address. */
 export const SUBS: Record<string, [string, string][]> = {
-  '/bookings': [['', 'All bookings'], ['day', 'Day view'], ['approvals', 'Approvals'], ['payments', 'UPI to verify']],
+  '/bookings': [['', 'All bookings'], ['day', 'Day view']],
+  '/matches': [['', 'All fixtures'], ['live', 'Live now']],
+  '/transactions': [['', 'Bank lines'], ['import', 'Import and bank feed']],
+  '/booking-report': [['', 'Month by month'], ['compare', 'Compare']],
   '/academy': [['students', 'Students'], ['attendance', 'Attendance'], ['fees', 'Fees'], ['skills', 'Skills'], ['coaches', 'Coaches']],
-  '/accounting': [['overview', 'Overview'], ['review', 'Books review'], ['reports', 'Reports'], ['reconcile', 'Reconcile'], ['recurring', 'Recurring'], ['journals', 'Journals'], ['cashflow', 'Cash flow'], ['budget', 'Budget'], ['gst', 'GST'], ['assets', 'Fixed assets'], ['close', 'Month-end'], ['setup', 'Setup']],
-  '/settings': [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['backups', 'Backups'], ['people', 'People'], ['connections', 'Connections'], ['services', 'Services'], ['golive', 'Go-live check']],
+  '/accounting': [['overview', 'Overview'], ['reports', 'Reports'], ['reconcile', 'Reconcile'], ['recurring', 'Recurring'], ['journals', 'Journals'], ['cashflow', 'Cash flow'], ['budget', 'Budget'], ['gst', 'GST'], ['assets', 'Fixed assets'], ['setup', 'Setup']],
+  '/settings': [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']],
   '/bills': [['', 'Bills'], ['vendors', 'Vendors']],
   '/compliance': [['rules', 'Rules and review dates'], ['renewals', 'Renewals'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']],
   '/payroll': [['run', 'Payroll run'], ['attendance', 'Attendance'], ['advances', 'Advances and deductions'], ['staff', 'Staff']],
   '/memberships': [['', 'Members'], ['expiring', 'Expiring soon'], ['plans', 'Plans'], ['activity', 'Activity']],
   '/reminders': [['', 'Queue'], ['templates', 'Templates'], ['one', 'Send one'], ['history', 'History']],
-  '/platform': [['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings'], ['connections', 'Connections'], ['bank', 'Bank connection'], ['services', 'Services'], ['refunds', 'Refunds'], ['costs', 'Software costs']],
+  '/platform': [['requests', 'Owner requests'], ['people', 'People'], ['settings', 'Platform settings and backups'], ['bank', 'Bank connection'], ['services', 'Services'], ['refunds', 'Refunds'], ['costs', 'Software costs']],
 };
 export const subHref = (to: string, k: string): string => (k ? `${to}/${k}` : to);
 
@@ -69,12 +69,12 @@ export interface NavGroup { section: string; group: string; items: NavItem[] }
 export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/bookings', page: Bookings }, { path: '/promos', page: Promos }, { path: '/tasks', page: Tasks }, { path: '/matches', page: Matches },
   { path: '/cards', page: Cards }, { path: '/contacts', page: Contacts }, { path: '/academy', page: Academy },
-  { path: '/accounting', page: Accounting }, { path: '/transactions', page: Transactions }, { path: '/bank', page: BankImport },
+  { path: '/accounting', page: Accounting }, { path: '/transactions', page: Transactions },
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
-  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/compare', page: Compare }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub }, { path: '/grounds', page: Spots },
-  { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/guppi', page: Guppi }, { path: '/live', page: LiveScore }, { path: '/booking-report', page: BookingsReport }, { path: '/documents', page: Documents },
+  { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub }, { path: '/grounds', page: Spots },
+  { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/guppi', page: Guppi }, { path: '/booking-report', page: BookingsReport }, { path: '/documents', page: Documents },
 ];
 export const HOME = Dashboard;
 
@@ -97,15 +97,13 @@ const grounds = { check: (me: Me) => can(me, 'manage_bookings') || can(me, 'mana
 export const NAV: NavGroup[] = [
   { section: 'today', group: 'Today', items: [
     { to: '/', href: '/today', label: 'Command center', icon: 'dashboard' },
-    { to: '/live', href: '/operations/live', label: 'Live score', icon: 'ball', perm: 'manage_matches' },
+    { to: '/matches/live', href: '/operations/live', label: 'Live score', icon: 'ball', perm: 'manage_matches' },
     { to: '/grounds', href: '/operations/grounds', label: 'Ground status', icon: 'ball', ...grounds },
   ] },
 
   { section: 'bookings', group: 'Bookings', items: [
     { to: '/bookings', label: 'All bookings', icon: 'list', perm: 'manage_bookings' },
     { to: '/calendar', href: '/bookings/calendar', label: 'Calendar', icon: 'calendar' },
-    { to: '/bookings/approvals', label: 'Bookings to approve', icon: 'check', perm: 'manage_bookings' },
-    { to: '/bookings/payments', label: 'UPI to verify', icon: 'payments', perm: 'manage_bookings' },
   ] },
   { section: 'bookings', group: 'Matches & tournaments', items: [
     { to: '/matches', label: 'Fixtures', icon: 'ball', perm: 'manage_matches' },
@@ -142,14 +140,12 @@ export const NAV: NavGroup[] = [
     { to: '/accounting', href: '/finance', label: 'Overview', icon: 'dashboard', ...books },
     { to: '/money', href: '/finance/payments', label: 'Payments', icon: 'payments', check: seesMoney },
     { to: '/transactions', href: '/finance/banking', label: 'Banking', icon: 'bank', ...acct },
-    { to: '/bank', label: 'Bank import', icon: 'upload', ...acct },
     { to: '/accounting/reconcile', label: 'Reconcile', icon: 'check', ...books },
   ] },
   { section: 'finance', group: 'Books', items: [
     { to: '/accounting/journals', href: '/finance/books', label: 'Books', icon: 'book', ...books },
     { to: '/accounting/gst', href: '/finance/gst', label: 'GST', icon: 'percent', ...books },
     { to: '/close', href: '/finance/month-end', label: 'Month end', icon: 'lock', check: seesMoney },
-    { to: '/accounting/review', label: 'Books review', icon: 'audit', ...books },
     { to: '/accounting/budget', label: 'Budget', icon: 'pie', ...books },
   ] },
   { section: 'finance', group: 'Buy & pay', items: [
@@ -168,9 +164,8 @@ export const NAV: NavGroup[] = [
 
   { section: 'reports', group: 'Reports', items: [
     { to: '/health', href: '/reports/operations', label: 'Operations', icon: 'pulse' },
-    { to: '/booking-report', href: '/reports/bookings', label: 'Bookings', icon: 'pie', check: (me) => can(me, 'view_reports') && can(me, 'view_revenue') },
+    { to: '/booking-report', href: '/reports/bookings', label: 'Bookings', icon: 'pie', check: (me) => (can(me, 'view_reports') && can(me, 'view_revenue')) || seesMoney(me) || can(me, 'manage_bookings') },
     { to: '/accounting/reports', href: '/reports/finance', label: 'Finance', icon: 'accounts', ...books },
-    { to: '/compare', label: 'Compare months', icon: 'swap', check: seesMoney },
   ] },
   { section: 'reports', group: 'Compliance', items: [
     { to: '/compliance', label: 'Register', icon: 'audit', ...owner },
@@ -203,10 +198,7 @@ export const NAV: NavGroup[] = [
     { to: '/cameras', href: '/admin/cameras', label: 'Live cameras', icon: 'camera', perm: 'view_cameras' },
   ] },
   { section: 'admin', group: 'Software owner', items: [
-    { to: '/settings/people', label: 'People', icon: 'users', ...sup },
-    { to: '/settings/services', label: 'Services', icon: 'plug', ...sup },
-    { to: '/settings/backups', label: 'Backups', icon: 'vault', ...sup },
-    { to: '/platform', label: 'Software owner', icon: 'vault', ...sup },
+    { to: '/platform', label: 'Platform', icon: 'vault', ...sup },
   ] },
 ];
 /** The address a menu item shows and links to. */
@@ -226,7 +218,7 @@ export const SIDE: SideItem[] = SECTIONS.map((x) => ({ key: x.key, get label() {
 
 /** The menu item for an address: first the item whose own address the address starts with (the longest), then the item whose page serves it. */
 export const itemFor = (route: string, items: NavItem[] = ALL()): NavItem | undefined => {
-  const r = route || '/';
+  const r = mergedPath(route || '/'); // an old address of a merged page belongs to the page that holds it now
   const longest = (key: (i: NavItem) => string, path: string) => items.filter((i) => { const k = key(i); return k === '/' ? path === '/' : path === k || path.startsWith(k + '/'); }).sort((a, b) => key(b).length - key(a).length)[0];
   return longest(hrefOf, r) ?? longest((i) => i.to, resolveRoute(r).path);
 };
@@ -244,23 +236,23 @@ export const navItem = (href: string): NavItem | undefined => ALL().find((i) => 
 /** One line under each job in a hub (by group name; the assistant's group, whose name each person picks, is under 'ai'). */
 export const BLURBS: Record<string, string> = {
   'Today': 'What is happening now and what needs you.',
-  'Bookings': 'Every booking, the calendar and what is waiting on you.',
+  'Bookings': 'Every booking and the calendar.',
   'Matches & tournaments': 'Fixtures, live scoring and tournaments.',
   'Grounds & nets': 'The grounds and nets, blocks, prices and hours.',
   'Customers': 'The directory, enquiries, broadcasts and members.',
   'Win customers': 'Promo codes, business cards and look-ups.',
   'Academy': 'Students, attendance, fees, progress and coaches.',
-  'Money in': 'Make sure every rupee landed where it should.',
+  'Money in': 'Make sure every rupee landed where it should: payments, banking and reconcile.',
   'Books': 'The ledgers, GST and a step-by-step month end.',
   'Buy & pay': 'Order, receive the bill, approve and pay.',
   'Work': 'Tasks, approvals, documents and what needs a second look.',
-  'Reports': 'How the ground, the bookings and the money are doing.',
+  'Reports': 'How the ground, the bookings and the money are doing, side by side.',
   'Compliance': 'Rules, review dates and the law-change log.',
   ai: 'Ask about the business in your own words.',
   'Staff & payroll': 'The team, their access, attendance and pay.',
   'Settings': 'Payments, website, festivals and connections.',
   'Audit & media': 'What happened, photos and the live cameras.',
-  'Software owner': 'People, services, backups and the platform.',
+  'Software owner': 'The platform: people, services, backups and owner requests.',
 };
 /** The hub an address belongs to. */
 export const railOf = (route: string): RailItem | undefined => {
@@ -270,15 +262,15 @@ export const railOf = (route: string): RailItem | undefined => {
 
 /** One symbol for every page inside a group, keyed "path:key" (the same keys as SUBS). */
 export const SUB_ICONS: Record<string, string> = {
-  '/bookings:': 'list', '/bookings:day': 'calendar', '/bookings:approvals': 'check', '/bookings:payments': 'payments',
+  '/bookings:': 'list', '/bookings:day': 'calendar', '/matches:': 'ball', '/matches:live': 'ball', '/transactions:': 'bank', '/transactions:import': 'upload', '/booking-report:': 'pie', '/booking-report:compare': 'swap',
   '/academy:students': 'users', '/academy:attendance': 'clock', '/academy:fees': 'payroll', '/academy:skills': 'star', '/academy:coaches': 'grad',
-  '/accounting:overview': 'dashboard', '/accounting:review': 'audit', '/accounting:reports': 'accounts', '/accounting:reconcile': 'swap', '/accounting:recurring': 'repeat',
-  '/accounting:journals': 'book', '/accounting:cashflow': 'payments', '/accounting:budget': 'pie', '/accounting:gst': 'percent', '/accounting:assets': 'warehouse', '/accounting:close': 'lock', '/accounting:setup': 'settings',
-  '/settings:prices': 'tag', '/settings:booking': 'calendar', '/settings:payments': 'payments', '/settings:website': 'globe', '/settings:festivals': 'calendar', '/settings:backups': 'vault', '/settings:people': 'users', '/settings:connections': 'key', '/settings:services': 'plug',
+  '/accounting:overview': 'dashboard', '/accounting:reports': 'accounts', '/accounting:reconcile': 'swap', '/accounting:recurring': 'repeat',
+  '/accounting:journals': 'book', '/accounting:cashflow': 'payments', '/accounting:budget': 'pie', '/accounting:gst': 'percent', '/accounting:assets': 'warehouse', '/accounting:setup': 'settings',
+  '/settings:prices': 'tag', '/settings:booking': 'calendar', '/settings:payments': 'payments', '/settings:website': 'globe', '/settings:festivals': 'calendar', '/settings:ai': 'ai', '/settings:connections': 'key',
   '/bills:': 'billing', '/bills:vendors': 'warehouse',
   '/compliance:rules': 'audit', '/compliance:changes': 'book', '/compliance:gst': 'percent', '/compliance:terms': 'shield',
   '/payroll:run': 'payroll', '/payroll:attendance': 'clock', '/payroll:advances': 'swap', '/payroll:staff': 'users',
   '/memberships:': 'users', '/memberships:expiring': 'bell', '/memberships:plans': 'tag', '/memberships:activity': 'list',
   '/reminders:': 'inbox', '/reminders:templates': 'edit', '/reminders:one': 'chat', '/reminders:history': 'clock',
-  '/platform:requests': 'inbox', '/platform:people': 'users', '/platform:settings': 'settings', '/platform:connections': 'key', '/platform:bank': 'bank', '/platform:services': 'plug', '/platform:refunds': 'swap', '/platform:costs': 'billing',
+  '/platform:requests': 'inbox', '/platform:people': 'users', '/platform:settings': 'settings', '/platform:bank': 'bank', '/platform:services': 'plug', '/platform:refunds': 'swap', '/platform:costs': 'billing',
 };

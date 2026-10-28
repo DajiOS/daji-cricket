@@ -65,7 +65,7 @@ export function Attention({ today, canBookings, canVerify, onChanged, version }:
           </div>
         </div>
       ))}
-      {nVerify > 0 && <a className="attn link" href="#/bookings/payments"><div className="attn-main"><div className="strong">UPI payments to verify</div><div className="small muted">Customers say they have paid; check your bank.</div></div><Chip tone="warn">{nVerify}</Chip></a>}
+      {nVerify > 0 && <a className="attn link" href="#/approvals/upi"><div className="attn-main"><div className="strong">UPI payments to verify</div><div className="small muted">Customers say they have paid; check your bank.</div></div><Chip tone="warn">{nVerify}</Chip></a>}
       {nReview > 0 && <a className="attn link" href="#/bookings/review"><div className="attn-main"><div className="strong">Bookings flagged for review</div><div className="small muted">Something about the payment or slot needs a look.</div></div><Chip tone="warn">{nReview}</Chip></a>}
       {nChoose > 0 && <a className="attn link" href="#/bookings/choosing"><div className="attn-main"><div className="strong">Customers yet to choose</div><div className="small muted">You cancelled; they pick a refund, credit or another slot.</div></div><Chip tone="info">{nChoose}</Chip></a>}
       {decline && <CancelDialog b={decline} onClose={() => setDecline(null)} onDone={() => { setDecline(null); toast('Cancelled. The customer has been told and can choose a refund, credit or another slot.'); refresh(); }} />}

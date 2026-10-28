@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useApi, post, inr, fmtDay, fmtDateTime, can, go } from '../lib';
 import { useSession } from '../App';
 import { ErrorBox, Loading, useToast } from '../ui';
@@ -6,20 +6,23 @@ import { timeRange, errText, type Booking } from '../parts/dash/common';
 import type { Bill } from '../parts/bills/common';
 const BillsTable = lazy(() => import('./ApprovalsList'));
 const Rules = lazy(() => import('../parts/approvals/Rules'));
+const Queues = lazy(() => import('../parts/dash/Queues'));
 
 // Approvals, as in the design: everything waiting on a decision on one stage board (Submitted, Review, Approval, Final sign-off, Done),
 // filtered by kind, with the selected item's facts, its sign-off chain and the decision. The old bills table is still at /approvals/bills.
 // Bills, staff pay, refunds, discounts, fee waivers and expenses follow the owner's approval rules (built at /approvals/rules):
 // the server sends each chain's steps, who may sign and its trail.
+// /approvals/<kind> opens the board filtered to that kind. Booking approvals and UPI payments also show their full table under the board:
+// they were the Approvals and UPI to verify tabs of Bookings, and /approvals/book and /approvals/upi open them here (routes.ts, MERGED).
 type Kind = 'bill' | 'pay' | 'book' | 'upi' | 'refund' | 'discount' | 'waiver' | 'expense';
 // The kinds that only ever come from the rules, with the right that lets a team member see them.
 const RULED: Partial<Record<Kind, string>> = { refund: 'record_payments', discount: 'manage_bookings', waiver: 'manage_academy', expense: 'manage_accounting' };
 const K: Record<Kind, { name: string; ink: string; tint: string; href: string }> = {
   bill: { name: 'Bills', ink: '#B86E12', tint: 'var(--t-amber)', href: '/bills' },
   pay: { name: 'Staff pay', ink: 'var(--i-violet)', tint: 'var(--t-violet)', href: '/payroll' },
-  book: { name: 'Booking approvals', ink: 'var(--i-green)', tint: 'var(--t-green)', href: '/bookings/approvals' },
-  upi: { name: 'UPI payments', ink: '#0B5F67', tint: 'var(--t-teal)', href: '/bookings/payments' },
-  refund: { name: 'Refunds', ink: 'var(--i-red)', tint: 'var(--t-red)', href: '/bookings/payments' },
+  book: { name: 'Booking approvals', ink: 'var(--i-green)', tint: 'var(--t-green)', href: '/approvals/book' },
+  upi: { name: 'UPI payments', ink: '#0B5F67', tint: 'var(--t-teal)', href: '/approvals/upi' },
+  refund: { name: 'Refunds', ink: 'var(--i-red)', tint: 'var(--t-red)', href: '/approvals/upi' },
   discount: { name: 'Discounts', ink: 'var(--i-blue)', tint: 'var(--t-blue)', href: '/bookings' },
   waiver: { name: 'Fee waivers', ink: 'var(--i-teal)', tint: 'var(--t-teal)', href: '/academy/fees' },
   expense: { name: 'Expenses', ink: 'var(--i-amber)', tint: 'var(--t-amber)', href: '/transactions' },
@@ -71,16 +74,20 @@ const age = (t: number | null) => {
 export default function Approvals({ sub }: { sub: string }) {
   if (sub === 'rules') return <Suspense fallback={<Loading />}><Rules /></Suspense>;
   if (sub === 'bills') return <Suspense fallback={<Loading />}><BillsTable sub="" /></Suspense>;
-  return <Board />;
+  const k = sub.split('/')[0] as Kind;
+  return <Board start={k in K ? k : 'all'} />;
 }
 
-function Board() {
+function Board({ start }: { start: Kind | 'all' }) {
   const s = useSession(); const toast = useToast();
   const me = s.me;
   const boss = me.role === 'owner' || me.role === 'super_admin';
   const acct = can(me, 'manage_accounting'), books = can(me, 'manage_bookings'), upiOk = can(me, 'verify_payments') || can(me, 'record_payments');
   const ruled = acct || (Object.values(RULED) as string[]).some((p) => can(me, p));
-  const [filter, setFilter] = useState<Kind | 'all'>('all');
+  const [filter, setFilterState] = useState<Kind | 'all'>(start);
+  // the filter is in the address, so the menu, a bookmark and Back all land on the same view
+  const setFilter = (k: Kind | 'all') => { setFilterState(k); go(k === 'all' ? '/approvals' : `/approvals/${k}`); };
+  useEffect(() => setFilterState(start), [start]);
   const [sel, setSel] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -214,6 +221,7 @@ function Board() {
             </aside>)}
         </div>
       </>)}
+      {(filter === 'book' && books) || (filter === 'upi' && upiOk) ? <Suspense fallback={<Loading h={200} />}><Queues kind={filter} version={v} onChanged={() => { setV((n) => n + 1); s.refreshCounts(); }} /></Suspense> : null}
     </div>
   );
 }

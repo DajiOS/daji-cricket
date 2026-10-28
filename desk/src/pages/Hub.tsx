@@ -17,7 +17,7 @@ export default function Hub({ sub }: { sub: string }) {
   const needs: { label: string; n: number | null; href: string }[] = [];
   if (appr) needs.push({ label: 'Bills and payments to approve', n: appr.count, href: '/approvals' });
   if (pnl) needs.push({ label: 'Bank lines to categorise', n: pnl.uncategorised.count, href: '/transactions' });
-  if (today) needs.push({ label: 'UPI payments to check', n: today.awaitingVerification, href: '/bookings/payments' });
+  if (today) needs.push({ label: 'UPI payments to check', n: today.awaitingVerification, href: '/approvals/upi' });
   needs.push({ label: 'Close the month, step by step', n: null, href: '/close' });
   const shown = needs.filter((x) => navVisible(me, { to: x.href, label: '', icon: '', ...(x.href === '/close' ? { check: () => can(me, 'view_revenue') } : {}) }));
   return (

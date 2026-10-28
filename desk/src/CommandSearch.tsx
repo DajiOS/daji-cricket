@@ -13,10 +13,10 @@ interface Hit { key: string; kind: 'Go to' | 'Do' | 'Booking' | 'Bill' | 'Vendor
 const ACTIONS: (NavItem & { words: string })[] = [
   { to: '/bookings/new', label: 'New booking', icon: 'plus', perm: 'manage_bookings', words: 'add book session walk in' },
   { to: '/bookings/block', label: 'Multi-day or tournament booking', icon: 'calendar', perm: 'manage_bookings', words: 'block several days' },
-  { to: '/bookings/payments', label: 'Verify UPI payments', icon: 'payments', perm: 'verify_payments', words: 'check upi money received' },
+  { to: '/approvals/upi', label: 'Verify UPI payments', icon: 'payments', perm: 'verify_payments', words: 'check upi money received' },
   { to: '/approvals', label: 'Approve bills and bookings', icon: 'check', perm: 'manage_accounting', words: 'approval waiting sign' },
   { to: '/bills', label: 'Enter a bill', icon: 'billing', perm: 'manage_accounting', words: 'vendor invoice expense pay' },
-  { to: '/bank', label: 'Import a bank statement', icon: 'upload', perm: 'manage_accounting', words: 'upload csv pdf statement' },
+  { to: '/transactions/import', label: 'Import a bank statement', icon: 'upload', perm: 'manage_accounting', words: 'upload csv pdf statement' },
   { to: '/close', label: 'Close the month', icon: 'lock', perm: 'view_revenue', check: seesMoney, words: 'month end sign off lock' },
   { to: '/payroll/run', label: 'Run payroll', icon: 'payroll', ownerOnly: true, words: 'salary wages pay staff' },
   { to: '/reminders', label: 'Send WhatsApp reminders', icon: 'chat', perm: 'send_broadcasts', words: 'message remind due' },

@@ -130,7 +130,7 @@ function BookingsFlow() {
       <Column title="Held, not paid" tone="amber" count={held.items.length}>{held.items.map((b) => card(b, <span className="small muted">Hold ends {b.holdExpiresAt ? fmtDateTime(b.holdExpiresAt) : 'soon'}</span>))}</Column>
       {verify && <Column title="UPI to verify" tone="violet" count={upi!.items.length} total={upi!.items.reduce((s, p) => s + p.amountPaise, 0)}>
         {upi!.items.map((p) => (
-          <button key={p.id} className="pl-card" onClick={() => go('/bookings/payments')}>
+          <button key={p.id} className="pl-card" onClick={() => go('/approvals/upi')}>
             <span className="pl-top"><b>UPI {p.reference ?? ''}</b><span className="num">{inr(p.amountPaise)}</span></span>
             <span className="small muted">Sent {fmtDateTime(p.submittedAt ?? p.createdAt)}</span>
           </button>))}

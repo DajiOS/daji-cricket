@@ -91,7 +91,7 @@ function Inspector({ kind, node, me, onSaved }: { kind: Kind; node: Node; me: Me
       <div className="row" style={{ marginTop: 16 }}>
         {can(me, 'manage_bookings') && <button className="btn primary" onClick={() => go('/bookings/day')}>Day view</button>}
         {me.role !== 'staff' && <button className="btn" onClick={() => go('/settings/prices')}>Prices and timings</button>}
-        {can(me, 'manage_bookings') && <button className="btn" onClick={() => go('/compare/grounds')}>Compare the grounds</button>}
+        {can(me, 'manage_bookings') && <button className="btn" onClick={() => go('/booking-report/compare/grounds')}>Compare the grounds</button>}
       </div>
     </div></>);
   if (kind === 'plans') return (<>

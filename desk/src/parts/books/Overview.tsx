@@ -1,4 +1,4 @@
-// The accounting home screen (cards and charts) and the books review.
+// The accounting home screen (cards and charts) and the books review, which is the top of Reconcile.
 import { useState } from 'react';
 import { api, go, inr, inrShort, fmtDate, todayISO, useApi } from '../../lib';
 import { Stat, Chip, ErrorBox, Loading, Empty } from '../../ui';
@@ -132,12 +132,12 @@ export function Review() {
     <div className="bk-issue"><div><b className="strong">{name}</b><div className="muted small">{small}</div></div><div className="row" style={{ gap: 12 }}><span className="bk-issue-n">{big}</span>{to && <Link to={to}>View</Link>}</div></div>);
   return (
     <div className="stack">
-      <Section title="Banking activity" pad={false}><div className="card-pad" style={{ paddingBottom: 0 }}><Note>Do the books agree with the bank? Each account, its last statement balance and what still needs a category.</Note></div>
+      <Section title="Do the books agree with the bank?" pad={false}><div className="card-pad" style={{ paddingBottom: 0 }}><Note>Each account, its last statement balance and what still needs a category.</Note></div>
         <Grid heads={['Account', 'Bank balance', 'In the books', 'Uncategorised', 'Last transaction', 'Check']} nums={[1, 2]} rows={rows} empty="No bank or cash accounts yet." /></Section>
       <Section title="Common issues"><Note>Things that may need your attention.</Note>
         <div className="bk-list">
           {issue('Uncategorised transactions', String(o.uncategorised.count), `${inr(Math.abs(o.uncategorised.amountPaise))} with no category, so profit is incomplete`, '/transactions/pending')}
-          {issue('Deposits not matched to a booking', String(rc.unmatchedPayments), 'UPI or bank-transfer payments with no bank deposit yet', '/accounting/reconcile')}
+          {issue('Deposits not matched to a booking', String(rc.unmatchedPayments), 'UPI or bank-transfer payments with no bank deposit yet: match them below')}
           {issue('Customer balances over 90 days', String(over90.length), inr(over90Paise), '/accounting/reports/cb-det')}
           {issue('Negative asset and liability accounts', String(negatives.length), negatives.slice(0, 3).map((r: any) => r.name).join(', ') || 'None', '/accounting/reports/bs')}
           {issue('Account credit owed to customers', inr(o.accountCreditOwedPaise), 'Unused credit and refunds due')}

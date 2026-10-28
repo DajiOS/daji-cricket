@@ -1,8 +1,9 @@
-// Reconcile, recurring entries, journal entries, month sign-off and setup (accounts, rules, GST).
-import { useEffect, useState } from 'react';
-import { api, post, put, patch, del, inr, fmtDate, thisMonth, addDaysISO } from '../../lib';
-import { Field, Chip, ErrorBox, Loading, Empty, useToast, Icon } from '../../ui';
+// Reconcile (with the books review at its top), recurring entries, journal entries, the signed-off months and setup (accounts, rules, GST).
+import { useState } from 'react';
+import { post, patch, del, inr, fmtDate } from '../../lib';
+import { Field, Chip, ErrorBox, Empty, useToast, Icon } from '../../ui';
 import { Grid, Money, Section, Note, Load, useShared, useAct, monthName } from './kit';
+import { Review } from './Overview';
 import { RecDialog, JournalDialog, ReasonDialog, FilesDialog, AccountDialog, RuleDialog } from './dialogs';
 
 export function Reconcile() {
@@ -10,11 +11,7 @@ export function Reconcile() {
   return (
     <Load<any> path="/api/accounting/reconcile">{(r, reload) => (
       <div className="stack">
-        <Section title="Do the books agree with the bank?" pad={false}>
-          <Grid heads={['Account', 'Books say', 'Last statement says', 'Difference', 'Uncategorised']} nums={[1, 2, 3, 4]} empty="No bank accounts yet."
-            rows={r.accounts.map((a: any) => [a.name, inr(a.booksBalancePaise), a.statementBalancePaise === null ? 'No statement balance' : `${inr(a.statementBalancePaise)} on ${fmtDate(a.statementDate)}`,
-              a.differencePaise === null ? '' : a.differencePaise === 0 ? <Chip tone="good">Matches</Chip> : <Chip tone="bad">{a.differencePaise < 0 ? '−' : '+'}{inr(Math.abs(a.differencePaise))}</Chip>, a.uncategorised])} />
-        </Section>
+        <Review />
         <Section title={`Deposits waiting to be matched (${r.rows.length})`} aside={<button className="btn sm primary" onClick={async () => { await act(() => post('/api/accounting/reconcile/auto', {}).then((x) => { reload(); return x; }), (x) => `${x.matched} matched, ${x.left} left`); }}>Run automatic matching</button>}>
           <Note>{r.unmatchedPayments} UPI or bank-transfer booking payments have no bank deposit yet. Matching is automatic after every statement import when the 12-digit UTR and the amount agree. Anything less certain is shown here for you to confirm.</Note>
           {!r.rows.length ? <Empty>Every bank deposit is matched or categorised.</Empty> : r.rows.map((x: any) => (
@@ -65,30 +62,20 @@ export function Journals() {
 }
 
 /** Month sign-off: freezes a month, keeps the profit and loss at that moment, and holds a note for it. */
-export function MonthEnd() {
-  const act = useAct(); const toast = useToast();
-  const [month, setMonth] = useState(addDaysISO(thisMonth() + '-01', -1).slice(0, 7));
-  const [memo, setMemo] = useState(''); const [reopen, setReopen] = useState<string | null>(null);
-  useEffect(() => { let live = true; api('/api/accounting/memos/' + month).then((m) => live && setMemo(m.body || '')).catch(() => live && setMemo('')); return () => { live = false; }; }, [month]);
+/** The months signed off so far, each with its figures and a Re-open (with a reason). Shown under the step-by-step close on Month end. */
+export function SignedOffMonths({ version = 0 }: { version?: number }) {
+  const toast = useToast(); const [reopen, setReopen] = useState<string | null>(null);
   return (
-    <Load<any> path="/api/accounting/signoffs">{(r, reload) => (
-      <div className="stack">
-        <Section title="Sign off a month">
-          <Note>Signing off freezes the month: nothing dated in it can be added, changed or imported until you re-open it. The profit and loss at that moment is kept on record.</Note>
-          <div className="form-grid">
-            <Field label="Month"><input className="inp" type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></Field>
-            <div className="row" style={{ alignItems: 'flex-end' }}><button className="btn primary" onClick={() => act(() => post('/api/accounting/signoffs', { month }).then(reload), () => `${monthName(month)} signed off`)}>Sign off {month ? monthName(month) : ''}</button></div>
-            <Field label="Month note" full><textarea className="inp" placeholder="Notes for this month (for you and your accountant)" value={memo} onChange={(e) => setMemo(e.target.value)} /></Field>
-          </div>
-          <div style={{ marginTop: 12 }}><button className="btn sm" onClick={() => act(() => put('/api/accounting/memos/' + month, { body: memo.trim() }), () => 'Note saved')}>Save note</button></div>
-        </Section>
+    <Load<any> path="/api/accounting/signoffs" deps={[version]}>{(r, reload) => (
+      <>
         <Section title="Signed-off months" pad={false}>
+          <div className="card-pad" style={{ paddingBottom: 0 }}><Note>Signing off freezes the month: nothing dated in it can be added, changed or imported until you re-open it. The profit and loss at that moment is kept on record.</Note></div>
           <Grid heads={['Month', 'Revenue', 'Expenses', 'Net profit', '']} nums={[1, 2, 3]} empty="No months signed off yet."
             rows={r.items.map((s: any) => [monthName(s.month), s.revenuePaise === null ? '' : inr(s.revenuePaise), s.expensesPaise === null ? '' : inr(s.expensesPaise), s.netProfitPaise === null ? '' : inr(s.netProfitPaise),
               s.reopenedAt ? <Chip>Re-opened</Chip> : <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}><Chip tone="good">Locked</Chip><button className="btn sm ghost" onClick={() => setReopen(s.month)}>Re-open</button></span>])} />
         </Section>
         {reopen && <ReasonDialog title={`Re-open ${monthName(reopen)}`} lede="The reason is kept in the audit log." label="Re-open month" path="/api/accounting/signoffs/reopen" body={(reason) => ({ month: reopen, reason })} onClose={() => setReopen(null)} done={() => { toast('Re-opened'); reload(); }} />}
-      </div>)}</Load>
+      </>)}</Load>
   );
 }
 
