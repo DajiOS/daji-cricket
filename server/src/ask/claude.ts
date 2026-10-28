@@ -41,6 +41,7 @@ export const TOOL_DEFS = [
   { name: 'why_cant_i_sign', description: 'Explains why the asker can or cannot sign a waiting approval, found by part of its title (for example a vendor name). Leave text empty for all waiting ones.', input_schema: { type: 'object', properties: { text: { type: 'string' } } } },
   { name: 'get_approvals_decided', description: 'How many approvals (bills, staff pay, refunds, discounts, fee waivers, expenses) were signed off, approved, sent back or rejected in a period.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_compliance', description: 'The compliance register (owner only): each Indian legal rule the software enforces, what it is set to, when it was last reviewed and is next due, the last changes in the law recorded, and law and policy updates waiting for a look.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_auction_tournaments', description: 'Tournaments customers host at this business, as a player auction (purse and bids in points, never money) or with teams entering directly: name, dates, status, host, teams, players signed up and sold, whether staff hid it, and the refundable hosting deposits due, held, waived or waiting for a waiver decision.', input_schema: { type: 'object', properties: {} } },
   { name: 'list_grounds', description: 'The names and ids of the grounds.', input_schema: { type: 'object', properties: {} } },
   { name: 'search_documents', description: 'Searches every page of the uploaded documents (statements, bills, agreements, licences, scans) for words, and gives each matching document with its best page and the words around the match.', input_schema: { type: 'object', properties: { text: { type: 'string', description: 'The words to look for, for example "ground lease Arvindbhai".' } }, required: ['text'] } },
 ] as const;
@@ -71,6 +72,7 @@ export function runTool(ctx: T.Ctx, name: string, i: Input): unknown {
     case 'get_bookings_summary': return T.bookings(ctx, { ...range(i), groundId: ground(i) });
     case 'get_upcoming_sessions': return T.upcoming(ctx, { ...range(i), groundId: ground(i), limit: typeof i.limit === 'number' ? i.limit : 8 }, false);
     case 'get_money_owed': return T.outstanding(ctx);
+    case 'get_auction_tournaments': return T.auctionTournaments(ctx);
     case 'get_utilisation': return T.utilisation(ctx, range(i));
     case 'get_account_credit': return T.credits(ctx);
     case 'get_refunds': return T.refunds(ctx, range(i));

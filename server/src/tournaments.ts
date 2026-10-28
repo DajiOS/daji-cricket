@@ -218,7 +218,7 @@ export function tournamentDetail(ownerId: string, id: string) {
 
 // ------------------------------------------------------------------ tournaments
 
-interface Organiser { first: string; last: string; phone: string | null; email: string | null }
+export interface Organiser { first: string; last: string; phone: string | null; email: string | null }
 function parseOrganiser(src: any, required: boolean): Organiser | null {
   const o = src?.organiser;
   if (!o || typeof o !== 'object') { if (required) throw bad('organiser', 'Enter the organiser\'s first and last name and phone'); return null; }
@@ -230,7 +230,7 @@ function parseOrganiser(src: any, required: boolean): Organiser | null {
 }
 
 /** The tournament row, with its organiser matched to (or made as) a customer so both sides point at the same person. */
-function insertTournament(actor: Actor, ownerId: string, f: { name: string; startDate: string; endDate: string; format: string; overs: number; fee: number; pw: number; pt: number; status: string; notes: string | null; seriesId?: string | null; org: Organiser | null; customerId?: string | null }): string {
+export function insertTournament(actor: Actor, ownerId: string, f: { name: string; startDate: string; endDate: string; format: string; overs: number; fee: number; pw: number; pt: number; status: string; notes: string | null; seriesId?: string | null; org: Organiser | null; customerId?: string | null }): string {
   const id = newId('trn');
   let customerId = f.customerId ?? null;
   if (!customerId && f.org?.phone && f.org.first) customerId = findOrCreateCustomer({ name: `${f.org.first} ${f.org.last}`.trim(), firstName: f.org.first, lastName: f.org.last, phone: f.org.phone, email: f.org.email ?? undefined }).id;

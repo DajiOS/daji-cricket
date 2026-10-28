@@ -227,6 +227,25 @@ All need sign-in as owner, staff or super admin (super admin adds `?ownerId=`).
 (The phone app sends `x-app-shot-at` (epoch ms) with a task photo. It is used only when the saved file carries no camera time; a camera time inside the file always wins.)
 
 
+## Customer-hosted tournaments (player auction or teams entering directly)
+
+A customer hosts a tournament with `mode` `auction` (teams are picked at a live player auction; purses and bids are points, never money) or `teams` (teams enter directly for a round robin or knockout). Either way the host pays a refundable hosting deposit (Settings `hostedTournamentDepositPaise`, ₹5,000 to start; fixed when the tournament is made) or asks the ground to waive it; players see the tournament only once the deposit is settled. Switched off with Settings `auctionTournamentsEnabled` (`GET /api/config` carries `auctionsEnabled`).
+
+Customer (sign-in as a customer):
+- `GET /api/auctions`: `{open, hosting, playing, teamsYouOwn, defaultsInWords, grounds, depositPaise, depositHowToPay}`.
+- `POST /api/auctions` `{name, mode?, groundId, startDate, endDate, overs?, format?, rules?}` (idempotent). At most 3 active per host.
+- `GET /api/auctions/:id?since=version` (`{changed:false}` when nothing moved); `PATCH /api/auctions/:id`.
+- Rules: `POST /:id/rules` `{rules, expectVersion, source, request?}` (409 `RULES_CHANGED`); `POST /:id/rules/draft` `{text}` (the assistant drafts, nothing is saved; money is refused); `GET /:id/rules/history`.
+- Teams: `POST /:id/teams`, `PATCH|DELETE /:id/teams/:teamId`. Players (auction mode): `POST /:id/join` `{role}`, `POST /:id/leave`, `POST /:id/players/:playerId/remove`.
+- Bidding (auction mode): `POST /:id/start`, `/next`, `/bid` `{teamId, points, lotNo}` (idempotent), `/bid/retract`, `/hammer`, `/undo`. `POST /:id/finish` (in teams mode: confirm the teams), `/cancel` `{reason}`, `/fixtures`, `GET /:id/tournament`.
+- Deposit: `POST /:id/deposit/paid` `{reference}` (a claim only; staff record the money), `POST /:id/deposit/waiver` `{reason}` (10+ characters). Errors: 409 `DEPOSIT_DUE`, `DEPOSIT_SETTLED`, `DEPOSIT_PART_PAID`, `WAIVER_PENDING`, `WAIVER_DECLINED`.
+
+Staff (`manage_matches`):
+- `GET /api/staff/auctions`, `GET /api/staff/auctions/:id`, `GET /api/staff/auctions/deposits/summary`.
+- `POST /api/staff/auctions/:id/deposit/collect|refund` `{amountPaise?, method, reference?}` (owner or `record_payments`); `.../keep` `{amountPaise?, reason}` (owner only, 10+ character reason the host sees, only once the tournament finished or was cancelled). All idempotent; entries are append-only and post to the ledger (`tournament_deposits_held`, `tournament_deposits_kept`).
+- `POST /api/staff/auctions/:id/deposit/waiver` `{approve, note?}` (owner or software owner; a note is required to turn it down).
+- `POST /api/staff/auctions/:id/hide` `{reason}`, `POST /api/staff/auctions/:id/unhide`.
+
 ## Booking window and closed days
 
 - `GET /api/config` (public) carries `bookingsOpenFrom`, `bookingsCloseFrom`, `closedDates {ground, practice, academy}`, `autoDebitEnabled`, `autoDebitHoursBefore`.

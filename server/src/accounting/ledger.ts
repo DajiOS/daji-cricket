@@ -2,6 +2,7 @@ import { many, one } from '../db.ts';
 import { now } from '../clock.ts';
 import { istDate } from '../time.ts';
 import '../securityDeposit.ts';
+import '../auctionDeposit.ts';
 
 // The ledger. Every figure in the reports is built from these lines, so the profit and loss, the balance sheet and the
 // trial balance cannot disagree. Lines are DERIVED on demand from the real records (bank transactions, booking payments,
@@ -106,6 +107,14 @@ export function ledgerLines(ownerId: string, upTo: string): Line[] {
     else if (e.kind === 'refund') out.post(d, 'sdeposit', e.id, [['security_deposits_held', n], [cash, -n]]);
     else if (e.kind === 'deduct') out.post(d, 'sdeposit', e.id, [['security_deposits_held', n], ['deposit_deductions', -n]]);
     else out.post(d, 'sdeposit', e.id, [['deposit_deductions', n], ['security_deposits_held', -n]]);
+  }
+
+  // ---- tournament hosting deposits (auctionDeposit.ts): a refundable liability of their own; never booking money
+  for (const e of many<{ id: string; kind: string; amount_paise: number; method: string | null; created_at: number }>('SELECT id, kind, amount_paise, method, created_at FROM auction_deposit_entries WHERE owner_id = ?', ownerId)) {
+    const cash = e.method === 'cash' ? 'cash_bookings' : 'gateway_clearing', d = istDate(e.created_at), n = e.amount_paise;
+    if (e.kind === 'collect') out.post(d, 'tdeposit', e.id, [[cash, n], ['tournament_deposits_held', -n]]);
+    else if (e.kind === 'refund') out.post(d, 'tdeposit', e.id, [['tournament_deposits_held', n], [cash, -n]]);
+    else out.post(d, 'tdeposit', e.id, [['tournament_deposits_held', n], ['tournament_deposits_kept', -n]]);
   }
 
   // ---- account credit: issued, expired, written down

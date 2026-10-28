@@ -13,7 +13,7 @@ import { hasPermission } from '../auth.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'fixtures' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'fixtures' | 'auctions' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -37,6 +37,7 @@ const RULES: [Intent, RegExp][] = [
   ['approvals_why', /why (cant|cannot|am i not|do i not|wont|isnt)\b.*\b(sign|approve|approval)|\b(cant|cannot|unable to|not able to) (i )?(sign|approve)\b|why.* (greyed|disabled|locked)/],
   ['approvals_report', /(how many|report|summary|history|stats|statistics)\b.*\b(approvals?|sign.?offs?|signed off|sent back)|\b(approvals?|sign.?offs?) (report|summary|history)\b/],
   ['approvals_waiting', /\b(whom|who)\b.*\b(waiting|holding|pending)|(waiting|pending|stuck|open|outstanding) (on|for)? ?(whom|who|which)\b|\bapprovals?\b|sign.?offs?|waiting (for|on) (my )?(sign|approval)|bills? (waiting|pending)|pay ?roll (waiting|pending)|(discounts?|waivers?|expenses?|refunds?) (waiting|pending) (for |on )?(sign|approv)/],
+  ['auctions', /\bauctions?\b|player (draft|auction)|\bsquads?\b|\bipl.?style\b|hosting deposits?|(tournament|host).{0,20}deposits?|deposit waivers?|hosted tournaments?/],
   ['compliance', /complian|\blaws?\b|legal (rules?|updates?|changes?)|regulat|\bpolic(y|ies) (check|changes?|updates?)|statutory|rules? (are |is )?(due|overdue|past|to review)|review dates?|law.?change|\b(dpdp|cert.?in|esic?|professional tax)\b/],
   ['awaiting', /awaiting|to verify|verification|waiting for (me|us|approval|verification)|payments? (to|waiting|pending) (verify|check|approv)|upi (proof|screenshot)s?/],
   ['outstanding', /outstanding|\bowe[ds]?\b|\bdues?\b|unpaid|pending (payment|balance|amount|dues)|to collect|receivables?|balance (due|pending|remaining|left|owed)|yet to (pay|collect)|hasn.?t paid|haven.?t paid|not (yet )?paid|who (still )?owes/],
@@ -58,7 +59,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'approvals_why', 'approvals_report', 'approvals_waiting', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'auctions', 'approvals_why', 'approvals_report', 'approvals_waiting', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -133,7 +134,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', fixtures: 'Tournament fixtures', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', fixtures: 'Tournament fixtures', auctions: 'Auction tournaments', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -142,6 +143,7 @@ export const EXAMPLES = {
   bookings: ['How many bookings did we have last week?', "What's booked for tomorrow?", 'Who still owes us money?', 'How busy was the cricket ground in September?', 'How many no-shows this month?', 'How much account credit do customers hold?'],
   customers: ['How many new customers played this month?'],
   compliance: ['Which compliance rules are due for review?', 'Any law updates waiting?'],
+  tournaments: ['Which auction tournaments are running?'],
 };
 
 // ---------------------------------------------------------------- the answerer
@@ -159,6 +161,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'help') return help(ctx);
   if (intent === 'compliance') return complianceAnswer(ctx, question, base);
   if (intent === 'fixtures') return fixturesAnswer(ctx, base);
+  if (intent === 'auctions') return auctionsAnswer(ctx, base);
   if (intent === 'unknown') {
     const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
     return base('unknown', "I'm not sure what you're asking. I can answer questions about revenue, expenses, profit, account balances, bookings, money owed, cancellations and more, for any dates you like.", { suggestions: lot });
@@ -466,8 +469,24 @@ function complianceAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answer
   });
 }
 
+function auctionsAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  if (!T.can(ctx, 'tournaments')) return base('auctions', 'You do not have access to the tournaments. Ask the owner to give you the "manage_matches" permission.');
+  const a = T.auctionTournaments(ctx);
+  if (!a.count) return base('auctions', 'No customer has hosted a tournament yet.');
+  const bits = [`${count(a.count, 'tournament')} ${a.count === 1 ? 'has' : 'have'} been hosted by customers.`];
+  if (a.running) bits.push(`${count(a.running, 'auction')} ${a.running === 1 ? 'is' : 'are'} running now.`);
+  if (a.signingUp) bits.push(`${a.signingUp} ${a.signingUp === 1 ? 'is' : 'are'} taking player sign-ups.`);
+  if (a.depositsHeldPaise) bits.push(`${R(a.depositsHeldPaise)} in hosting deposits is held, to give back when the tournaments end.`);
+  if (a.depositsDuePaise) bits.push(`${R(a.depositsDuePaise)} in hosting deposits is still due.`);
+  if (a.waiverRequestsWaiting) bits.push(`${count(a.waiverRequestsWaiting, 'deposit waiver request')} ${a.waiverRequestsWaiting === 1 ? 'is' : 'are'} waiting for the owner.`);
+  return base('auctions', bits.join(' '), {
+    details: a.items.slice(0, 8).map((i) => ({ label: i.name, text: `${i.status} · ${i.kind} · host ${i.host} · ${niceDay(i.from)} to ${niceDay(i.to)} · ${count(i.teams, 'team')}${i.kind === 'player auction' ? `, ${count(i.players, 'player')} signed up, ${i.sold} picked` : ''}${i.depositDuePaise ? ` · deposit ${R(i.depositDuePaise)} due` : i.depositWaived ? ' · deposit waived' : i.depositHeldPaise ? ` · deposit ${R(i.depositHeldPaise)} held` : ''}${i.waiverWaiting ? ' · waiver request waiting' : ''}${i.hidden ? ' · hidden by staff' : ''}` })),
+    notes: ['Auction purses and bids are points, never money. The hosting deposit is real money: it is recorded, refunded or kept from Tournaments on the Desk.'],
+  });
+}
+
 function help(ctx: T.Ctx): Built {
-  const lot = [...(T.can(ctx, 'reports') ? EXAMPLES.reports : []), ...(T.can(ctx, 'bookings') ? EXAMPLES.bookings : []), ...(T.can(ctx, 'customers') ? EXAMPLES.customers : []), ...(T.can(ctx, 'compliance') ? EXAMPLES.compliance : [])];
+  const lot = [...(T.can(ctx, 'reports') ? EXAMPLES.reports : []), ...(T.can(ctx, 'bookings') ? EXAMPLES.bookings : []), ...(T.can(ctx, 'customers') ? EXAMPLES.customers : []), ...(T.can(ctx, 'compliance') ? EXAMPLES.compliance : []), ...(T.can(ctx, 'tournaments') ? EXAMPLES.tournaments : [])];
   return {
     intent: 'help', answer: 'Ask me about your money or your bookings in plain words, for any dates: "past 37 days", "last month", "in September", "from 1 Oct to 14 Oct". I read the same figures as the Reports tab and tell you which dates I used.',
     details: [], understood: 'Help', period: null, open: null, notes: ['I only read figures; I never change anything.'], suggestions: lot,

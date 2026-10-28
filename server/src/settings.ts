@@ -69,6 +69,10 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   voiceShortcutsEnabled: true,
   /** Customers see free slots without prices and send a pricing enquiry for a slot instead of paying online (priceOnEnquiry.ts). The saved prices are kept. */
   pricesOnEnquiry: false,
+  /** Customers may host auction tournaments (auction.ts). Off hides the feature and refuses its actions; what was saved is kept. */
+  auctionTournamentsEnabled: true,
+  /** The refundable deposit a customer puts down to host a tournament (auction or teams entering directly), in paise. It opens to players once paid or waived by an admin; 0 = no deposit. Owner's decision, 28 Oct 2026. */
+  hostedTournamentDepositPaise: 500000,
 };
 
 /** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
@@ -99,6 +103,7 @@ const INT_RANGES: Record<string, [number, number]> = {
   creditExpiryDays: [1, 3650],
   noShowGraceMinutes: [0, 600],
   autoDebitHoursBefore: [1, 168],
+  hostedTournamentDepositPaise: [0, 10_000_000],
 };
 
 /** Validates and stores a partial update. Returns the keys that actually changed (with old/new values). */
@@ -108,7 +113,7 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
   const next: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULT_SETTINGS)) { fields.push({ field: k, message: 'Unknown setting' }); continue; }
-    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled' || k === 'voiceShortcutsEnabled' || k === 'pricesOnEnquiry') {
+    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled' || k === 'voiceShortcutsEnabled' || k === 'pricesOnEnquiry' || k === 'auctionTournamentsEnabled') {
       if (typeof v !== 'boolean') fields.push({ field: k, message: 'Must be true or false' }); else next[k] = v;
     } else if (k === 'rescheduleCutoffHours' || k === 'rescheduleMaxMoves') {
       const [lo, hi] = k === 'rescheduleCutoffHours' ? [0, 720] : [0, 10];

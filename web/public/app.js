@@ -625,7 +625,8 @@ async function apiDownload(path, filename) {
 }
 
 window.DAJI = { refreshCoaches: () => fillCoaches(), h, clear, $, $$, api, apiFile, apiDownload, ApiError, fieldErrors: null, toast, openModal, closeModal, field, input, inr, niceDate, todayIst, addDays, hhmm, niceDateTime, state, can, MON,
-  deskSub: (tab, sub, quiet) => deskNav(tab, sub, quiet), registerDeskTab: (t) => deskTabs.push(t), registerBookingsExtra: (f) => bookingsExtras.push(f), registerAdminPanel: (f) => adminPanels.push(f) };
+  deskSub: (tab, sub, quiet) => deskNav(tab, sub, quiet), registerDeskTab: (t) => deskTabs.push(t), registerBookingsExtra: (f) => bookingsExtras.push(f), registerAdminPanel: (f) => adminPanels.push(f), registerAuctions: (f) => { auctionsView = f; }, aiLabel: () => aiLabel() };
+let auctionsView = null;
 
 const fieldErrors = (e) => Object.fromEntries(((e.details && e.details.fields) || []).map((f) => [f.field, f.message]));
 window.DAJI.fieldErrors = fieldErrors;
@@ -941,8 +942,10 @@ function renderAuth() {
   // each nav bar gets its own fresh elements, because the buttons carry click handlers
   for (const el of $$('#authlinks')) { clear(el); el.append(...buildAuthItems()); }
   for (const el of $$('#profile-slot')) clear(el); // the profile button now takes the place of the Sign in button
-  for (const el of $$('[data-navclone]')) { clear(el); el.append(h('a', { href: '#top', 'data-home': true, onclick: goHome }, 'Home'), h('a', { href: '#book', 'data-jump': 'book' }, 'Reserve'), ...buildAuthItems()); }
+  for (const el of $$('[data-navclone]')) { clear(el); el.append(h('a', { href: '#top', 'data-home': true, onclick: goHome }, 'Home'), h('a', { href: '#book', 'data-jump': 'book' }, 'Reserve'), ...(auctionsOn() ? [h('a', { href: '#auctions' }, 'Auctions')] : []), ...buildAuthItems()); }
+  const na = $('#nav-auctions'); if (na) na.hidden = !auctionsOn();
 }
+const auctionsOn = () => !!(state.config && state.config.auctionsEnabled) && (!state.user || state.user.role === 'customer');
 function buildAuthItems() {
   const u = state.user;
   if (!u) return [h('button', { type: 'button', class: 'linkbtn', onclick: () => openAuth() }, 'Sign in')];
@@ -2844,6 +2847,7 @@ function askBox(out, opt = {}) {
       clear(out);
       out.append(h('div', { class: 'answer' }, h('p', {}, r.answer), r.understood ? h('div', { class: 'why' }, r.understood + (r.source === 'claude' ? (r.verified ? '' : '  ·  Not fully verified') : '')) : null));
       if (r.details && r.details.length) out.append(h('div', { class: 'list' }, r.details.map((d) => h('div', { class: 'li' }, h('span', {}, d.label), h('b', {}, d.text)))));
+      if (r.open === 'auction') out.append(h('p', { style: 'margin:12px 0 0' }, h('a', { class: 'btn outline sm', href: '#auctions' + (r.auctionId ? '/' + r.auctionId : '') }, r.intent === 'auction_rules_draft' ? 'Open the auction to confirm' : 'Open auctions')));
       if (r.open === 'book') out.append(h('p', { style: 'margin:12px 0 0' }, h('button', { class: 'btn outline sm', type: 'button', onclick: () => { location.hash = ''; show('home'); setTimeout(() => $('#book').scrollIntoView({ behavior: 'smooth' }), 50); } }, 'Open the booking panel')));
       for (const n of r.notes || []) out.append(h('p', { class: 'hint', style: 'margin:10px 0 0' }, n));
       if (r.suggestions && r.suggestions.length) out.append(h('div', { class: 'sugg' }, r.suggestions.map((s) => h('button', { type: 'button', onclick: () => run(s) }, s))));
@@ -2986,11 +2990,13 @@ async function loadAdminDesk(body) {
 // ------------------------------------------------------------------ navigation
 
 function show(name) {
-  for (const v of ['home', 'bookings', 'desk', 'login', 'platform', 'academy']) $('#view-' + v).classList.toggle('on', v === name);
+  for (const v of ['home', 'bookings', 'desk', 'login', 'platform', 'academy', 'auctions']) $('#view-' + v).classList.toggle('on', v === name);
   document.documentElement.classList.toggle('in-desk', name === 'desk');
 }
 /** Every desk screen has its own address: #desk/<tab> and #desk/<tab>/<page>, so the back button and a bookmark both work. */
 const DESK_HASH = /^#desk(?:\/([\w-]+)(?:\/([\w-]+))?)?$/;
+/** #auctions is the list; #auctions/<id> one auction tournament. */
+const AUCTION_HASH = /^#auctions(?:\/([\w-]+))?$/;
 function deskNav(tab, sub, quiet) {
   const hh = '#desk/' + tab + (sub ? '/' + sub : '');
   if (location.hash === hh) return;
@@ -3004,12 +3010,18 @@ function route() {
   if (hash === '#bookings' && state.user && state.user.role === 'customer') v = 'bookings';
   else if (DESK_HASH.test(hash) && state.user && state.user.role !== 'customer') { v = 'desk'; const m = DESK_HASH.exec(hash); if (m[1]) state.deskTab = m[1]; state.deskSub = m[2] || null; }
   else if ((hash === '#bookings' || DESK_HASH.test(hash)) && !state.user) { openAuth({ note: 'Sign in to see this page.', after: () => { location.hash = hash; route(); } }); return; }
+  else if (AUCTION_HASH.test(hash) && state.config && state.config.auctionsEnabled) {
+    if (!state.user) { openAuth({ note: 'Sign in to host an auction tournament or sign up as a player.', after: () => { location.hash = hash; route(); } }); return; }
+    if (state.user.role !== 'customer') { toast('Auction tournaments are run from a customer account. Staff see them under Tournaments on the desk.'); location.hash = ''; return; }
+    v = 'auctions';
+  }
   else if (hash === '#platform') v = 'platform';
   else if (hash === '#academy' || (!hash && document.documentElement.getAttribute('data-embed') === 'academy')) v = 'academy';
   else if (hash === '#login' && !state.user) { if (!$('#login-body').firstChild) openAuth(); v = 'login'; }
   show(v);
   if (v === 'bookings') loadBookings();
   if (v === 'desk') loadDesk();
+  if (v === 'auctions' && auctionsView) auctionsView(AUCTION_HASH.exec(hash)[1] || null);
   if (v !== 'home') window.scrollTo(0, 0);
 }
 function goHome(e) { if (e) e.preventDefault(); location.hash = ''; history.replaceState(null, '', location.pathname + location.search); show('home'); window.scrollTo(0, 0); }

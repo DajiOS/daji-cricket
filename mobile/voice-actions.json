@@ -88,6 +88,13 @@
       "screen": "book"
     },
     {
+      "id": "tournaments",
+      "title": "Hosted tournaments",
+      "phrase": "Show hosted tournaments in APP",
+      "personal": "Tell NAME to show hosted tournaments",
+      "screen": "auctions"
+    },
+    {
       "id": "ask",
       "title": "Ask a question",
       "phrase": "Ask APP a question",
