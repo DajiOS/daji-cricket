@@ -1,5 +1,5 @@
 import type { Config } from './config.ts';
-import type { OtpSender, AlertSender } from './notifications.ts';
+import type { OtpSender, AlertSender, Provider } from './notifications.ts';
 
 type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
 
@@ -76,5 +76,29 @@ export function whatsappAlertSender(cfg: Config, fetchImpl: Fetch = fetch as unk
     });
     if (!res.ok) console.error(JSON.stringify({ level: 'error', where: 'whatsapp-alert', status: res.status, body: (await res.text()).slice(0, 300) }));
     return res.ok;
+  };
+}
+
+/**
+ * Customer messages by WhatsApp: the waitlist offers (waitlist.ts), sent only to people who agreed to WhatsApp messages. Meta allows a business to start
+ * a chat only with an approved template, so this needs a Utility template (WHATSAPP_WAITLIST_TEMPLATE) with one text variable: the message.
+ * Null until the token, phone number ID and template are all set: the messages then stay recorded as queued, nothing else changes.
+ */
+export function whatsappCustomerProvider(cfg: Config, fetchImpl: Fetch = fetch as unknown as Fetch): Provider | null {
+  const w = cfg.whatsapp;
+  if (!w.token || !w.phoneId || !w.waitlistTemplate) return null;
+  return async (m) => {
+    if (!m.to) return { ok: false, error: 'no phone number' };
+    const res = await fetchImpl(`${w.apiUrl}/${encodeURIComponent(w.phoneId)}/messages`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${w.token}`, 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify({
+        messaging_product: 'whatsapp', to: waNumber(m.to), type: 'template',
+        template: { name: w.waitlistTemplate, language: { code: w.lang }, components: [{ type: 'body', parameters: [{ type: 'text', text: m.body.replace(/[\r\n\t]+/g, ' ').slice(0, 900) || '-' }] }] },
+      }),
+    });
+    if (res.ok) return { ok: true };
+    return { ok: false, error: `WhatsApp refused the message (${res.status})` };
   };
 }

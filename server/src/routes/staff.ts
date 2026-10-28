@@ -22,6 +22,7 @@ import { completeManualRefund, requestRefund, listPayments, listRefunds, payment
 import { linksOf, setLinks } from '../groundLinks.ts';
 import { readDeposit, recordDeposit } from '../securityDeposit.ts';
 import { blockRange, createGround, listGrounds, toGround, unblockRange, updateGround } from '../grounds.ts';
+import { staffJoin, staffWaitlist, withdrawEntry } from '../waitlist.ts';
 import { addEnquiryNote, closeEnquiry, convertEnquiry, convertEnquiryToBlock, getEnquiry, listEnquiries, sendQuotation } from '../enquiries.ts';
 import { customerList, overview, parseRange } from '../reports.ts';
 import * as credits from '../credits.ts';
@@ -341,6 +342,11 @@ export function staffRoutes(r: Router): void {
     audit({ id: u.id, role: u.role }, 'ground.unblock', 'ground', g.id, { date, startTime, endTime, slots: n }, g.owner_id);
     return ok({ unblocked: n });
   }, A);
+
+  // ---- the weekly waitlist: who is waiting, the offers, and adding or taking someone off (with a reason)
+  r.get('/api/staff/waitlist', (c) => ok(staffWaitlist(U(c), ownerOrFail(c, 'see the waitlist'))), A);
+  r.post('/api/staff/waitlist', (c) => { const res = staffJoin(U(c), ownerOrFail(c, 'add to the waitlist'), c.json()); return res.created ? created(res) : ok(res); }, { ...A, idempotent: true });
+  r.post('/api/staff/waitlist/:id/withdraw', (c) => ok({ entry: withdrawEntry(U(c), c.params.id!, c.json()) }), A);
 
   // ---- enquiries
   r.get('/api/staff/enquiries', (c) => {

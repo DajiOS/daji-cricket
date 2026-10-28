@@ -31,7 +31,7 @@ export interface HoldQuote {
   creditUsedPaise: number; dueNowPaise: number;
 }
 export interface HoldResponse { booking: Booking; payment: PaymentInstructions; creditAppliedPaise: number; series?: { id: string; frequency: RepeatFrequency; created: number; skipped: { date: string; reason: string }[] } }
-export interface AppConfig { freeCancelHours: number; maxDaysAhead: number; contact: { name: string; phone: string }; demoMode: boolean; bookingsOpenFrom?: string; bookingsCloseFrom?: string; closedDates?: { ground: string[]; practice: string[]; academy: string[] }; autoDebitEnabled?: boolean; autoDebitHoursBefore?: number; guppiBookingEnabled?: boolean; pricesOnEnquiry?: boolean; securityDepositEnabled?: boolean; customerRescheduleEnabled?: boolean }
+export interface AppConfig { freeCancelHours: number; maxDaysAhead: number; contact: { name: string; phone: string }; demoMode: boolean; bookingsOpenFrom?: string; bookingsCloseFrom?: string; closedDates?: { ground: string[]; practice: string[]; academy: string[] }; autoDebitEnabled?: boolean; autoDebitHoursBefore?: number; guppiBookingEnabled?: boolean; pricesOnEnquiry?: boolean; securityDepositEnabled?: boolean; customerRescheduleEnabled?: boolean; waitlistEnabled?: boolean }
 export interface Dashboard {
   spentPaise: number; sessions: number; slots: number; cancelled: number; noShows: number; paidAheadPaise: number; upcoming: number; creditPaise: number; firstPlayed: string | null;
   byGround: { groundId: string; groundName: string; sessions: number; spentPaise: number }[]; byMonth: { month: string; sessions: number; spentPaise: number }[];

@@ -4,6 +4,7 @@ import { api } from './api';
 import type { AppConfig, Booking, Child, Dashboard, User } from './types';
 import { Badge, Btn, Chip, KV, Loading, Segmented, s } from './ui';
 import { AutoDebit } from './AutoDebit';
+import { Waitlist } from './Waitlist';
 import { PayScreen } from './PayScreen';
 import { DepositScreen, RescheduleScreen, differenceAsHold } from './ManageBooking';
 import type { HoldResponse } from './types';
@@ -22,16 +23,17 @@ const KINDS: [Kind, string][] = [['upcoming', 'Upcoming'], ['completed', 'Comple
 export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; user: User; start?: 'ground' | 'academy' }) {
   const [view, setView] = useState<'ground' | 'academy'>(start ?? 'ground');
   const [dash, setDash] = useState<Dashboard | null>(null); const [books, setBooks] = useState<Booking[]>([]); const [kids, setKids] = useState<Child[]>([]);
-  const [flags, setFlags] = useState<{ deposit: boolean; reschedule: boolean; askToMove: boolean }>({ deposit: false, reschedule: false, askToMove: false });
+  const [flags, setFlags] = useState<{ deposit: boolean; reschedule: boolean; askToMove: boolean; waitlist: boolean }>({ deposit: false, reschedule: false, askToMove: false, waitlist: false });
   const [manage, setManage] = useState<{ kind: 'reschedule' | 'deposit'; b: Booking } | null>(null); const [payDiff, setPayDiff] = useState<HoldResponse | null>(null);
   const [show, setShow] = useState<Kind>('upcoming');
+  const [payHold, setPayHold] = useState<HoldResponse | null>(null);
   const [kid, setKid] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [note, setNote] = useState('');
 
   const load = useCallback(async () => {
     setErr(''); setBusy(true);
     try {
       const [d, b, k, cfg] = await Promise.all([api<Dashboard>('/api/my/dashboard'), api<{ items: Booking[] }>('/api/bookings?limit=50&group=1'), api<{ items: Child[] }>('/api/me/children'), api<AppConfig>('/api/config')]);
-      setFlags({ deposit: !!cfg.securityDepositEnabled, reschedule: !!(cfg.customerRescheduleEnabled || cfg.pricesOnEnquiry), askToMove: !!cfg.pricesOnEnquiry });
+      setFlags({ deposit: !!cfg.securityDepositEnabled, reschedule: !!(cfg.customerRescheduleEnabled || cfg.pricesOnEnquiry), askToMove: !!cfg.pricesOnEnquiry, waitlist: !!cfg.waitlistEnabled });
       setDash(d); setBooks(b.items); if (!b.items.some((x) => kindOf(x) === 'upcoming')) setShow((cur) => (cur === 'upcoming' ? 'all' : cur)); setKids(k.items); setKid((cur) => cur || k.items[0]?.id || '');
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }, []);
@@ -60,6 +62,8 @@ export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; us
     try { const r = await api<{ payment: HoldResponse['payment']; booking: Booking }>(`/api/bookings/${b.id}/pay-difference`, { method: 'POST', body: {} }); setManage(null); setPayDiff(differenceAsHold(r)); }
     catch (e: any) { setErr(e.message); void load(); }
   };
+  // a session accepted from the waitlist is paid like any new booking
+  if (payHold) return <PayScreen hold={payHold} user={user} onBack={() => { setPayHold(null); void load(); }} onDone={(_b, paid) => { setPayHold(null); setNote(paid ? 'Payment received. Thank you.' : 'Reference sent. The ground will check it and confirm.'); void load(); }} />;
   if (payDiff) return <PayScreen balance hold={payDiff} user={user} onBack={() => { setPayDiff(null); void load(); }} onDone={(_b, paid) => { setPayDiff(null); setNote(paid ? 'Payment received. Thank you.' : 'Reference sent. The ground will check it and confirm.'); void load(); }} />;
   if (manage?.kind === 'reschedule') return <RescheduleScreen booking={manage.b} onBack={() => { setManage(null); void load(); }} onPayDifference={startDifference} />;
   if (manage?.kind === 'deposit') return <DepositScreen booking={manage.b} onBack={() => setManage(null)} />;
@@ -93,6 +97,7 @@ export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; us
             {b.seriesId && !b.block && (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() && <Btn kind="ghost" label="Cancel unpaid repeats" onPress={() => cancelRepeats(b)} style={{ marginBottom: 0 }} />}
           </View>
         ))}
+        {flags.waitlist && <Waitlist onPay={setPayHold} />}
         <Text style={[s.h2, { marginTop: 10, color: C.head }]}>Your cricket</Text>
         <View style={s.card}>
           <KV k="Spent at the ground" v={inr(dash.spentPaise)} bold /><KV k="Sessions played" v={String(dash.sessions)} /><KV k="Upcoming" v={String(dash.upcoming)} />

@@ -8,10 +8,11 @@ import Festivals from '../parts/admin/Festivals';
 import { Connections } from '../parts/admin/Platform';
 import GoLive from '../parts/admin/GoLive';
 import AiName from '../parts/admin/AiName';
+import WaitlistSettings from '../parts/admin/Waitlist';
 
 // The ground's own settings. People, Services and Backups are the software owner's, so they live on the Platform page only; their old
 // addresses here open them there (routes.ts, MERGED). Connections stays here for everyone (Settings, Connections: CLAUDE.md).
-const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']];
+const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['waitlist', 'Waitlist'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']];
 
 export default function Settings({ sub }: { sub: string }) {
   // Admin, Settings opens on a list of every setting, rather than on prices (which already has its own menu item)
@@ -22,6 +23,7 @@ export default function Settings({ sub }: { sub: string }) {
       <PageHead eyebrow="Settings" title={TABS.find(([k]) => k === tab)?.[1] ?? 'Settings'} />
       {tab === 'prices' && <Prices />}
       {tab === 'booking' && <Booking />}
+      {tab === 'waitlist' && <WaitlistSettings />}
       {tab === 'payments' && <Payments />}
       {tab === 'website' && <Website />}
       {tab === 'festivals' && <Festivals />}
@@ -35,6 +37,7 @@ export default function Settings({ sub }: { sub: string }) {
 const ABOUT: Record<string, string> = {
   prices: 'What each ball and practice session costs, by day and time, and the days the ground is closed.',
   booking: 'When customers can book online, and days switched off for booking.',
+  waitlist: 'The weekly waitlist (Sunday leather ball): when a free session is offered, and priority for regular players.',
   payments: 'Razorpay online payments, UPI AutoPay and who customers contact about money.',
   website: 'The website design pack and how it looks.',
   festivals: 'Festival looks and offers that switch on by themselves on the day.',

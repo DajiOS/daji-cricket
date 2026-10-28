@@ -32,6 +32,7 @@ import { resolveOwnerCancel } from '../cancellation.ts';
 import { beginSetup, checkCode, confirmSetup, disable as disableMfa, mfaEnabled } from '../mfa.ts';
 import { scopeOwnerId } from '../auth.ts';
 import { checkAiName, setOwnAiName } from '../aiNames.ts';
+import { acceptOffer, joinWaitlist, myWaitlist, parseJoin, withdrawEntry } from '../waitlist.ts';
 
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
 
@@ -168,6 +169,11 @@ export function customerRoutes(r: Router): void {
     const viaOption = !!body && typeof body === 'object' && 'optionId' in (body as object);
     return created(await (viaOption ? holdFromOption(c.cfg, U(c), body) : holdSlots(c.cfg, U(c), body)));
   }, { idempotent: true, auth: ['customer'] });
+  // ---- the weekly waitlist (Sunday leather ball): join, leave, and accept a free session offered to it
+  r.get('/api/waitlist', (c) => ok(myWaitlist(U(c))), { auth: ['customer'] });
+  r.post('/api/waitlist', (c) => { const u = U(c); const res = joinWaitlist({ id: u.id, role: u.role }, u, parseJoin(c.json())); return res.created ? created(res) : ok(res); }, { idempotent: true, auth: ['customer'] });
+  r.post('/api/waitlist/:id/withdraw', (c) => ok({ entry: withdrawEntry(U(c), c.params.id!, c.json()) }), { auth: ['customer'] });
+  r.post('/api/waitlist/offers/:id/accept', async (c) => ok(await acceptOffer(c.cfg, U(c), c.params.id!)), { idempotent: true, auth: ['customer'] });
   r.post('/api/availability/options', (c) => {
     const q = parseOptionRequest(c.json());
     return ok(pricesFor(c.user, searchOptions(c.cfg, U(c), q, q.max)));

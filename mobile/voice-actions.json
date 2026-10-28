@@ -74,6 +74,13 @@
       "question": "How much credit do I have?"
     },
     {
+      "id": "waitlist",
+      "title": "My waitlist",
+      "phrase": "Ask APP about my waitlist",
+      "personal": "Ask NAME about my waitlist",
+      "question": "Am I on the waitlist?"
+    },
+    {
       "id": "live",
       "title": "Live score",
       "phrase": "Show the live score in APP",

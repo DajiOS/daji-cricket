@@ -69,6 +69,14 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   voiceShortcutsEnabled: true,
   /** Customers see free slots without prices and send a pricing enquiry for a slot instead of paying online (priceOnEnquiry.ts). The saved prices are kept. */
   pricesOnEnquiry: false,
+  /** Off until the owner switches it on: the weekly waitlist for one day's sessions (waitlist.ts). The details below are the owner's to change. */
+  waitlistEnabled: false,
+  waitlistDay: 0,
+  waitlistBall: 'leather',
+  waitlistConfirmHours: 72,
+  waitlistTierPriority: false,
+  waitlistWaveMinutes: 120,
+  waitlistTiers: [{ name: 'Gold', minGames: 20 }, { name: 'Silver', minGames: 10 }],
 };
 
 /** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
@@ -99,6 +107,9 @@ const INT_RANGES: Record<string, [number, number]> = {
   creditExpiryDays: [1, 3650],
   noShowGraceMinutes: [0, 600],
   autoDebitHoursBefore: [1, 168],
+  waitlistDay: [0, 6],
+  waitlistConfirmHours: [1, 336],
+  waitlistWaveMinutes: [5, 1440],
 };
 
 /** Validates and stores a partial update. Returns the keys that actually changed (with old/new values). */
@@ -108,13 +119,21 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
   const next: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULT_SETTINGS)) { fields.push({ field: k, message: 'Unknown setting' }); continue; }
-    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled' || k === 'voiceShortcutsEnabled' || k === 'pricesOnEnquiry') {
+    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled' || k === 'voiceShortcutsEnabled' || k === 'pricesOnEnquiry' || k === 'waitlistEnabled' || k === 'waitlistTierPriority') {
       if (typeof v !== 'boolean') fields.push({ field: k, message: 'Must be true or false' }); else next[k] = v;
     } else if (k === 'rescheduleCutoffHours' || k === 'rescheduleMaxMoves') {
       const [lo, hi] = k === 'rescheduleCutoffHours' ? [0, 720] : [0, 10];
       if (v !== null && (!Number.isInteger(v) || (v as number) < lo || (v as number) > hi)) fields.push({ field: k, message: `A whole number from ${lo} to ${hi}, or null to leave it not configured` }); else next[k] = v;
     } else if (k === 'rescheduleCheaperTreatment') {
       if (v !== 'credit' && v !== 'refund_request') fields.push({ field: k, message: "Must be 'credit' or 'refund_request'" }); else next[k] = v;
+    } else if (k === 'waitlistBall') {
+      if (v !== 'leather' && v !== 'combo' && v !== 'tennis') fields.push({ field: k, message: "Must be 'leather', 'combo' or 'tennis'" }); else next[k] = v;
+    } else if (k === 'waitlistTiers') {
+      // up to five tiers, each a name and the games it takes; kept highest first, no two alike
+      const bad = !Array.isArray(v) || v.length > 5 || v.some((t) => !t || typeof t !== 'object' || typeof t.name !== 'string' || t.name.trim().length < 1 || t.name.trim().length > 30 || !Number.isInteger(t.minGames) || t.minGames < 1 || t.minGames > 500);
+      const list = bad ? [] : (v as { name: string; minGames: number }[]).map((t) => ({ name: t.name.trim(), minGames: t.minGames })).sort((a, b) => b.minGames - a.minGames);
+      if (bad || new Set(list.map((t) => t.minGames)).size !== list.length || new Set(list.map((t) => t.name.toLowerCase())).size !== list.length) fields.push({ field: k, message: 'Up to 5 tiers, each with a name (1 to 30 characters) and a different number of games from 1 to 500' });
+      else next[k] = list;
     } else if (k === 'siteDesign') {
       if (typeof v !== 'string' || !(SITE_DESIGN_CHOICES as readonly string[]).includes(v)) fields.push({ field: k, message: `One of ${SITE_DESIGN_CHOICES.join(', ')}` }); else next[k] = v;
     } else if (k === 'designPace') {

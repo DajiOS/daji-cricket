@@ -79,6 +79,12 @@ registerIntegration({
   },
 });
 registerIntegration({
+  id: 'whatsapp-customers', name: 'WhatsApp messages to customers', what: 'Waitlist offers by WhatsApp, only to customers who agreed to WhatsApp messages. App and email messages go out without it.',
+  setup: 'Needs the WhatsApp connection above, plus a Utility template approved in Meta Business Manager with one text variable (the message), for example daji_waitlist_offer. Put its name in WHATSAPP_WAITLIST_TEMPLATE. Until then WhatsApp messages are recorded as waiting and nothing else changes.',
+  env: ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_WAITLIST_TEMPLATE'],
+  have: (c) => ({ WHATSAPP_TOKEN: !!c.whatsapp.token, WHATSAPP_PHONE_ID: !!c.whatsapp.phoneId, WHATSAPP_WAITLIST_TEMPLATE: !!c.whatsapp.waitlistTemplate }),
+});
+registerIntegration({
   id: 'msg91', name: 'MSG91', what: 'Text message sign-in codes, the backup for WhatsApp.',
   setup: 'Create an MSG91 account, register the DLT template for the code message, then put the Auth Key and Template ID in the server settings.',
   env: ['MSG91_AUTH_KEY', 'MSG91_TEMPLATE_ID'],

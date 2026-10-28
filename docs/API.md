@@ -285,3 +285,14 @@ Law and policy updates (owner): `GET /api/compliance` also returns `alerts` (new
 
 ## Sign-out and revenue
 `POST /api/auth/logout` revokes the token on the server; `POST /api/auth/logout-all` ends every session. The `view_revenue` permission ("Can see revenue") gates reports, the books, bills and the dashboard money tiles for team members; the owner always sees them.
+
+## Weekly waitlist (Sunday leather ball unless changed)
+Switched on in Settings › Waitlist (`waitlistEnabled`, `waitlistDay` 0 to 6, `waitlistBall`, `waitlistConfirmHours` 1 to 336, default 72, `waitlistTierPriority`, `waitlistWaveMinutes` 5 to 1440, `waitlistTiers [{name, minGames}]` up to 5). `GET /api/config` carries `waitlistEnabled`. When off, every route below returns 503 `FEATURE_OFF`.
+
+- `GET /api/waitlist` (customer): settings, own entries, offers open to them, sessions they can join, games played in the last 12 months and tier.
+- `POST /api/waitlist` `{groundId, ruleId?, everyWeek?}`: join. 201 when added, 200 with the same entry when already on the list. At most 3 live requests (409 `TOO_MANY_WAITLIST`).
+- `POST /api/waitlist/:id/withdraw`: leave.
+- `POST /api/waitlist/offers/:id/accept`: one statement claims the offer, so of many at once exactly one wins; the others get 409 `OFFER_GONE`. The winner gets the normal 15-minute hold (`via: "booking"`, `hold`) or, while prices are on enquiry, a pricing enquiry for that slot (`via: "enquiry"`). Repeating it returns the same result with `already: true`. 409 `OFFER_NOT_FOR_YOU`, 409 `NOT_YOUR_WAVE_YET`; staff get 403.
+- `GET /api/staff/waitlist`, `POST /api/staff/waitlist` `{groundId, ruleId?, everyWeek?, customer:{name, phone}}`, `POST /api/staff/waitlist/:id/withdraw` `{reason}` (`manage_bookings`).
+
+The scheduler (`sweepWaitlist`, every fast sweep) offers a session still free `waitlistConfirmHours` before it starts, sends tier groups one at a time when tier priority is on, reopens an offer whose hold expired or was cancelled, closes it when the session is booked another way or starts, and moves every waiting request on to the next week (up to 52 weeks). Messages go by app, email and, with the customer's WhatsApp consent, WhatsApp (Settings › Connections, WhatsApp messages to customers: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_WAITLIST_TEMPLATE`). Ask AI answers about the waitlist (`get_waitlist` in Claude mode, counts only).

@@ -13,6 +13,7 @@ import { niceDay, parseRange } from './dates.ts';
 import { parseBooking } from '../guppiLang.ts';
 import { say } from '../guppiText.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
+import { myWaitlist } from '../waitlist.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -36,11 +37,13 @@ export const CUSTOMER_EXAMPLES = [
   'What is the cancellation policy?',
   'How much does an evening slot cost?',
   'How do I get there?',
+  'Am I on the Sunday waitlist?',
 ];
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const RULES: [string, RegExp][] = [
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?)\b/],
+  ['waitlist', /wait.?list|waiting list|on the list|my (place|turn|request)|વેઇટિંગ|વેટિંગ|वेटिंग|प्रतीक्षा/],
   ['cancel_policy', /cancel|refund policy|refund rules?|can i get (a|my) refund/],
   ['credit', /\bcredits?\b|wallet|account balance/],
   ['owing', /\bowe\b|\bdue\b|balance (due|pending|left|remaining)|how much (do i|have i to|must i) pay|pending payment|to pay\b/],
@@ -116,6 +119,21 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
       if (n!.status === 'held') bits.push('It is held for you until you pay the advance.');
       else if (balanceOf(n!) > 0) bits.push(`${formatPaise(balanceOf(n!))} is still to pay.`);
       return out(bits.join(' '), { details: rest.slice(0, 5).map((b) => ({ label: 'Then', text: fmtBooking(b) })), open: 'bookings' });
+    }
+    case 'waitlist': {
+      // the customer's own requests only, and how the waitlist works; accepting is done on the Waitlist screen, never here
+      const w = myWaitlist(user);
+      if (!w.settings.enabled) return out(`The ${w.settings.name} waitlist is not open at the moment. Book a free slot, or call ${s.contactName} on ${s.contactPhone}.`, { open: 'book' });
+      const how = `A session still free ${w.settings.confirmHours} hours before it starts is offered to everyone waiting for that day, and the first to accept gets it; otherwise you move to the next week, for up to a year.`;
+      const live = w.entries.filter((e) => e.status === 'waiting' || e.status === 'won');
+      const offer = w.offers.find((o) => !o.yours);
+      const bits: string[] = [];
+      if (offer) bits.push(`${offer.session} at ${offer.groundName} on ${niceDay(offer.date)} (${offer.time}) is free for you now. Open My bookings › Waitlist to accept it before someone else does.`);
+      if (!live.length) bits.push(`You are not on the ${w.settings.name} waitlist. You can join it from My bookings › Waitlist.`);
+      else bits.push(live.length === 1 ? `You are on the waitlist for ${live[0]!.session} at ${live[0]!.groundName}, for ${niceDay(live[0]!.nextDate)}.` : `You are on the waitlist for ${live.length} sessions.`);
+      if (w.tier) bits.push(`You have played ${w.games} ${w.games === 1 ? 'game' : 'games'} here in the last 12 months, so you are ${w.tier} and hear about free sessions early.`);
+      bits.push(how);
+      return out(bits.join(' '), { details: live.map((e) => ({ label: e.groundName, text: `${e.session}, ${e.status === 'won' ? 'you accepted a slot for' : 'waiting for'} ${niceDay(e.nextDate)}${e.everyWeek ? ', every week' : ''}${e.rollovers ? `, moved on ${e.rollovers} ${e.rollovers === 1 ? 'week' : 'weeks'} so far` : ''}` })), open: 'bookings' });
     }
     case 'history':
     case 'bookings': {

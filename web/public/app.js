@@ -2032,6 +2032,63 @@ bookingsExtras.push((ex) => {
   draw();
 });
 
+/**
+ * The weekly waitlist (Sunday leather ball unless the ground changed it): join for a session, see where each request stands, leave, and
+ * accept a session the ground offers. The server decides what is free and who wins; accepting goes to the normal payment (or, while prices
+ * are on enquiry, sends the ground a pricing enquiry for that slot).
+ */
+bookingsExtras.push((ex) => {
+  if (!state.config.waitlistEnabled || !state.user || state.user.role !== 'customer') return;
+  const card = h('div', { class: 'card waitlist-card', style: 'margin:0 0 14px' }); ex.append(card);
+  const draw = async () => {
+    clear(card);
+    let w; try { w = await api('/api/waitlist'); } catch (e) { card.append(h('h4', { style: 'margin:0 0 4px' }, 'Waitlist'), h('p', { class: 'hint err' }, `We could not load your waitlist just now (${e.message}). Come back to try again.`)); return; }
+    const err = h('div', { class: 'fe', role: 'alert' });
+    const name = w.settings.name;
+    card.append(h('h4', { style: 'margin:0 0 4px' }, `${name} waitlist`),
+      h('p', { class: 'hint' }, `If the session you want is booked, you move to the next week, for up to a year. A session still free ${w.settings.confirmHours} hours before it starts is offered to everyone waiting, and the first to accept gets it.${w.tier ? ` You have played ${w.games} games here in the last 12 months, so you are ${w.tier} and hear early.` : ''}`));
+    for (const o of w.offers) {
+      const btn = h('button', { class: 'btn primary sm', type: 'button' }, o.yours ? (o.bookingId ? 'Pay for it' : 'Waiting for the ground') : 'Accept');
+      if (o.yours && !o.bookingId) btn.disabled = true;
+      btn.addEventListener('click', async () => {
+        err.textContent = ''; btn.disabled = true;
+        try {
+          const r = await api(`/api/waitlist/offers/${encodeURIComponent(o.id)}/accept`, { method: 'POST', body: {} });
+          if (r.via === 'enquiry') { toast('Sent. The ground will confirm the price and the booking with you.'); draw(); return; }
+          openPay(r.hold); loadBookings();
+        } catch (e) { err.textContent = e.message; btn.disabled = false; draw(); }
+      });
+      card.append(h('div', { class: 'whybox', style: 'margin:8px 0' }, h('b', {}, o.yours ? 'Yours' : 'Free for you now'),
+        h('p', {}, `${o.session} at ${o.groundName}, ${niceDate(o.date)}, ${o.time} – ${o.endTime}.`), btn));
+    }
+    const live = w.entries.filter((e) => e.status === 'waiting' || e.status === 'won');
+    for (const e of live) {
+      const leave = h('button', { class: 'btn outline sm', type: 'button' }, 'Leave');
+      leave.addEventListener('click', async () => {
+        if (!confirm('Leave the waitlist for this session?')) return;
+        try { await api(`/api/waitlist/${encodeURIComponent(e.id)}/withdraw`, { method: 'POST', body: {} }); toast('You have left the waitlist.'); draw(); } catch (x) { err.textContent = x.message; }
+      });
+      card.append(h('div', { class: 'meta', style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0' },
+        h('span', {}, `${e.session}, ${e.groundName}: ${e.status === 'won' ? 'you accepted a slot for' : 'waiting for'} ${niceDate(e.nextDate)}${e.everyWeek ? ', every week' : ''}${e.rollovers ? ` (moved on ${e.rollovers} ${e.rollovers === 1 ? 'week' : 'weeks'})` : ''}`), leave));
+    }
+    if (!w.sessions.length) card.append(h('p', { class: 'hint' }, `No ground has a ${name} session on its price list right now.`));
+    else if (live.length < 3) {
+      const sel = h('select', { 'aria-label': 'Session' }, ...w.sessions.map((x, i) => h('option', { value: String(i) }, `${x.groundName}: ${x.label}, ${x.from} – ${x.to}${x.pricePaise !== null ? ` (${inr(x.pricePaise)})` : ''}`)));
+      const every = h('input', { type: 'checkbox', id: 'wl-every' });
+      const go = h('button', { class: 'btn primary sm', type: 'button' }, 'Join the waitlist');
+      go.addEventListener('click', async () => {
+        err.textContent = ''; go.disabled = true;
+        const x = w.sessions[Number(sel.value)];
+        try { const r = await api('/api/waitlist', { method: 'POST', body: { groundId: x.groundId, ruleId: x.ruleId, everyWeek: every.checked } }); toast(`You are on the waitlist for ${niceDate(r.entry.nextDate)}.`); draw(); }
+        catch (e) { err.textContent = e.message; go.disabled = false; }
+      });
+      card.append(h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px' }, sel, h('label', { for: 'wl-every', style: 'display:flex;gap:6px;align-items:center' }, every, 'Every week'), go));
+    }
+    card.append(err);
+  };
+  draw();
+});
+
 /** The ground cancelled this booking: show why, and let the customer choose a full refund, credit, or another slot. */
 function cancelledByGround(b) {
   const box = h('div', { class: 'whybox' }, h('b', {}, 'Why the ground cancelled'), h('p', {}, b.cancelReason || ''));

@@ -83,6 +83,7 @@ export function publicRoutes(r: Router): void {
       guppiBookingEnabled: s.guppiAssistEnabled && !s.pricesOnEnquiry,
       securityDepositEnabled: s.securityDepositEnabled,
       customerRescheduleEnabled: s.customerRescheduleEnabled && s.rescheduleCutoffHours !== null && s.rescheduleMaxMoves !== null,
+      waitlistEnabled: s.waitlistEnabled,
     };
     return ok(cfg);
   });
