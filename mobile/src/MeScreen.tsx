@@ -22,7 +22,7 @@ const KINDS: [Kind, string][] = [['upcoming', 'Upcoming'], ['completed', 'Comple
 export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; user: User; start?: 'ground' | 'academy' }) {
   const [view, setView] = useState<'ground' | 'academy'>(start ?? 'ground');
   const [dash, setDash] = useState<Dashboard | null>(null); const [books, setBooks] = useState<Booking[]>([]); const [kids, setKids] = useState<Child[]>([]);
-  const [flags, setFlags] = useState<{ deposit: boolean; reschedule: boolean }>({ deposit: false, reschedule: false });
+  const [flags, setFlags] = useState<{ deposit: boolean; reschedule: boolean; askToMove: boolean }>({ deposit: false, reschedule: false, askToMove: false });
   const [manage, setManage] = useState<{ kind: 'reschedule' | 'deposit'; b: Booking } | null>(null); const [payDiff, setPayDiff] = useState<HoldResponse | null>(null);
   const [show, setShow] = useState<Kind>('upcoming');
   const [kid, setKid] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [note, setNote] = useState('');
@@ -31,7 +31,7 @@ export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; us
     setErr(''); setBusy(true);
     try {
       const [d, b, k, cfg] = await Promise.all([api<Dashboard>('/api/my/dashboard'), api<{ items: Booking[] }>('/api/bookings?limit=50&group=1'), api<{ items: Child[] }>('/api/me/children'), api<AppConfig>('/api/config')]);
-      setFlags({ deposit: !!cfg.securityDepositEnabled, reschedule: !!cfg.customerRescheduleEnabled });
+      setFlags({ deposit: !!cfg.securityDepositEnabled, reschedule: !!(cfg.customerRescheduleEnabled || cfg.pricesOnEnquiry), askToMove: !!cfg.pricesOnEnquiry });
       setDash(d); setBooks(b.items); if (!b.items.some((x) => kindOf(x) === 'upcoming')) setShow((cur) => (cur === 'upcoming' ? 'all' : cur)); setKids(k.items); setKid((cur) => cur || k.items[0]?.id || '');
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }, []);
@@ -87,7 +87,7 @@ export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; us
             {b.block ? (!b.block.cancelled && b.block.balancePaise > 0 && <Text style={s.muted}>Balance at the ground: {inr(b.block.balancePaise)}</Text>) : b.balancePaise > 0 && b.status === 'confirmed' && <Text style={s.muted}>Balance at the ground: {inr(b.balancePaise)}</Text>}
             {(b.moveDifferenceDuePaise ?? 0) > 0 && <Text style={s.muted}>{inr(b.moveDifferenceDuePaise!)} of it is for your move and can be paid online.</Text>}
             {(b.moveDifferenceDuePaise ?? 0) > 0 && <Btn label={`Pay ${inr(b.moveDifferenceDuePaise!)} online`} onPress={() => startDifference(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
-            {flags.reschedule && b.status === 'confirmed' && b.startAt > Date.now() && !b.seriesId && <Btn kind="outline" label="Change time" onPress={() => setManage({ kind: 'reschedule', b })} style={{ marginTop: 10, marginBottom: 0 }} />}
+            {flags.reschedule && b.status === 'confirmed' && b.startAt > Date.now() && !b.seriesId && <Btn kind="outline" label={flags.askToMove ? 'Ask to move' : 'Change time'} onPress={() => setManage({ kind: 'reschedule', b })} style={{ marginTop: 10, marginBottom: 0 }} />}
             {flags.deposit && ['confirmed', 'completed', 'no_show'].includes(b.status) && <Btn kind="ghost" label="Security deposit" onPress={() => setManage({ kind: 'deposit', b })} style={{ marginBottom: 0 }} />}
             {!b.block && ((b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now()) && <Btn kind="outline" label="Cancel" onPress={() => cancel(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
             {b.seriesId && !b.block && (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() && <Btn kind="ghost" label="Cancel unpaid repeats" onPress={() => cancelRepeats(b)} style={{ marginBottom: 0 }} />}

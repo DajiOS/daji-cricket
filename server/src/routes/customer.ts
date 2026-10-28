@@ -1,4 +1,4 @@
-import { pricesFor, refuseOnlineBooking } from '../priceOnEnquiry.ts';
+import { pricesFor, pricesHidden, refuseOnlineBooking, refuseOnlineMove } from '../priceOnEnquiry.ts';
 import { myDashboard } from '../mydash.ts';
 import { Router, ok, created } from '../http.ts';
 import { U, page } from './helpers.ts';
@@ -199,9 +199,14 @@ export function customerRoutes(r: Router): void {
     return ok(cancelPreviewFor(U(c), c.params.id!, prefer === 'credit' ? 'credit' : undefined));
   }, { auth: ['customer'] });
 
-  r.get('/api/bookings/:id/reschedule', (c) => ok({ status: rescheduleStatus(U(c), c.params.id!) }), { auth: ['customer'] });
-  r.post('/api/bookings/:id/reschedule-preview', (c) => ok({ preview: previewReschedule(c.cfg, U(c), c.params.id!, c.json()) }), { auth: ['customer'] });
-  r.post('/api/bookings/:id/reschedule', (c) => ok(rescheduleBooking(c.cfg, U(c), c.params.id!, c.json())), { idempotent: true, auth: ['customer'] });
+  // while prices are on enquiry a customer asks the ground to move a booking (an enquiry with moveBookingId) instead of moving it and seeing new prices
+  r.get('/api/bookings/:id/reschedule', (c) => {
+    const st = rescheduleStatus(U(c), c.params.id!);
+    if (!pricesHidden(c.user)) return ok({ status: st });
+    return ok({ status: { ...st, allowed: false, code: 'PRICE_ON_ENQUIRY', message: 'Prices are given on enquiry, so the ground moves bookings for you. Send them a request to move this booking.', optionsRequest: null, priceOnEnquiry: true, askToMove: true } });
+  }, { auth: ['customer'] });
+  r.post('/api/bookings/:id/reschedule-preview', (c) => { refuseOnlineMove(c.user); return ok({ preview: previewReschedule(c.cfg, U(c), c.params.id!, c.json()) }); }, { auth: ['customer'] });
+  r.post('/api/bookings/:id/reschedule', (c) => { refuseOnlineMove(c.user); return ok(rescheduleBooking(c.cfg, U(c), c.params.id!, c.json())); }, { idempotent: true, auth: ['customer'] });
   r.post('/api/bookings/:id/pay-difference', async (c) => ok(await startDifferencePayment(c.cfg, U(c), c.params.id!)), { idempotent: true, auth: ['customer'] });
 
   r.get('/api/bookings/:id/retention-dispute', (c) => ok({ dispute: getRetentionCase(U(c), c.params.id!) }), { auth: ['customer'] });

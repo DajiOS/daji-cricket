@@ -417,6 +417,9 @@ export interface Enquiry {
   preferredTime?: string | null;
   preferredSlots?: number | null;
   preferredLabel?: string | null;
+  /** A request to move a booking the customer already has (prices on enquiry): the booking, and when it is now. */
+  moveBookingId?: string | null;
+  moveBooking?: { id: string; ref: string; date: string; startAt: number; endAt: number; status: string } | null;
   players: number | null;
   message: string;
   status: EnquiryStatus;

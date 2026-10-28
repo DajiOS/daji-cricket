@@ -45,6 +45,16 @@ export function RescheduleScreen({ booking: b, onBack, onPayDifference }: { book
   const [offers, setOffers] = useState<BookingOption[] | null>(null); const [offerNote, setOfferNote] = useState('');
   const [pick, setPick] = useState<BookingOption | null>(null); const [pv, setPv] = useState<ReschedulePreview | null>(null);
   const [busy, setBusy] = useState(false); const [done, setDone] = useState<RescheduleOutcome | null>(null);
+  // prices on enquiry: the customer asks the ground to move the booking; one key per open screen so a resend after a lost answer files it once
+  const [note, setNote] = useState(''); const [asked, setAsked] = useState(false); const [askKey] = useState(() => `mv-${b.id.slice(-20)}-${Date.now().toString(36)}`);
+  const askToMove = async () => {
+    setErr(''); setBusy(true);
+    try {
+      await api('/api/enquiries', { method: 'POST', headers: { 'Idempotency-Key': askKey }, body: { groundId: b.groundId, moveBookingId: b.id, preferredDate: date, preferredTime: time, preferredSlots: b.slotCount,
+        message: `Please move booking ${b.ref} to ${date} at ${time}.${note.trim() ? ' ' + note.trim() : ''}` } });
+      setAsked(true);
+    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+  };
   useEffect(() => { api<{ status: RescheduleStatus }>(`/api/bookings/${b.id}/reschedule`).then((r) => setSt(r.status)).catch((e) => setErr(e.message)); }, [b.id]);
 
   const show = async () => {
@@ -72,17 +82,28 @@ export function RescheduleScreen({ booking: b, onBack, onPayDifference }: { book
   if (!st) return <View style={s.screen}>{err ? <View style={[s.pad, { paddingTop: 60 }]}><Text style={s.err}>{err}</Text><Btn kind="ghost" label="Back" onPress={onBack} /></View> : <Loading />}</View>;
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} keyboardShouldPersistTaps="handled">
-      <Text style={s.eyebrow}>Booking {b.ref}</Text><Text style={s.h1}>Change the time</Text>
+      <Text style={s.eyebrow}>Booking {b.ref}</Text><Text style={s.h1}>{st.askToMove ? 'Ask to move' : 'Change the time'}</Text>
       <View style={s.card}>
         <KV k="Now" v={`${b.date.slice(8)} ${MON[Number(b.date.slice(5, 7)) - 1]}, ${hm(b.startAt)} – ${hm(b.endAt)}`} />
-        {st.maxMoves != null && <KV k="Moves left" v={`${st.movesLeft} of ${st.maxMoves}`} />}{st.cutoffHours != null && <KV k="Allowed until" v={`${st.cutoffHours} hours before the start`} />}
+        {!st.askToMove && st.maxMoves != null && <KV k="Moves left" v={`${st.movesLeft} of ${st.maxMoves}`} />}{!st.askToMove && st.cutoffHours != null && <KV k="Allowed until" v={`${st.cutoffHours} hours before the start`} />}
       </View>
       {done ? (<>
         <Text style={s.text} testID="reschedule-done">Moved to {dayTime(done.toStartAt)}.</Text>
         {done.settlement && <Text style={s.muted}>{done.settlement.treatment === 'credit' ? `${inr(done.settlement.creditPaise ?? 0)} was added to your account credit.` : `A refund request for ${inr(done.settlement.refundRequestedPaise ?? 0)} was sent to the ground.`}</Text>}
         {(done.booking.moveDifferenceDuePaise ?? 0) > 0 && <Btn label={`Pay the ${inr(done.booking.moveDifferenceDuePaise!)} difference online`} onPress={() => onPayDifference(done.booking)} style={{ marginTop: 12 }} />}
         <Btn kind="ghost" label="Close" onPress={onBack} />
-      </>) : !st.allowed ? (<>
+      </>) : st.askToMove ? (asked ? (<>
+        <Text style={s.text} testID="move-asked">Sent. The ground will move your booking and let you know.</Text>
+        <Btn kind="ghost" label="Close" onPress={onBack} />
+      </>) : (<>
+        <Text style={[s.muted, { marginBottom: 12 }]}>Prices are given on enquiry, so the ground moves bookings for you. Tell them when you would like to play instead.</Text>
+        <DateField label="New date" value={date} onChange={setDate} />
+        <Field label="New start time (HH:MM)" value={time} onChangeText={setTime} keyboardType="numbers-and-punctuation" maxLength={5} />
+        <Field label="Anything else (optional)" value={note} onChangeText={setNote} multiline maxLength={500} />
+        <Btn label="Ask the ground to move it" onPress={askToMove} busy={busy} disabled={!date || !/^\d{2}:\d{2}$/.test(time) || date < todayIST()} />
+        {!!err && <Text style={s.err}>{err}</Text>}
+        <Btn kind="ghost" label="Back" onPress={onBack} />
+      </>)) : !st.allowed ? (<>
         <Text style={s.err} testID="reschedule-blocked">{st.message ?? 'This booking cannot be changed online.'}</Text>
         <Btn kind="ghost" label="Back" onPress={onBack} />
       </>) : (<>

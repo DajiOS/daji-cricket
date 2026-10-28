@@ -24,7 +24,15 @@ export function withoutPrices<T>(x: T): T {
   return out as T;
 }
 
+// a request to move a booking the customer already has, sent as an enquiry while prices are on enquiry (Sunny Patel, 28 Oct 2026): the desk moves it
+registerSchema('enquiry-move-1', `ALTER TABLE enquiries ADD COLUMN move_booking_id TEXT REFERENCES bookings(id);`);
+
 export const pricesFor = <T>(user: { role: string } | null | undefined, x: T): T => (pricesHidden(user) ? withoutPrices(x) : x);
+
+/** A customer does not move a booking themselves while prices are on enquiry: the move is asked for as an enquiry and staff move it from the desk. */
+export function refuseOnlineMove(user: { role: string } | null | undefined): void {
+  if (pricesHidden(user)) throw new HttpError(409, 'PRICE_ON_ENQUIRY', 'Prices are given on enquiry, so the ground moves bookings for you. Send them a request to move this booking.');
+}
 
 /** An online booking by a customer is refused while prices are on enquiry: the slot goes to the ground as a pricing enquiry instead. */
 export function refuseOnlineBooking(user: { role: string } | null | undefined): void {

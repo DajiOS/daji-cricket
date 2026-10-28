@@ -1,7 +1,8 @@
 // Prices on enquiry: customers see free slots without prices and send a pricing enquiry for a slot; the ground quotes it and confirms it as a booking.
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { startHarness, dayFromNow, grounds, hold, setting, type Harness } from './helpers.ts';
+import { startHarness, dayFromNow, grounds, hold, setting, bookAndPay, type Harness } from './helpers.ts';
+import { register } from './register.ts';
 import { getSettings } from '../src/settings.ts';
 import { one } from '../src/db.ts';
 
@@ -115,4 +116,33 @@ test('a customer cannot quote or confirm an enquiry, and the booking options giv
   const o = await h.post('/api/availability/options', { groundId: g.id, date: dayFromNow(6), startTime: '19:00', slots: 1 }, cust);
   assert.equal(o.status, 200, JSON.stringify(o.body));
   assert.deepEqual(prices(o.body), [], 'no price on any option');
+});
+
+test('a customer does not move a booking or see new prices; they ask the ground to move it, and staff move it from the desk', async () => {
+  setting({ pricesOnEnquiry: false });
+  const b = await bookAndPay(h, cust, g.id, dayFromNow(6), '18:00', 1);
+  setting({ pricesOnEnquiry: true });
+  const st = (await h.get(`/api/bookings/${b.id}/reschedule`, cust)).body.status;
+  assert.equal(st.allowed, false); assert.equal(st.code, 'PRICE_ON_ENQUIRY'); assert.equal(st.askToMove, true); assert.equal(st.optionsRequest, null, 'no options to price');
+  assert.equal((await h.post(`/api/bookings/${b.id}/reschedule-preview`, { date: dayFromNow(7), startTime: '18:00' }, cust)).status, 409);
+  assert.equal((await h.post(`/api/bookings/${b.id}/reschedule`, { date: dayFromNow(7), startTime: '18:00' }, cust)).status, 409);
+  const gm = await h.call('POST', '/api/guppi/reschedule', { token: cust, body: { bookingId: b.id, optionId: 'x.y', actionId: 'mv-enq-0001', context: { bookingId: b.id } }, headers: { 'idempotency-key': 'mv-enq-0001' } });
+  assert.equal(gm.status, 409); assert.equal(gm.body.error.code, 'PRICE_ON_ENQUIRY');
+
+  const ask = { groundId: g.id, moveBookingId: b.id, preferredDate: dayFromNow(7), preferredTime: '19:00', preferredSlots: 1, message: 'Please move my booking to 19:00 the next day.' };
+  const e = await h.post('/api/enquiries', ask, cust);
+  assert.equal(e.status, 201, JSON.stringify(e.body));
+  assert.equal(e.body.moveBookingId, b.id); assert.equal(e.body.moveBooking.ref, b.ref);
+  assert.equal((await h.post('/api/enquiries', { ...ask, firstName: 'No', lastName: 'One', phone: '9876500033' })).status, 401, 'a visitor cannot ask to move a booking');
+  const other = await register(h, 'Other', '9810000077');
+  assert.equal((await h.post('/api/enquiries', ask, other)).status, 404, 'only your own booking');
+  const g2 = (await grounds(h)).find((x) => x.id !== g.id)!;
+  assert.equal((await h.post('/api/enquiries', { ...ask, groundId: g2.id }, cust)).status, 400, 'a move stays on the same ground');
+
+  // the desk sees which booking to move; the request is never turned into a second booking
+  const seen = (await h.get(`/api/staff/enquiries/${e.body.id}`, staff)).body;
+  assert.equal(seen.moveBooking.ref, b.ref);
+  const conv = await h.post(`/api/staff/enquiries/${e.body.id}/convert`, { payment: { method: 'cash', amountPaise: 1 } }, staff);
+  assert.equal(conv.status, 409); assert.equal(conv.body.error.code, 'MOVE_REQUEST');
+  assert.equal((await h.post(`/api/staff/bookings/${b.id}/reschedule-preview`, { date: dayFromNow(7), startTime: '19:00' }, staff)).status, 200, 'staff still move bookings');
 });
