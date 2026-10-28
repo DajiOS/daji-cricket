@@ -197,7 +197,9 @@ export function outstanding(ctx: Ctx) {
   need(ctx, 'bookings');
   const t = now();
   const played = one<{ n: number; s: number | null }>("SELECT COUNT(*) n, SUM(total_paise - paid_paise) s FROM bookings WHERE owner_id = ? AND status IN ('confirmed','completed') AND end_at <= ? AND total_paise > paid_paise", ctx.ownerId, t)!;
-  const fut = one<{ n: number; s: number | null }>("SELECT COUNT(*) n, SUM(total_paise - paid_paise) s FROM bookings WHERE owner_id = ? AND status = 'confirmed' AND end_at > ? AND total_paise > paid_paise", ctx.ownerId, t)!;
+  // a multi-day booking is one booking however many of its days are still to come
+  const fut = one<{ n: number; s: number | null }>(`SELECT COUNT(DISTINCT CASE WHEN s.kind = 'block' THEN b.series_id ELSE b.id END) n, SUM(b.total_paise - b.paid_paise) s FROM bookings b LEFT JOIN booking_series s ON s.id = b.series_id
+    WHERE b.owner_id = ? AND b.status = 'confirmed' AND b.end_at > ? AND b.total_paise > b.paid_paise`, ctx.ownerId, t)!;
   const awaiting = one<{ n: number; s: number | null }>("SELECT COUNT(*) n, SUM(amount_paise) s FROM payments WHERE owner_id = ? AND status = 'submitted'", ctx.ownerId)!;
   const review = one<{ n: number }>("SELECT COUNT(*) n FROM bookings WHERE owner_id = ? AND status = 'held' AND needs_review = 1", ctx.ownerId)!.n;
   return {

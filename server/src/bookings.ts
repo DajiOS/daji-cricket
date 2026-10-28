@@ -199,34 +199,42 @@ export function listBookings(f: {
 }): Page<Booking> {
   const where: string[] = ['b.deleted_at IS NULL'];
   const p: (string | number)[] = [];
+  // x is this booking, or any day of the multi-day block it starts
+  const sameBooking = "(x.id = b.id OR (b.series_id IS NOT NULL AND x.series_id = b.series_id AND x.deleted_at IS NULL AND b.series_id IN (SELECT id FROM booking_series WHERE kind = 'block')))";
   if (f.ownerId) { where.push('b.owner_id = ?'); p.push(f.ownerId); }
   if (f.customerId) { where.push('b.customer_id = ?'); p.push(f.customerId); }
   if (f.groundId) { where.push('b.ground_id = ?'); p.push(f.groundId); }
-  if (f.status) { where.push('b.status = ?'); p.push(f.status); }
   if (f.collapse) {
-    // a multi-day block is one row: its first day stands for it, and a date filter looks at every day of the block
+    // a multi-day block is one row: its first day stands for it, and a date, status, resolution or upcoming filter looks at every day of the block
+    // (all in one EXISTS, so "confirmed from today" means a day that is both, not one day confirmed and another day ahead)
     // series_index is NULL on an ordinary booking: compare it as 0, or NOT (NULL ...) drops every ordinary booking once any block exists
     where.push(`NOT (COALESCE(b.series_index, 0) > 0 AND b.series_id IS NOT NULL AND b.series_id IN (SELECT id FROM booking_series WHERE kind = 'block'))`);
-    if (f.from || f.to) {
-      const c: string[] = []; const q: string[] = [];
-      if (f.from) { c.push('x.date >= ?'); q.push(f.from); }
-      if (f.to) { c.push('x.date <= ?'); q.push(f.to); }
-      where.push(`EXISTS (SELECT 1 FROM bookings x WHERE (x.id = b.id OR (b.series_id IS NOT NULL AND x.series_id = b.series_id AND b.series_id IN (SELECT id FROM booking_series WHERE kind = 'block'))) AND ${c.join(' AND ')})`);
+    const c: string[] = []; const q: (string | number)[] = [];
+    if (f.status) { c.push('x.status = ?'); q.push(f.status); }
+    if (f.from) { c.push('x.date >= ?'); q.push(f.from); }
+    if (f.to) { c.push('x.date <= ?'); q.push(f.to); }
+    if (f.resolution) { c.push('x.resolution = ?'); q.push(f.resolution); }
+    if (f.upcoming) { c.push("x.end_at > ? AND x.status IN ('held','confirmed')"); q.push(now()); }
+    if (c.length) {
+      where.push(`EXISTS (SELECT 1 FROM bookings x WHERE ${sameBooking} AND ${c.join(' AND ')})`);
       p.push(...q);
     }
   } else {
+    if (f.status) { where.push('b.status = ?'); p.push(f.status); }
     if (f.from) { where.push('b.date >= ?'); p.push(f.from); }
     if (f.to) { where.push('b.date <= ?'); p.push(f.to); }
+    if (f.resolution) { where.push('b.resolution = ?'); p.push(f.resolution); }
   }
   if (f.needsReview) where.push('b.needs_review = 1');
   if (f.approval) { where.push("b.approval = ? AND b.status = 'confirmed'"); p.push(f.approval); }
-  if (f.resolution) { where.push('b.resolution = ?'); p.push(f.resolution); }
   if (f.tournament) where.push("lower(b.format_label) LIKE '%tournament%'");
-  if (f.upcoming) { where.push("b.end_at > ? AND b.status IN ('held','confirmed')"); p.push(now()); }
+  if (f.upcoming && !f.collapse) { where.push("b.end_at > ? AND b.status IN ('held','confirmed')"); p.push(now()); }
   if (f.q) {
     const like = `%${f.q.replace(/[%_\\]/g, '\\$&')}%`;
     // the booking type too, so searching "tournament" finds the bookings made on a tournament price
-    where.push("(b.ref LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.phone LIKE ? ESCAPE '\\' OR b.format_label LIKE ? ESCAPE '\\')");
+    // grouped, the ref of any day of a multi-day booking finds it
+    const ref = f.collapse ? `EXISTS (SELECT 1 FROM bookings x WHERE ${sameBooking} AND x.ref LIKE ? ESCAPE '\\')` : "b.ref LIKE ? ESCAPE '\\'";
+    where.push(`(${ref} OR u.name LIKE ? ESCAPE '\\' OR u.phone LIKE ? ESCAPE '\\' OR b.format_label LIKE ? ESCAPE '\\')`);
     p.push(like, like, like, like);
   }
   const w = where.length ? `WHERE ${where.join(' AND ')}` : '';

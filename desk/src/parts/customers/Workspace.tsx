@@ -55,11 +55,11 @@ export function CustomerWorkspace({ id, tab: tabIn }: { id: string; tab?: string
           {tab === 'bookings' && (
             <div className="card"><Table rows={x.bookings} rowKey={(b) => b.id} empty="No bookings." onRow={(b) => { location.hash = `/bookings/${b.id}`; }} cols={[
               { head: 'Ref', cell: (b) => <span className="strong">{b.ref}</span> },
-              { head: 'When', cell: (b) => <>{fmtDay(b.date)}<div className="small muted">{timeRange(b)}</div></> },
+              { head: 'When', cell: (b) => b.block ? <>{fmtDay(b.block.fromDate)} – {fmtDay(b.block.toDate)}<div className="small muted">{b.block.days} days · {timeRange(b)} daily</div></> : <>{fmtDay(b.date)}<div className="small muted">{timeRange(b)}</div></> },
               { head: 'Ground', cell: (b) => b.groundName },
               { head: 'Status', cell: (b) => <BookingChip b={b} /> },
-              { head: 'Total', num: true, cell: (b) => inr(b.totalPaise) },
-              { head: 'Balance', num: true, cell: (b) => (b.status === 'cancelled' || b.status === 'expired' ? '—' : inr(b.balancePaise)) },
+              { head: 'Total', num: true, cell: (b) => inr(b.block ? b.block.totalPaise : b.totalPaise) },
+              { head: 'Balance', num: true, cell: (b) => (b.block ? (b.block.cancelled ? '—' : inr(b.block.balancePaise)) : b.status === 'cancelled' || b.status === 'expired' ? '—' : inr(b.balancePaise)) },
             ]} /></div>)}
           {tab === 'money' && (
             <div className="stack">
@@ -82,7 +82,7 @@ export function CustomerWorkspace({ id, tab: tabIn }: { id: string; tab?: string
 /** Bookings made, payments and enquiries, newest first. */
 function Activity({ d }: { d: Detail }) {
   const rows = [
-    ...d.bookings.map((b) => ({ at: b.createdAt, key: 'b' + b.id, text: `Booked ${b.groundName} for ${fmtDay(b.date)}`, href: `#/bookings/${b.id}` })),
+    ...d.bookings.map((b) => ({ at: b.createdAt, key: 'b' + b.id, text: b.block ? `Booked ${b.groundName} for ${fmtDay(b.block.fromDate)} – ${fmtDay(b.block.toDate)} (${b.block.days} days)` : `Booked ${b.groundName} for ${fmtDay(b.date)}`, href: `#/bookings/${b.id}` })),
     ...d.payments.map((p) => ({ at: p.createdAt, key: 'p' + p.id, text: `${METHOD_LABEL[p.method] || p.method} payment of ${inr(p.amountPaise)} (${(PAY_STATUS[p.status]?.[1] ?? p.status).toLowerCase()})`, href: p.bookingId ? `#/bookings/${p.bookingId}/money` : null })),
     ...d.enquiries.map((e) => ({ at: e.createdAt, key: 'e' + e.id, text: `Enquiry${e.groundName ? ` for ${e.groundName}` : ''} (${e.status.replace('_', ' ')})`, href: `#/enquiries/${e.id}` })),
   ].sort((a, b) => b.at - a.at);
