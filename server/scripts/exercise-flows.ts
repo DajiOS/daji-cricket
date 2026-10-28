@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { loadConfig } from '../src/config.ts';
-import { openDb, closeDb, one } from '../src/db.ts';
+import { openDb, closeDb, one, db } from '../src/db.ts';
 import { buildServer } from '../src/app.ts';
 import { istDate, addDays } from '../src/time.ts';
 import { DEMO_ACCOUNTS } from '../test/helpers.ts';
@@ -16,6 +16,9 @@ if (!dbFile || !dataDir) { console.error('usage: exercise-flows.ts <database fil
 mkdirSync(resolve(dataDir), { recursive: true });
 const cfg = loadConfig({ PUBLIC_URL: 'http://localhost:4000', RATE_LIMIT: 'off', REQUIRE_STAFF_TERMS: 'off', LOG: 'off', DEMO_MODE: 'on', DATA_DIR: resolve(dataDir) });
 openDb(resolve(dbFile));
+// this rehearses the online booking and payment path, so on this copy it is switched on even where prices are given on enquiry (Settings, Booking)
+const enquiryOnly = one<{ value: string }>("SELECT value FROM settings WHERE key = 'pricesOnEnquiry'")?.value === 'true';
+if (enquiryOnly) db().prepare("UPDATE settings SET value = 'false' WHERE key = 'pricesOnEnquiry'").run();
 const server = buildServer(cfg);
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
 const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -33,7 +36,7 @@ const ground = (await call('GET', '/api/grounds')).body;
 const gid = (Array.isArray(ground) ? ground : ground.grounds ?? ground.items)[0].id as string;
 const day = (n: number) => addDays(istDate(Date.now()), n);
 const salt = label.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 20;
-const out: Record<string, unknown> = { label, version: process.env.CODE_VERSION ?? 'unknown' };
+const out: Record<string, unknown> = { label, version: process.env.CODE_VERSION ?? 'unknown', pricesOnEnquiryWasOn: enquiryOnly };
 
 // an online booking paid in full through the demo gateway
 const hold = await call('POST', '/api/bookings', cust, { groundId: gid, date: day(40 + salt), startTime: '10:00', slots: 1 });
@@ -57,6 +60,7 @@ out.bookings = one<{ n: number }>('SELECT COUNT(*) n FROM bookings')!.n;
 out.payments = one<{ n: number }>('SELECT COUNT(*) n FROM payments')!.n;
 out.refunds = one<{ n: number }>('SELECT COUNT(*) n FROM refunds')!.n;
 await new Promise<void>((r) => { server.close(() => r()); server.closeAllConnections(); });
+if (enquiryOnly) db().prepare("UPDATE settings SET value = 'true' WHERE key = 'pricesOnEnquiry'").run(); // back as it was
 closeDb();
 console.log(JSON.stringify(out));
 process.exit(0);
