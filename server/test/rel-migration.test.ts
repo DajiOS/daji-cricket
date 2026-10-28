@@ -49,6 +49,31 @@ function rowsHash(d: DatabaseSync, t: string, columns: string[]): { rows: number
   return { rows: n, sha256: h.digest('hex') };
 }
 const skip = (why: string) => { ev('skipped', why); };
+// rows a released module adds to a table that already existed. Old rows must stay exactly as they were; a new row in an old table passes only
+// when it is listed here, under the module that added it, and that module was applied by this migration. Anything else is an undeclared change.
+const DECLARED_NEW_ROWS: { module: string; table: string; match: Record<string, unknown> }[] = [
+  { module: 'prices-on-enquiry-1', table: 'settings', match: { key: 'pricesOnEnquiry' } }, // Sunny Patel switched prices on enquiry on for Daji (28 Oct 2026)
+];
+function rowDiff(beforeRows: Record<string, Map<number, string>>, now: DatabaseSync, oldCols: Record<string, string[]>, applied: string[]) {
+  const changed: string[] = [], undeclared: string[] = [], declared: string[] = [];
+  for (const t of Object.keys(beforeRows)) {
+    if (t === 'audit_log') continue;
+    const was = beforeRows[t]!, is = rowsByRowid(now, t, oldCols[t]!);
+    for (const [id, row] of was) if (is.get(id) !== row) changed.push(`${t} row ${id}`);
+    for (const [id, row] of is) {
+      if (was.has(id)) continue;
+      const r = JSON.parse(row) as Record<string, unknown>;
+      const d = DECLARED_NEW_ROWS.find((x) => x.table === t && applied.includes(x.module) && Object.entries(x.match).every(([k, v]) => r[k] === v));
+      if (d) declared.push(`${t} ${JSON.stringify(d.match)} by ${d.module}`); else undeclared.push(`${t} row ${id}`);
+    }
+  }
+  return { changed, undeclared, declared };
+}
+function rowsByRowid(d: DatabaseSync, t: string, columns: string[]): Map<number, string> {
+  const m = new Map<number, string>();
+  for (const r of d.prepare(`SELECT rowid AS "__rowid", ${columns.map((c) => `"${c}"`).join(', ')} FROM "${t}"`).iterate() as Iterable<Record<string, unknown>>) { const { __rowid, ...rest } = r; m.set(Number(__rowid), JSON.stringify(rest)); }
+  return m;
+}
 
 // ------------------------------------------------------------------ REL-MIG-001
 
@@ -59,6 +84,7 @@ rel('REL-MIG-001', 'forward migration of a real old database: every old row is u
   const oldTables = tableNames(old);
   const oldCols = Object.fromEntries(oldTables.map((t) => [t, cols(old, t)]));
   const before = Object.fromEntries(oldTables.filter((t) => t !== 'schema_migrations').map((t) => [t, rowsHash(old, t, oldCols[t]!)]));
+  const beforeRows = Object.fromEntries(Object.keys(before).map((t) => [t, rowsByRowid(old, t, oldCols[t]!)]));
   const oldIds = (old.prepare('SELECT id FROM schema_migrations').all() as { id: string }[]).map((r) => r.id);
   old.close();
   const baseline = reconcileCli(join(FIXTURE, 'old.db'));
@@ -74,15 +100,27 @@ rel('REL-MIG-001', 'forward migration of a real old database: every old row is u
 
   // nothing that existed was changed: every old table, restricted to its old columns, hashes the same
   const now = lite(w.db);
-  const changed: string[] = [];
-  for (const t of Object.keys(before)) { const a = rowsHash(now, t, oldCols[t]!); if (a.sha256 !== before[t]!.sha256 || a.rows !== before[t]!.rows) changed.push(`${t} (${before[t]!.rows} -> ${a.rows})`); }
-  assert.deepEqual(changed.filter((c) => !c.startsWith('audit_log')), [], 'old rows changed by the migration');
+  const { changed, undeclared, declared } = rowDiff(beforeRows, now, oldCols, res.appliedNow);
+  assert.deepEqual(changed, [], 'old rows changed by the migration');
+  assert.deepEqual(undeclared, [], 'rows added to an old table that no module declares');
+  ev('declaredNewRows', declared);
+  // the check itself catches an edited old row and an undeclared new row (on a throwaway copy)
+  const probe = workCopy(); assert.equal(migrate(probe.db).code, 0);
+  const pd = new DatabaseSync(probe.db);
+  pd.prepare("INSERT INTO settings(key, value, updated_at, updated_by) VALUES('undeclaredProbe', 'x', 0, NULL)").run();
+  const firstUser = pd.prepare('SELECT rowid AS r FROM users ORDER BY rowid LIMIT 1').get() as { r: number };
+  pd.prepare("UPDATE users SET name = name || ' (edited)' WHERE rowid = ?").run(firstUser.r);
+  const caught = rowDiff(beforeRows, pd, oldCols, res.appliedNow);
+  pd.close();
+  assert.ok(caught.undeclared.some((x) => x.startsWith('settings ')), `an undeclared settings row is caught: ${caught.undeclared}`);
+  assert.ok(caught.changed.includes(`users row ${firstUser.r}`), `an edited old row is caught: ${caught.changed}`);
   const nowTables = tableNames(now);
   const added = nowTables.filter((t) => !oldTables.includes(t));
   const addedCols: Record<string, string[]> = {};
   for (const t of oldTables) { const c = cols(now, t).filter((x) => !oldCols[t]!.includes(x)); if (c.length) addedCols[t] = c; }
   assert.ok(added.includes('booking_reschedules') && added.includes('retention_cases') && added.includes('file_intake_log') && added.includes('idempotency_keys'), `new tables: ${added}`);
-  assert.deepEqual(addedCols.bookings, ['reschedule_count']);
+  assert.deepEqual(addedCols.bookings, ['deleted_at', 'deleted_by', 'reschedule_count']); // booking-deleted-1 (hidden, never deleted) and the reschedule count
+  assert.equal((now.prepare('SELECT COUNT(*) n FROM bookings WHERE deleted_at IS NOT NULL').get() as { n: number }).n, 0, 'no old booking is hidden by the migration');
   assert.equal((now.prepare('SELECT COUNT(*) n FROM bookings WHERE reschedule_count <> 0').get() as { n: number }).n, 0, 'the new column starts at zero for every old booking');
   const triggers = (now.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_ao_%'").all() as { name: string }[]).length;
   assert.ok(triggers >= 15, `append-only guards: ${triggers}`);
