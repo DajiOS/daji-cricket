@@ -103,7 +103,7 @@ export function publicRoutes(r: Router): void {
     return ok(pricesFor(c.user, availability(g, date)));
   });
 
-  r.post('/api/enquiries', (c) => created(createEnquiry(c.user?.role === 'customer' ? c.user : null, c.json())), { rate: 'auth' });
+  r.post('/api/enquiries', (c) => created(createEnquiry(c.user?.role === 'customer' ? c.user : null, c.json())), { rate: 'auth', idempotent: true });
 
   r.post('/api/auth/register', (c) => {
     const v = new Validator(c.json());

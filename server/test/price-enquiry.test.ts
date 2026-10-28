@@ -93,3 +93,26 @@ test('off, everything is as before; the owner turns it on and off in Settings', 
   assert.equal((await hold(h, cust, g.id, dayFromNow(6), '18:00', 1)).status, 201);
   void owner;
 });
+
+test('a pricing enquiry is filed once even when the answer is lost and it is sent again; a visitor can send one too', async () => {
+  const date = dayFromNow(6);
+  const body = { groundId: g.id, preferredDate: date, preferredTime: '18:00', preferredSlots: 2, message: 'Price for this slot, please.' };
+  const send = () => h.call('POST', '/api/enquiries', { body, token: cust, headers: { 'idempotency-key': 'enq-test-0001' } });
+  const a = await send(), b = await send();
+  assert.equal(a.status, 201); assert.equal(b.status, 201);
+  assert.equal(b.headers.get('idempotent-replayed'), 'true', 'the second send is the first answer again');
+  assert.equal(b.body.id, a.body.id);
+  assert.equal(one<{ n: number }>('SELECT COUNT(*) n FROM enquiries')!.n, 1, 'one enquiry, not two');
+  const v = await h.post('/api/enquiries', { ...body, firstName: 'Walk', lastName: 'Up', phone: '9876500022' });
+  assert.equal(v.status, 201, JSON.stringify(v.body));
+  assert.equal(v.body.preferredTime, '18:00');
+});
+
+test('a customer cannot quote or confirm an enquiry, and the booking options give no price', async () => {
+  const e = (await h.post('/api/enquiries', { groundId: g.id, preferredDate: dayFromNow(6), preferredTime: '18:00', preferredSlots: 1, message: 'Price for this slot, please.' }, cust)).body;
+  assert.equal((await h.post(`/api/staff/enquiries/${e.id}/quotations`, { amountPaise: 1 }, cust)).status, 403);
+  assert.equal((await h.post(`/api/staff/enquiries/${e.id}/convert`, { payment: { method: 'cash', amountPaise: 1 } }, cust)).status, 403);
+  const o = await h.post('/api/availability/options', { groundId: g.id, date: dayFromNow(6), startTime: '19:00', slots: 1 }, cust);
+  assert.equal(o.status, 200, JSON.stringify(o.body));
+  assert.deepEqual(prices(o.body), [], 'no price on any option');
+});
