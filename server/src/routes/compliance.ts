@@ -10,7 +10,7 @@ import { getProfile, invoiceForBooking, listInvoices, saveProfile } from '../inv
 const OWNER = { auth: ['owner', 'super_admin'] as ('owner' | 'staff' | 'super_admin')[] };
 
 export function complianceRoutes(r: Router): void {
-  // ---- compliance register, law-change log and the twice-monthly check (owner and software owner)
+  // ---- compliance register, law-change log and the daily check (owner and software owner)
   r.get('/api/compliance', () => ok({ items: register(), changes: changes(), checks: lastChecks() }), OWNER);
   r.post('/api/compliance/check', () => ok(runCheck({ force: true })), OWNER);
   r.post('/api/compliance/changes', (c) => created(logChange({ id: U(c).id, role: U(c).role }, c.json())), OWNER);

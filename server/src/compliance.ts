@@ -11,7 +11,7 @@ import { ESI, GUJARAT_PT, STATUTORY_RULES_CHECKED } from './accounting/statutory
 
 // The compliance register: every legal rule the software enforces, where it is enforced, when it was last looked at and when
 // it must be looked at next. The law-change log records each time a rule changed and what we changed in response. The
-// twice-monthly check (1st and 16th, IST) marks anything past its review date as due, so a stale rule is visible, not silent.
+// daily check (once each India day) marks anything past its review date as due, so a stale rule is visible, not silent.
 
 registerSchema('compliance-1', `
 CREATE TABLE compliance_items (
@@ -147,15 +147,11 @@ export function changes(): ChangeEntry[] {
     .map((r) => ({ id: r.id, code: r.code, changedOn: r.changed_on, summary: r.summary, oldValue: r.old_value, newValue: r.new_value, source: r.source, recordedBy: r.recorded_by, createdAt: r.created_at }));
 }
 
-/** True on the 1st and 16th of the month (India time): the two days a month the check runs. */
-export const isCheckDay = (date: string): boolean => date.endsWith('-01') || date.endsWith('-16');
-
-/** The twice-monthly check. Runs at most once per check day; `force` runs it any day (for the "Run the check now" button). */
+/** The daily check. Runs at most once per India day; `force` runs it again (for the "Run the check now" button). */
 export function runCheck(opts: { force?: boolean } = {}): { ran: boolean; ranOn: string; dueCount: number; due: string[] } {
   const ranOn = istDate(now());
-  // The check is owed for the latest 1st or 16th. If the server was down on that day, it still runs on the next call.
-  const owedDay = ranOn.slice(8) >= '16' ? `${ranOn.slice(0, 8)}16` : `${ranOn.slice(0, 8)}01`;
-  if (!opts.force && one('SELECT 1 FROM compliance_checks WHERE ran_on >= ?', owedDay)) return { ran: false, ranOn, dueCount: 0, due: [] };
+  // The check is owed once a day. If the server was down, it runs on the first call after it comes back.
+  if (!opts.force && one('SELECT 1 FROM compliance_checks WHERE ran_on >= ?', ranOn)) return { ran: false, ranOn, dueCount: 0, due: [] };
   const due = register().filter((r) => r.status === 'due').map((r) => r.code);
   run('INSERT INTO compliance_checks(id, ran_on, due_count, due_codes, created_at) VALUES(?,?,?,?,?) ON CONFLICT(ran_on) DO UPDATE SET due_count = excluded.due_count, due_codes = excluded.due_codes, created_at = excluded.created_at', newId('ccx'), ranOn, due.length, due.join(','), now());
   audit(SYSTEM, 'compliance.check', 'compliance', ranOn, { due });
