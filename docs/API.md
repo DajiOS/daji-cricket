@@ -276,7 +276,7 @@ Set `GMAIL_USER` (default dajicricket@gmail.com) and `GMAIL_APP_PASSWORD` (a Goo
 - `GET/PUT /api/accounting/gst-profile`, `GET /api/accounting/invoices?fy=26-27` (owner).
 
 ## Compliance register (owner)
-`GET /api/compliance` returns rules with review dates, the law-change log and past checks. `POST /api/compliance/:code/review`, `POST /api/compliance/changes`, `POST /api/compliance/:code/limit` (cash limits only, logs a change), `POST /api/compliance/check`. The check also runs by itself on the 1st and 16th (IST).
+`GET /api/compliance` returns rules with review dates, the law-change log and past checks. `POST /api/compliance/:code/review`, `POST /api/compliance/changes`, `POST /api/compliance/:code/limit` (cash limits only, logs a change), `POST /api/compliance/check`. The check also runs by itself once a day (IST).
 
 ## Team terms
 `GET /api/legal/staff-terms` returns the wording, version and SHA-256. `POST /api/legal/staff-terms/accept {version, sha256}` records the acceptance with time and IP. Until accepted, every other team request returns 403 `TERMS_REQUIRED`. `GET /api/legal/staff-terms/report` (owner) lists who accepted. Changing the wording requires bumping `STAFF_TERMS_VERSION` in `server/src/legal.ts`.

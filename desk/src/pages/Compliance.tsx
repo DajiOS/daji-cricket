@@ -42,7 +42,7 @@ function Rules({ reg, reload }: { reg: Reg; reload: () => void }) {
         <h3>Rules {due > 0 && <Chip tone="bad">{due} overdue</Chip>}</h3>
         <button className="btn sm ghost" onClick={check}>Run the check now</button>
       </div>
-      <div className="card-pad small muted">A check runs on the 1st and 16th of every month and flags any rule past its review date. Before you tick "Reviewed", look up the current rule on the official source and note any change in the log.{reg.checks[0] && ` Last check: ${fmtDate(reg.checks[0].ranOn)}.`}</div>
+      <div className="card-pad small muted">A check runs every day and flags any rule past its review date. Before you tick "Reviewed", look up the current rule on the official source and note any change in the log.{reg.checks[0] && ` Last check: ${fmtDate(reg.checks[0].ranOn)}.`}</div>
       {err && <div className="card-pad"><ErrorBox msg={err} /></div>}
       <Table rows={reg.items} rowKey={(i) => i.code} cols={[
         { head: 'Rule', cell: (i) => <><span className="strong">{i.title}</span><div className="small muted">{i.authority}</div><div className="small">{i.rule}</div></> },

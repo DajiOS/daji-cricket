@@ -1,9 +1,9 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { startHarness, type Harness } from './helpers.ts';
+import { startHarness, advance, DAY, type Harness } from './helpers.ts';
 import { invoiceNumber, financialYear, MAX_INVOICE_NO } from '../src/invoices.ts';
 import { sha256, STAFF_TERMS_BODY } from '../src/legal.ts';
-import { isCheckDay } from '../src/compliance.ts';
+import { runCheck } from '../src/compliance.ts';
 
 let h: Harness;
 before(async () => { h = await startHarness({ REQUIRE_STAFF_TERMS: 'on' }); });
@@ -31,7 +31,20 @@ test('compliance register lists the rules, logs a law change and runs the check'
   const chk = await h.post('/api/compliance/check', {}, owner);
   assert.equal(chk.status, 200); assert.equal(chk.body.ran, true);
   assert.equal((await h.get('/api/compliance', await h.login('staff1'))).status, 403);
-  assert.ok(isCheckDay('2026-11-01') && isCheckDay('2026-11-16') && !isCheckDay('2026-11-15'));
+});
+
+test('the compliance check runs by itself once every day, and only once a day', () => {
+  const first = runCheck();
+  assert.equal(first.ran, true);
+  assert.equal(runCheck().ran, false, 'a second run on the same day is skipped');
+  advance(DAY);
+  const next = runCheck();
+  assert.equal(next.ran, true, 'the next day it runs again');
+  assert.notEqual(next.ranOn, first.ranOn);
+  assert.equal(runCheck().ran, false);
+  advance(3 * DAY);
+  assert.equal(runCheck().ran, true, 'after days with no run it catches up on the first call');
+  assert.equal(runCheck({ force: true }).ran, true, 'the Run the check now button always runs');
 });
 
 test('team members must accept the exact wording; acceptance stores hash, time and IP; owner sees the report', async () => {

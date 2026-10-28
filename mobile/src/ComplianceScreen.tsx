@@ -40,7 +40,7 @@ export function ComplianceScreen() {
       </View>
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok, marginBottom: 8 }]}>{note}</Text>}
       {!reg ? (err ? null : <Loading />) : tab === 'rules' ? (<>
-        <Text style={[s.muted, { marginBottom: 8 }]}>A check runs on the 1st and 16th of every month.{reg.checks[0] ? ` Last run ${day(reg.checks[0].ranOn)}.` : ''}</Text>
+        <Text style={[s.muted, { marginBottom: 8 }]}>A check runs every day.{reg.checks[0] ? ` Last run ${day(reg.checks[0].ranOn)}.` : ''}</Text>
         <Btn kind="outline" label="Run the check now" busy={working === 'check'} onPress={check} />
         {items.map((i) => (
           <View key={i.code} style={s.card}>
