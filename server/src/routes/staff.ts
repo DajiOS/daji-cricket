@@ -375,7 +375,8 @@ export function staffRoutes(r: Router): void {
     const owner = ownerFilter(c);
     if (!owner) throw new HttpError(400, 'OWNER_REQUIRED', 'Pass ?ownerId= to look at one owner\'s customers');
     const cust = userRow(c.params.id!);
-    const bookings = cust ? listBookings({ ownerId: owner, customerId: cust.id, limit: 100, offset: 0 }) : null;
+    // a multi-day booking is one row, with its dates and money across every day in `block`
+    const bookings = cust ? listBookings({ ownerId: owner, customerId: cust.id, limit: 100, offset: 0, collapse: true }) : null;
     if (!cust || cust.role !== 'customer' || !bookings || bookings.total === 0) throw notFound('Customer not found');
     const payments = many<any>('SELECT * FROM payments WHERE customer_id = ? AND owner_id = ? ORDER BY created_at DESC LIMIT 100', cust.id, owner);
     const enquiries = listEnquiries(u.role === 'super_admin' ? u : u, { limit: 100, offset: 0 }).items.filter((e) => e.customerId === cust.id || e.phone === cust.phone);

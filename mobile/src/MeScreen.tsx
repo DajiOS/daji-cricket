@@ -13,7 +13,10 @@ const label = (st: Booking['status']): string => ({ confirmed: 'Confirmed', held
 const tone = (st: Booking['status']) => (st === 'confirmed' || st === 'completed' ? 'ok' : st === 'held' ? 'warn' : st === 'no_show' ? 'danger' : 'muted') as 'ok' | 'warn' | 'danger' | 'muted';
 type Kind = 'upcoming' | 'completed' | 'cancelled' | 'all';
 /** Which tab a booking sits under: still to come, played (or missed), or called off. */
-const kindOf = (b: Booking): Exclude<Kind, 'all'> => (b.status === 'cancelled' || b.status === 'expired' ? 'cancelled' : (b.status === 'confirmed' || b.status === 'held') && b.endAt > Date.now() ? 'upcoming' : 'completed');
+const todayIst = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+// a multi-day booking is one card: upcoming until its last day, whatever its first day says
+const kindOf = (b: Booking): Exclude<Kind, 'all'> => (b.block ? (b.block.cancelled ? 'cancelled' : b.block.toDate >= todayIst() ? 'upcoming' : 'completed')
+  : b.status === 'cancelled' || b.status === 'expired' ? 'cancelled' : (b.status === 'confirmed' || b.status === 'held') && b.endAt > Date.now() ? 'upcoming' : 'completed');
 const KINDS: [Kind, string][] = [['upcoming', 'Upcoming'], ['completed', 'Completed'], ['cancelled', 'Cancelled'], ['all', 'All']];
 
 export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: User }) {
@@ -27,7 +30,7 @@ export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: Use
   const load = useCallback(async () => {
     setErr(''); setBusy(true);
     try {
-      const [d, b, k, cfg] = await Promise.all([api<Dashboard>('/api/my/dashboard'), api<{ items: Booking[] }>('/api/bookings?limit=50'), api<{ items: Child[] }>('/api/me/children'), api<AppConfig>('/api/config')]);
+      const [d, b, k, cfg] = await Promise.all([api<Dashboard>('/api/my/dashboard'), api<{ items: Booking[] }>('/api/bookings?limit=50&group=1'), api<{ items: Child[] }>('/api/me/children'), api<AppConfig>('/api/config')]);
       setFlags({ deposit: !!cfg.securityDepositEnabled, reschedule: !!cfg.customerRescheduleEnabled });
       setDash(d); setBooks(b.items); if (!b.items.some((x) => kindOf(x) === 'upcoming')) setShow((cur) => (cur === 'upcoming' ? 'all' : cur)); setKids(k.items); setKid((cur) => cur || k.items[0]?.id || '');
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
@@ -79,17 +82,17 @@ export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: Use
         {books.length === 0 ? <Text style={[s.muted, { marginBottom: 14 }]}>No bookings yet.</Text> : !shown.length && <Text style={[s.muted, { marginBottom: 14 }]}>Nothing here.</Text>}
         {shown.map((b) => (
           <View key={b.id} style={s.card}>
-            <View style={s.row}><Text style={[s.text, { fontWeight: '800', fontSize: 16, flex: 1 }]}>{b.groundName}</Text><Badge label={kindOf(b) === 'upcoming' && b.status === 'confirmed' ? 'Upcoming' : label(b.status)} tone={tone(b.status)} /></View>
-            <Text style={s.text}>{niceDate(b.date)} · {new Date(b.startAt + 330 * 60000).toISOString().slice(11, 16)} – {new Date(b.endAt + 330 * 60000).toISOString().slice(11, 16)}</Text>
-            <Text style={s.muted}>{b.slotCount} slot{b.slotCount > 1 ? 's' : ''} · {inr(b.totalPaise)} · Ref {b.ref}</Text>
-            {b.seriesId ? <Text style={s.muted}>Repeat booking · date {(b.seriesIndex ?? 0) + 1}</Text> : null}
-            {b.balancePaise > 0 && b.status === 'confirmed' && <Text style={s.muted}>Balance at the ground: {inr(b.balancePaise)}</Text>}
+            <View style={s.row}><Text style={[s.text, { fontWeight: '800', fontSize: 16, flex: 1 }]}>{b.groundName}</Text><Badge label={kindOf(b) === 'upcoming' && (b.status === 'confirmed' || (!!b.block && b.status !== 'held')) ? 'Upcoming' : label(b.status)} tone={tone(b.block && kindOf(b) === 'upcoming' && b.status !== 'held' ? 'confirmed' : b.status)} /></View>
+            <Text style={s.text}>{b.block ? `${niceDate(b.block.fromDate)} – ${niceDate(b.block.toDate)}` : niceDate(b.date)} · {new Date(b.startAt + 330 * 60000).toISOString().slice(11, 16)} – {new Date(b.endAt + 330 * 60000).toISOString().slice(11, 16)}{b.block ? ' daily' : ''}</Text>
+            <Text style={s.muted}>{b.block ? `${b.block.days} days` : `${b.slotCount} slot${b.slotCount > 1 ? 's' : ''}`} · {inr(b.block ? b.block.totalPaise : b.totalPaise)} · Ref {b.ref}</Text>
+            {b.block ? <Text style={s.muted}>Multi-day booking. To change or cancel it, speak to the ground.</Text> : b.seriesId ? <Text style={s.muted}>Repeat booking · date {(b.seriesIndex ?? 0) + 1}</Text> : null}
+            {b.block ? (!b.block.cancelled && b.block.balancePaise > 0 && <Text style={s.muted}>Balance at the ground: {inr(b.block.balancePaise)}</Text>) : b.balancePaise > 0 && b.status === 'confirmed' && <Text style={s.muted}>Balance at the ground: {inr(b.balancePaise)}</Text>}
             {(b.moveDifferenceDuePaise ?? 0) > 0 && <Text style={s.muted}>{inr(b.moveDifferenceDuePaise!)} of it is for your move and can be paid online.</Text>}
             {(b.moveDifferenceDuePaise ?? 0) > 0 && <Btn label={`Pay ${inr(b.moveDifferenceDuePaise!)} online`} onPress={() => startDifference(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
             {flags.reschedule && b.status === 'confirmed' && b.startAt > Date.now() && !b.seriesId && <Btn kind="outline" label="Change time" onPress={() => setManage({ kind: 'reschedule', b })} style={{ marginTop: 10, marginBottom: 0 }} />}
             {flags.deposit && ['confirmed', 'completed', 'no_show'].includes(b.status) && <Btn kind="ghost" label="Security deposit" onPress={() => setManage({ kind: 'deposit', b })} style={{ marginBottom: 0 }} />}
-            {((b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now()) && <Btn kind="outline" label="Cancel" onPress={() => cancel(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
-            {b.seriesId && (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() && <Btn kind="ghost" label="Cancel unpaid repeats" onPress={() => cancelRepeats(b)} style={{ marginBottom: 0 }} />}
+            {!b.block && ((b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now()) && <Btn kind="outline" label="Cancel" onPress={() => cancel(b)} style={{ marginTop: 10, marginBottom: 0 }} />}
+            {b.seriesId && !b.block && (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() && <Btn kind="ghost" label="Cancel unpaid repeats" onPress={() => cancelRepeats(b)} style={{ marginBottom: 0 }} />}
           </View>
         ))}
         <Text style={[s.h2, { marginTop: 10 }]}>Your cricket</Text>
