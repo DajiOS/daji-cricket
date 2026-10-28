@@ -4,7 +4,8 @@ import { addDays, dayOfWeek, istDate, istMidnight, monthRange, DAY } from '../ti
 import { addMonths, niceDay, niceRange, parseRange, type Span } from './dates.ts';
 import * as T from './tools.ts';
 import { rulesIn } from '../lawUpdates.ts';
-import { one } from '../db.ts';
+import { many, one } from '../db.ts';
+import { hasPermission } from '../auth.ts';
 import { getSettings } from '../settings.ts';
 
 // The built-in answerer: reads a question, works out what is being asked and for which dates, asks the software through
@@ -13,7 +14,7 @@ import { getSettings } from '../settings.ts';
 
 export type Intent =
   | 'help' | 'about' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'fixtures' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -31,6 +32,7 @@ export interface Built {
 
 const RULES: [Intent, RegExp][] = [
   ['about', /software owner|who (owns|makes|made|built|builds|runs|developed|provides|supplies) (this|the|our) (software|apps?|system|platform|desk)|whose (software|app|platform|system)|(which|what) (company|business) (owns|makes|runs|provides) (this|the) (software|apps?|platform|system)|(which|what) business (is this|am i (in|on|using))|are we (a|the) customer/],
+  ['fixtures', /\bfixtures?\b|\btournaments?\b|\bnext match(es)?\b|\bmatch (schedule|times?)\b/],
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?|how does (this|it) work|what (do|can) you (do|know))\b/],
   ['balance_sheet', /balance ?sheet|\bassets\b|liabilit|net worth|\bequity\b|what (do )?(we|i) own/],
   ['pnl', /profit (and|&|n|\/) ?loss|\bp ?(&|and|n|\/) ?l\b|\bpnl\b|income statement|how (much )?(did|do|have) (we|i) (make|made|earn|earned|do|done)|how are we doing|how.?s (the )?business|how is (the )?business|financial summary|financial position/],
@@ -58,7 +60,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'about', 'approvals_why', 'approvals_report', 'approvals_waiting', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'about', 'approvals_why', 'approvals_report', 'approvals_waiting', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -133,7 +135,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', about: 'About this software', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', fixtures: 'Tournament fixtures', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -159,6 +161,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'help') return help(ctx);
   if (intent === 'about') return about(ctx);
   if (intent === 'compliance') return complianceAnswer(ctx, question, base);
+  if (intent === 'fixtures') return fixturesAnswer(ctx, base);
   if (intent === 'unknown') {
     const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
     return base('unknown', "I'm not sure what you're asking. I can answer questions about revenue, expenses, profit, account balances, bookings, money owed, cancellations and more, for any dates you like.", { suggestions: lot });
@@ -483,4 +486,23 @@ function help(ctx: T.Ctx): Built {
     intent: 'help', answer: 'Ask me about your money or your bookings in plain words, for any dates: "past 37 days", "last month", "in September", "from 1 Oct to 14 Oct". I read the same figures as the Reports tab and tell you which dates I used.',
     details: [], understood: 'Help', period: null, open: null, notes: ['I only read figures; I never change anything.'], suggestions: lot,
   };
+}
+
+/** The next tournament fixtures, from Matches & tournaments: who plays whom, when and where, and whether the ground time is blocked. */
+function fixturesAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  if (!hasPermission(ctx.user, 'manage_matches')) return base('fixtures', 'You do not have access to tournaments. Ask the owner to give you the "manage_matches" permission.');
+  const rows = many<{ tname: string; a: string; b: string; starts_at: number; ground: string | null; block_until: number | null; round: number }>(
+    `SELECT t.name tname, ta.name a, tb.name b, f.starts_at, g.name ground, f.block_until, f.round
+       FROM tournament_fixtures f JOIN tournaments t ON t.id = f.tournament_id JOIN tournament_teams ta ON ta.id = f.team_a_id JOIN tournament_teams tb ON tb.id = f.team_b_id
+       LEFT JOIN grounds g ON g.id = f.ground_id
+      WHERE f.owner_id = ? AND f.deleted_at IS NULL AND t.deleted_at IS NULL AND f.outcome IS NULL AND f.starts_at >= ?
+      ORDER BY f.starts_at LIMIT 10`, ctx.ownerId, now());
+  const unscheduled = one<{ n: number }>('SELECT COUNT(*) n FROM tournament_fixtures f JOIN tournaments t ON t.id = f.tournament_id WHERE f.owner_id = ? AND f.deleted_at IS NULL AND t.deleted_at IS NULL AND f.outcome IS NULL AND f.starts_at IS NULL', ctx.ownerId)!.n;
+  const notes = unscheduled ? [`${count(unscheduled, 'fixture')} still ${unscheduled === 1 ? 'has' : 'have'} no date.`] : [];
+  if (!rows.length) return base('fixtures', 'No tournament fixtures are coming up.', { notes });
+  const when = (ms: number) => `${niceDay(istDate(ms))} ${new Date(ms + 330 * 60000).toISOString().slice(11, 16)}`;
+  const first = rows[0]!;
+  return base('fixtures', `${count(rows.length, 'fixture')} coming up${rows.length === 10 ? ' (the next 10)' : ''}. Next: ${first.a} v ${first.b} (${first.tname}) on ${when(first.starts_at)}${first.ground ? ` at ${first.ground}` : ''}.`, {
+    details: rows.map((r) => ({ label: `${when(r.starts_at)}`, text: `${r.a} v ${r.b} · ${r.tname}, round ${r.round}${r.ground ? ` · ${r.ground}` : ''}${r.block_until ? ' · ground blocked' : ''}` })), notes,
+  });
 }
