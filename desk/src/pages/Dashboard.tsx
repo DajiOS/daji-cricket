@@ -58,6 +58,8 @@ export default function Dashboard({ sub }: { sub: string }) {
 
   const [today, todayErr] = useApi<TodayData>(canBookings ? '/api/staff/today' : null, [version, ownerId]);
   const [cancelled, cancelledErr] = useApi<Page<Booking>>(canBookings ? `/api/staff/bookings?from=${day}&to=${day}&status=cancelled&limit=50` : null, [version, ownerId]);
+  // everything still to come, not only today's: the same list the Bookings page and Upcoming tournaments read, a multi-day booking as one row
+  const [ahead, aheadErr] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?upcoming=1&group=1&limit=20' : null, [version, ownerId]);
   const [pending, pendingErr] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?approval=pending&limit=1' : null, [version, ownerId]);
   const [grounds, groundsErr] = useApi<{ items: Ground[] }>(canBookings ? '/api/staff/grounds' : null, [ownerId]);
   // the same people the Contacts page opens on (confirmed or played customers), so the tile and the page agree
@@ -84,10 +86,12 @@ export default function Dashboard({ sub }: { sub: string }) {
   const [ask, setAsk] = useState('');
   const t = Date.now();
   const all = [...(today?.bookings ?? []), ...(cancelled?.items ?? [])].sort((a, b) => a.startAt - b.startAt);
-  const count = (k: Tab) => (k === 'all' ? all.length : all.filter((b) => phase(b, t) === k).length);
-  const rows = tab === 'all' ? all : all.filter((b) => phase(b, t) === tab);
+  // a single booking already being played is Ongoing, not Upcoming; a multi-day booking stays upcoming until its last day is over
+  const aheadRows = (ahead?.items ?? []).filter((b) => b.block || b.startAt > t);
+  const upcoming = ahead ? ahead.total - (ahead.items.length - aheadRows.length) : 0;
+  const count = (k: Tab) => (k === 'all' ? all.length : k === 'upcoming' ? upcoming : all.filter((b) => phase(b, t) === k).length);
+  const rows = tab === 'all' ? all : tab === 'upcoming' ? aheadRows.slice(0, 10) : all.filter((b) => phase(b, t) === tab);
   const live = all.filter((b) => phase(b, t) !== 'cancelled');
-  const upcoming = live.filter((b) => phase(b, t) === 'upcoming').length;
   const waitingBookings = pending?.total ?? 0;
   // the approvals count is a number only when every source it needs has answered; a failed or pending source is never shown as "0, nothing waiting"
   const needAppr = can(me, 'manage_accounting');
@@ -133,14 +137,15 @@ export default function Dashboard({ sub }: { sub: string }) {
   quick.push({ icon: 'ai', label: aiName(), run: () => askAssistant() });
   if (me.role !== 'staff') quick.push({ icon: 'settings', label: 'Settings', href: '#/settings' });
 
-  const tabs: [Tab, string][] = [['all', 'All'], ['upcoming', 'Upcoming'], ['ongoing', 'Ongoing'], ['completed', 'Completed'], ['cancelled', 'Cancelled']];
+  const tabs: [Tab, string][] = [['all', 'Today'], ['upcoming', 'Upcoming'], ['ongoing', 'Ongoing'], ['completed', 'Completed'], ['cancelled', 'Cancelled']];
   const STATUS: Record<Exclude<Tab, 'all'>, [string, string]> = { upcoming: ['next', 'Upcoming'], ongoing: ['live', 'Ongoing'], completed: ['done', 'Completed'], cancelled: ['free', 'Cancelled'] };
   const statusOf = (b: Booking): [string, string] => {
     if (b.status === 'held') return ['wait', 'Held, not paid'];
     if (b.status === 'no_show') return ['bad', 'No-show'];
     if (b.status === 'confirmed' && b.approval === 'pending') return ['wait', 'Pending approval'];
-    return STATUS[phase(b, t)];
+    return tab === 'upcoming' ? STATUS.upcoming : STATUS[phase(b, t)];
   };
+  const when = (b: Booking) => tab !== 'upcoming' ? span(b) : b.block ? `${fmtDay(b.block.fromDate)} – ${fmtDay(b.block.toDate)}` : `${fmtDay(b.date)} · ${span(b)}`;
   const business = me.role === 'super_admin' ? 'Daji Cricket Ground' : me.businessName || 'Daji Cricket Ground';
 
   return (
@@ -151,7 +156,7 @@ export default function Dashboard({ sub }: { sub: string }) {
       </div>
 
       <div className="xstats">
-        {canBookings && <StatCard icon="calendar" tone="blue" label="Today's bookings" value={today ? live.length : todayErr ? '—' : '…'} foot={today ? `${upcoming} upcoming` : todayErr ? 'could not load' : ' '} href="#/bookings/day" />}
+        {canBookings && <StatCard icon="calendar" tone="blue" label="Today's bookings" value={today ? live.length : todayErr ? '—' : '…'} foot={ahead ? `${upcoming} upcoming` : aheadErr ? 'could not load' : ' '} href="#/bookings/day" />}
         {canMoney && canBookings && <StatCard icon="payroll" tone="green" label="Today's revenue" value={today?.money ? inr(today.money.soldPaise) : todayErr ? '—' : '…'} foot={today?.money ? `${inr(today.money.collectedPaise)} collected so far` : todayErr ? 'could not load' : ' '} href="#/accounting/reports" />}
         {canPeople && <StatCard icon="users" tone="violet" label="Customers" value={people ? people.total : peopleErr ? '—' : '…'} foot={peopleErr ? 'could not load' : 'on your customer list'} href="#/contacts" />}
         {(canBookings || can(me, 'manage_accounting')) && <StatCard icon="clock" tone="orange" label="Pending approvals" value={waitingFailed ? '—' : waitingKnown ? waiting : '…'} foot={waitingFailed ? 'could not load' : !waitingKnown ? ' ' : waiting ? 'require action' : 'nothing waiting'} alert={waitingFailed || (waitingKnown && waiting > 0)} href={waitingBookings || !can(me, 'manage_accounting') ? '#/approvals/book' : '#/approvals'} />}
@@ -161,27 +166,28 @@ export default function Dashboard({ sub }: { sub: string }) {
       <div className="xgrid">
         <div className="xcol">
           {canBookings && (
-            <section className="xpanel" aria-label="Today's bookings">
-              <div className="xpanel-hd"><h2>Today's bookings <small>{fmtDay(day)}{awayFromIndia && ' · India time'}</small></h2><a href="#/bookings/day">View all bookings →</a></div>
+            <section className="xpanel" aria-label="Bookings">
+              <div className="xpanel-hd"><h2>Bookings <small>{fmtDay(day)}{awayFromIndia && ' · India time'}</small></h2><a href="#/bookings/day">View all bookings →</a></div>
               <div className="xtabs" role="tablist">{tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l} ({count(k)})</button>)}</div>
-              {todayErr || cancelledErr ? <p className="xempty err" role="alert">Today's bookings could not be loaded: {todayErr || cancelledErr}</p> : !today || !cancelled ? <p className="xempty">Loading today…</p> : !rows.length ? <p className="xempty">{tab === 'all' ? 'No bookings today yet.' : `Nothing ${tab} today.`}</p> : (
+              {todayErr || cancelledErr || aheadErr ? <p className="xempty err" role="alert">Bookings could not be loaded: {todayErr || cancelledErr || aheadErr}</p> : !today || !cancelled || !ahead ? <p className="xempty">Loading bookings…</p> : !rows.length ? <p className="xempty">{tab === 'all' ? 'No bookings today yet.' : tab === 'upcoming' ? 'Nothing booked ahead.' : `Nothing ${tab} today.`}</p> : (
                 <div className="tbl-wrap"><table className="xtbl">
-                  <thead><tr><th>Time</th><th>Customer</th><th>Ground / Net</th><th>Type</th>{canMoney && <th className="r">Amount</th>}<th>Status</th><th>Actions</th></tr></thead>
+                  <thead><tr><th>{tab === 'upcoming' ? 'When' : 'Time'}</th><th>Customer</th><th>Ground / Net</th><th>Type</th>{canMoney && <th className="r">Amount</th>}<th>Status</th><th>Actions</th></tr></thead>
                   <tbody>{rows.map((b) => {
                     const [cls, word] = statusOf(b);
                     const ph = phase(b, t);
                     return (
                       <tr key={b.id}>
-                        <td>{span(b)}</td>
+                        <td>{when(b)}</td>
                         <td>{b.customerName}</td>
                         <td>{b.groundName}</td>
                         <td>{b.formatLabel ? whatOf(b) : b.source === 'walk_in' ? 'Walk-in' : 'Booking'}</td>
                         {canMoney && <td className="r">{inr(b.totalPaise)}</td>}
                         <td><span className={`xdot ${cls}`}>{word}</span></td>
-                        <td><button type="button" className="xact" onClick={() => setOpen(b.id)}>{ph === 'ongoing' || ph === 'upcoming' ? 'Manage' : 'View'}</button></td>
+                        <td><button type="button" className="xact" onClick={() => setOpen(b.id)}>{tab === 'upcoming' || ph === 'ongoing' || ph === 'upcoming' ? 'Manage' : 'View'}</button></td>
                       </tr>);
                   })}</tbody>
                 </table></div>)}
+              {tab === 'upcoming' && upcoming > rows.length && <p className="xempty"><a href="#/bookings/upcoming">More: all {upcoming} bookings still to come →</a></p>}
             </section>)}
 
           {(canBookings || can(me, 'manage_matches')) && (
