@@ -401,3 +401,44 @@ test('Platform AI answers about the shared spreadsheet from the same records, wi
   const stranger = { ...one<any>('SELECT * FROM users WHERE email = ?', 'staff1@daji.test'), permissions: '[]' };
   await assert.rejects(Promise.resolve().then(() => runTool({ ownerId: owner1.id, user: stranger }, 'get_shared_sheet', {})), /do not have access to bookings/);
 });
+
+test('a sheet can cover chosen grounds only: a second ground\'s sheet never carries the first ground\'s bookings, customers or money', async () => {
+  const gs = await grounds(h);
+  const main = gs.find((g) => g.name === 'Cricket Ground')!, nets = gs.find((g) => g.name === 'Practice Nets')!, other = gs.find((g) => g.name === 'Riverside Box Cricket')!;
+  const cust = await h.login('customer');
+  const onMain = await bookAndPay(h, cust, main.id, dayFromNow(3), '10:00');
+  const onNets = await bookAndPay(h, cust, nets.id, dayFromNow(3), '10:00');
+  const o1 = await h.login('owner1');
+  assert.equal((await h.put('/api/desk/sheets', { groundIds: [other.id] }, o1)).status, 400, 'another business\'s ground cannot be chosen');
+  const saved = await h.put('/api/desk/sheets', { groundIds: [nets.id], pushTabs: ['bookings', 'slots', 'customers', 'payments'] }, o1);
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.body.groundIds, [nets.id]);
+  assert.deepEqual(saved.body.grounds.map((g: any) => g.name), ['Cricket Ground', 'Practice Nets']);
+
+  const all = JSON.stringify(await download(o1));
+  assert.equal(all.includes(onMain.ref), false, 'the other ground\'s booking stays off');
+  assert.equal(all.includes(onNets.ref), true);
+  const slots = (await download(o1)).find((s) => s.name === 'Daji Open slots')!;
+  assert.ok(slots.rows.slice(1).every((r) => r[1] === 'Practice Nets'));
+  const pay = (await download(o1)).find((s) => s.name === 'Daji Payments')!;
+  assert.deepEqual(pay.rows.slice(1).map((r) => r[1]), [onNets.ref], 'only that ground\'s money');
+
+  // requests: the ground column may be empty (one ground covered); the other ground is refused
+  const r = await upload(csv([HEAD, [dayFromNow(6), '07:00', '1', '', 'Kiran', '9123456789', '', ''], [dayFromNow(6), '09:00', '1', 'Cricket Ground', 'Raj', '9123456780', '', '']]), o1);
+  assert.deepEqual([r.body.counts.new, r.body.counts.invalid], [1, 1]);
+  const items = (await h.get('/api/desk/sheets/inbox', o1)).body.items;
+  assert.equal(items.find((i: any) => i.name === 'Kiran').ground, 'Practice Nets');
+  assert.ok(items.find((i: any) => i.name === 'Raj').problems.some((p: string) => /not one of the grounds this sheet covers/.test(p)));
+
+  // the sheet stops covering a ground: a waiting row for it cannot be accepted any more
+  assert.equal((await h.put('/api/desk/sheets', { groundIds: [main.id] }, o1)).status, 200);
+  const kiran = items.find((i: any) => i.name === 'Kiran');
+  const acc = await h.post(`/api/desk/sheets/inbox/${kiran.id}/accept`, {}, o1);
+  assert.equal(acc.status, 409); assert.equal(acc.body.error.code, 'GROUND_NOT_ON_SHEET');
+  // and no choice means every ground again
+  assert.equal((await h.put('/api/desk/sheets', { groundIds: [] }, o1)).status, 200);
+  const both = JSON.stringify(await download(o1));
+  assert.ok(both.includes(onMain.ref) && both.includes(onNets.ref));
+  const owner1 = one<any>('SELECT * FROM users WHERE email = ?', 'owner1@daji.test');
+  assert.deepEqual((runTool({ ownerId: owner1.id, user: owner1 }, 'get_shared_sheet', {}) as any).grounds, ['Cricket Ground', 'Practice Nets']);
+});

@@ -86,6 +86,10 @@ CREATE UNIQUE INDEX uq_sheet_inbox_row ON sheet_inbox(owner_id, row_key);
 CREATE INDEX ix_sheet_inbox_owner ON sheet_inbox(owner_id, status, created_at);
 `);
 
+// Which of the business's grounds the sheet is about (a JSON list of ground ids; empty = every ground). A sheet kept with the people of one
+// ground (Antroli) then never carries the bookings, customers or money of the business's other grounds.
+registerSchema('sheets-2', `ALTER TABLE sheet_links ADD COLUMN ground_ids TEXT NOT NULL DEFAULT '[]';`);
+
 // ------------------------------------------------------------------------------------------------ the platform side (Settings › Connections)
 
 registerIntegration({
@@ -123,13 +127,21 @@ const STATE_TTL_MS = 10 * MIN;
 interface LinkRow {
   owner_id: string; provider: Provider; account: string | null; refresh_token: string | null; file_ref: string | null; file_name: string | null; file_url: string | null;
   push_tabs: string; pull_requests: number; include_contacts: number; auto_sync: number; problem: string | null; connected_at: number | null; connected_by: string | null;
-  last_auto_at: number | null; created_at: number; updated_at: number; updated_by: string | null;
+  last_auto_at: number | null; created_at: number; updated_at: number; updated_by: string | null; ground_ids: string;
 }
 const linkRow = (ownerId: string): LinkRow | undefined => one<LinkRow>('SELECT * FROM sheet_links WHERE owner_id = ?', ownerId);
 const tabsOf = (r: LinkRow | undefined): PushTab[] => {
   if (!r) return ['bookings', 'slots'];
   try { const v: unknown = JSON.parse(r.push_tabs); return Array.isArray(v) ? PUSH_TABS.filter((t) => v.includes(t)) : []; } catch { return []; }
 };
+
+/** The business's active grounds this sheet covers: the chosen ones, or every one when none is chosen. A chosen ground that has since gone is dropped. */
+function sheetGrounds(ownerId: string, r: LinkRow | undefined): GroundRow[] {
+  const all = many<GroundRow>('SELECT * FROM grounds WHERE owner_id = ? AND active = 1 ORDER BY name', ownerId);
+  const chosen = safeJson<unknown>(r?.ground_ids ?? '[]', []);
+  return Array.isArray(chosen) && chosen.length ? all.filter((g) => chosen.includes(g.id)) : all;
+}
+const chosenIds = (r: LinkRow | undefined): string[] => { const v = safeJson<unknown>(r?.ground_ids ?? '[]', []); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; };
 
 const providerReady = (cfg: Config, p: Provider): boolean =>
   p === 'excel' ? !!(cfg.sheets.microsoft.clientId && cfg.sheets.microsoft.clientSecret) : p === 'google' ? !!(cfg.sheets.google.clientId && cfg.sheets.google.clientSecret) : true;
@@ -157,6 +169,8 @@ export interface SheetView {
   provider: Provider; providers: { id: Provider; name: string; ready: boolean; note: string }[];
   connected: boolean; account: string | null; file: { name: string | null; url: string | null } | null; problem: string | null;
   pushTabs: PushTab[]; pullRequests: boolean; includeContacts: boolean; autoSync: boolean;
+  /** Every ground of the business, and which ones the sheet covers (empty = all). */
+  grounds: { id: string; name: string }[]; groundIds: string[];
   tabNames: Record<string, string>; requestsTab: string; requestHeaders: string[];
   inbox: { waiting: number; invalid: number; accepted: number; rejected: number };
   lastPush: SheetRun | null; lastPull: SheetRun | null; runs: SheetRun[]; canChange: boolean; vault: boolean;
@@ -180,6 +194,7 @@ export function viewSheet(cfg: Config, u: UserRow, ownerId: string): SheetView {
     connected: provider !== 'file' && !!r?.refresh_token, account: provider !== 'file' ? r?.account ?? null : null,
     file: provider !== 'file' && r?.file_ref ? { name: r.file_name, url: r.file_url } : null, problem: r?.problem ?? null,
     pushTabs: allowedTabs(u, tabsOf(r)), pullRequests: r ? !!r.pull_requests : true, includeContacts: !!r?.include_contacts, autoSync: !!r?.auto_sync,
+    grounds: many<{ id: string; name: string }>('SELECT id, name FROM grounds WHERE owner_id = ? AND active = 1 ORDER BY name', ownerId), groundIds: chosenIds(r).filter((id) => !!one('SELECT 1 FROM grounds WHERE id = ? AND owner_id = ? AND active = 1', id, ownerId)),
     tabNames: TAB_NAMES, requestsTab: REQUESTS_TAB, requestHeaders: REQUEST_HEADERS,
     inbox: { waiting: counts.waiting ?? 0, invalid: counts.invalid ?? 0, accepted: counts.accepted ?? 0, rejected: counts.rejected ?? 0 },
     lastPush: runs.find((x) => x.direction === 'push') ?? null, lastPull: runs.find((x) => x.direction === 'pull') ?? null, runs,
@@ -202,7 +217,10 @@ export function saveSheetSettings(cfg: Config, u: UserRow, ownerId: string, body
   const pull = v.bool('pullRequests');
   const contacts = v.bool('includeContacts');
   const auto = v.bool('autoSync');
+  const groundIds = v.strArray('groundIds', { max: 50, itemMax: 60 });
   v.done();
+  if (groundIds?.some((id) => !one('SELECT 1 FROM grounds WHERE id = ? AND owner_id = ?', id, ownerId)))
+    throw new HttpError(400, 'VALIDATION_FAILED', 'Pick grounds of this business only', { fields: [{ field: 'groundIds', message: 'Not one of this business\'s grounds' }] });
   if (pushTabs !== undefined && (!Array.isArray(pushTabs) || pushTabs.some((t) => !(PUSH_TABS as readonly unknown[]).includes(t))))
     throw new HttpError(400, 'VALIDATION_FAILED', `pushTabs must be a list of: ${PUSH_TABS.join(', ')}`, { fields: [{ field: 'pushTabs', message: 'Unknown tab' }] });
   if (provider && provider !== 'file' && !providerReady(cfg, provider)) throw new HttpError(409, 'NOT_SET_UP', `${provider === 'excel' ? 'Microsoft Excel' : 'Google Sheets'} is not switched on for this platform yet. Use download and upload meanwhile.`);
@@ -211,12 +229,13 @@ export function saveSheetSettings(cfg: Config, u: UserRow, ownerId: string, body
   const nextProvider = provider ?? cur.provider;
   if (auto && nextProvider === 'file') throw new HttpError(400, 'VALIDATION_FAILED', 'Sending by itself needs a linked Excel or Google sheet.', { fields: [{ field: 'autoSync', message: 'Link a sheet first' }] });
   const tabs = pushTabs !== undefined ? PUSH_TABS.filter((t) => (pushTabs as unknown[]).includes(t)) : tabsOf(cur);
+  if (groundIds !== undefined) run('UPDATE sheet_links SET ground_ids = ? WHERE owner_id = ?', JSON.stringify([...new Set(groundIds)]), ownerId);
   run(`UPDATE sheet_links SET provider = ?, push_tabs = ?, pull_requests = ?, include_contacts = ?, auto_sync = ?, updated_at = ?, updated_by = ?
        ${switching ? ', account = NULL, refresh_token = NULL, file_ref = NULL, file_name = NULL, file_url = NULL, problem = NULL, connected_at = NULL, connected_by = NULL' : ''} WHERE owner_id = ?`,
     nextProvider, JSON.stringify(tabs), pull === undefined ? cur.pull_requests : pull ? 1 : 0, contacts === undefined ? cur.include_contacts : contacts ? 1 : 0,
     switching ? 0 : auto === undefined ? cur.auto_sync : auto ? 1 : 0, now(), u.id, ownerId);
   if (switching) dropToken(ownerId);
-  audit({ id: u.id, role: u.role }, 'sheet.settings', 'sheet_link', ownerId, { provider: nextProvider, pushTabs: tabs, pullRequests: pull, includeContacts: contacts, autoSync: auto }, ownerId);
+  audit({ id: u.id, role: u.role }, 'sheet.settings', 'sheet_link', ownerId, { provider: nextProvider, pushTabs: tabs, pullRequests: pull, includeContacts: contacts, autoSync: auto, groundIds }, ownerId);
   return viewSheet(cfg, u, ownerId);
 }
 
@@ -454,21 +473,23 @@ const STATUS_WORD: Record<string, string> = { held: 'Held', confirmed: 'Confirme
 interface Grid { name: string; head: string[]; rows: Value[][]; money: number[] }
 
 /** The rows of each tab, for one business only. Everything is read with `owner_id = ?`; nothing of another business can reach the sheet. */
-export function buildTabs(ownerId: string, tabs: PushTab[], includeContacts: boolean): Grid[] {
+export function buildTabs(ownerId: string, tabs: PushTab[], includeContacts: boolean, grounds: GroundRow[] = many<GroundRow>('SELECT * FROM grounds WHERE owner_id = ? AND active = 1 ORDER BY name', ownerId)): Grid[] {
   const today = istDate(now());
   const out: Grid[] = [];
+  // only the grounds the sheet covers; with none, every query below matches nothing
+  const gids = grounds.map((g) => g.id);
+  const inG = `IN (${gids.map(() => '?').join(',') || 'NULL'})`;
   if (tabs.includes('bookings')) {
     const rows = many<any>(`SELECT b.ref, b.date, b.start_at, b.end_at, g.name ground, b.format_label, u.name cname, u.phone, b.status, b.total_paise, b.paid_paise
       FROM bookings b JOIN grounds g ON g.id = b.ground_id JOIN users u ON u.id = b.customer_id
-      WHERE b.owner_id = ? AND b.deleted_at IS NULL AND b.date >= ? AND b.date <= ? AND b.status IN ('held','confirmed','completed','no_show','cancelled')
-      ORDER BY b.start_at, b.ref LIMIT ?`, ownerId, addDays(today, -WINDOW.bookingsBackDays), addDays(today, WINDOW.bookingsAheadDays), WINDOW.maxRows);
+      WHERE b.owner_id = ? AND b.ground_id ${inG} AND b.deleted_at IS NULL AND b.date >= ? AND b.date <= ? AND b.status IN ('held','confirmed','completed','no_show','cancelled')
+      ORDER BY b.start_at, b.ref LIMIT ?`, ownerId, ...gids, addDays(today, -WINDOW.bookingsBackDays), addDays(today, WINDOW.bookingsAheadDays), WINDOW.maxRows);
     out.push({ name: TAB_NAMES.bookings, money: includeContacts ? [9, 10, 11] : [8, 9, 10],
       head: ['Ref', 'Date', 'Start', 'End', 'Ground', 'Type', 'Customer', ...(includeContacts ? ['Phone'] : []), 'Status', 'Total (Rs)', 'Paid (Rs)', 'Balance (Rs)'],
       rows: rows.map((b) => [b.ref, b.date, timeOfDay(b.start_at), timeOfDay(b.end_at), b.ground, b.format_label ?? '', b.cname, ...(includeContacts ? [b.phone ?? ''] : []), STATUS_WORD[b.status] ?? b.status,
         rs(b.total_paise), rs(b.paid_paise), b.status === 'cancelled' || b.status === 'expired' ? 0 : rs(Math.max(0, b.total_paise - b.paid_paise))]) });
   }
   if (tabs.includes('slots')) {
-    const grounds = many<GroundRow>('SELECT * FROM grounds WHERE owner_id = ? AND active = 1 ORDER BY name', ownerId);
     const rows: Value[][] = [];
     for (let d = 0; d < WINDOW.slotDays && rows.length < WINDOW.maxRows; d++) {
       const date = addDays(today, d);
@@ -480,8 +501,8 @@ export function buildTabs(ownerId: string, tabs: PushTab[], includeContacts: boo
     const rows = many<any>(`SELECT u.name, u.phone, u.email, COUNT(*) n,
         MAX(CASE WHEN b.start_at <= ? THEN b.date END) last_on, MIN(CASE WHEN b.start_at > ? AND b.status IN ('held','confirmed') THEN b.date END) next_on
       FROM bookings b JOIN users u ON u.id = b.customer_id
-      WHERE b.owner_id = ? AND b.deleted_at IS NULL AND b.status IN ('held','confirmed','completed','no_show')
-      GROUP BY u.id ORDER BY lower(u.name) LIMIT ?`, now(), now(), ownerId, WINDOW.maxRows);
+      WHERE b.owner_id = ? AND b.ground_id ${inG} AND b.deleted_at IS NULL AND b.status IN ('held','confirmed','completed','no_show')
+      GROUP BY u.id ORDER BY lower(u.name) LIMIT ?`, now(), now(), ownerId, ...gids, WINDOW.maxRows);
     out.push({ name: TAB_NAMES.customers, money: [],
       head: ['Name', ...(includeContacts ? ['Phone', 'Email'] : []), 'Bookings', 'Last played', 'Next booking'],
       rows: rows.map((c) => [c.name, ...(includeContacts ? [c.phone ?? '', c.email ?? ''] : []), c.n, c.last_on ?? '', c.next_on ?? '']) });
@@ -489,8 +510,8 @@ export function buildTabs(ownerId: string, tabs: PushTab[], includeContacts: boo
   if (tabs.includes('payments')) {
     const rows = many<any>(`SELECT p.created_at, b.ref, u.name cname, p.method, p.purpose, p.status, p.amount_paise, p.refunded_paise
       FROM payments p JOIN bookings b ON b.id = p.booking_id JOIN users u ON u.id = p.customer_id
-      WHERE p.owner_id = ? AND p.created_at >= ? AND p.status IN ('submitted','captured','refunded','partially_refunded','rejected')
-      ORDER BY p.created_at, p.id LIMIT ?`, ownerId, istMidnight(addDays(today, -WINDOW.paymentsBackDays)), WINDOW.maxRows);
+      WHERE p.owner_id = ? AND b.ground_id ${inG} AND p.created_at >= ? AND p.status IN ('submitted','captured','refunded','partially_refunded','rejected')
+      ORDER BY p.created_at, p.id LIMIT ?`, ownerId, ...gids, istMidnight(addDays(today, -WINDOW.paymentsBackDays)), WINDOW.maxRows);
     const PAY: Record<string, string> = { submitted: 'Waiting for a check', captured: 'Received', refunded: 'Refunded', partially_refunded: 'Part refunded', rejected: 'Rejected' };
     out.push({ name: TAB_NAMES.payments, money: [6, 7],
       head: ['Date', 'Booking', 'Customer', 'Method', 'For', 'Status', 'Amount (Rs)', 'Refunded (Rs)'],
@@ -501,8 +522,10 @@ export function buildTabs(ownerId: string, tabs: PushTab[], includeContacts: boo
 }
 
 /** What happened to each row read from "Booking requests", so the people on the sheet can see it was received. */
-function statusGrid(ownerId: string): Grid {
-  const rows = many<any>('SELECT * FROM sheet_inbox WHERE owner_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 500', ownerId);
+function statusGrid(ownerId: string, grounds: GroundRow[]): Grid {
+  const gids = new Set(grounds.map((g) => g.id));
+  // a row about another ground of the business stays off this sheet; a row whose ground could not be read is shown, as it came from this sheet
+  const rows = many<any>('SELECT * FROM sheet_inbox WHERE owner_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 500', ownerId).filter((r) => { const g = safeJson<Record<string, any>>(r.data, {}).groundId; return !g || gids.has(g); });
   const WORD: Record<string, string> = { waiting: 'Received, waiting for review', invalid: 'Not read: needs fixing', accepted: 'Accepted as an enquiry', rejected: 'Not taken' };
   return { name: TAB_NAMES.status, money: [], head: ['Read on', 'Line', 'Date asked', 'Start', 'Name', 'Status', 'Why'],
     rows: rows.map((r) => { const d = safeJson<Record<string, any>>(r.data, {}); return [istDate(r.created_at), r.line, d.date ?? d.rawDate ?? '', d.start ?? d.rawStart ?? '', d.name ?? '', WORD[r.status] ?? r.status, r.status === 'invalid' ? safeJson<string[]>(r.problems, []).join('; ') : r.reason ?? '']; }) };
@@ -538,7 +561,8 @@ export function downloadWorkbook(u: UserRow, ownerId: string): { data: Buffer; f
   const tabs = allowedTabs(u, tabsOf(r));
   const contacts = !!r?.include_contacts && hasPermission(u, 'view_customers');
   const pull = r ? !!r.pull_requests : true;
-  const grids = [...buildTabs(ownerId, tabs, contacts), ...(pull ? [statusGrid(ownerId)] : [])];
+  const gs = sheetGrounds(ownerId, r);
+  const grids = [...buildTabs(ownerId, tabs, contacts, gs), ...(pull ? [statusGrid(ownerId, gs)] : [])];
   const head = (h: string[]): Cell[] => h.map((v) => ({ v, s: 'header' as const }));
   const sheets: SheetSpec[] = [
     { name: TAB_NAMES.about, rows: ABOUT_ROWS(pull).map((r) => r.map((v) => ({ v, s: 'wrap' as const }))), widths: [110] },
@@ -548,7 +572,7 @@ export function downloadWorkbook(u: UserRow, ownerId: string): { data: Buffer; f
   ];
   const data = writeXlsx(sheets, { creator: 'Daji' });
   recordRun(ownerId, 'push', 'download', true, Object.fromEntries(grids.map((g) => [g.name, g.rows.length])), `Downloaded ${grids.map((g) => `${g.name} (${g.rows.length})`).join(', ') || 'the request tab'}.`, u.id);
-  audit({ id: u.id, role: u.role }, 'sheet.download', 'sheet_link', ownerId, { tabs, contacts }, ownerId);
+  audit({ id: u.id, role: u.role }, 'sheet.download', 'sheet_link', ownerId, { tabs, contacts, grounds: gs.map((g) => g.id) }, ownerId);
   return { data, filename: `daji-sheet-${istDate(now())}.xlsx` };
 }
 
@@ -558,7 +582,8 @@ export async function pushSheet(cfg: Config, actor: Actor, ownerId: string, f: F
     const r = linkRow(ownerId);
     if (!r || r.provider === 'file') throw new HttpError(400, 'PICK_A_SHEET', 'No Excel or Google sheet is linked. Use Download meanwhile.');
     const tabs = tabsOf(r), pull = !!r.pull_requests;
-    const grids = [...buildTabs(ownerId, tabs, !!r.include_contacts), ...(pull ? [statusGrid(ownerId)] : [])];
+    const gs = sheetGrounds(ownerId, r);
+    const grids = [...buildTabs(ownerId, tabs, !!r.include_contacts, gs), ...(pull ? [statusGrid(ownerId, gs)] : [])];
     const via = r.provider;
     try {
       const api = await apiFor(cfg, r, f);
@@ -623,7 +648,7 @@ export function parseRequests(ownerId: string, grid: string[][]): { rows: Parsed
   const head = grid[headAt]!.map((c) => c.trim());
   const col: Record<string, number> = {};
   for (const [k, re] of Object.entries(HEAD)) { const i = head.findIndex((h) => re.test(h)); if (i >= 0) col[k] = i; }
-  const grounds = many<GroundRow>('SELECT * FROM grounds WHERE owner_id = ? AND active = 1 ORDER BY name', ownerId);
+  const grounds = sheetGrounds(ownerId, linkRow(ownerId));
   const today = istDate(now());
   const rows: Parsed[] = [];
   let skipped = 0;
@@ -641,9 +666,9 @@ export function parseRequests(ownerId: string, grid: string[][]): { rows: Parsed
     const hours = rawHours ? Number(rawHours) : 1;
     if (!Number.isFinite(hours) || hours <= 0 || hours > 24 || Math.round(hours * 2) !== hours * 2) problems.push(`Hours "${rawHours.slice(0, 8)}" must be a number like 1, 2 or 1.5`);
     let ground: GroundRow | undefined;
-    if (rawGround) { ground = grounds.find((g) => g.name.toLowerCase() === rawGround.toLowerCase()) ?? grounds.find((g) => g.name.toLowerCase().includes(rawGround.toLowerCase())); if (!ground) problems.push(`Ground "${rawGround.slice(0, 40)}" is not one of this business's grounds`); }
+    if (rawGround) { ground = grounds.find((g) => g.name.toLowerCase() === rawGround.toLowerCase()) ?? grounds.find((g) => g.name.toLowerCase().includes(rawGround.toLowerCase())); if (!ground) problems.push(`Ground "${rawGround.slice(0, 40)}" is not one of the grounds this sheet covers`); }
     else if (grounds.length === 1) ground = grounds[0];
-    else problems.push(grounds.length ? 'Ground is empty and there is more than one' : 'This business has no ground yet');
+    else problems.push(grounds.length ? 'Ground is empty and there is more than one' : 'This sheet covers no ground yet');
     if (name.length < 2) problems.push('Name is empty'); else if (name.length > 80) problems.push('Name is longer than 80 letters');
     const phone = rawPhone ? normalizePhone(rawPhone) : null;
     if (!rawPhone) problems.push('Phone is empty'); else if (!phone) problems.push('Phone is not a 10-digit Indian mobile number');
@@ -770,6 +795,7 @@ export function acceptRequest(u: UserRow, ownerId: string, id: string): InboxIte
     const d = safeJson<Record<string, any>>(r.data, {});
     const g = d.groundId ? one<GroundRow>('SELECT * FROM grounds WHERE id = ? AND owner_id = ?', d.groundId, ownerId) : undefined;
     if (!g) throw conflict('GROUND_GONE', 'That ground is no longer one of this business\'s grounds.');
+    if (!sheetGrounds(ownerId, linkRow(ownerId)).some((x) => x.id === g.id)) throw conflict('GROUND_NOT_ON_SHEET', 'This sheet no longer covers that ground. Reject this row, or add the ground back to the sheet.');
     if (d.date < istDate(now())) throw conflict('DATE_PASSED', 'The date asked for has passed. Reject this row.');
     const enqId = newId('enq'), t = now();
     const slots = Math.max(1, Math.round(((d.hours ?? 1) * 60) / g.slot_minutes));
@@ -826,7 +852,7 @@ export function sheetSummary(ownerId: string, withNames: boolean) {
   return {
     kind: provider === 'excel' ? 'Microsoft Excel' : provider === 'google' ? 'Google Sheets' : 'download and upload',
     linked: provider !== 'file' && !!r?.refresh_token && !!r?.file_ref, fileName: provider !== 'file' ? r?.file_name ?? null : null,
-    sends: tabsOf(r).map((t) => TAB_LABEL[t]), readsBookingRequests: r ? !!r.pull_requests : true, sendsByItself: !!r?.auto_sync, problem: r?.problem ?? null,
+    grounds: sheetGrounds(ownerId, r).map((g) => g.name), sends: tabsOf(r).map((t) => TAB_LABEL[t]), readsBookingRequests: r ? !!r.pull_requests : true, sendsByItself: !!r?.auto_sync, problem: r?.problem ?? null,
     lastSend: runs.find((x) => x.direction === 'push') ?? null, lastRead: runs.find((x) => x.direction === 'pull') ?? null,
     requestsWaiting: counts.waiting ?? 0, requestsWithProblems: counts.invalid ?? 0, requestsAccepted: counts.accepted ?? 0, requestsRejected: counts.rejected ?? 0,
     rows: waiting.map((w) => ({ line: w.line, status: w.status === 'waiting' ? 'waiting for review' : 'has problems', date: w.date, start: w.start, ground: w.ground, ...(withNames ? { name: w.name } : {}), problems: w.problems })),

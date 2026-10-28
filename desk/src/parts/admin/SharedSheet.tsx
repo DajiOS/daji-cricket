@@ -11,7 +11,7 @@ interface Run { id: string; direction: 'push' | 'pull'; via: string; ok: boolean
 interface Sheet {
   provider: 'file' | 'excel' | 'google'; providers: { id: 'file' | 'excel' | 'google'; name: string; ready: boolean; note: string }[];
   connected: boolean; account: string | null; file: { name: string | null; url: string | null } | null; problem: string | null;
-  pushTabs: string[]; pullRequests: boolean; includeContacts: boolean; autoSync: boolean; tabNames: Record<string, string>; requestsTab: string; requestHeaders: string[];
+  pushTabs: string[]; pullRequests: boolean; includeContacts: boolean; autoSync: boolean; grounds: { id: string; name: string }[]; groundIds: string[]; tabNames: Record<string, string>; requestsTab: string; requestHeaders: string[];
   inbox: { waiting: number; invalid: number; accepted: number; rejected: number }; lastPush: Run | null; lastPull: Run | null; runs: Run[]; canChange: boolean; vault: boolean;
 }
 interface Item { id: string; line: number; status: string; problems: string[]; reason: string | null; enquiryId: string | null; createdAt: number; date: string | null; start: string | null; hours: number | null; ground: string | null; name: string; phone: string | null; players: number | null; note: string; free: boolean | null }
@@ -33,7 +33,7 @@ export default function SharedSheet() {
   const linked = data.provider !== 'file' && data.connected && !!data.file;
   return (
     <div className="stack">
-      <Panel title="Shared spreadsheet" note={<>Keep a spreadsheet with people outside the desk. Daji writes this business's own tabs into it and reads booking requests back for the team to check. Only this business's data goes in. {aiName()} can answer questions about it.</>}>
+      <Panel title="Shared spreadsheet" note={<>Keep a spreadsheet with people outside the desk. Daji writes the bookings, slots, customers and payments of the grounds you choose into it, and reads booking requests back for the team to check. Nothing of the other grounds goes in. {aiName()} can answer questions about it.</>}>
         <div className="stack">
           {back && SIGN_IN_WORD[back] && <div className={SIGN_IN_WORD[back]![0] ? 'ok-text' : 'err-text'} role="status">{SIGN_IN_WORD[back]![1]}</div>}
           {data.problem && <ErrorBox msg={`Problem: ${data.problem}`} />}
@@ -69,7 +69,7 @@ function Status({ s }: { s: Sheet }) {
 
 function Settings({ s, onSaved }: { s: Sheet; onSaved: () => void }) {
   const toast = useToast();
-  const [f, setF] = useState({ provider: s.provider, pushTabs: s.pushTabs, includeContacts: s.includeContacts, pullRequests: s.pullRequests, autoSync: s.autoSync });
+  const [f, setF] = useState({ provider: s.provider, pushTabs: s.pushTabs, includeContacts: s.includeContacts, pullRequests: s.pullRequests, autoSync: s.autoSync, groundIds: s.groundIds });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const switching = f.provider !== s.provider;
@@ -81,7 +81,7 @@ function Settings({ s, onSaved }: { s: Sheet; onSaved: () => void }) {
   const tick = (k: string) => setF((x) => ({ ...x, pushTabs: x.pushTabs.includes(k) ? x.pushTabs.filter((t) => t !== k) : [...x.pushTabs, k] }));
   return (
     <div className="stack" style={{ gap: 18 }}>
-      <fieldset className="stack" style={{ gap: 6, border: 0, padding: 0, margin: 0 }}>
+      <fieldset className="stack" style={{ gap: 6, border: 0, padding: 0, margin: '14px 0 0' }}>
         <legend className="small" style={{ fontWeight: 600, marginBottom: 4 }}>Which spreadsheet</legend>
         {s.providers.map((p) => (
           <label key={p.id} className="row" style={{ gap: 8, alignItems: 'flex-start', opacity: p.ready ? 1 : 0.6 }}>
@@ -91,7 +91,14 @@ function Settings({ s, onSaved }: { s: Sheet; onSaved: () => void }) {
         ))}
         {switching && s.connected && <div className="hint">Changing this forgets the current sign-in and workbook link.</div>}
       </fieldset>
-      <fieldset className="stack" style={{ gap: 6, border: 0, padding: 0, margin: 0 }}>
+      {s.grounds.length > 1 && <fieldset className="stack" style={{ gap: 6, border: 0, padding: 0, margin: '14px 0 0' }}>
+        <legend className="small" style={{ fontWeight: 600, marginBottom: 4 }}>Which grounds</legend>
+        <div className="row" style={{ gap: 14, flexWrap: 'wrap' }}>
+          {s.grounds.map((g) => <label key={g.id} className="row small" style={{ gap: 6 }}><input type="checkbox" checked={f.groundIds.includes(g.id)} onChange={() => setF((x) => ({ ...x, groundIds: x.groundIds.includes(g.id) ? x.groundIds.filter((i) => i !== g.id) : [...x.groundIds, g.id] }))} />{g.name}</label>)}
+        </div>
+        <div className="hint" style={{ marginTop: 0 }}>{f.groundIds.length ? 'Only the ticked grounds: their bookings, open slots, customers and payments, and requests for them. Nothing of the other grounds goes into the sheet.' : 'None ticked means every ground.'}</div>
+      </fieldset>}
+      <fieldset className="stack" style={{ gap: 6, border: 0, padding: 0, margin: '14px 0 0' }}>
         <legend className="small" style={{ fontWeight: 600, marginBottom: 4 }}>What Daji sends</legend>
         <div className="row" style={{ gap: 14, flexWrap: 'wrap' }}>
           {TAB_LABEL.map(([k, l]) => <label key={k} className="row small" style={{ gap: 6 }}><input type="checkbox" checked={f.pushTabs.includes(k)} onChange={() => tick(k)} />{l}</label>)}
@@ -100,7 +107,7 @@ function Settings({ s, onSaved }: { s: Sheet; onSaved: () => void }) {
         {f.includeContacts && <div className="hint" style={{ marginTop: 0 }}>Everyone who can open the spreadsheet will see them. Share it only with people who should.</div>}
         <div className="hint" style={{ marginTop: 0 }}>Bookings from {30} days back to {90} days ahead, open slots for the next 14 days, and payments of the last 90 days. Amounts are in rupees.</div>
       </fieldset>
-      <fieldset className="stack" style={{ gap: 6, border: 0, padding: 0, margin: 0 }}>
+      <fieldset className="stack" style={{ gap: 6, border: 0, padding: 0, margin: '14px 0 0' }}>
         <legend className="small" style={{ fontWeight: 600, marginBottom: 4 }}>What Daji reads</legend>
         <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={f.pullRequests} onChange={(e) => setF((x) => ({ ...x, pullRequests: e.target.checked }))} />Read the "{s.requestsTab}" tab into the review list below</label>
         <div className="hint" style={{ marginTop: 0 }}>Columns: {s.requestHeaders.join(', ')}. Rows are checked, then wait for the team. Nothing read from the sheet becomes a booking or a payment by itself.</div>
