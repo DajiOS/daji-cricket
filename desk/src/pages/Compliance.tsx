@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useApi, post, put, go, fmtDate, fmtDateTime, inr } from '../lib';
 import { PageHead, Tabs, Table, Chip, Modal, Field, ErrorBox, Loading, useToast, useForm, type Tone } from '../ui';
 
-type Tab = 'rules' | 'renewals' | 'changes' | 'gst' | 'terms';
-const TABS: [Tab, string][] = [['rules', 'Rules and review dates'], ['renewals', 'Renewals'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']];
+type Tab = 'rules' | 'renewals' | 'updates' | 'changes' | 'gst' | 'terms';
+const TABS: [Tab, string][] = [['rules', 'Rules and review dates'], ['renewals', 'Renewals'], ['updates', 'Law updates'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']];
 
 interface Item { code: string; title: string; authority: string; rule: string; currentValue: string; enforcedIn: string; reviewEveryDays: number; lastReviewedOn: string; nextReviewOn: string; status: 'ok' | 'soon' | 'due'; daysToReview: number }
 interface Change { id: string; code: string; changedOn: string; summary: string; oldValue: string | null; newValue: string | null; source: string | null }
-interface Reg { items: Item[]; changes: Change[]; checks: { ranOn: string; dueCount: number; due: string[] }[] }
+interface Alert { id: string; source: 'feed' | 'manual'; title: string; summary: string | null; url: string | null; publishedOn: string; codes: string[]; status: 'new' | 'reviewed' | 'not_relevant'; note: string | null; handledAt: number | null }
+interface Feed { connected: boolean; sources: string[]; lastRun: { ranOn: string; ok: boolean; message: string; at: number } | null }
+interface Reg { items: Item[]; changes: Change[]; checks: { ranOn: string; dueCount: number; due: string[] }[]; alerts: Alert[]; feed: Feed }
 const TONE: Record<string, Tone> = { ok: 'good', soon: 'warn', due: 'bad' };
 const LABEL: Record<string, string> = { ok: 'Up to date', soon: 'Review soon', due: 'Review overdue' };
 
@@ -23,6 +25,7 @@ export default function Compliance({ sub }: { sub: string }) {
       <ErrorBox msg={err} />
       {tab === 'rules' && (reg ? <Rules reg={reg} reload={reload} /> : !err && <Loading />)}
       {tab === 'renewals' && (reg ? <Renewals reg={reg} reload={reload} /> : !err && <Loading />)}
+      {tab === 'updates' && (reg ? <Updates reg={reg} reload={reload} /> : !err && <Loading />)}
       {tab === 'changes' && (reg ? <Changes reg={reg} reload={reload} /> : !err && <Loading />)}
       {tab === 'gst' && <Gst />}
       {tab === 'terms' && <Terms />}
@@ -74,6 +77,76 @@ function Renewals({ reg, reload }: { reg: Reg; reload: () => void }) {
         { head: '', cell: (i) => <button className="btn sm ghost" onClick={() => review(i.code)}>Reviewed</button> },
       ]} />
     </div>
+  );
+}
+
+const ALERT_LABEL: Record<Alert['status'], [string, Tone]> = { new: ['Waiting for a look', 'warn'], reviewed: ['Reviewed', 'good'], not_relevant: ['Not relevant', 'mute'] };
+
+/** News of a change in the law, from the updates feed (Settings › Connections) or added by hand, until someone has looked at it. */
+function Updates({ reg, reload }: { reg: Reg; reload: () => void }) {
+  const toast = useToast();
+  const [err, setErr] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState('');
+  const waiting = reg.alerts.filter((a) => a.status === 'new').length;
+  const name = (code: string) => reg.items.find((i) => i.code === code)?.title ?? code;
+  async function handle(id: string, status: 'reviewed' | 'not_relevant') {
+    setErr(null); setBusy(id);
+    try { await post(`/api/compliance/alerts/${id}/handle`, { status }); toast(status === 'reviewed' ? 'Marked as reviewed' : 'Marked as not relevant'); reload(); } catch (e: any) { setErr(e.message); reload(); } finally { setBusy(''); }
+  }
+  async function fetchNow() {
+    setErr(null); setBusy('feed');
+    try { const r = await post('/api/compliance/feed/fetch', {}); toast(r.run?.ok ? r.run.message : 'The feed could not be read'); reload(); } catch (e: any) { setErr(e.message); } finally { setBusy(''); }
+  }
+  const f = reg.feed;
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h3>Law updates {waiting > 0 && <Chip tone="warn">{waiting} waiting</Chip>}</h3>
+        <div className="row">
+          {f.connected && <button className="btn sm ghost" disabled={busy === 'feed'} onClick={fetchNow}>Fetch now</button>}
+          <button className="btn sm primary" onClick={() => setAdding(true)}>Add an update</button>
+        </div>
+      </div>
+      <div className="card-pad small muted">
+        {f.connected
+          ? <>Read once a day from {f.sources.join(', ')}. {f.lastRun ? (f.lastRun.ok ? `Last read ${fmtDateTime(f.lastRun.at)}: ${f.lastRun.message}.` : '') : 'Not read yet.'}</>
+          : <>No updates feed is connected, so add news of a change here by hand (for example from your CA). A feed can be connected in Settings › Connections, Law and policy updates.</>}
+        {' '}When an update changes a rule, record it in the law-change log and mark the update reviewed.
+      </div>
+      {f.lastRun && !f.lastRun.ok && <div className="card-pad"><ErrorBox msg={`The feed could not be read on ${fmtDate(f.lastRun.ranOn)}. ${f.lastRun.message}`} /></div>}
+      {err && <div className="card-pad"><ErrorBox msg={err} /></div>}
+      <Table rows={reg.alerts} rowKey={(a) => a.id} empty="No law updates yet." cols={[
+        { head: 'Date', cell: (a) => <><div>{fmtDate(a.publishedOn)}</div><div className="small muted">{a.source === 'feed' ? 'From the feed' : 'Added by hand'}</div></> },
+        { head: 'Update', cell: (a) => <><span className="strong">{a.url ? <a href={a.url} target="_blank" rel="noopener noreferrer">{a.title}</a> : a.title}</span>{a.summary && <div className="small">{a.summary}</div>}{a.codes.length > 0 && <div className="small muted">About: {a.codes.map(name).join(', ')}</div>}{a.note && <div className="small muted">Note: {a.note}</div>}</> },
+        { head: 'Status', cell: (a) => <Chip tone={ALERT_LABEL[a.status][1]}>{ALERT_LABEL[a.status][0]}</Chip> },
+        { head: '', cell: (a) => a.status === 'new' ? <div className="row"><button className="btn sm ghost" disabled={busy === a.id} onClick={() => handle(a.id, 'reviewed')}>Reviewed</button><button className="btn sm ghost" disabled={busy === a.id} onClick={() => handle(a.id, 'not_relevant')}>Not relevant</button></div> : null },
+      ]} />
+      {adding && <AlertForm items={reg.items} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); reload(); }} />}
+    </div>
+  );
+}
+
+function AlertForm({ items, onClose, onSaved }: { items: Item[]; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const f = useForm({ title: '', summary: '', url: '', publishedOn: '', code: '' });
+  const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  async function save() {
+    setErr(null); setSaving(true);
+    try { await post('/api/compliance/alerts', { title: f.v.title, summary: f.v.summary, url: f.v.url, publishedOn: f.v.publishedOn || undefined, codes: f.v.code ? [f.v.code] : [] }); toast('Update added'); onSaved(); } catch (e: any) { setErr(e.message); } finally { setSaving(false); }
+  }
+  return (
+    <Modal title="Add a law update" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={saving} onClick={save}>Save</button></>}>
+      <div className="form-grid">
+        <Field label="What is the news" full><input className="inp" {...f.bind('title')} placeholder="ESI wage ceiling raised" /></Field>
+        <Field label="Details" full><input className="inp" {...f.bind('summary')} /></Field>
+        <Field label="Link" full hint="The notification or circular, if you have it"><input className="inp" {...f.bind('url')} placeholder="https://" /></Field>
+        <Field label="Date"><input className="inp" type="date" {...f.bind('publishedOn')} /></Field>
+        <Field label="Rule it is about" hint="Leave empty to let the software match it"><select className="inp" {...f.bind('code')}><option value="">Match it for me</option>{items.map((i) => <option key={i.code} value={i.code}>{i.title}</option>)}</select></Field>
+      </div>
+      <ErrorBox msg={err} />
+    </Modal>
   );
 }
 

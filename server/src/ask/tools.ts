@@ -10,16 +10,18 @@ import { balanceSheet, profitAndLoss, type BalanceSheet } from '../accounting/st
 import { futureSchedule, pastSchedule } from '../accounting/schedule.ts';
 import { listAccounts } from '../accounting/store.ts';
 import { listOpen, getFlow, describe, looksAfterAny, APPROVAL_KINDS, KIND_INFO } from '../approvals.ts';
+import { changes as lawChanges, lastChecks, register } from '../compliance.ts';
+import { alerts as lawAlerts, lastFeedRun } from '../lawUpdates.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
 // can never disagree with a report. They are read-only, scoped to one owner and checked against the asker's permissions.
 // The built-in answerer and the optional Claude mode use exactly these.
 
 export interface Ctx { ownerId: string; user: UserRow }
-export type Area = 'reports' | 'bookings' | 'customers' | 'tasks' | 'team' | 'approvals';
+export type Area = 'reports' | 'bookings' | 'customers' | 'tasks' | 'team' | 'approvals' | 'compliance';
 
-const AREA_PERMISSION: Record<Area, string> = { reports: 'view_reports', bookings: 'manage_bookings', customers: 'view_customers', tasks: 'manage_tasks', team: 'owner', approvals: 'manage_accounting' };
-const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', bookings: 'bookings', customers: 'customers', tasks: 'the jobs', team: 'the team', approvals: 'the approvals' };
+const AREA_PERMISSION: Record<Area, string> = { reports: 'view_reports', bookings: 'manage_bookings', customers: 'view_customers', tasks: 'manage_tasks', team: 'owner', approvals: 'manage_accounting', compliance: 'owner' };
+const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', bookings: 'bookings', customers: 'customers', tasks: 'the jobs', team: 'the team', approvals: 'the approvals', compliance: 'the compliance register' };
 
 export function can(ctx: Ctx, area: Area): boolean {
   const u = ctx.user;
@@ -28,6 +30,8 @@ export function can(ctx: Ctx, area: Area): boolean {
   if (area === 'tasks') return hasPermission(u, 'manage_tasks');
   if (area === 'team') return u.role !== 'staff';
   if (area === 'approvals') return looksAfterAny(u);
+  // the same people as the Compliance page: the owner and the software owner
+  if (area === 'compliance') return u.role === 'owner' || u.role === 'super_admin';
   return hasPermission(u, 'view_customers');
 }
 export function need(ctx: Ctx, area: Area): void {
@@ -319,4 +323,24 @@ export function approvalsDecided(ctx: Ctx, a: Range) {
   checkRange(a);
   const rows = many<{ action: string; n: number }>(`SELECT action, COUNT(*) n FROM audit_log WHERE owner_id = ? AND at >= ? AND at < ? AND action IN (${DECIDED.map(() => '?').join(',')}) GROUP BY action`, ctx.ownerId, istMidnight(a.from), istMidnight(addDays(a.to, 1)), ...DECIDED);
   return { from: a.from, to: a.to, decisions: Object.fromEntries(rows.map((r) => [r.action, r.n])) };
+}
+
+// ---------------------------------------------------------------- compliance
+
+/** The compliance register as the Compliance page shows it: each rule and its review date, the law-change log, the last check and the law updates waiting. */
+export function compliance(ctx: Ctx) {
+  need(ctx, 'compliance');
+  const rules = register();
+  const waiting = lawAlerts(200).filter((a) => a.status === 'new');
+  const feed = lastFeedRun();
+  return {
+    today: todayIst(), rulesOnRegister: rules.length,
+    overdue: rules.filter((r) => r.status === 'due').length, dueWithin30Days: rules.filter((r) => r.status === 'soon').length,
+    rules: rules.map((r) => ({ code: r.code, title: r.title, law: r.authority, rule: r.rule, enforcedAs: r.currentValue, where: r.enforcedIn, lastReviewedOn: r.lastReviewedOn, nextReviewOn: r.nextReviewOn, status: r.status === 'due' ? 'review overdue' : r.status === 'soon' ? 'review soon' : 'up to date' })),
+    lastCheck: lastChecks(1)[0] ?? null,
+    recentLawChanges: lawChanges().slice(0, 10).map((c) => ({ code: c.code, changedOn: c.changedOn, summary: c.summary, oldValue: c.oldValue, newValue: c.newValue, source: c.source })),
+    lawUpdatesWaiting: waiting.length,
+    lawUpdates: waiting.slice(0, 10).map((a) => ({ title: a.title, publishedOn: a.publishedOn, rules: a.codes, from: a.source === 'feed' ? 'the updates feed' : 'added by hand', link: a.url })),
+    feed: feed ? { lastReadOn: feed.ranOn, ok: feed.ok, message: feed.message } : null,
+  };
 }

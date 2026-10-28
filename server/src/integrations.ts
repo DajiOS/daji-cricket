@@ -136,6 +136,23 @@ registerIntegration({
     catch (e) { return { ok: false, message: String((e as Error).message).slice(0, 200) }; }
   },
 });
+registerIntegration({
+  id: 'lawfeed', name: 'Law and policy updates', what: 'Brings news of changes in Indian laws, rates and rules into Compliance › Law updates once a day, matched to the rules the software enforces.',
+  setup: 'Put the address of one or more RSS, Atom or JSON feeds in LAW_FEED_URL (separate several with spaces), for example a legal-news or CA firm feed, or a government notifications feed. If the service gives you a key, put it in LAW_FEED_TOKEN. Only news that matches a rule in the register is kept unless LAW_FEED_KEEP_ALL is on. Until then, updates can be added by hand on the Compliance page.',
+  env: ['LAW_FEED_URL'],
+  have: (c) => ({ LAW_FEED_URL: c.lawFeed.urls.length > 0 }),
+  test: async (c, f) => {
+    const { readFeed, rulesIn } = await import('./lawUpdates.ts');
+    const parts: string[] = [];
+    for (const url of c.lawFeed.urls) {
+      try {
+        const items = await readFeed(c, url, f);
+        parts.push(`${new URL(url).host}: ${items.length} item${items.length === 1 ? '' : 's'}, ${items.filter((i) => i.codes.length || rulesIn(`${i.title} ${i.summary}`).length).length} about a rule on the register`);
+      } catch (e) { return { ok: false, message: `${url.slice(0, 80)}: ${(e as Error).message}`.slice(0, 200) }; }
+    }
+    return { ok: true, message: `Read ${parts.join('; ')}. Nothing was saved.` };
+  },
+});
 
 export function integrationStatuses(cfg: Config): IntegrationStatus[] {
   const tests = new Map(many<{ integration_id: string; ok: number; message: string; at: number }>('SELECT * FROM integration_tests').map((t) => [t.integration_id, t]));

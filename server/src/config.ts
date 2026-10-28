@@ -60,6 +60,8 @@ export interface Config {
   /** Email through Gmail SMTP with an App Password. The address defaults to the ground's own Gmail; GMAIL_APP_PASSWORD switches sending on. */
   email: { user: string; appPassword: string; fromName: string; host: string; port: number; tls: boolean };
   ai: { apiKey: string; model: string; apiUrl: string; mode: 'builtin' | 'auto' | 'claude'; limitPerHour: number; timeoutMs: number };
+  /** Law and policy updates: one or more RSS, Atom or JSON feeds read once a day into Compliance › Law updates. Empty = off; updates are then added by hand. */
+  lawFeed: { urls: string[]; token: string; keepAll: boolean };
 }
 
 export const DEV_SECRET = 'dev-only-secret-change-me-dev-only-secret';
@@ -209,6 +211,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       mode: aiMode(env.AI_MODE),
       limitPerHour: Math.max(1, Number(env.AI_LIMIT_PER_HOUR ?? 30) || 30),
       timeoutMs: Math.max(1000, Number(env.AI_TIMEOUT_MS ?? 25000) || 25000),
+    },
+    lawFeed: {
+      urls: (env.LAW_FEED_URL || '').split(/[\s,]+/).map((u) => u.trim()).filter(Boolean),
+      token: env.LAW_FEED_TOKEN || '',
+      keepAll: truthy(env.LAW_FEED_KEEP_ALL, false),
     },
   };
 }

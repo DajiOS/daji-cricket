@@ -1,4 +1,5 @@
 import { runCheck } from './compliance.ts';
+import { syncLawFeed } from './lawUpdates.ts';
 import { runRecurring } from './accounting/books.ts';
 import { runDepreciation } from './accounting/plus.ts';
 import { runFeedSync } from './accounting/feed.ts';
@@ -106,7 +107,7 @@ export async function runFastSweeps(cfg: Config): Promise<SweepResult> {
   return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done };
 }
 
-/** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries and the compliance check. */
+/** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries, the compliance check and the law updates feed. */
 export async function runSlowSweeps(cfg: Config): Promise<void> {
   await chargeDue(cfg).catch(logErr('autodebit'));
   try { sweepQuarantine(cfg.dataDir); } catch (e) { logErr('quarantine')(e); }
@@ -116,6 +117,7 @@ export async function runSlowSweeps(cfg: Config): Promise<void> {
   await runAaSync(cfg, logErr('account-aggregator'));
   await billingDaily(cfg, SYSTEM).catch(logErr('billing'));
   try { runCheck(); } catch (e) { logErr('compliance-check')(e); }
+  await syncLawFeed(cfg).catch(logErr('law-feed'));
 }
 
 /** Everything the scheduler does each minute. Safe to run any number of times. */
