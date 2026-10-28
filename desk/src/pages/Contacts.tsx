@@ -6,7 +6,7 @@ import { Async, FilterBar, Select, errMsg, useDebounced } from '../parts/club/co
 import Composer, { loadTemplates } from '../parts/club/Composer';
 import { CustomerWorkspace } from '../parts/customers/Workspace';
 
-interface Contact { id: string; name: string; phone: string | null; email: string | null; timesPlayed: number; lastPlayedAt: number; lastPastAt: number | null; nextAt: number | null; paidPaise: number | null; reachable: { email: boolean; whatsapp: boolean; sms: boolean } }
+interface Contact { id: string; name: string; phone: string | null; email: string | null; timesPlayed: number; lastPlayedAt: number; lastPastAt: number | null; nextAt: number | null; paidPaise: number | null; signedUpAt: number; reachable: { email: boolean; whatsapp: boolean; sms: boolean } }
 interface Result { items: Contact[]; total: number; summary: { total: number; reachableEmail: number; reachableWhatsapp: number; reachableSms: number } }
 interface Broadcast { id: string; createdAt: number; channel: string; subject?: string | null; body: string; sent: number; queued: number }
 const LIMIT = 50;
@@ -23,7 +23,7 @@ export default function Contacts({ sub }: { sub: string }) {
 
 function Directory() {
   const { me } = useSession(); const toast = useToast();
-  const [who, setWho] = useState('booked'); const [ground, setGround] = useState(''); const [inactive, setInactive] = useState(''); const [min, setMin] = useState(''); const [q, setQ] = useState(''); const [offset, setOffset] = useState(0);
+  const [who, setWho] = useState('account'); const [ground, setGround] = useState(''); const [inactive, setInactive] = useState(''); const [min, setMin] = useState(''); const [q, setQ] = useState(''); const [offset, setOffset] = useState(0);
   const [templates, setTemplates] = useState<Awaited<ReturnType<typeof loadTemplates>> | null>(null); const [sent, setSent] = useState(0);
   const dq = useDebounced(q), dmin = useDebounced(min);
   const filter: Record<string, string | number> = { who };
@@ -40,7 +40,7 @@ function Directory() {
   const today = todayISO();
   return (
     <div className="stack">
-      <PageHead eyebrow="Ground" title="Contacts" lede="Everyone who has booked or played, and messages to them. Only people who said yes to a channel are messaged.">
+      <PageHead eyebrow="Ground" title="Contacts" lede="Everyone who has made an account or booked, and messages to them. Only people who said yes to a channel are messaged.">
         <button className="btn" onClick={csv}>Download CSV</button>
         {can(me, 'send_broadcasts') && <button className="btn primary" onClick={compose}>Message these people</button>}
       </PageHead>
@@ -54,7 +54,7 @@ function Directory() {
         <div className="card-head"><h3>Customers</h3></div>
         <div className="card-pad">
           <FilterBar>
-            <Field label="Show"><Select value={who} onChange={(v) => change(() => setWho(v))} options={[['played', 'Have played'], ['booked', 'Played or booked ahead'], ['all', 'Everyone who booked']]} /></Field>
+            <Field label="Show"><Select value={who} onChange={(v) => change(() => setWho(v))} options={[['account', 'Everyone with an account'], ['all', 'Everyone who booked'], ['booked', 'Played or booked ahead'], ['played', 'Have played']]} /></Field>
             <Field label="Ground"><Select value={ground} onChange={(v) => change(() => setGround(v))} options={[['', 'All grounds'], ...(grounds?.items ?? []).map((g) => [g.id, g.name] as [string, string])]} /></Field>
             <Field label="Activity"><Select value={inactive} onChange={(v) => change(() => setInactive(v))} options={[['', 'Any time'], [addDaysISO(today, -30), 'Not played in 30 days'], [addDaysISO(today, -90), 'Not played in 90 days']]} /></Field>
             <Field label="Played at least"><input className="inp" type="number" min="1" inputMode="numeric" placeholder="e.g. 3" value={min} onChange={(e) => change(() => setMin(e.target.value))} /></Field>
@@ -67,7 +67,8 @@ function Directory() {
               { head: 'Person', cell: (c) => <><a className="strong" href={`#/customers/${encodeURIComponent(c.id)}`} onClick={(e) => e.stopPropagation()}>{c.name}</a><div className="muted small">{[c.phone, c.email].filter(Boolean).join(' · ')}</div></> },
               { head: who === 'played' ? 'Times played' : 'Bookings', num: true, cell: (c) => c.timesPlayed },
               // a booking ahead is not a game played: the last one that has started, and the next one under it
-              { head: 'Last played', cell: (c) => <>{c.lastPastAt ? fmtDate(day(c.lastPastAt)) : <span className="muted">Not yet</span>}{c.nextAt && <div className="muted small">Next {fmtDate(day(c.nextAt))}</div>}</> },
+              { head: 'Last played', cell: (c) => <>{c.lastPastAt ? fmtDate(day(c.lastPastAt)) : <span className="muted">{c.timesPlayed ? 'Not yet' : 'Not booked yet'}</span>}{c.nextAt && <div className="muted small">Next {fmtDate(day(c.nextAt))}</div>}</> },
+              { head: 'Signed up', cell: (c) => fmtDate(day(c.signedUpAt)) },
               { head: 'Paid', num: true, cell: (c) => (c.paidPaise == null ? '—' : inr(c.paidPaise)) },
               // only the channels this person said yes to (and has an address for): the counts above add these up
               { head: 'Can reach on', cell: (c) => { const on = (['email', 'whatsapp', 'sms'] as const).filter((k) => c.reachable[k]); return on.length ? <div className="row" style={{ gap: 6 }}>{on.map((k) => <Chip key={k} tone="good">{k === 'sms' ? 'SMS' : k === 'email' ? 'Email' : 'WhatsApp'}</Chip>)}</div> : <span className="muted small">No channel agreed</span>; } },

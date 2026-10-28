@@ -67,7 +67,7 @@ export function contactRoutes(r: Router): void {
     const money = canSeeRevenue(u); // the "Total paid" column is revenue: only for those who may see revenue
     const rows: (string | number)[][] = [['Name', 'Phone (with country code 91)', 'Email', 'Times played', 'Sessions (slots)', 'First played', 'Last played', 'Next booking', ...(money ? ['Total paid'] : []), 'Grounds', 'OK to email', 'OK to WhatsApp', 'OK to text']];
     for (const p of people) {
-      rows.push([p.name, p.phone ? waNumber(p.phone) : '', p.email ?? '', p.timesPlayed, p.slotsPlayed, istDate(p.firstPlayedAt), p.lastPastAt ? istDate(p.lastPastAt) : '', p.nextAt ? istDate(p.nextAt) : '', ...(money ? [formatPaise(p.paidPaise ?? 0, true)] : []),
+      rows.push([p.name, p.phone ? waNumber(p.phone) : '', p.email ?? '', p.timesPlayed, p.slotsPlayed, p.firstPlayedAt ? istDate(p.firstPlayedAt) : '', p.lastPastAt ? istDate(p.lastPastAt) : '', p.nextAt ? istDate(p.nextAt) : '', ...(money ? [formatPaise(p.paidPaise ?? 0, true)] : []),
         p.groundIds.map((g) => names.get(g) ?? g).join('; '), yn(p.reachable.email), yn(p.reachable.whatsapp), yn(p.reachable.sms)]);
     }
     audit({ id: u.id, role: u.role }, 'contacts.export', 'contacts', null, { rows: people.length, filter: f }, owner);
