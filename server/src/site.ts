@@ -11,14 +11,8 @@ const TYPES: Record<string, string> = {
 };
 
 /** Serves the built website, falling back to index.html for client-side routes. */
-/**
- * `tenant`: the request came to a customer business's own address (white-label), so its pages are the plain booking page
- * (book.html), never the main site. /b/<slug> is the same page on any address, for a business with no address of its own yet.
- */
-export function serveWeb(cfg: Config, url: URL, ifNoneMatch?: string, tenant = false): Reply {
+export function serveWeb(cfg: Config, url: URL, ifNoneMatch?: string): Reply {
   let p = decodeURIComponent(url.pathname);
-  if (/^\/b\/[a-z0-9-]{1,40}\/?$/.test(p) || (tenant && (p === '/' || !extname(p)))) p = '/book.html';
-  if (tenant && p === '/index.html') p = '/book.html';
   if (p.includes('\0')) return { status: 400, body: { error: { code: 'BAD_URL', message: 'Bad address' } } };
   const root = normalize(cfg.webDir);
   const file = normalize(join(root, p === '/' ? 'index.html' : p));

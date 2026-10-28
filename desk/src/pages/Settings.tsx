@@ -11,29 +11,20 @@ import AiName from '../parts/admin/AiName';
 import SharedSheet from '../parts/admin/SharedSheet';
 import WaitlistSettings from '../parts/admin/Waitlist';
 import CheckInSettings from '../parts/admin/CheckIn';
-import BrandSettings, { type Brand } from '../parts/admin/Brand';
 import { useSession } from '../App';
-import { can, useApi } from '../lib';
+import { can } from '../lib';
 
 // The ground's own settings. People, Services and Backups are the software owner's, so they live on the Platform page only; their old
 // addresses here open them there (routes.ts, MERGED). Connections stays here for everyone (Settings, Connections: CLAUDE.md).
-const TABS: [string, string][] = [['business', 'Your business'], ['prices', 'Prices and timings'], ['booking', 'Booking window'], ['waitlist', 'Waitlist'], ['checkin', 'Check-in'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']];
-
-// The main website's settings (booking window, payments, website look, festivals, the assistant's name, connections, go-live) run
-// the main site, so another customer business sees only its own business and prices (the server refuses the rest: requireMainBusiness).
-const OWN = ['business', 'prices'];
+const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['waitlist', 'Waitlist'], ['checkin', 'Check-in'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']];
 
 export default function Settings({ sub }: { sub: string }) {
-  const { me, ownerId } = useSession();
-  const [brand] = useApi<Brand>('/api/desk/brand', [ownerId]);
-  const tabs = me.role !== 'super_admin' && brand && !brand.mainSettings ? TABS.filter(([k]) => OWN.includes(k)) : TABS;
   // Admin, Settings opens on a list of every setting, rather than on prices (which already has its own menu item)
-  if (!sub.split('/')[0]) return <Hub tabs={tabs} />;
-  const tab = sectionOf(sub, tabs.map(([k]) => k));
+  if (!sub.split('/')[0]) return <Hub tabs={TABS} />;
+  const tab = sectionOf(sub, TABS.map(([k]) => k));
   return (
     <div className="stack">
       <PageHead eyebrow="Settings" title={TABS.find(([k]) => k === tab)?.[1] ?? 'Settings'} />
-      {tab === 'business' && <BrandSettings />}
       {tab === 'prices' && <Prices />}
       {tab === 'booking' && <Booking />}
       {tab === 'waitlist' && <WaitlistSettings />}
@@ -55,7 +46,6 @@ function ConnectionsTab() {
 }
 
 const ABOUT: Record<string, string> = {
-  business: 'Your business name, your app name, your ground logo and your app logo.',
   prices: 'What each ball and practice session costs, by day and time, and the days the ground is closed.',
   booking: 'When customers can book online, and days switched off for booking.',
   waitlist: 'The weekly waitlist (Sunday leather ball): when a free session is offered, and priority for regular players.',

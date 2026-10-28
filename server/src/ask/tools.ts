@@ -3,7 +3,6 @@ import { many, one } from '../db.ts';
 import { now } from '../clock.ts';
 import { forbidden, HttpError } from '../errors.ts';
 import { hasPermission, type UserRow } from '../auth.ts';
-import { mainSiteBusinessId } from '../businesses.ts';
 import { addDays, istDate, istMidnight } from '../time.ts';
 import { overview as opsOverview } from '../reports.ts';
 import { summarize } from '../contacts.ts';
@@ -34,8 +33,8 @@ export function can(ctx: Ctx, area: Area): boolean {
   if (area === 'tasks') return hasPermission(u, 'manage_tasks');
   if (area === 'team') return u.role !== 'staff';
   if (area === 'approvals') return looksAfterAny(u);
-  // the same people as the Compliance page: the software owner, and the owner of the main site's business (requireMainBusiness)
-  if (area === 'compliance') { const main = mainSiteBusinessId(); return u.role === 'super_admin' || (u.role === 'owner' && (!main || main === u.id)); }
+  // the same people as the Compliance page: the owner and the software owner
+  if (area === 'compliance') return u.role === 'owner' || u.role === 'super_admin';
   return hasPermission(u, 'view_customers');
 }
 export function need(ctx: Ctx, area: Area): void {
