@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { api } from './api';
 import type { AppConfig, Availability, Ball, Ground, HoldQuote, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
-import { Btn, Chip, Field, GuppiMark, Icon, KV, ListCard, ListRow, Loading, MonthBar, Segmented, Steps, s } from './ui';
+import { Btn, Chip, Field, GuppiMark, Icon, type IconName, KV, Loading, MonthBar, Segmented, Steps, s } from './ui';
 import { useGroundPhoto } from './photo';
-import { C, inr } from './theme';
+import { C, inr, tint } from './theme';
 import { GuppiBookScreen } from './GuppiBookScreen';
 
 const istToday = (): string => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
@@ -23,24 +23,57 @@ function Hero() {
       <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: pic ? 'rgba(6,22,13,.52)' : 'transparent' }} />
       <View style={{ zIndex: 1 }}>
         <Text style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, fontWeight: '700', marginBottom: 6 }}>Daji Cricket Ground · Surat</Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 34, lineHeight: 38, fontWeight: '800', letterSpacing: -0.8 }}>Play.{'\n'}Practice.{'\n'}<Text style={{ color: '#5FD68A' }}>Grow.</Text></Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 34, lineHeight: 38, fontWeight: '800', letterSpacing: -0.8 }}>Play.{'\n'}Practice.{'\n'}<Text style={{ color: C.onBg }}>Grow.</Text></Text>
         <Text style={{ color: 'rgba(255,255,255,.88)', fontSize: 14, lineHeight: 20, marginTop: 8 }}>Floodlit ground and practice nets. Pick a free slot, pay a small advance and the time is yours.</Text>
       </View>
     </View>
   );
 }
-/** One time or session to pick, three to a row (sessions two to a row); the chosen one is filled green. */
-function SlotTile({ title, line, price, on, disabled, wide, onPress }: { title: string; line?: string; price: string; on: boolean; disabled: boolean; wide?: boolean; onPress: () => void }) {
+/** One time or session to pick: its time and price on the left and whether it is free on the right; the chosen one is outlined in gold. */
+function SlotTile({ title, line, price, on, disabled, onPress }: { title: string; line?: string; price: string; on: boolean; disabled: boolean; wide?: boolean; onPress: () => void }) {
+  const pill = on ? ['Selected', C.goldDark] : disabled ? ['Unavailable', C.danger] : ['Available', C.ok];
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected: on, disabled }} disabled={disabled} onPress={onPress}
-      style={{ flexBasis: wide ? '47%' : '30%', flexGrow: 1, borderRadius: 12, borderWidth: 1, borderColor: on ? C.strong : C.line, backgroundColor: on ? C.strong : C.panel, paddingVertical: 10, paddingHorizontal: 10, alignItems: 'center', opacity: disabled ? 0.4 : 1 }}>
-      <Text style={{ color: on ? C.onStrong : C.text, fontSize: 14, fontWeight: '700' }}>{title}</Text>
-      {!!line && <Text style={{ color: on ? C.onStrong : C.muted, fontSize: 12, marginTop: 2 }}>{line}</Text>}
-      <Text style={{ color: on ? C.onStrong : C.muted, fontSize: 12, marginTop: 2, textTransform: 'capitalize' }}>{price}</Text>
+      style={{ flexBasis: '100%', flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: on ? 2 : 1, borderColor: on ? C.strong : C.line, backgroundColor: on ? tint(C.strong, 0.12) : C.panel, paddingVertical: on ? 11 : 12, paddingHorizontal: on ? 13 : 14, opacity: disabled ? 0.6 : 1 }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: C.text, fontSize: 15, fontWeight: '700' }}>{title}{line ? <Text style={{ fontWeight: '500' }}>{`  ${line}`}</Text> : null}</Text>
+        <Text style={{ color: disabled ? C.muted : C.text, fontSize: 13, fontWeight: '700', marginTop: 2, textTransform: 'capitalize' }}>{price}</Text>
+      </View>
+      <View style={{ backgroundColor: tint(pill[1]!, 0.14), borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}><Text style={{ color: pill[1], fontSize: 11, fontWeight: '800' }}>{pill[0]}</Text></View>
     </Pressable>
   );
 }
-const Label = ({ children }: { children: React.ReactNode }) => <Text style={{ color: C.text, fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>{children}</Text>;
+const Label = ({ children }: { children: React.ReactNode }) => <Text style={{ color: C.head, fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>{children}</Text>;
+
+const AMENITY_ICON: [RegExp, IconName][] = [[/flood|light/i, 'bulb-outline'], [/turf|wicket|pitch/i, 'grid-outline'], [/pavilion|seat|stand/i, 'home-outline'], [/park/i, 'car-outline'], [/wash|toilet|change/i, 'water-outline'], [/net/i, 'baseball-outline']];
+/** A ground as a photo card: its picture, name and place, a few amenities, and a pill when it is the one chosen. */
+function GroundCard({ g, on, onPress }: { g: Ground; on: boolean; onPress: () => void }) {
+  const pic = useGroundPhoto();
+  return (
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: C.panel, borderWidth: 2, borderColor: on ? C.strong : 'transparent', marginBottom: 12 }}>
+      <View style={{ height: 120, backgroundColor: '#1B4A2E' }}>
+        {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
+        <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: on ? C.strong : 'rgba(255,255,255,0.92)', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}>
+          <Text style={{ color: on ? C.onStrong : '#1C7A3E', fontSize: 11, fontWeight: '800' }}>{on ? 'Selected' : 'Available'}</Text>
+        </View>
+      </View>
+      <View style={{ padding: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.text, fontSize: 17, fontWeight: '800' }}>{g.name}</Text>
+            {!!g.city && <Text style={s.muted}>{g.city}</Text>}
+          </View>
+          <Icon name={on ? 'checkmark-circle' : 'chevron-forward-circle-outline'} size={26} color={on ? C.goldDark : C.muted} />
+        </View>
+        {!!g.amenities?.length && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+            {g.amenities.slice(0, 3).map((a) => <View key={a} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Icon name={AMENITY_ICON.find(([re]) => re.test(a))?.[1] ?? 'checkmark-outline'} size={14} color={C.muted} /><Text style={[s.muted, { fontSize: 12 }]}>{a}</Text></View>)}
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
 
 /** A month at a time. Only the days in `open` can be picked. */
 function DayPicker({ open, value, onPick }: { open: string[]; value: string; onPick: (d: string) => void }) {
@@ -180,7 +213,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   if (!cfg) return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]}>
       <Hero />
-      {err ? (<><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={() => void loadGrounds()} style={{ marginTop: 16 }} /></>) : (<><Loading /><Text style={[s.muted, { textAlign: 'center' }]}>Loading today's slots…</Text></>)}
+      {err ? (<><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={() => void loadGrounds()} style={{ marginTop: 16 }} /></>) : (<><Loading /><Text style={[s.note, { textAlign: 'center' }]}>Loading today's slots…</Text></>)}
     </ScrollView>
   );
   if (guppi && cfg.guppiBookingEnabled) return <View style={s.screen}><GuppiBookScreen onHold={onHold} onBack={() => setGuppi(false)} signedIn={!onNeedSignIn} onNeedSignIn={onNeedSignIn} /></View>;
@@ -200,40 +233,35 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
           <Icon name="chevron-forward" size={18} color={C.muted} />
         </Pressable>
       )}
-      <Label>Ground</Label>
-      <ListCard>
-        {grounds.map((g, i) => (
-          <ListRow key={g.id} icon="location-outline" title={g.name} sub={[g.city, g.amenities?.slice(0, 2).join(', ')].filter(Boolean).join(' · ')} last={i === grounds.length - 1} onPress={() => setGid(g.id)}
-            right={<Icon name={g.id === gid ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={g.id === gid ? C.gold : C.line} />} />
-        ))}
-      </ListCard>
+      <Label>Choose a ground</Label>
+      {grounds.map((g) => <GroundCard key={g.id} g={g} on={g.id === gid} onPress={() => setGid(g.id)} />)}
       <Label>Day</Label>
       <DayPicker open={days} value={date} onPick={setDate} />
 
-      {av === null ? (err ? <Btn kind="outline" label="Try again" onPress={() => void loadSlots()} /> : <Loading />) : av.closed ? <Text style={s.muted}>The ground is closed on this day. Please pick another day.</Text> : hasRates ? (<>
+      {av === null ? (err ? <Btn kind="outline" label="Try again" onPress={() => void loadSlots()} /> : <Loading />) : av.closed ? <Text style={s.note}>The ground is closed on this day. Please pick another day.</Text> : hasRates ? (<>
         <Label>Play with</Label>
         <Segmented items={balls.map((b) => [b, BALLS[b]] as [Ball, string])} value={ball as Ball} onChange={(b) => { setBall(b); setWin(null); setHr(null); }} />
-        {!ball ? <Text style={s.muted}>Choose the ball you want to play with.</Text> : !opts.length ? <Text style={s.muted}>Nothing is on sale for this ball on this day. Pick another day, or call us.</Text> : (<>
+        {!ball ? <Text style={s.note}>Choose the ball you want to play with.</Text> : !opts.length ? <Text style={s.note}>Nothing is on sale for this ball on this day. Pick another day, or call us.</Text> : (<>
           {fixed.length > 0 && <Label>Sessions</Label>}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {fixed.map((o) => <SlotTile key={o.ruleId} wide title={o.label} line={`${o.time} – ${o.endTime}`} price={o.state === 'available' ? `${inr(o.pricePaise)}${o.proRated ? ' · part session' : ''}` : o.state} on={win === o.ruleId} disabled={o.state !== 'available'} onPress={() => { setWin(o.ruleId); setHr(null); }} />)}
           </View>
           {hourly.map((o) => (
             <View key={o.ruleId}>
-              <Text style={[s.muted, { marginVertical: 6 }]}>{o.label} · {inr(o.pricePaise)} per hour · up to {maxSlots} hours in a row</Text>
+              <Text style={[s.note, { marginVertical: 6 }]}>{o.label} · {inr(o.pricePaise)} per hour · up to {maxSlots} hours in a row</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {(o.slots ?? []).map((sl, i) => <SlotTile key={sl.start} title={sl.time} price={sl.state === 'available' ? inr(sl.pricePaise) : sl.state} on={!!hr && hr.ruleId === o.ruleId && hr.idx.includes(i)} disabled={sl.state !== 'available'} onPress={() => toggleHour(o, i)} />)}
               </View>
             </View>
           ))}
         </>)}
-        {!!ground?.ratesNote && <Text style={[s.muted, { marginTop: 10 }]}>{ground.ratesNote}</Text>}
+        {!!ground?.ratesNote && <Text style={[s.note, { marginTop: 10 }]}>{ground.ratesNote}</Text>}
       </>) : (<>
         <Label>Time</Label>
-        <Text style={[s.muted, { marginBottom: 10 }]}>Choose up to {maxSlots} slots in a row.</Text>
+        <Text style={[s.note, { marginBottom: 10 }]}>Choose up to {maxSlots} slots in a row.</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {av.slots.map((sl) => <SlotTile key={sl.start} title={sl.time} price={inr(sl.pricePaise)} on={pick.includes(sl.start)} disabled={sl.state !== 'available'} onPress={() => toggleSlot(sl)} />)}
-          {!av.slots.length && <Text style={s.muted}>No slots on this day.</Text>}
+          {!av.slots.length && <Text style={s.note}>No slots on this day.</Text>}
         </View>
       </>)}
 
@@ -246,10 +274,10 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
         {rep && (<>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Chip label="−" onPress={() => setRep({ ...rep, n: Math.max(2, rep.n - 1) })} />
-            <Text style={[s.text, { marginRight: 8, marginBottom: 8 }]}>{rep.n} times in all</Text>
+            <Text style={[s.text, { color: C.head, marginRight: 8, marginBottom: 8 }]}>{rep.n} times in all</Text>
             <Chip label="+" onPress={() => setRep({ ...rep, n: Math.min(REPEATS[rep.f].max, rep.n + 1) })} />
           </View>
-          <Text style={s.muted}>Repeats {REPEATS[rep.f].word}. You pay for the first date now; the other {rep.n - 1} are reserved for you and their balance is paid at the ground{cfg?.autoDebitEnabled ? ' (or by auto-debit)' : ''}. Closed or taken dates are left out.</Text>
+          <Text style={s.note}>Repeats {REPEATS[rep.f].word}. You pay for the first date now; the other {rep.n - 1} are reserved for you and their balance is paid at the ground{cfg?.autoDebitEnabled ? ' (or by auto-debit)' : ''}. Closed or taken dates are left out.</Text>
         </>)}
       </>)}
       <View style={{ marginTop: 14 }}><Field label="Promo code" value={promo} onChangeText={setPromo} autoCapitalize="characters" placeholder="Have a code?" /></View>
@@ -267,7 +295,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
         </View>
       )}
       <Btn label={body ? `Hold · ${chosenText}${quote ? ` · ${inr(quote.fullPricePaise)}` : ''}` : hasRates ? 'Choose ball and session' : 'Choose your slots'} onPress={hold} disabled={!body} busy={busy} style={{ marginTop: 16 }} />
-      {!!cfg && <Text style={[s.muted, { textAlign: 'center', color: C.muted }]}>Free cancellation more than {cfg.freeCancelHours} hours before the start.</Text>}
+      {!!cfg && <Text style={[s.note, { textAlign: 'center' }]}>Free cancellation more than {cfg.freeCancelHours} hours before the start.</Text>}
     </ScrollView>
   );
 }

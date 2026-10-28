@@ -3,7 +3,7 @@ import { Image, RefreshControl, ScrollView, StyleSheet, Text, View, Pressable } 
 import { api } from './api';
 import type { StaffBooking, Task, User, MatchRow } from './types';
 import { ActionTile, Avatar, Badge, Icon, type IconName, SectionHead, StatTile, s } from './ui';
-import { C, mode, niceDate } from './theme';
+import { C, niceDate } from './theme';
 import { useGroundPhoto } from './photo';
 
 const hhmm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
@@ -46,7 +46,7 @@ export function HomeScreen({ user, aiName, go }: { user: User; aiName: string; g
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
       <View style={[s.row, { marginBottom: 12 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-          <Image source={mode === 'light' ? require('../assets/logo-green.png') : require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 112, height: 38 }} />
+          <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 112, height: 38 }} />
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Your profile" onPress={() => go('profile')}><Avatar name={user.name} url={user.avatarUrl} size={40} /></Pressable>
       </View>

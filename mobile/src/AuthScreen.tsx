@@ -36,19 +36,19 @@ export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) 
         </View>
         <View style={s.pad}>
         <Text style={s.h1}>{mode === 'in' ? 'Sign in' : 'Create your account'}</Text>
-        <Text style={[s.muted, { marginBottom: 22 }]}>{note ?? (admin ? 'For the ground team and owners.' : 'Book the ground, see what you have played and spent, and follow your child at the academy.')}</Text>
+        <Text style={[s.note, { marginBottom: 22 }]}>{note ?? (admin ? 'For the ground team and owners.' : 'Book the ground, see what you have played and spent, and follow your child at the academy.')}</Text>
         {mode === 'up' && (<><NameFields value={f.name} onChange={set('name')} /><PhoneField code={f.countryCode} number={f.phone} onCode={set('countryCode')} onNumber={set('phone')} /></>)}
         <Field label={mode === 'in' ? 'Email or mobile number' : 'Email'} value={f.email} onChangeText={set('email')} keyboardType={mode === 'in' ? 'default' : 'email-address'} autoCapitalize="none" autoComplete={mode === 'in' ? 'username' : 'email'} />
-        {mode === 'in' && <Text style={[s.muted, { marginTop: -6, marginBottom: 12 }]}>Number from outside India? Start it with + and the country code.</Text>}
+        {mode === 'in' && <Text style={[s.note, { marginTop: -6, marginBottom: 12 }]}>Number from outside India? Start it with + and the country code.</Text>}
         <Field label="Password" value={f.password} onChangeText={set('password')} secureTextEntry autoComplete="password" />
-        {mode === 'up' && <Text style={[s.muted, { marginBottom: 12 }]}>8 or more characters with a capital letter, a small letter and a number.</Text>}
+        {mode === 'up' && <Text style={[s.note, { marginBottom: 12 }]}>8 or more characters with a capital letter, a small letter and a number.</Text>}
         {needCode && <Field label="Code" value={f.code} onChangeText={set('code')} keyboardType="number-pad" maxLength={6} />}
         {!!err && <Text style={s.err}>{err}</Text>}
         <Btn label={mode === 'in' ? 'Sign in' : 'Create account'} onPress={go} busy={busy} />
-        {!admin && <Btn kind="ghost" label={mode === 'in' ? 'New here? Create an account' : 'Have an account? Sign in'} onPress={() => { setMode(mode === 'in' ? 'up' : 'in'); setErr(''); }} />}
-        {onBack && <Btn kind="ghost" label="Back to booking" onPress={onBack} />}
+        {!admin && <Btn kind="link" label={mode === 'in' ? 'New here? Create an account' : 'Have an account? Sign in'} onPress={() => { setMode(mode === 'in' ? 'up' : 'in'); setErr(''); }} />}
+        {onBack && <Btn kind="link" label="Back to booking" onPress={onBack} />}
         <View style={{ height: 1, backgroundColor: C.line, marginVertical: 14 }} />
-        <Btn kind="ghost" label={look.mode === 'dark' ? 'Use the light look' : 'Use the dark look'} onPress={look.flip} />
+        <Btn kind="link" label={look.mode === 'dark' ? 'Use the light look' : 'Use the dark look'} onPress={look.flip} />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

@@ -66,7 +66,7 @@ export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: str
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
       <Text style={s.eyebrow}>Team</Text><Text style={s.h1}>Tasks</Text>
-      <Text style={s.muted}>Close a task with photos taken right now. The camera opens, and a photo is only accepted if it was taken in the last 5 minutes. Gallery pictures and old photos are turned away.</Text>
+      <Text style={s.note}>Close a task with photos taken right now. The camera opens, and a photo is only accepted if it was taken in the last 5 minutes. Gallery pictures and old photos are turned away.</Text>
       {manager && (
         <View style={[s.card, { marginTop: 14 }]}>
           <Field label="New task" value={title} onChangeText={setTitle} placeholder="e.g. Roll the pitch" autoCapitalize="sentences" />
@@ -87,7 +87,7 @@ export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: str
       <View style={{ flexDirection: 'row', marginVertical: 10 }}>{(['open', 'done', 'cancelled'] as const).map((f) => <Chip key={f} label={f === 'open' ? 'Open' : f === 'done' ? 'Done' : 'Cancelled'} on={filter === f} onPress={() => setFilter(f)} />)}</View>
       <Field label="Search" value={q} onChangeText={setQ} placeholder="Title, details, step or person" />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
-      {shown === null ? <Loading /> : !shown.length ? <Text style={s.muted}>{q.trim() ? 'No task matches the search.' : filter === 'open' ? 'Nothing to do right now.' : 'Nothing here yet.'}</Text> : shown.map((t) => {
+      {shown === null ? <Loading /> : !shown.length ? <Text style={s.note}>{q.trim() ? 'No task matches the search.' : filter === 'open' ? 'Nothing to do right now.' : 'Nothing here yet.'}</Text> : shown.map((t) => {
         const missing = Math.max(0, t.photosRequired - t.photos.length);
         const list = t.checklist ?? []; const ticked = list.filter((c) => c.done).length;
         const canTick = t.status === 'open' && (manager || !t.assignedTo || t.assignedTo === user.id);

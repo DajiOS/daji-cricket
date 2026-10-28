@@ -11,6 +11,7 @@ import { MeScreen } from './src/MeScreen';
 import { AskScreen } from './src/AskScreen';
 import { StaffScreen, type View_ as StaffView } from './src/StaffScreen';
 import { HomeScreen, type HomeGo } from './src/HomeScreen';
+import { CustomerHome } from './src/CustomerHome';
 import { LiveScreen } from './src/LiveScreen';
 import { TasksScreen } from './src/TasksScreen';
 import { ProfileScreen } from './src/ProfileScreen';
@@ -55,15 +56,15 @@ const TAB_ICON: Record<string, IconName> = { home: 'home', book: 'calendar', me:
 /** The bar of tabs along the bottom: an icon over each name; the open tab is filled green. */
 function TabBar({ tabs, on, onPick, bottom }: { tabs: [string, string][]; on: string; onPick: (id: string) => void; bottom: number }) {
   return (
-    <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.panel, paddingHorizontal: 6, paddingTop: 8, paddingBottom: Math.max(12, bottom) }}>
+    <View style={{ flexDirection: 'row', borderTopColor: 'rgba(255,255,255,0.08)', borderTopWidth: 1, backgroundColor: C.bar, paddingHorizontal: 6, paddingTop: 8, paddingBottom: Math.max(12, bottom) }}>
       {tabs.map(([id, name]) => {
         const sel = on === id, icon = TAB_ICON[id] ?? 'ellipse';
         return (
           <Pressable key={id} accessibilityRole="tab" accessibilityState={{ selected: sel }} accessibilityLabel={name} onPress={() => onPick(id)} style={{ flex: 1, alignItems: 'center', gap: 3 }}>
-            <View style={{ paddingVertical: 4, paddingHorizontal: 14, borderRadius: 999, backgroundColor: sel ? C.soft : 'transparent' }}>
-              <Icon name={(sel ? icon : `${icon}-outline`) as IconName} size={22} color={sel ? C.gold : C.muted} />
+            <View style={{ paddingVertical: 4, paddingHorizontal: 14, borderRadius: 999, backgroundColor: sel ? 'rgba(227,194,122,0.14)' : 'transparent' }}>
+              <Icon name={(sel ? icon : `${icon}-outline`) as IconName} size={22} color={sel ? C.onBg : C.headMuted} />
             </View>
-            <Text numberOfLines={1} style={{ color: sel ? C.gold : C.muted, fontSize: 11, fontWeight: sel ? '800' : '600' }}>{name}</Text>
+            <Text numberOfLines={1} style={{ color: sel ? C.onBg : C.headMuted, fontSize: 11, fontWeight: sel ? '800' : '600' }}>{name}</Text>
           </Pressable>
         );
       })}
@@ -75,7 +76,7 @@ function AppInner({ theme }: { theme: Mode }) {
   const insets = useSafeAreaInsets(); // Android draws behind the system bars now, so the tab bar clears the gesture or button bar itself
   void theme; // a new value makes the whole app draw again with the new colours
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [tab, setTab] = useState<Tab>('book');
+  const [tab, setTab] = useState<Tab>('home');
   const [hold, setHold] = useState<HoldResponse | null>(null);
   const [done, setDone] = useState<{ b: Booking; paid: boolean } | null>(null);
   const [more, setMore] = useState<More>(null);
@@ -89,6 +90,7 @@ function AppInner({ theme }: { theme: Mode }) {
   const [voiceAsk, setVoiceAsk] = useState<{ q: string; n: number } | null>(null);
   const [taskDraft, setTaskDraft] = useState<{ title: string; n: number } | null>(null);
   const [staffView, setStaffView] = useState<{ v: StaffView; n: number }>({ v: 'today', n: 0 }); // Home can open Bookings on one of its tabs
+  const [meStart, setMeStart] = useState<{ v: 'ground' | 'academy'; n: number }>({ v: 'ground', n: 0 }); // customer Home can open My Bookings on Academy
   const [voiceNote, setVoiceNote] = useState('');
   useEffect(() => {
     const take = (url: string | null) => { const v = parseVoiceLink(url); if (v) setVoiceLink(v); };
@@ -119,7 +121,6 @@ function AppInner({ theme }: { theme: Mode }) {
     })();
   }, []);
   // once signed in, people who work for the ground land on their own Home
-  useEffect(() => { if (user && user.role !== 'customer') setTab((t) => (t === 'book' ? 'home' : t)); }, [user?.id]);
   useEffect(() => { if (user) void registerForPush(); }, [user?.id]);
   // the super admin works inside one owner's desk at a time
   useEffect(() => {
@@ -129,27 +130,28 @@ function AppInner({ theme }: { theme: Mode }) {
       .catch(() => {});
   }, [user?.role]);
   useEffect(() => onNotificationTap(() => { setHold(null); setDone(null); setMore(null); setTab(user && user.role !== 'customer' ? 'tasks' : 'me'); }), [user?.role]);
-  const signOut = useCallback(async () => { await unregisterPush(); await serverSignOut(); await setToken(null); await setLockOn(false); setViewOwner(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('book'); }, []);
+  const signOut = useCallback(async () => { await unregisterPush(); await serverSignOut(); await setToken(null); await setLockOn(false); setViewOwner(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('home'); }, []);
 
   if (user === undefined) return <View style={s.screen}><Loading /></View>;
-  if (user === null && ADMIN_APP) return <><StatusBar style={mode === 'light' ? 'dark' : 'light'} /><AuthScreen admin onUser={setUser} /></>;
+  if (user === null && ADMIN_APP) return <><StatusBar style="light" /><AuthScreen admin onUser={setUser} /></>;
   if (user === null) {
     // Guests open straight on the booking page and only sign in when they hold a slot or open their own pages.
     const ask = () => setSignin(true);
     return (
       <View style={s.screen}>
-        <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
-        <View style={{ flex: 1, display: signin || tab === 'live' ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
+        <StatusBar style="light" />
+        <View style={{ flex: 1, display: signin || tab !== 'book' ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
         {!signin && tab === 'live' && <LiveScreen />}
+        {!signin && tab === 'home' && <CustomerHome user={null} aiName="" go={(to) => { if (to === 'book' || to === 'live') setTab(to); else ask(); }} />}
         {signin && <AuthScreen onUser={(u) => { setSignin(false); setUser(u); }} onBack={() => setSignin(false)} note="Sign in to hold your slot. Your day and time stay as you left them." />}
-        <TabBar tabs={[['book', 'Book'], ['live', 'Live'], ['signin', 'Sign in']]} on={signin ? 'signin' : tab === 'live' ? 'live' : 'book'} onPick={(id) => { if (id === 'signin') ask(); else { setSignin(false); setTab(id as Tab); } }} bottom={insets.bottom} />
+        <TabBar tabs={[['home', 'Home'], ['book', 'Book'], ['live', 'Live'], ['signin', 'Sign in']]} on={signin ? 'signin' : tab === 'live' || tab === 'home' ? tab : 'book'} onPick={(id) => { if (id === 'signin') ask(); else { setSignin(false); setTab(id as Tab); } }} bottom={insets.bottom} />
       </View>
     );
   }
   if (ADMIN_APP === (user.role === 'customer')) {
     return (
       <View style={[s.screen, s.pad, { paddingTop: 90 }]}>
-        <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
+        <StatusBar style="light" />
         <Text style={s.eyebrow}>{ADMIN_APP ? 'Daji Admin' : 'Daji Cricket Ground'}</Text>
         <Text style={s.h1}>{ADMIN_APP ? 'This app is for the ground team' : 'Please use the Daji Admin app'}</Text>
         <Text style={[s.muted, { marginBottom: 18 }]}>{ADMIN_APP ? 'Your account is a customer account. Book and manage your games in the Daji Cricket Ground app.' : 'Your account belongs to the ground team. Sign in to the Daji Admin app to work with bookings, tasks and accounts.'}</Text>
@@ -245,21 +247,22 @@ function AppInner({ theme }: { theme: Mode }) {
       </View>
     );
   } else if (hold) body = <PayScreen hold={hold} user={user} onBack={() => setHold(null)} onDone={(b, paid) => { setHold(null); setDone({ b, paid }); }} />;
+  else if (tab === 'home') body = <CustomerHome user={user} aiName={aiName} go={(to) => { if (to === 'me' || to === 'academy') { setMeStart((x) => ({ v: to === 'academy' ? 'academy' : 'ground', n: x.n + 1 })); setTab('me'); } else setTab(to); }} />;
   else if (tab === 'book') body = <BookScreen onHold={setHold} />;
-  else if (tab === 'me') body = <MeScreen onSignOut={signOut} user={user} />;
+  else if (tab === 'me') body = <MeScreen key={meStart.n} start={meStart.v} onSignOut={signOut} user={user} />;
   else if (tab === 'profile') body = <ProfileScreen user={user} onUser={setUser} onSignOut={signOut} />;
   else if (tab === 'live') body = <LiveScreen />;
   else body = <AskScreen user={user} onUser={setUser} voice={voiceAsk} />;
 
   const tabs: [Tab, string][] = customer
-    ? [['book', 'Book'], ['me', 'Bookings'], ['live', 'Live'], ['ask', aiTab], ['profile', 'Profile']]
+    ? [['home', 'Home'], ['me', 'Bookings'], ['ask', aiTab], ['live', 'Live'], ['profile', 'Profile']]
     : [['home', 'Home'], ...(bookingsOk ? [['bookings', 'Bookings'] as [Tab, string]] : []), ['tasks', 'Tasks'], ['ask', aiTab], ['more', 'More']];
   return (
     <View style={s.screen}>
-      <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
+      <StatusBar style="light" />
       {!!voiceNote && <Pressable onPress={() => setVoiceNote('')} style={{ backgroundColor: C.soft, paddingTop: insets.top + 8, paddingBottom: 10, paddingHorizontal: 16 }}><Text style={s.text}>{voiceNote}</Text></Pressable>}
       <View key={wake} style={{ flex: 1 }}>{body}</View>
-      {!hold && <TabBar tabs={tabs} on={tab} onPick={(id) => { setDone(null); setMore(null); setTab(id as Tab); }} bottom={insets.bottom} />}
+      {!hold && <TabBar tabs={tabs} on={customer && tab === 'book' ? 'home' : tab} onPick={(id) => { setDone(null); setMore(null); setTab(id as Tab); }} bottom={insets.bottom} />}
       {locked && <LockScreen name={user.name} onUnlock={unlocked} onSignOut={signOut} />}
     </View>
   );
@@ -270,7 +273,7 @@ function MenuGroup({ title, rows, onPick }: { title: string; rows: (false | [Ico
   const shown = rows.filter(Boolean) as [IconName, string, string, More][];
   if (!shown.length) return null;
   return (<>
-    <Text style={[s.muted, { fontWeight: '700', marginTop: 8, marginBottom: 6 }]}>{title}</Text>
+    <Text style={[s.note, { fontWeight: '700', marginTop: 8, marginBottom: 6 }]}>{title}</Text>
     <ListCard>{shown.map(([icon, label, sub, to], i) => <ListRow key={String(to)} icon={icon} title={label} sub={sub || undefined} onPress={() => onPick(to)} last={i === shown.length - 1} />)}</ListCard>
   </>);
 }
@@ -283,7 +286,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   useEffect(() => { (async () => { try { const v = await SecureStore.getItemAsync(THEME_KEY); if (v === 'light' || v === 'dark') { setMode(v); refreshStyles(); setM(v); } } catch { /* keep light */ } setReady(true); })(); }, []);
   const flip = () => { const next: Mode = m === 'dark' ? 'light' : 'dark'; setMode(next); refreshStyles(); setM(next); SecureStore.setItemAsync(THEME_KEY, next).catch(() => {}); };
-  if (!ready) return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;
+  if (!ready) return <View style={{ flex: 1, backgroundColor: '#0E2A1B' }} />;
   return (
     <SafeAreaProvider>
       <Appearance.Provider value={{ mode: m, flip }}>
