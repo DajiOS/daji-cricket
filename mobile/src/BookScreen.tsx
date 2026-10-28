@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { api, API_URL } from './api';
 import type { AppConfig, Availability, Ball, Ground, HoldQuote, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
 import { Btn, Chip, Field, GuppiMark, KV, Loading, MonthBar, Steps, s } from './ui';
@@ -25,7 +25,7 @@ function Hero() {
   }, []);
   return (
     <View style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: '#123D24', padding: 20, paddingTop: 64, marginBottom: 4 }}>
-      {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} />}
+      {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
       <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: pic ? 'rgba(6,22,13,.52)' : 'transparent' }} />
       <View style={{ zIndex: 1 }}>
         <Text style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, fontWeight: '700', marginBottom: 6 }}>Daji Cricket Ground · Surat</Text>
@@ -174,7 +174,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   };
 
   if (!cfg) return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 52 }]}>
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 86 }]}>
       <Hero />
       {err ? (<><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={() => void loadGrounds()} style={{ marginTop: 16 }} /></>) : (<><Loading /><Text style={[s.muted, { textAlign: 'center' }]}>Loading today's slots…</Text></>)}
     </ScrollView>
@@ -186,7 +186,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const days = Array.from({ length: Math.min(cfg?.maxDaysAhead ?? 30, 366) }, (_, i) => addDays(first, i)).filter((d) => !(cfg?.bookingsCloseFrom && d >= cfg.bookingsCloseFrom) && !shut.has(d));
   const fixed = opts.filter((o) => o.mode === 'fixed'), hourly = opts.filter((o) => o.mode === 'hourly');
   return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 52 }]}>
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 86 }]}>
       <Hero />
       <Steps at={body ? 2 : 1} />
       {!!cfg.guppiBookingEnabled && (
@@ -249,7 +249,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
           <Text style={s.muted}>Repeats {REPEATS[rep.f].word}. You pay for the first date now; the other {rep.n - 1} are reserved for you and their balance is paid at the ground{cfg?.autoDebitEnabled ? ' (or by auto-debit)' : ''}. Closed or taken dates are left out.</Text>
         </>)}
       </>)}
-      <Field label="Promo code" value={promo} onChangeText={setPromo} autoCapitalize="characters" placeholder="Have a code?" />
+      <View style={{ marginTop: 14 }}><Field label="Promo code" value={promo} onChangeText={setPromo} autoCapitalize="characters" placeholder="Have a code?" /></View>
       {credit > 0 && <Chip label={`${useCredit ? '✓ ' : ''}Use my ${inr(credit)} account credit`} on={useCredit} onPress={() => setUseCredit(!useCredit)} />}
       {!!err && <Text style={s.err}>{err}</Text>}
       {!!body && (
