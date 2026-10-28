@@ -1,3 +1,4 @@
+import { ownsCustomer } from '../contacts.ts';
 import { Router, ok, created } from '../http.ts';
 import { U, page, ownerFilter, ownerOrFail, groundInScope } from './helpers.ts';
 import { Validator } from '../input.ts';
@@ -379,7 +380,8 @@ export function staffRoutes(r: Router): void {
     const cust = userRow(c.params.id!);
     // a multi-day booking is one row, with its dates and money across every day in `block`
     const bookings = cust ? listBookings({ ownerId: owner, customerId: cust.id, limit: 100, offset: 0, collapse: true }) : null;
-    if (!cust || cust.role !== 'customer' || !bookings || bookings.total === 0) throw notFound('Customer not found');
+    // someone who has an account and has not booked yet is this business's too while it is the only one (contacts.ts ownsCustomer)
+    if (!cust || cust.role !== 'customer' || !bookings || (bookings.total === 0 && !ownsCustomer(owner, cust.id))) throw notFound('Customer not found');
     const payments = many<any>('SELECT * FROM payments WHERE customer_id = ? AND owner_id = ? ORDER BY created_at DESC LIMIT 100', cust.id, owner);
     const enquiries = listEnquiries(u.role === 'super_admin' ? u : u, { limit: 100, offset: 0 }).items.filter((e) => e.customerId === cust.id || e.phone === cust.phone);
     const { id, name, firstName, lastName, phone, email, consent } = toUser(cust);
@@ -393,7 +395,7 @@ export function staffRoutes(r: Router): void {
     const owner = ownerFilter(c);
     if (!owner) throw new HttpError(400, 'OWNER_REQUIRED', 'Pass ?ownerId= to edit one owner\'s customer');
     const cust = userRow(c.params.id!);
-    if (!cust || cust.role !== 'customer' || !one('SELECT 1 FROM bookings WHERE customer_id = ? AND owner_id = ?', cust.id, owner)) throw notFound('Customer not found');
+    if (!cust || cust.role !== 'customer' || !ownsCustomer(owner, cust.id)) throw notFound('Customer not found');
     if (u.role !== 'super_admin' && one('SELECT 1 FROM bookings WHERE customer_id = ? AND owner_id <> ? UNION SELECT 1 FROM payments WHERE customer_id = ? AND owner_id <> ?', cust.id, owner, cust.id, owner)) {
       throw new HttpError(409, 'SHARED_CUSTOMER', 'This customer also books with another business, so only they (or the software owner) can change their sign-in details.');
     }

@@ -13,19 +13,35 @@ const PLAYED: Record<ContactWho, string> = {
   played: "(b.status = 'completed' OR (b.status = 'confirmed' AND b.end_at <= ?))",
   booked: "b.status IN ('confirmed','completed')",
   all: "b.status IN ('confirmed','completed','no_show')",
+  account: "b.status IN ('confirmed','completed','no_show')",
 };
+
+/** The business a new account belongs to before it books. A customer account is not tied to a business when it is made, so while the
+ *  platform has exactly one active owner (Daji today) a sign-up is theirs from the start. With more than one, an account becomes a
+ *  business's customer only by booking there, so one business never sees another's sign-ups. */
+export function soleOwner(): string | null {
+  const o = many<{ id: string }>("SELECT id FROM users WHERE role = 'owner' AND active = 1 LIMIT 2");
+  return o.length === 1 ? o[0]!.id : null;
+}
+const NEVER_BOOKED = "NOT EXISTS (SELECT 1 FROM bookings x WHERE x.customer_id = u.id) AND NOT EXISTS (SELECT 1 FROM payments y WHERE y.customer_id = u.id)";
+
+/** Is this customer one of this business's: they booked here, or they have an account and have not booked anywhere yet (see soleOwner). */
+export function ownsCustomer(ownerId: string, customerId: string): boolean {
+  if (one('SELECT 1 FROM bookings WHERE customer_id = ? AND owner_id = ?', customerId, ownerId)) return true;
+  return soleOwner() === ownerId && !!one(`SELECT 1 FROM users u WHERE u.id = ? AND u.role = 'customer' AND ${NEVER_BOOKED}`, customerId);
+}
 
 export const MAX_AUDIENCE = 5000;
 
 interface Row {
-  id: string; name: string; phone: string | null; email: string | null; active: number;
+  id: string; name: string; phone: string | null; email: string | null; active: number; created_at: number;
   consent_email: number; consent_sms: number; consent_whatsapp: number;
-  times: number; slots: number; first_at: number; last_at: number; past_at: number | null; next_at: number | null; paid: number; ground_ids: string;
+  times: number; slots: number; first_at: number | null; last_at: number; past_at: number | null; next_at: number | null; paid: number; ground_ids: string;
 }
 
 export function parseContactFilter(src: unknown): ContactFilter {
   const v = new Validator(src ?? {});
-  const who = v.oneOf('who', ['played', 'booked', 'all'] as const);
+  const who = v.oneOf('who', ['played', 'booked', 'all', 'account'] as const);
   const groundId = v.str('groundId', { max: 60 });
   const playedFrom = v.str('playedFrom', { max: 10 });
   const playedTo = v.str('playedTo', { max: 10 });
@@ -51,6 +67,7 @@ export function parseContactFilter(src: unknown): ContactFilter {
 /** One row per person, for the owner's bookings that match the filter. */
 function base(ownerId: string, f: ContactFilter): { sql: string; p: (string | number)[] } {
   const who = f.who ?? 'played';
+  if (who === 'account') return withAccounts(ownerId, f);
   const where: string[] = ['b.owner_id = ?', "u.role = 'customer'", PLAYED[who]];
   const p: (string | number)[] = [ownerId];
   if (who === 'played') p.push(now());
@@ -66,11 +83,41 @@ function base(ownerId: string, f: ContactFilter): { sql: string; p: (string | nu
   const having: string[] = [];
   if (f.minTimes) { having.push('COUNT(*) >= ?'); p.push(f.minTimes); }
   if (f.inactiveSince) { having.push('MAX(b.date) < ?'); p.push(f.inactiveSince); }
-  const sql = `SELECT u.id, u.name, u.phone, u.email, u.active, u.consent_email, u.consent_sms, u.consent_whatsapp,
+  const sql = `SELECT u.id, u.name, u.phone, u.email, u.active, u.consent_email, u.consent_sms, u.consent_whatsapp, u.created_at,
       COUNT(*) AS times, SUM(b.slot_count) AS slots, MIN(b.start_at) AS first_at, MAX(b.start_at) AS last_at,
       MAX(CASE WHEN b.start_at <= ${t} THEN b.start_at END) AS past_at, MIN(CASE WHEN b.start_at > ${t} THEN b.start_at END) AS next_at, SUM(b.paid_paise) AS paid,
       group_concat(DISTINCT b.ground_id) AS ground_ids
     FROM bookings b JOIN users u ON u.id = b.customer_id
+    WHERE ${where.join(' AND ')}
+    GROUP BY u.id ${having.length ? 'HAVING ' + having.join(' AND ') : ''}`;
+  return { sql, p };
+}
+
+/** 'account': everyone who booked here (as 'all'), and everyone who has an account and has not booked anywhere yet, when this business
+ *  is the only one (soleOwner). The ground, date and times filters are about bookings, so with any of them set only bookers match. */
+function withAccounts(ownerId: string, f: ContactFilter): { sql: string; p: (string | number)[] } {
+  const on: string[] = ['b.customer_id = u.id', 'b.owner_id = ?', PLAYED.account];
+  const p: (string | number)[] = [ownerId];
+  if (f.groundId) { on.push('b.ground_id = ?'); p.push(f.groundId); }
+  if (f.playedFrom) { on.push('b.date >= ?'); p.push(f.playedFrom); }
+  if (f.playedTo) { on.push('b.date <= ?'); p.push(f.playedTo); }
+  const mine = soleOwner() === ownerId;
+  const where: string[] = ["u.role = 'customer'", mine ? `(b.id IS NOT NULL OR ${NEVER_BOOKED})` : 'b.id IS NOT NULL'];
+  if (f.q) {
+    const like = `%${f.q.replace(/[%_\\]/g, '\\$&')}%`;
+    where.push("(u.name LIKE ? ESCAPE '\\' OR u.phone LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')");
+    p.push(like, like, like);
+  }
+  const t = Math.floor(Number(now()));
+  const having: string[] = [];
+  if (f.groundId || f.playedFrom || f.playedTo) having.push('COUNT(b.id) > 0');
+  if (f.minTimes) { having.push('COUNT(b.id) >= ?'); p.push(f.minTimes); }
+  if (f.inactiveSince) { having.push('(MAX(b.date) IS NULL OR MAX(b.date) < ?)'); p.push(f.inactiveSince); }
+  const sql = `SELECT u.id, u.name, u.phone, u.email, u.active, u.consent_email, u.consent_sms, u.consent_whatsapp, u.created_at,
+      COUNT(b.id) AS times, COALESCE(SUM(b.slot_count), 0) AS slots, MIN(b.start_at) AS first_at, COALESCE(MAX(b.start_at), u.created_at) AS last_at,
+      MAX(CASE WHEN b.start_at <= ${t} THEN b.start_at END) AS past_at, MIN(CASE WHEN b.start_at > ${t} THEN b.start_at END) AS next_at, COALESCE(SUM(b.paid_paise), 0) AS paid,
+      group_concat(DISTINCT b.ground_id) AS ground_ids
+    FROM users u LEFT JOIN bookings b ON ${on.join(' AND ')}
     WHERE ${where.join(' AND ')}
     GROUP BY u.id ${having.length ? 'HAVING ' + having.join(' AND ') : ''}`;
   return { sql, p };
@@ -84,8 +131,8 @@ const reach = (r: Row) => ({
 
 const toContact = (r: Row): Contact => ({
   id: r.id, name: r.name, phone: r.phone, email: r.email, timesPlayed: r.times, slotsPlayed: r.slots ?? 0,
-  firstPlayedAt: r.first_at, lastPlayedAt: r.last_at, lastPastAt: r.past_at ?? null, nextAt: r.next_at ?? null, paidPaise: r.paid ?? 0, groundIds: r.ground_ids ? r.ground_ids.split(',') : [],
-  consent: { email: !!r.consent_email, sms: !!r.consent_sms, whatsapp: !!r.consent_whatsapp }, reachable: reach(r),
+  firstPlayedAt: r.first_at ?? null, lastPlayedAt: r.times ? r.last_at : null, lastPastAt: r.past_at ?? null, nextAt: r.next_at ?? null, paidPaise: r.paid ?? 0, groundIds: r.ground_ids ? r.ground_ids.split(',') : [],
+  consent: { email: !!r.consent_email, sms: !!r.consent_sms, whatsapp: !!r.consent_whatsapp }, reachable: reach(r), signedUpAt: r.created_at,
 });
 
 export interface ContactPage { items: Contact[]; total: number; limit: number; offset: number; summary: ContactSummary }

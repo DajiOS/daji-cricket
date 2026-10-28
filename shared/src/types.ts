@@ -627,8 +627,9 @@ export interface Contact {
   email: string | null;
   timesPlayed: number;
   slotsPlayed: number;
-  firstPlayedAt: number;
-  lastPlayedAt: number;
+  /** Null for someone with an account who has not booked yet (who = 'account'). */
+  firstPlayedAt: number | null;
+  lastPlayedAt: number | null;
   /** The last session that has started (null if none yet) and the next one ahead (null if none): lastPlayedAt also counts bookings ahead. */
   lastPastAt: number | null;
   nextAt: number | null;
@@ -638,6 +639,8 @@ export interface Contact {
   consent: { email: boolean; sms: boolean; whatsapp: boolean };
   /** Can we message them on this channel right now: has the address, said yes, account not disabled. */
   reachable: { email: boolean; sms: boolean; whatsapp: boolean };
+  /** When they made their account. */
+  signedUpAt: number;
 }
 
 export interface ContactSummary {
@@ -647,8 +650,9 @@ export interface ContactSummary {
   reachableSms: number;
 }
 
-/** 'played' = finished sessions only; 'booked' = also upcoming confirmed ones; 'all' = also no-shows. */
-export type ContactWho = 'played' | 'booked' | 'all';
+/** 'played' = finished sessions only; 'booked' = also upcoming confirmed ones; 'all' = also no-shows; 'account' = also everyone who made
+ *  an account here and has not booked yet. */
+export type ContactWho = 'played' | 'booked' | 'all' | 'account';
 export type BroadcastChannel = 'email' | 'sms' | 'whatsapp';
 
 export interface ContactFilter {
