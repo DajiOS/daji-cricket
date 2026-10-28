@@ -12,6 +12,7 @@ import { listAccounts } from '../accounting/store.ts';
 import { listOpen, getFlow, describe, looksAfterAny, APPROVAL_KINDS, KIND_INFO } from '../approvals.ts';
 import { changes as lawChanges, lastChecks, register } from '../compliance.ts';
 import { alerts as lawAlerts, lastFeedRun } from '../lawUpdates.ts';
+import { sheetSummary } from '../sheets.ts';
 import { staffAuctionFacts } from '../auction.ts';
 import { depositsAt } from '../auctionDeposit.ts';
 import { staffWaitlist } from '../waitlist.ts';
@@ -349,6 +350,14 @@ export function compliance(ctx: Ctx) {
     lawUpdates: waiting.slice(0, 10).map((a) => ({ title: a.title, publishedOn: a.publishedOn, rules: a.codes, from: a.source === 'feed' ? 'the updates feed' : 'added by hand', link: a.url })),
     feed: feed ? { lastReadOn: feed.ranOn, ok: feed.ok, message: feed.message } : null,
   };
+}
+
+// ---------------------------------------------------------------- shared spreadsheet
+
+/** The shared spreadsheet (Settings › Connections): what is linked, the last send and read, and the booking requests from it waiting for review. Names only for people who see customers. */
+export function sheet(ctx: Ctx) {
+  need(ctx, 'bookings');
+  return sheetSummary(ctx.ownerId, can(ctx, 'customers'));
 }
 
 /** Tournaments customers host at this business (player auctions and teams entering directly): status, host, teams, players, and the hosting deposits due, held or waived. Bids are points; no contact details. */

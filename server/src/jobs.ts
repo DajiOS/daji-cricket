@@ -1,5 +1,6 @@
 import { runCheck } from './compliance.ts';
 import { syncLawFeed } from './lawUpdates.ts';
+import { runSheetSync } from './sheets.ts';
 import { runRecurring } from './accounting/books.ts';
 import { runDepreciation } from './accounting/plus.ts';
 import { runFeedSync } from './accounting/feed.ts';
@@ -112,7 +113,7 @@ export async function runFastSweeps(cfg: Config): Promise<SweepResult> {
   return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done, waitlist };
 }
 
-/** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries, faces players removed (asked of the face service), the compliance check and the law updates feed. */
+/** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries, faces players removed (asked of the face service), the compliance check, the law updates feed and the shared spreadsheets. */
 export async function runSlowSweeps(cfg: Config): Promise<void> {
   await chargeDue(cfg).catch(logErr('autodebit'));
   try { sweepQuarantine(cfg.dataDir); } catch (e) { logErr('quarantine')(e); }
@@ -124,6 +125,7 @@ export async function runSlowSweeps(cfg: Config): Promise<void> {
   await billingDaily(cfg, SYSTEM).catch(logErr('billing'));
   try { runCheck(); } catch (e) { logErr('compliance-check')(e); }
   await syncLawFeed(cfg).catch(logErr('law-feed'));
+  await runSheetSync(cfg, undefined, logErr('shared-sheet')).catch(logErr('shared-sheet'));
 }
 
 /** Everything the scheduler does each minute. Safe to run any number of times. */

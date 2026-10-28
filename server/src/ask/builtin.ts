@@ -1,6 +1,6 @@
 import { formatPaise } from '@daji/shared';
 import { now } from '../clock.ts';
-import { addDays, dayOfWeek, istDate, istMidnight, monthRange, DAY } from '../time.ts';
+import { addDays, dayOfWeek, istDate, istMidnight, monthRange, timeOfDay, DAY } from '../time.ts';
 import { addMonths, niceDay, niceRange, parseRange, type Span } from './dates.ts';
 import * as T from './tools.ts';
 import { rulesIn } from '../lawUpdates.ts';
@@ -13,7 +13,7 @@ import { hasPermission } from '../auth.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -38,6 +38,7 @@ const RULES: [Intent, RegExp][] = [
   ['approvals_report', /(how many|report|summary|history|stats|statistics)\b.*\b(approvals?|sign.?offs?|signed off|sent back)|\b(approvals?|sign.?offs?) (report|summary|history)\b/],
   ['approvals_waiting', /\b(whom|who)\b.*\b(waiting|holding|pending)|(waiting|pending|stuck|open|outstanding) (on|for)? ?(whom|who|which)\b|\bapprovals?\b|sign.?offs?|waiting (for|on) (my )?(sign|approval)|bills? (waiting|pending)|pay ?roll (waiting|pending)|(discounts?|waivers?|expenses?|refunds?) (waiting|pending) (for |on )?(sign|approv)/],
   ['auctions', /\bauctions?\b|player (draft|auction)|\bsquads?\b|\bipl.?style\b|hosting deposits?|(tournament|host).{0,20}deposits?|deposit waivers?|hosted tournaments?/],
+  ['sheet', /spread ?sheets?|\bexcel\b|google sheets?|shared sheet|\bthe sheet\b|sheet (sync|link)|requests? from the sheet|sheet requests?/],
   ['waitlist', /wait.?list|waiting list|on the list for|standing (request|booking)s?/],
   ['checkins', /^(?!.*\b(staff|employees?|team members?|attendance)\b).*\b(check(ed)?[ -]?ins?|team lists?|who played|players? (came|turned up))\b/],
   ['compliance', /complian|\blaws?\b|legal (rules?|updates?|changes?)|regulat|\bpolic(y|ies) (check|changes?|updates?)|statutory|rules? (are |is )?(due|overdue|past|to review)|review dates?|law.?change|\b(dpdp|cert.?in|esic?|professional tax)\b/],
@@ -61,7 +62,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'auctions', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'auctions', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -136,7 +137,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', auctions: 'Auction tournaments', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', sheet: 'Shared spreadsheet', auctions: 'Auction tournaments', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -164,6 +165,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'compliance') return complianceAnswer(ctx, question, base);
   if (intent === 'waitlist') return waitlistAnswer(ctx, base);
   if (intent === 'checkins') return checkInsAnswer(ctx, base);
+  if (intent === 'sheet') return sheetAnswer(ctx, base);
   if (intent === 'fixtures') return fixturesAnswer(ctx, base);
   if (intent === 'auctions') return auctionsAnswer(ctx, base);
   if (intent === 'unknown') {
@@ -518,6 +520,23 @@ function waitlistAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Pa
   return base('waitlist', head + tail, {
     details: w.people.slice(0, 12).map((p) => ({ label: p.name ?? p.session, text: `${p.ground}, ${niceDay(p.nextDate)}, ${p.status}${p.weeksRolled ? `, moved on ${count(p.weeksRolled, 'week')}` : ''}, ${count(p.gamesPlayed, 'game')} played${p.tier ? ` (${p.tier})` : ''}` })),
     notes, open: { tab: 'bookings', report: 'waitlist' },
+  });
+}
+
+/** The shared spreadsheet in words: what is linked, the last send and read, and the booking requests from it still to look at. */
+function sheetAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  if (!T.can(ctx, 'bookings')) return base('sheet', 'You do not have access to bookings, so I cannot tell you about the shared spreadsheet. Ask the owner for the "manage_bookings" permission.');
+  const s = T.sheet(ctx);
+  const at = (ms: number): string => `${niceDay(istDate(ms))} at ${timeOfDay(ms)}`;
+  const linked = s.linked ? `The shared spreadsheet is ${s.kind}${s.fileName ? ` (${s.fileName})` : ''}` : s.kind === 'download and upload' ? 'No Excel or Google sheet is linked; the shared spreadsheet works by download and upload' : `${s.kind} is chosen but no sheet is linked yet`;
+  const sent = s.lastSend ? ` It was last sent ${at(s.lastSend.at)}${s.lastSend.ok ? '' : `, and that failed: ${s.lastSend.message}`}.` : ' Nothing has been sent yet.';
+  const read = s.lastRead ? ` It was last read ${at(s.lastRead.at)}${s.lastRead.ok ? '' : `, and that failed: ${s.lastRead.message}`}.` : s.readsBookingRequests ? ' Booking requests have not been read from it yet.' : '';
+  const waiting = s.readsBookingRequests ? ` ${s.requestsWaiting ? `${count(s.requestsWaiting, 'booking request')} from the sheet ${s.requestsWaiting === 1 ? 'is' : 'are'} waiting for review` : 'No booking requests from the sheet are waiting'}${s.requestsWithProblems ? `, and ${count(s.requestsWithProblems, 'row')} ${s.requestsWithProblems === 1 ? 'has' : 'have'} problems to fix in the sheet` : ''}.` : '';
+  const notes = ['This is the same as Settings › Connections, Shared spreadsheet. Rows from the sheet only become bookings when the team books them.'];
+  if (s.problem) notes.push(`Problem: ${s.problem}`);
+  if (s.sends.length) notes.push(`Daji sends: ${s.sends.join(', ')}.`);
+  return base('sheet', `${linked}.${sent}${read}${waiting}`, {
+    details: s.rows.map((r) => ({ label: `Line ${r.line} · ${r.status}`, text: [r.date, r.start, r.ground, 'name' in r ? r.name : null].filter(Boolean).join(' · ') + (r.problems.length ? ` (${r.problems.join('; ')})` : '') })), notes,
   });
 }
 

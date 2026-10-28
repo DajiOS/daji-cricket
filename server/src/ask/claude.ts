@@ -41,6 +41,7 @@ export const TOOL_DEFS = [
   { name: 'why_cant_i_sign', description: 'Explains why the asker can or cannot sign a waiting approval, found by part of its title (for example a vendor name). Leave text empty for all waiting ones.', input_schema: { type: 'object', properties: { text: { type: 'string' } } } },
   { name: 'get_approvals_decided', description: 'How many approvals (bills, staff pay, refunds, discounts, fee waivers, expenses) were signed off, approved, sent back or rejected in a period.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_compliance', description: 'The compliance register (owner only): each Indian legal rule the software enforces, what it is set to, when it was last reviewed and is next due, the last changes in the law recorded, and law and policy updates waiting for a look.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_shared_sheet', description: 'The shared spreadsheet (an Excel workbook or Google Sheet, or download and upload): whether it is linked, what Daji sends to it, when it last sent and read, any problem, and the booking requests read from it that wait for review or have problems.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_auction_tournaments', description: 'Tournaments customers host at this business, as a player auction (purse and bids in points, never money) or with teams entering directly: name, dates, status, host, teams, players signed up and sold, whether staff hid it, and the refundable hosting deposits due, held, waived or waiting for a waiver decision.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_waitlist', description: 'The weekly waitlist (Sunday leather ball unless the owner changed it): how many people wait and for which day, each request (no names), how many games each has played and their tier, the session offered to them now and the rules (hours before, priority waves).', input_schema: { type: 'object', properties: {} } },
   { name: 'get_check_ins', description: 'Team lists and check-ins at the ground for one day (today unless a date is given): games, players on the lists, how many checked in (by phone at the ground or by staff), guests without a profile, check-ins undone. Counts only, no names.', input_schema: { type: 'object', properties: { date: { type: 'string', description: 'YYYY-MM-DD, IST' } } } },
@@ -87,6 +88,7 @@ export function runTool(ctx: T.Ctx, name: string, i: Input): unknown {
     case 'why_cant_i_sign': return T.whyCantISign(ctx, { text: typeof i.text === 'string' ? i.text.slice(0, 80) : '' });
     case 'get_approvals_decided': return T.approvalsDecided(ctx, range(i));
     case 'get_compliance': return T.compliance(ctx);
+    case 'get_shared_sheet': return T.sheet(ctx);
     case 'get_waitlist': return T.waitlist(ctx, false);
     case 'get_check_ins': return T.checkIns(ctx, false, typeof i.date === 'string' ? i.date : undefined);
     case 'list_grounds': return T.grounds(ctx);
