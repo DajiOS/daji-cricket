@@ -988,12 +988,15 @@ function openProfile() {
   const [ccNow, phoneNow] = splitPhone(u.phone), cc = countrySelect(ccNow), phone = h('input', { type: 'tel', value: phoneNow, autocomplete: 'tel-national', style: 'flex:1 1 auto;min-width:0' });
   const biz = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.businessName || '' }) : null, upi = u.role === 'owner' ? h('input', { type: 'text', maxlength: '80', value: u.upiId || '', placeholder: 'name@bank' }) : null;
   const f = (l, el) => { el.style.width = '100%'; return h('label', { class: 'lbl', style: 'display:grid;gap:6px;margin-top:12px' }, l, el); };
+  // Preferences: the name this person sees the assistant called. Empty = the ground's default. Reserved names (Siri, Alexa, ...) are refused by the server.
+  const aiName = h('input', { type: 'text', maxlength: '200', value: u.aiNameOwn || '', placeholder: (state.config && state.config.aiName) || 'Ask AI' });
   const save = h('button', { class: 'btn primary block', type: 'button', style: 'margin-top:16px', onclick: async () => {
     formClear(null, err); busyBtn(save, true, 'Saving…');
     if (!first.value.trim()) { busyBtn(save, false); formFail(null, err, new ApiError(400, 'VALIDATION_FAILED', 'Enter your first name.')); first.classList.add('bad'); first.focus(); return; }
     try {
       const body = { firstName: first.value.trim(), lastName: last.value.trim(), ...(phone.value.trim() ? { countryCode: cc.value, phone: phone.value.trim() } : {}), email: email.value.trim() || undefined };
       if (biz) { body.businessName = biz.value.trim(); body.upiId = upi.value.trim(); }
+      if (aiName.value.trim() !== (u.aiNameOwn || '')) body.aiName = aiName.value.trim() || null;
       const r = await api('/api/me', { method: 'PATCH', body }); busyBtn(save, false); state.user = r.user; renderAuth(); toast('Profile saved.'); closeModal();
     } catch (e) { busyBtn(save, false); formFail(null, err, e); }
   } }, 'Save profile');
@@ -1011,7 +1014,9 @@ function openProfile() {
       h('button', { class: 'btn outline sm', type: 'button', onclick: () => file.click() }, 'Choose a picture'),
       h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { closeModal(); signOut(); } }, 'Sign out'),
       u.avatarUrl ? h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { await api('/api/me/avatar', { method: 'DELETE' }); state.user = { ...state.user, avatarUrl: null }; refreshPic(); } catch (e) { err.textContent = e.message; } } }, 'Use my initial') : null, file)),
-    f('First name', first), f('Last name', last), f('Email', email), f('Mobile number', phoneRow(cc, phone)), biz ? f('Business name', biz) : null, upi ? f('UPI ID for payments', upi) : null, err, save,
+    f('First name', first), f('Last name', last), f('Email', email), f('Mobile number', phoneRow(cc, phone)), biz ? f('Business name', biz) : null, upi ? f('UPI ID for payments', upi) : null,
+    h('div', { class: 'eyebrow', style: 'margin:22px 0 4px' }, 'Preferences'), f('AI assistant name', aiName),
+    h('p', { class: 'hint', style: 'margin:6px 0 0' }, 'Any name you like, shown exactly as you type it, on your screens only. Leave it empty for the ground\'s default. It changes only the name, not what the assistant can see or do.'), err, save,
     h('div', { class: 'eyebrow', style: 'margin:22px 0 4px' }, 'Password'), u.hasPassword === false ? h('p', { class: 'hint', style: 'margin:4px 0 0' }, 'Set a password to sign in with your email or mobile number.') : f('Current password', cur), f('New password', nw), pwErr, pwBtn,
     h('button', { class: 'btn ghost block', type: 'button', style: 'margin-top:18px', onclick: () => { closeModal(); signOut(); } }, 'Sign out')]);
 }
@@ -1887,11 +1892,13 @@ async function loadBookings() {
   await loadCredit();
   $('#bk-credit').textContent = state.creditPaise === null ? 'We could not load your account credit just now. Pull down or come back to try again.' : state.creditPaise > 0 ? `Account credit: ${inr(state.creditPaise)}. It is used first on your next booking if you tick the box.` : 'Your confirmed, played and cancelled bookings.';
   try {
-    const res = await api('/api/bookings?limit=50');
+    // group=1: a multi-day booking comes once, its dates and money across every day in b.block
+    const res = await api('/api/bookings?limit=50&group=1');
     clear(list);
     if (!res.items.length) { list.append(h('div', { class: 'empty' }, 'No bookings yet. Pick a ground and a time to get started.')); return; }
     // Upcoming, Completed and Cancelled tabs over the same list (sorted by the server); nothing is fetched again
-    const now = Date.now(), kindOf = (b) => (['cancelled', 'expired'].includes(b.status) ? 'cancelled' : ['confirmed', 'held'].includes(b.status) && b.endAt > now ? 'upcoming' : 'completed');
+    const now = Date.now(), kindOf = (b) => (b.block ? (b.block.cancelled ? 'cancelled' : b.block.toDate >= todayIst() ? 'upcoming' : 'completed')
+      : ['cancelled', 'expired'].includes(b.status) ? 'cancelled' : ['confirmed', 'held'].includes(b.status) && b.endAt > now ? 'upcoming' : 'completed');
     const tabs = [['upcoming', 'Upcoming'], ['completed', 'Completed'], ['cancelled', 'Cancelled'], ['all', 'All']];
     const count = (k) => (k === 'all' ? res.items.length : res.items.filter((b) => kindOf(b) === k).length);
     if (!state.bkFilter || !count(state.bkFilter)) state.bkFilter = count('upcoming') ? 'upcoming' : 'all';
@@ -1905,22 +1912,32 @@ async function loadBookings() {
     const shown = res.items.filter((b) => state.bkFilter === 'all' || kindOf(b) === state.bkFilter);
     if (!shown.length) cards.append(h('div', { class: 'empty' }, 'Nothing here.'));
     for (const b of shown) {
-      const pending = b.status === 'confirmed' && b.approval === 'pending';
-      const [cls, label] = pending ? ['warn', 'Pending approval'] : b.status === 'cancelled' && b.cancelledByOwner ? ['danger', 'Cancelled by the ground'] : (STATUS[b.status] || ['mute', b.status]);
-      const canCancel = (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now();
+      const k = b.block;
+      // a multi-day booking still to come reads as confirmed (or held) even once its first day has been played
+      const st = k && kindOf(b) === 'upcoming' ? (b.status === 'held' ? 'held' : 'confirmed') : b.status;
+      const pending = st === 'confirmed' && b.approval === 'pending';
+      const [cls, label] = pending ? ['warn', 'Pending approval'] : st === 'cancelled' && b.cancelledByOwner ? ['danger', 'Cancelled by the ground'] : (STATUS[st] || ['mute', st]);
+      // one day of a multi-day booking is not cancelled on its own here: the ground changes or cancels the whole booking
+      const canCancel = !k && (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now();
+      const total = k ? k.totalPaise : b.totalPaise, paid = k ? k.paidPaise : b.paidPaise, bal = k ? k.balancePaise : b.balancePaise;
       const choosing = b.status === 'cancelled' && b.cancelledByOwner && b.resolution === 'awaiting';
       cards.append(h('div', { class: 'bk' + (choosing ? ' needs' : '') },
         h('div', { class: 'fx-pic' + (/net/i.test(b.groundName || '') ? ' nets' : ''), 'data-gid': b.groundId, 'aria-hidden': 'true' }),
         h('div', {},
           h('h4', {}, b.groundName),
-          h('div', { class: 'meta' }, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${b.formatLabel ? b.formatLabel + ' (' + b.ball + ' ball)' : b.slotCount + (b.slotCount === 1 ? ' slot' : ' slots')}  ·  `, h('span', { class: 'mono' }, b.ref)),
-          h('div', { class: 'meta' }, `Total ${inr(b.totalPaise)}  ·  Paid ${inr(b.paidPaise)}` + (b.status === 'confirmed' && b.balancePaise > 0 ? `  ·  Balance ${inr(b.balancePaise)}` : '')
+          h('div', { class: 'meta' }, k ? `${niceDate(k.fromDate)} – ${niceDate(k.toDate)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)} daily  ·  ${k.days} days  ·  ` : `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${b.formatLabel ? b.formatLabel + ' (' + b.ball + ' ball)' : b.slotCount + (b.slotCount === 1 ? ' slot' : ' slots')}  ·  `, h('span', { class: 'mono' }, b.ref)),
+          h('div', { class: 'meta' }, `Total ${inr(total)}  ·  Paid ${inr(paid)}` + (st === 'confirmed' && bal > 0 ? `  ·  Balance ${inr(bal)}` : '')
             + (b.moveDifferenceDuePaise > 0 ? `  ·  ${inr(b.moveDifferenceDuePaise)} of it is for your move and can be paid online` : '')
             + (b.status === 'held' && b.holdExpiresAt ? `  ·  Hold ends ${hhmm(b.holdExpiresAt)}` : '')
-            + (b.cancelKind === 'credit' && b.creditPaise ? `  ·  ${inr(b.creditPaise)} returned as credit` : '') + (b.refundPaise ? `  ·  ${inr(b.refundPaise)} refunded` : '')),
-          b.seriesId ? h('div', { class: 'meta' }, `Repeat booking, date ${b.seriesIndex + 1}`, (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() ? h('a', { href: '#', style: 'margin-left:8px', onclick: (e) => { e.preventDefault(); cancelSeriesOf(b); } }, 'Cancel unpaid repeats') : null) : null,
+            + (k ? (k.creditedPaise ? `  ·  ${inr(k.creditedPaise)} returned as credit` : '') + (k.refundedPaise ? `  ·  ${inr(k.refundedPaise)} refunded` : '')
+              : (b.cancelKind === 'credit' && b.creditPaise ? `  ·  ${inr(b.creditPaise)} returned as credit` : '') + (b.refundPaise ? `  ·  ${inr(b.refundPaise)} refunded` : ''))),
+          k ? h('div', { class: 'meta' }, 'Multi-day booking. To change or cancel it, speak to the ground.')
+          : b.seriesId ? h('div', { class: 'meta' }, `Repeat booking, date ${b.seriesIndex + 1}`, (b.status === 'confirmed' || b.status === 'held') && b.startAt > Date.now() ? h('a', { href: '#', style: 'margin-left:8px', onclick: (e) => { e.preventDefault(); cancelSeriesOf(b); } }, 'Cancel unpaid repeats') : null) : null,
           pending ? h('div', { class: 'meta' }, 'Your advance is holding the slot. The ground will approve it shortly and you will get a message.') : null,
-          b.status === 'cancelled' && b.cancelledByOwner ? cancelledByGround(b) : null),
+          // the choice is made here only when all the money waiting is on the first day; otherwise the ground settles the whole booking
+          k && k.awaitingPaise > 0 && !(b.resolution === 'awaiting' && k.awaitingPaise === b.paidPaise)
+            ? h('div', { class: 'meta' }, `The ground cancelled this booking. The ${inr(k.awaitingPaise)} you paid is waiting to be settled, and the ground will contact you about it.`)
+            : b.status === 'cancelled' && b.cancelledByOwner ? cancelledByGround(b) : null),
         h('div', { class: 'acts' }, h('span', { class: 'st ' + cls }, label), ...manageButtons(b), canCancel ? h('button', { class: 'btn outline sm', type: 'button', onclick: () => openCancel(b) }, 'Cancel') : null)));
     }
     paintPics();
@@ -2094,6 +2111,8 @@ function subPages(pane, tabId, items) {
   open(want || items[0][0], true);
 }
 
+/** The assistant's name as this person sees it: their own pick (Profile), else the ground's default (Settings), else "Ask AI". Shown exactly as given; a label only. */
+const aiLabel = () => (state.user && state.user.aiName) || (state.config && state.config.aiName) || 'Ask AI';
 const roleName = (u) => u.role === 'super_admin' ? 'Software owner' : u.role === 'owner' ? 'Owner' : (u.permissions || []).includes('manage_accounting') ? 'Accountant' : 'Team';
 
 const SERVICE_STATUS = { not_started: 'Not started', account_created: 'Account created', connected: 'Connected', live: 'Live', problem: 'Needs attention' };
@@ -2395,7 +2414,7 @@ async function loadDesk() {
   const sa = u.role === 'super_admin';
   $('#dk-eyebrow').textContent = sa ? 'Software owner' : u.role === 'owner' ? 'Owner desk' : 'Team desk';
   const slot = clear($('#dk-ask-slot'));
-  if (!sa) slot.append(h('button', { class: 'iconbtn', type: 'button', title: 'Ask AI', 'aria-label': 'Ask AI', onclick: openAskDialog }, sparkIcon()));
+  if (!sa) slot.append(h('button', { class: 'iconbtn', type: 'button', title: aiLabel(), 'aria-label': aiLabel(), onclick: openAskDialog }, sparkIcon()));
   const t = clear($('#dk-title'));
   if (sa) { t.append('The platform, ', h('em', {}, 'in one place.')); $('#dk-sub').textContent = 'Settings and people for the whole platform. Choose an owner to see their bookings and accounting.'; }
   else { t.append('Today, ', h('em', {}, 'at a glance.')); }
@@ -2491,7 +2510,7 @@ function sparkIcon() {
   return svg;
 }
 function openAskDialog() {
-  const out = h('div'); openModal([h('h3', {}, 'Ask AI'), askBox(out), out]);
+  const out = h('div'); openModal([h('h3', {}, aiLabel()), askBox(out), out]);
 }
 
 /** The ground cancels a booking: the owner must explain why. The customer reads it, then chooses a full refund, credit or another slot. */
@@ -3007,7 +3026,7 @@ async function renderMyDash(el) {
       d.creditPaise > 0 ? h('p', { class: 'hint', style: 'margin:6px 0 0' }, `Account credit available: ${inr(d.creditPaise)}.`) : null));
   }
   const out = h('div');
-  el.append(h('div', { class: 'box', style: 'margin-bottom:28px' }, h('div', { class: 'eyebrow', style: 'margin-bottom:6px' }, 'Ask about your bookings'),
+  el.append(h('div', { class: 'box', style: 'margin-bottom:28px' }, h('div', { class: 'eyebrow', style: 'margin-bottom:6px' }, aiLabel()),
     askBox(out, { base: '/api/ask', examples: '/api/ask/examples', placeholder: 'e.g. When is my next booking?' }), out));
   el.append(h('div', { class: 'eyebrow', style: 'margin:8px 0 14px' }, 'Your bookings'));
 }

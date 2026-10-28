@@ -30,6 +30,7 @@ import type { Reply } from '../http.ts';
 import { resolveOwnerCancel } from '../cancellation.ts';
 import { beginSetup, checkCode, confirmSetup, disable as disableMfa, mfaEnabled } from '../mfa.ts';
 import { scopeOwnerId } from '../auth.ts';
+import { checkAiName, setOwnAiName } from '../aiNames.ts';
 
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
 
@@ -95,6 +96,10 @@ export function customerRoutes(r: Router): void {
       ce = cv.bool('email'); cs = cv.bool('sms'); cw = cv.bool('whatsapp');
       for (const f of cv.fields) v.fail(`consent.${f.field}`, f.message);
     }
+    // Profile › Preferences › AI assistant name: '' or null goes back to the business default
+    const aiRaw = body.aiName;
+    const aiClear = aiRaw === null || (typeof aiRaw === 'string' && aiRaw.trim() === '');
+    if (aiRaw !== undefined && !aiClear) { try { checkAiName(aiRaw); } catch (e) { v.fail('aiName', (e as Error).message); } }
     v.done();
     if (name !== undefined) {
       const p = nm.firstName ? { first: titleCase(nm.firstName), last: titleCase(nm.lastName ?? '') } : (() => { const x = splitName(titleCase(name)); return { first: x.first, last: x.last }; })();
@@ -113,6 +118,7 @@ export function customerRoutes(r: Router): void {
         ce === undefined ? u.consent_email : ce ? 1 : 0, cs === undefined ? u.consent_sms : cs ? 1 : 0, cw === undefined ? u.consent_whatsapp : cw ? 1 : 0, now(), u.id);
       audit({ id: u.id, role: u.role }, 'consent.update', 'user', u.id, { email: ce, sms: cs, whatsapp: cw });
     }
+    if (aiRaw !== undefined) setOwnAiName({ id: u.id, role: u.role }, aiClear ? null : aiRaw, scopeOwnerId(u));
     return ok({ user: toUser(userRow(u.id)!) });
   }, { auth: 'user' });
 
@@ -167,7 +173,7 @@ export function customerRoutes(r: Router): void {
 
   r.get('/api/bookings', (c) => {
     const { limit, offset } = page(c);
-    return ok(listBookings({ customerId: U(c).id, status: c.query.get('status') ?? undefined, from: c.query.get('from') ?? undefined, to: c.query.get('to') ?? undefined, limit, offset }));
+    return ok(listBookings({ customerId: U(c).id, status: c.query.get('status') ?? undefined, from: c.query.get('from') ?? undefined, to: c.query.get('to') ?? undefined, collapse: c.query.get('group') === '1', limit, offset }));
   }, { auth: ['customer'] });
 
   r.get('/api/bookings/:id', (c) => {

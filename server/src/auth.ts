@@ -8,6 +8,7 @@ import { splitName, titleCase } from './names.ts';
 import { now } from './clock.ts';
 import { newId } from './ids.ts';
 import { HttpError, forbidden } from './errors.ts';
+import { aiNameFor, aiNameNotice, ownAiName } from './aiNames.ts';
 import type { Config } from './config.ts';
 
 // First and last name are kept apart so the admin can edit them; `name` stays the two joined.
@@ -110,6 +111,7 @@ export function toUser(r: UserRow): User {
     id: r.id, role: r.role, name: r.name, firstName: r.first_name ?? splitName(r.name).first, lastName: r.last_name ?? splitName(r.name).last, email: r.email, phone: r.phone, ownerId: r.owner_id,
     permissions: perms, active: !!r.active, consent, businessName: r.business_name, upiId: r.upi_id, createdAt: r.created_at,
     avatarUrl: r.avatar_id ? `/api/avatar/${r.avatar_id}` : null, hasPassword: !!r.password_hash,
+    aiName: aiNameFor(r.id), aiNameOwn: ownAiName(r.id), aiNameNotice: aiNameNotice(r.id),
   };
 }
 export const userRow = (id: string): UserRow | undefined => one<UserRow>('SELECT * FROM users WHERE id = ?', id);

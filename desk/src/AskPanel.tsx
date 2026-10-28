@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, go, useApi } from './lib';
+import { aiName, api, go, useApi } from './lib';
 import { PagePicture, Snippet } from './parts/docs/PagePicture';
 import { Icon } from './ui';
 
-// Guppi, the staff assistant: a panel on the right that the top-bar button, the Home question box and the search all open. Each answer comes from the
+// The staff assistant (Platform AI, under the name this person picked): a panel on the right that the top-bar button, the Home question box and the search all open. Each answer comes from the
 // desk's own reports through read-only tools on the server, limited to what this login may see. The key lives on the server only.
 interface Answer { question: string; answer: string; understood: string; details: { label: string; text: string }[]; notes: string[]; suggestions: string[]; source: 'builtin' | 'claude'; verified: boolean;
   /** Documents whose pages match, each with the page to show. */
@@ -43,13 +43,13 @@ export function AskPanel() {
 
   return createPortal(
     <div className="ai-wrap" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
-      <aside className="ai-panel" role="dialog" aria-modal="true" aria-label="Guppi">
+      <aside className="ai-panel" role="dialog" aria-modal="true" aria-label={aiName()}>
         <header className="ai-head">
-          <div><span className="eyebrow">Guppi</span><h2>What would you like to know?</h2></div>
+          <div><span className="eyebrow">{aiName()}</span><h2>What would you like to know?</h2></div>
           <button type="button" className="dround" onClick={() => setOpen(false)} aria-label="Close"><Icon name="x" size={16} /></button>
         </header>
         <div className="ai-body">
-          {ex && !ex.claudeEnabled && <p className="ai-note">Guppi is answering from the built-in reports, which cover bookings, money and customers. To let it answer any question, add an Anthropic API key (ANTHROPIC_API_KEY) to the server settings.</p>}
+          {ex && !ex.claudeEnabled && <p className="ai-note">{aiName()} is answering from the built-in reports, which cover bookings, money and customers. To let it answer any question, add an Anthropic API key (ANTHROPIC_API_KEY) to the server settings.</p>}
           {!turns.length && <>
             <p className="muted" style={{ margin: 0 }}>Ask about bookings, money, jobs or the team. It only reads your own data and only what your login may see.</p>
             <div className="ai-ex">{(ex?.items ?? []).slice(0, 6).map((x) => <button key={x} type="button" onClick={() => send(x)}>{x}</button>)}</div>

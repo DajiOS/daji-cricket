@@ -7,9 +7,13 @@ import { answerBuiltin, classify, EXAMPLES, type Built, type Detail, type Intent
 import { askClaude, AiError } from './claude.ts';
 import { niceRange } from './dates.ts';
 import * as T from './tools.ts';
+import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
 import { isDocQuestion, searchDocs, searchWords, seesDocs, waitingCount, type SearchHit } from '../docs.ts';
 
 export const MAX_QUESTION = 500;
+/** How a question reached the server: typed (the default) or by voice. */
+export type AskVia = 'typed' | 'voice';
+export const readVia = (v: unknown): AskVia => (v === 'voice' ? 'voice' : 'typed');
 
 export interface AskAnswer {
   question: string;
@@ -62,18 +66,25 @@ export function examplesFor(ctx: T.Ctx): string[] {
  * Answers one question. `fetchImpl` is for tests. Built-in answers never leave the server; Claude is used only when a key is
  * set and either the mode is "claude" or the built-in answerer could not read the question (mode "auto").
  */
-export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuestion: unknown, fetchImpl: typeof fetch = fetch): Promise<AskAnswer> {
+export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuestion: unknown, fetchImpl: typeof fetch = fetch, opts: { via?: AskVia } = {}): Promise<AskAnswer> {
   const question = cleanQuestion(rawQuestion);
+  // a question that came by voice (Siri, a shortcut) is logged as such; it is answered exactly like a typed one, with the same access
+  const via = opts.via === 'voice' ? { via: 'voice' } : {};
   const ctx: T.Ctx = { ownerId, user };
   takeSlot(cfg, user.id);
   const actor: Actor = { id: user.id, role: user.role };
+  // "What is your name?": the display name this person chose (or the business default) over Platform AI. Answered here, never by Claude.
+  if (isNameQuestion(question)) {
+    audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: 'assistant_name' }, ownerId);
+    return { question, answer: aiNameAnswer(user.id), details: [], understood: 'A question about the assistant itself', period: null, intent: 'help', source: 'builtin', verified: true, open: null, notes: [], suggestions: [] };
+  }
   const { intent } = classify(question);
   // a question that asks for a document is answered from the pages of the uploaded documents, with the page itself to look at;
   // a question nothing else understands is tried against the documents too
   if (seesDocs(user) && (isDocQuestion(question) || intent === 'unknown')) {
     const hits = searchDocs(ownerId, question, 5);
     if (hits.length || isDocQuestion(question)) {
-      audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), source: 'builtin', intent: 'documents', found: hits.length }, ownerId);
+      audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: 'documents', found: hits.length }, ownerId);
       return docAnswer(question, hits, waitingCount(ownerId));
     }
   }
@@ -84,7 +95,7 @@ export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuesti
     try {
       const r = await askClaude(cfg, ctx, question, fetchImpl);
       const used = r.sources.filter((s) => !s.error);
-      audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), source: 'claude', tools: r.sources.map((s) => s.tool), verified: r.verified }, ownerId);
+      audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'claude', tools: r.sources.map((s) => s.tool), verified: r.verified }, ownerId);
       return {
         question, answer: r.answer, details: [], source: 'claude', intent: 'claude', verified: r.verified, period: null, open: null,
         understood: used.length ? `Answered by Claude from: ${[...new Set(used.map((s) => describeTool(s.tool, s.input)))].join('; ')}` : 'Answered by Claude without looking anything up',
@@ -100,7 +111,7 @@ export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuesti
   }
 
   const b: Built = answerBuiltin({ question, ctx });
-  audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), source: 'builtin', intent: b.intent }, ownerId);
+  audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: b.intent }, ownerId);
   return { question, ...b, notes: claudeNote ? [claudeNote, ...b.notes] : b.notes, intent: b.intent, source: 'builtin', verified: true };
 }
 

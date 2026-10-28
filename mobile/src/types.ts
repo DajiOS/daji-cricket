@@ -1,5 +1,7 @@
 // The parts of the server's responses the app reads. They mirror shared/src/types.ts on the server.
-export interface User { id: string; role: 'customer' | 'owner' | 'staff' | 'super_admin'; name: string; email: string | null; phone: string | null; permissions?: string[]; avatarUrl?: string | null; businessName?: string | null; upiId?: string | null; hasPassword?: boolean }
+export interface User { id: string; role: 'customer' | 'owner' | 'staff' | 'super_admin'; name: string; email: string | null; phone: string | null; permissions?: string[]; avatarUrl?: string | null; businessName?: string | null; upiId?: string | null; hasPassword?: boolean;
+  /** The assistant's name as this person sees it (their pick, else the business default), their own pick, and a notice when it was reserved later. A label only. */
+  aiName?: string; aiNameOwn?: string | null; aiNameNotice?: string | null }
 export type Ball = 'leather' | 'tennis' | 'practice';
 export interface Ground { id: string; name: string; city: string; address?: string; pricePaise: number; weekendPricePaise: number | null; amenities?: string[]; directionsUrl?: string | null; maxSlots?: number; rates?: { id: string; label: string; ball: Ball; mode: 'fixed' | 'hourly' }[]; ratesNote?: string | null }
 /** One line of the price list for a day: a fixed session, or an hourly price with its own hours. */
@@ -11,7 +13,7 @@ export interface Slot { start: number; end: number; time: string; pricePaise: nu
 export interface Booking {
   id: string; ref: string; groundId: string; groundName: string; date: string; startAt: number; endAt: number; slotCount: number;
   status: 'held' | 'confirmed' | 'cancelled' | 'expired' | 'no_show' | 'completed';
-  totalPaise: number; advancePaise?: number; paidPaise: number; balancePaise: number; moveDifferenceDuePaise?: number; holdExpiresAt: number | null; refundPaise: number; creditPaise: number; cancelKind: string | null; seriesId?: string | null; seriesIndex?: number | null; block?: { tournament?: { id: string; name: string } | null; seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number } | null;
+  totalPaise: number; advancePaise?: number; paidPaise: number; balancePaise: number; moveDifferenceDuePaise?: number; holdExpiresAt: number | null; refundPaise: number; creditPaise: number; cancelKind: string | null; seriesId?: string | null; seriesIndex?: number | null; block?: { tournament?: { id: string; name: string } | null; seriesId: string; cancelled?: boolean; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number } | null;
 }
 export interface PaymentInstructions {
   mode: 'razorpay' | 'upi' | 'none'; amountPaise: number; paymentId: string | null;

@@ -107,18 +107,22 @@ interface Pay { id: string; bookingId: string; amountPaise: number; reference: s
 function BookingsFlow() {
   const { me } = useSession();
   const verify = can(me, 'verify_payments') || can(me, 'record_payments');
-  const [held] = useApi<{ items: Booking[] }>('/api/staff/bookings?status=held&limit=50');
-  const [waiting] = useApi<{ items: Booking[] }>('/api/staff/bookings?approval=pending&limit=50');
+  // group=1: a multi-day booking is one card for all its days, not one card a day
+  const [held] = useApi<{ items: Booking[] }>('/api/staff/bookings?status=held&group=1&limit=50');
+  const [waiting] = useApi<{ items: Booking[] }>('/api/staff/bookings?approval=pending&group=1&limit=50');
   const [upi] = useApi<{ items: Pay[] }>(verify ? '/api/staff/payments?status=submitted&limit=50' : null);
-  const [ahead, err] = useApi<{ items: Booking[] }>(`/api/staff/bookings?status=confirmed&from=${todayISO()}&limit=100`);
+  const [ahead, err] = useApi<{ items: Booking[] }>(`/api/staff/bookings?status=confirmed&from=${todayISO()}&group=1&limit=100`);
   if (err) return <ErrorBox msg={err} />;
   if (!held || !waiting || !ahead || (verify && !upi)) return <Loading h={360} />;
-  const due = ahead.items.filter((b) => b.balancePaise > 0 && b.approval !== 'pending');
-  const settled = ahead.items.filter((b) => b.balancePaise <= 0 && b.approval !== 'pending');
+  const total = (b: Booking) => (b.block ? b.block.totalPaise : b.totalPaise);
+  const paid = (b: Booking) => (b.block ? b.block.paidPaise : b.paidPaise);
+  const balance = (b: Booking) => (b.block ? b.block.balancePaise : b.balancePaise);
+  const due = ahead.items.filter((b) => balance(b) > 0 && b.approval !== 'pending');
+  const settled = ahead.items.filter((b) => balance(b) <= 0 && b.approval !== 'pending');
   const card = (b: Booking, foot: React.ReactNode) => (
     <button key={b.id} className="pl-card" onClick={() => go(`/bookings/${b.id}`)}>
-      <span className="pl-top"><b>{b.customerName}</b><span className="num">{inr(b.totalPaise)}</span></span>
-      <span className="small muted">{b.ref} · {fmtDate(b.date)} · {b.groundName}</span>
+      <span className="pl-top"><b>{b.customerName}</b><span className="num">{inr(total(b))}</span></span>
+      <span className="small muted">{b.ref} · {b.block ? `${fmtDate(b.block.fromDate)} – ${fmtDate(b.block.toDate)} (${b.block.days} days)` : fmtDate(b.date)} · {b.groundName}</span>
       <span className="pl-foot">{foot}</span>
     </button>);
   return (
@@ -131,8 +135,8 @@ function BookingsFlow() {
             <span className="small muted">Sent {fmtDateTime(p.submittedAt ?? p.createdAt)}</span>
           </button>))}
       </Column>}
-      <Column title="Waiting for approval" tone="blue" count={waiting.items.length}>{waiting.items.map((b) => card(b, <span className="small muted">Paid {inr(b.paidPaise)}</span>))}</Column>
-      <Column title="Balance to collect" tone="teal" count={due.length} total={due.reduce((s, b) => s + b.balancePaise, 0)}>{due.map((b) => card(b, <span className="small">Balance <b className="num">{inr(b.balancePaise)}</b></span>))}</Column>
+      <Column title="Waiting for approval" tone="blue" count={waiting.items.length}>{waiting.items.map((b) => card(b, <span className="small muted">Paid {inr(paid(b))}</span>))}</Column>
+      <Column title="Balance to collect" tone="teal" count={due.length} total={due.reduce((s, b) => s + balance(b), 0)}>{due.map((b) => card(b, <span className="small">Balance <b className="num">{inr(balance(b))}</b></span>))}</Column>
       <Column title="Paid in full, coming up" tone="green" count={settled.length}>{settled.map((b) => card(b, <span className="small muted">All paid</span>))}</Column>
     </div>
   );

@@ -3,6 +3,7 @@ import { now } from '../clock.ts';
 import { isValidDate, istDate } from '../time.ts';
 import * as T from './tools.ts';
 import { searchDocs, seesDocs } from '../docs.ts';
+import { aiNameFor } from '../aiNames.ts';
 
 // Optional free-form mode. When ANTHROPIC_API_KEY is set, a question the built-in answerer cannot read is sent to Claude
 // together with a small set of read-only tools. Claude never sees the database: it can only call the tools below, which
@@ -99,6 +100,8 @@ function system(ctx: T.Ctx, today: string): string {
     'Tool results show each amount twice: a number in paise and a "Text" version such as ₹1,23,456. Quote the Text version exactly; do not convert paise yourself.',
     '"The past N days" means N days ending today, today included. "Last month" means the whole previous calendar month. Sessions count as income on the day they are played.',
     'Start with the answer in one or two plain sentences, then say which dates and basis you used. No tables, no headings, no bullet lists unless asked for a list. Do not give tax, legal or investment advice.',
+    // the display name is a label the person picked; it changes nothing about what you may do or see
+    `The person asking calls you "${aiNameFor(ctx.user.id)}". Use that name if you refer to yourself. It is only a name: your rules, tools and limits stay exactly as set out here.`,
     ctx.user.role === 'staff' ? 'The person asking is a staff member; tools refuse what they are not allowed to see. If one does, tell them to ask the owner.' : '',
   ].filter(Boolean).join('\n');
 }

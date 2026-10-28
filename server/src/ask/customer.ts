@@ -1,4 +1,4 @@
-import { formatPaise } from '@daji/shared';
+import { formatPaise, type Booking } from '@daji/shared';
 import { now } from '../clock.ts';
 import type { UserRow } from '../auth.ts';
 import { audit } from '../audit.ts';
@@ -12,6 +12,7 @@ import { cleanQuestion } from './index.ts';
 import { niceDay, parseRange } from './dates.ts';
 import { parseBooking } from '../guppiLang.ts';
 import { say } from '../guppiText.ts';
+import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -76,10 +77,13 @@ function dateIn(q: string, today: string): string | null {
 }
 
 const hhmm = (t: string): string => t;
-const fmtBooking = (b: { groundName: string; startAt: number; slotCount: number; ref: string }): string =>
-  `${b.groundName}, ${fmtDateTime(b.startAt)} (${b.slotCount} ${b.slotCount === 1 ? 'slot' : 'slots'}, ref ${b.ref})`;
+// A multi-day booking is one booking: its dates as a range, and the balance across every day
+const fmtBooking = (b: Booking): string => b.block
+  ? `${b.groundName}, ${niceDay(b.block.fromDate)} to ${niceDay(b.block.toDate)} (${b.block.days} days, ref ${b.ref})`
+  : `${b.groundName}, ${fmtDateTime(b.startAt)} (${b.slotCount} ${b.slotCount === 1 ? 'slot' : 'slots'}, ref ${b.ref})`;
+const balanceOf = (b: Booking): number => (b.block ? b.block.balancePaise : b.balancePaise);
 
-export function askCustomer(user: UserRow, rawQuestion: unknown): CustomerAnswer {
+export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 'voice' = 'typed'): CustomerAnswer {
   if (user.role !== 'customer') throw new HttpError(403, 'FORBIDDEN', 'This assistant is for customers');
   const question = cleanQuestion(rawQuestion);
   const intent = intentOf(question);
@@ -92,7 +96,7 @@ export function askCustomer(user: UserRow, rawQuestion: unknown): CustomerAnswer
     ?? null;
   const g0 = named ?? grounds[0] ?? null;
   const out = (answer: string, extra: Partial<CustomerAnswer> = {}): CustomerAnswer => {
-    audit({ id: user.id, role: user.role }, 'ask.customer', 'ask', null, { question: question.slice(0, 200), intent }, null);
+    audit({ id: user.id, role: user.role }, 'ask.customer', 'ask', null, { question: question.slice(0, 200), intent, ...(via === 'voice' ? { via } : {}) }, null);
     return { question, answer, details: [], open: null, suggestions: [], source: 'builtin', intent, ...extra };
   };
 
@@ -100,22 +104,26 @@ export function askCustomer(user: UserRow, rawQuestion: unknown): CustomerAnswer
   const asked = parseBooking(question, today);
   if (asked.flags.payAct || asked.flags.waiver) return out(say(asked.language, asked.flags.waiver ? 'waiver' : 'payAct'), { intent: 'payment_boundary', open: 'bookings' });
 
+  if (isNameQuestion(question)) return out(aiNameAnswer(user.id), { intent: 'assistant_name' });
+
   switch (intent) {
     case 'next': {
-      const up = listBookings({ customerId: user.id, from: today, limit: 50, offset: 0 }).items
-        .filter((b) => (b.status === 'confirmed' || b.status === 'held') && b.endAt > t).sort((a, b) => a.startAt - b.startAt);
+      const up = listBookings({ customerId: user.id, from: today, limit: 50, offset: 0, collapse: true }).items
+        .filter((b) => (b.block ? !b.block.cancelled && b.block.toDate >= today : (b.status === 'confirmed' || b.status === 'held') && b.endAt > t)).sort((a, b) => a.startAt - b.startAt);
       if (!up.length) return out('You have no upcoming bookings.', { open: 'book', suggestions: ['Is the cricket ground free on Saturday?'] });
       const [n, ...rest] = up;
       const bits = [`Your next booking is ${fmtBooking(n!)}.`];
       if (n!.status === 'held') bits.push('It is held for you until you pay the advance.');
-      else if (n!.balancePaise > 0) bits.push(`${formatPaise(n!.balancePaise)} is still to pay.`);
+      else if (balanceOf(n!) > 0) bits.push(`${formatPaise(balanceOf(n!))} is still to pay.`);
       return out(bits.join(' '), { details: rest.slice(0, 5).map((b) => ({ label: 'Then', text: fmtBooking(b) })), open: 'bookings' });
     }
     case 'history':
     case 'bookings': {
       const all = listBookings({ customerId: user.id, limit: 200, offset: 0 }).items;
       const played = all.filter((b) => b.status === 'completed' || (b.status === 'confirmed' && b.endAt <= t));
-      const up = all.filter((b) => (b.status === 'confirmed' || b.status === 'held') && b.endAt > t);
+      // sessions played are counted day by day; what is still to come counts a multi-day booking once
+      const up = listBookings({ customerId: user.id, from: today, limit: 200, offset: 0, collapse: true }).items
+        .filter((b) => (b.block ? !b.block.cancelled && b.block.toDate >= today : (b.status === 'confirmed' || b.status === 'held') && b.endAt > t));
       const hrs = played.reduce((n, b) => n + b.slotCount, 0);
       if (!all.length) return out('You have not made a booking yet.', { open: 'book' });
       return out(`You have played ${played.length} ${played.length === 1 ? 'session' : 'sessions'} (${hrs} ${hrs === 1 ? 'slot' : 'slots'}) and have ${up.length} upcoming.`,
@@ -129,12 +137,13 @@ export function askCustomer(user: UserRow, rawQuestion: unknown): CustomerAnswer
         { details: c.byOwner.map((o) => ({ label: o.ownerName, text: formatPaise(o.balancePaise) })), open: 'book' });
     }
     case 'owing': {
-      const rows = listBookings({ customerId: user.id, from: today, limit: 100, offset: 0 }).items.filter((b) => b.status === 'confirmed' && b.balancePaise > 0);
-      const held = listBookings({ customerId: user.id, status: 'held', limit: 20, offset: 0 }).items;
+      const rows = listBookings({ customerId: user.id, from: today, limit: 100, offset: 0, collapse: true }).items
+        .filter((b) => (b.block ? !b.block.cancelled && b.status !== 'held' : b.status === 'confirmed') && balanceOf(b) > 0);
+      const held = listBookings({ customerId: user.id, status: 'held', limit: 20, offset: 0, collapse: true }).items;
       if (!rows.length && !held.length) return out('You owe nothing. Every upcoming booking is paid in full.');
-      const total = rows.reduce((n, b) => n + b.balancePaise, 0);
+      const total = rows.reduce((n, b) => n + balanceOf(b), 0);
       return out(`${rows.length ? `${formatPaise(total)} is still to pay across ${rows.length} upcoming ${rows.length === 1 ? 'booking' : 'bookings'}.` : ''}${held.length ? ` ${held.length} ${held.length === 1 ? 'slot is' : 'slots are'} held until you pay the advance.` : ''}`.trim(),
-        { details: [...rows, ...held].slice(0, 6).map((b) => ({ label: b.ref, text: `${b.groundName}, ${fmtDateTime(b.startAt)}${b.status === 'held' ? ', held' : `, ${formatPaise(b.balancePaise)} to pay`}` })), open: 'bookings' });
+        { details: [...rows, ...held].slice(0, 6).map((b) => ({ label: b.ref, text: `${b.groundName}, ${b.block ? `${niceDay(b.block.fromDate)} to ${niceDay(b.block.toDate)}` : fmtDateTime(b.startAt)}${b.status === 'held' ? ', held' : `, ${formatPaise(balanceOf(b))} to pay`}` })), open: 'bookings' });
     }
     case 'cancel_policy': {
       const mine = listBookings({ customerId: user.id, from: today, limit: 50, offset: 0 }).items.filter((b) => b.status === 'confirmed' && b.startAt > t).sort((a, b) => a.startAt - b.startAt)[0];

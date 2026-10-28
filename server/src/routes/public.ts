@@ -75,6 +75,8 @@ export function publicRoutes(r: Router): void {
       demoMode: c.cfg.demoMode,
       publicUrl: c.cfg.publicUrl,
       mediaBase: c.cfg.mediaCdn || null,
+      aiName: s.aiAssistantName,
+      voiceEnabled: s.voiceShortcutsEnabled,
       guppiBookingEnabled: s.guppiAssistEnabled,
       securityDepositEnabled: s.securityDepositEnabled,
       customerRescheduleEnabled: s.customerRescheduleEnabled && s.rescheduleCutoffHours !== null && s.rescheduleMaxMoves !== null,
