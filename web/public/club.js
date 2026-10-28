@@ -4,7 +4,7 @@
 'use strict';
 const D = window.DAJI;
 if (!D) return;
-const { h, clear, $, api, toast, openModal, closeModal, niceDate, todayIst, state } = D;
+const { h, clear, $, api, toast, openModal, closeModal, niceDate, todayIst, state, formatPhone } = D;
 
 const btn = (label, fn, cls = 'outline sm') => h('button', { class: 'btn ' + cls, type: 'button', onclick: fn }, label);
 const fail = (e) => toast((e && e.message) || 'Something went wrong', true);
@@ -109,7 +109,7 @@ function students(view) {
   const run = async () => {
     const r = await load(list, () => api(`/api/staff/academy/students?status=${status.value}&q=${encodeURIComponent(q.value.trim())}`));
     if (!r) return;
-    list.append(tbl(['Student', 'Batch', 'Parent', 'Parent app', ''], r.items.map((s) => [h('span', {}, s.name, s.status === 'left' ? h('span', { class: 'chip', style: 'margin-left:8px' }, 'Left') : null), s.batch || '', `${s.guardianName}${s.guardianPhone ? '  ·  ' + s.guardianPhone : ''}`,
+    list.append(tbl(['Student', 'Batch', 'Parent', 'Parent app', ''], r.items.map((s) => [h('span', {}, s.name, s.status === 'left' ? h('span', { class: 'chip', style: 'margin-left:8px' }, 'Left') : null), s.batch || '', `${s.guardianName}${s.guardianPhone ? '  ·  ' + formatPhone(s.guardianPhone) : ''}`,
       s.linked ? h('span', { class: 'chip ok' }, 'Linked') : h('span', { class: 'chip' }, 'Not linked'),
       h('span', { class: 'acts' }, btn('Progress', () => progressDialog(s), 'ghost sm'), btn('Parent', () => parentDialog(s, run), 'ghost sm'), btn('Edit', () => studentDialog(s, run), 'ghost sm'))]), [], 'No students yet. Add the first one.'));
   };
@@ -390,7 +390,7 @@ D.registerAdminPanel(() => {
   const run = async () => {
     const r = await load(list, () => api('/api/admin/leads'));
     if (!r) return;
-    list.append(tbl(['Who', 'Contact', 'Grounds', 'Status', ''], r.items.map((l) => [h('span', {}, l.business, h('small', { class: 'sub' }, `  ${l.name}${l.city ? ', ' + l.city : ''}`)), `${l.phone}  ·  ${l.email}`, l.grounds || '',
+    list.append(tbl(['Who', 'Contact', 'Grounds', 'Status', ''], r.items.map((l) => [h('span', {}, l.business, h('small', { class: 'sub' }, `  ${l.name}${l.city ? ', ' + l.city : ''}`)), `${formatPhone(l.phone)}  ·  ${l.email}`, l.grounds || '',
       sel([['new', 'New'], ['contacted', 'Contacted'], ['demo', 'Demo booked'], ['won', 'Won'], ['lost', 'Lost']], l.status, { class: 'inl', onchange: async (e) => { try { await api('/api/admin/leads/' + l.id, { method: 'PATCH', body: { status: e.target.value } }); toast('Saved'); } catch (er) { fail(er); } } }),
       l.message ? btn('Message', () => openModal([h('h3', {}, l.business), h('p', { class: 'hint' }, l.message)]), 'ghost sm') : '']), [2], 'No requests yet.'));
   };

@@ -5,7 +5,7 @@ import { pickProfilePhoto } from './camera';
 import type { User } from './types';
 import { Avatar, BackBar, Btn, Field, ListCard, ListRow, PhoneField, s, NameFields, splitName, splitPhone } from './ui';
 import { useAppearance } from './photo';
-import { C } from './theme';
+import { C, formatPhone } from './theme';
 import { biometricName, lockOn, setLockOn, unlock } from './lock';
 import { VoiceShortcuts } from './VoiceShortcuts';
 
@@ -81,7 +81,7 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
           <Avatar name={user.name} url={user.avatarUrl} size={60} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: C.text, fontSize: 18, fontWeight: '800' }}>{user.name}</Text>
-            {!!(user.email || user.phone) && <Text style={s.muted}>{user.email || user.phone}</Text>}
+            {!!(user.email || user.phone) && <Text style={s.muted}>{user.email || formatPhone(user.phone)}</Text>}
             <Text style={[s.muted, { color: C.gold, fontWeight: '600' }]}>{owner && user.businessName ? `${ROLE[user.role]} · ${user.businessName}` : ROLE[user.role] ?? user.role}</Text>
           </View>
         </View>

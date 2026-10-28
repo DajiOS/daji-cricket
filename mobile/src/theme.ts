@@ -9,6 +9,15 @@ export let mode: Mode = 'light';
 export function setMode(m: Mode): void { mode = m; Object.assign(C, m === 'light' ? LIGHT : DARK); }
 /** A colour see-through, for tinted fills: tint('#1C7A3E', 0.12). */
 export const tint = (hex: string, a: number): string => `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+/** Every phone number is shown with its country code: Indian numbers (stored as 10 digits) get +91, others keep their own +code. Same as shared/src/money.ts. */
+export function formatPhone(phone?: string | null): string {
+  const p = (phone ?? '').trim();
+  if (!p) return '';
+  const d = p.replace(/\D/g, '');
+  const m = /^(?:91|0)?(\d{5})(\d{5})$/.exec(d);
+  if (m && (!p.startsWith('+') || d.startsWith('91'))) return `+91 ${m[1]} ${m[2]}`;
+  return p; // already has its own +code, or is not a phone number we can read
+}
 export const inr = (paise: number): string => '₹' + (paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 export const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const niceDate = (d: string): string => { const [, m, day] = d.split('-').map(Number); return `${day} ${MON[(m ?? 1) - 1]}`; };

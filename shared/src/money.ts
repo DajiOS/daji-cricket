@@ -27,9 +27,15 @@ export function rupeesToPaise(input: string | number): number | null {
   return Number(r) * 100 + Number(p.padEnd(2, '0'));
 }
 
-/** "7567156000" -> "+91 75671 56000". Anything that is not a 10-digit mobile number is returned as it was. */
-export function formatPhone(phone: string): string {
-  const d = phone.replace(/\D/g, '');
-  const m = /^(?:91)?([6-9]\d{4})(\d{5})$/.exec(d);
-  return m ? `+91 ${m[1]} ${m[2]}` : phone;
+/**
+ * Every phone number is shown with its country code. Indian numbers are kept as their 10 digits, so they get +91:
+ * "7567156000" -> "+91 75671 56000". A number from another country is stored with its own +code ("+447911123456") and shown as it is.
+ */
+export function formatPhone(phone: string | null | undefined): string {
+  const p = (phone ?? '').trim();
+  if (!p) return '';
+  const d = p.replace(/\D/g, '');
+  const m = /^(?:91|0)?(\d{5})(\d{5})$/.exec(d);
+  if (m && (!p.startsWith('+') || d.startsWith('91'))) return `+91 ${m[1]} ${m[2]}`;
+  return p; // already has its own +code, or is not a phone number we can read
 }

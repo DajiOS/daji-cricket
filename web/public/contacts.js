@@ -29,7 +29,7 @@ function renderContacts(pane) {
       const r = await api(`/api/staff/contacts?${qs(filter())}&limit=${LIMIT}&offset=${offset}`);
       clear(list); clear(summary);
       for (const [l, v] of [['People', r.summary.total], ['Can email', r.summary.reachableEmail], ['Can WhatsApp', r.summary.reachableWhatsapp], ['Can text', r.summary.reachableSms]]) summary.append(h('div', { class: 'kpi' }, h('span', {}, l), h('b', {}, String(v))));
-      const rows = r.items.map((c) => h('tr', {}, h('td', {}, c.name, h('small', { class: 'sub' }, ' ' + (c.phone || '') + (c.email ? ' ' + c.email : ''))),
+      const rows = r.items.map((c) => h('tr', {}, h('td', {}, c.name, h('small', { class: 'sub' }, ' ' + D.formatPhone(c.phone) + (c.email ? ' ' + c.email : ''))),
         h('td', { class: 'n' }, String(c.timesPlayed)), h('td', {}, c.lastPastAt ? niceDate(day(c.lastPastAt)) : 'Not yet', c.nextAt ? h('small', { class: 'sub' }, ' Next ' + niceDate(day(c.nextAt))) : null), h('td', { class: 'n' }, inr(c.paidPaise)),
         h('td', {}, ...(c.reachable.email || c.reachable.whatsapp || c.reachable.sms ? [c.reachable.email && chip(true, 'Email'), c.reachable.whatsapp && chip(true, 'WhatsApp'), c.reachable.sms && chip(true, 'SMS')].filter(Boolean) : [h('small', { class: 'sub' }, 'No channel agreed')]))));
       list.append(r.items.length ? h('div', { class: 'tblwrap' }, h('table', { class: 'dt' }, h('thead', {}, h('tr', {}, ['Person', filter().who === 'played' ? 'Times played' : 'Bookings', 'Last played', 'Paid', 'Can reach on'].map((x, i) => h('th', { class: i === 1 || i === 3 ? 'n' : null }, x)))), h('tbody', {}, rows))) : h('div', { class: 'empty' }, 'Nobody matches yet.'),

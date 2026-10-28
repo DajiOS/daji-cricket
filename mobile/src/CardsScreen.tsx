@@ -3,7 +3,7 @@ import { Image, Linking, Pressable, RefreshControl, ScrollView, Text, View } fro
 import { api, authImage, upload } from './api';
 import { takeCardPhoto } from './camera';
 import { Btn, Field, Loading, NameFields, s } from './ui';
-import { C } from './theme';
+import { C, formatPhone } from './theme';
 
 interface Card { id: string; name: string; title: string; company: string; phones: string[]; emails: string[]; website: string; address: string; notes: string; hasImage: boolean }
 interface Scan { fields: Omit<Card, 'id' | 'hasImage'>; readable: boolean; duplicates: { id: string; name: string; company: string }[] }
@@ -53,12 +53,12 @@ export function CardsScreen() {
         <Pressable key={c.id} onPress={() => setOpen(open === c.id ? '' : c.id)} style={s.card}>
           <Text style={[s.text, { fontWeight: '700' }]}>{c.name}</Text>
           {!!(c.title || c.company) && <Text style={s.muted}>{[c.title, c.company].filter(Boolean).join('  ·  ')}</Text>}
-          {open !== c.id ? <Text style={[s.muted, { marginTop: 4 }]} numberOfLines={1}>{[...c.phones, ...c.emails].slice(0, 2).join('  ·  ')}</Text> : (
+          {open !== c.id ? <Text style={[s.muted, { marginTop: 4 }]} numberOfLines={1}>{[...c.phones.map(formatPhone), ...c.emails].slice(0, 2).join('  ·  ')}</Text> : (
             <View style={{ marginTop: 10 }}>
               {c.hasImage && <Image source={authImage(`/api/staff/cards/${c.id}/image`)} style={{ width: '100%', height: 180, borderRadius: 12, backgroundColor: C.line, marginBottom: 10 }} resizeMode="contain" />}
               {c.phones.map((p) => (
                 <View key={p} style={[s.row, { flexWrap: 'wrap' }]}>
-                  <Text style={s.text}>{p}</Text>
+                  <Text style={s.text}>{formatPhone(p)}</Text>
                   <View style={{ flexDirection: 'row', gap: 14 }}>
                     <Pressable onPress={() => go(`tel:${digits(p)}`)}><Text style={{ color: C.gold, fontWeight: '600' }}>Call</Text></Pressable>
                     <Pressable onPress={() => go(`https://wa.me/${digits(p).replace(/^\+/, '').replace(/^(\d{10})$/, '91$1')}`)}><Text style={{ color: C.gold, fontWeight: '600' }}>WhatsApp</Text></Pressable>

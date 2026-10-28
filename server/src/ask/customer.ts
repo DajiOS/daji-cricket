@@ -1,4 +1,4 @@
-import { formatPaise, type Booking } from '@daji/shared';
+import { formatPaise, formatPhone, type Booking } from '@daji/shared';
 import { now } from '../clock.ts';
 import type { UserRow } from '../auth.ts';
 import { audit } from '../audit.ts';
@@ -144,7 +144,7 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
     case 'waitlist': {
       // the customer's own requests only, and how the waitlist works; accepting is done on the Waitlist screen, never here
       const w = myWaitlist(user);
-      if (!w.settings.enabled) return out(`The ${w.settings.name} waitlist is not open at the moment. Book a free slot, or call ${s.contactName} on ${s.contactPhone}.`, { open: 'book' });
+      if (!w.settings.enabled) return out(`The ${w.settings.name} waitlist is not open at the moment. Book a free slot, or call ${s.contactName} on ${formatPhone(s.contactPhone)}.`, { open: 'book' });
       const how = `A session still free ${w.settings.confirmHours} hours before it starts is offered to everyone waiting for that day, and the first to accept gets it; otherwise you move to the next week, for up to a year.`;
       const live = w.entries.filter((e) => e.status === 'waiting' || e.status === 'won');
       const offer = w.offers.find((o) => !o.yours);
@@ -228,7 +228,7 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
       return out(`${g0.name}${g0.area ? `, ${g0.area}` : ''}, ${g0.city}.${g0.address ? ` ${g0.address}.` : ''}${url ? ` Directions: ${url}` : ''}`, { open: 'contact' });
     }
     case 'contact':
-      return out(`Call or write to ${s.contactName}: ${s.contactPhone}${s.contactEmail ? `, ${s.contactEmail}` : ''}.`, { open: 'contact' });
+      return out(`Call or write to ${s.contactName}: ${formatPhone(s.contactPhone)}${s.contactEmail ? `, ${s.contactEmail}` : ''}.`, { open: 'contact' });
     default:
       return out('I can answer questions about your own bookings and credit, and about the grounds: prices, opening times, free slots and directions. I cannot make or change a booking, take or confirm a payment, or waive or refund anything, so use the booking panel or My bookings for that.',
         { suggestions: CUSTOMER_EXAMPLES, open: null, intent: 'help' });

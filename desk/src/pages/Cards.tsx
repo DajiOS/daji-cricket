@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chip, Field, Filters, Modal, PageHead, Table, useForm, NameField, useToast } from '../ui';
-import { ApiError, del, download, getToken, getViewOwner, patch, post, qs, sendFile, useApi } from '../lib';
+import { ApiError, del, download, getToken, getViewOwner, patch, post, qs, sendFile, useApi, formatPhone } from '../lib';
 import { Async, errMsg, useDebounced } from '../parts/club/common';
 
 interface Card { id: string; name: string; title: string; company: string; phones: string[]; emails: string[]; website: string; address: string; notes: string; hasImage: boolean }
@@ -111,7 +111,7 @@ export default function Cards({ sub }: { sub: string }) {
           <>
             <Table rows={d.items.filter((c) => !has || (has === 'phone' ? c.phones.length : has === 'email' ? c.emails.length : has === 'address' ? c.address : c.hasImage))} empty="No contacts yet. Scan a card to add the first." onRow={(c) => setEdit({ card: c })} cols={[
               { head: 'Person', cell: (c) => <><span className="strong">{c.name}</span><div className="muted small">{[c.title, c.company].filter(Boolean).join(' · ')}</div></> },
-              { head: 'Reach', cell: (c) => <div className="small">{[...c.phones, ...c.emails].slice(0, 3).join(' · ')}</div> },
+              { head: 'Reach', cell: (c) => <div className="small">{[...c.phones.map(formatPhone), ...c.emails].slice(0, 3).join(' · ')}</div> },
               { head: '', cell: (c) => <span className="row" onClick={(e) => e.stopPropagation()}>
                 <button className="btn sm" onClick={() => download(`/api/staff/cards/${c.id}/vcard`, `${c.name.replace(/[^\w-]+/g, '_') || 'contact'}.vcf`).catch((e) => toast(errMsg(e)))}>Save to phone</button>
                 <button className="btn ghost sm" onClick={() => remove(c)}>Delete</button></span> },

@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { ProgressCard, Student } from './types';
 import { Badge, Btn, Chip, Field, KV, Loading, Section, s, NameFields, DateField } from './ui';
-import { C } from './theme';
+import { C, formatPhone } from './theme';
 
 type Tab = 'attendance' | 'students' | 'progress';
 const today = (): string => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
@@ -91,7 +91,7 @@ function Students() {
       {items === null ? <Loading /> : !items.length ? <Text style={s.muted}>No students yet.</Text> : items.map((st) => (
         <View key={st.id} style={s.card}>
           <View style={s.row}><Text style={s.h2}>{st.name}</Text><View style={{ flexDirection: 'row' }}>{st.linked && <Badge tone="ok" label="Parent linked" />}{st.status === 'left' && <Badge label="Left" />}</View></View>
-          <KV k="Batch" v={st.batch ?? '—'} /><KV k="Parent" v={`${st.guardianName}${st.guardianPhone ? ' · ' + st.guardianPhone : ''}`} />
+          <KV k="Batch" v={st.batch ?? '—'} /><KV k="Parent" v={`${st.guardianName}${st.guardianPhone ? ' · ' + formatPhone(st.guardianPhone) : ''}`} />
           {st.guardianEmail && <KV k="Email" v={st.guardianEmail} />}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
             {!st.linked && st.guardianEmail && <Chip label="Link parent account" onPress={() => link(st)} />}

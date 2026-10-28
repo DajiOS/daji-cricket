@@ -1,7 +1,7 @@
 // Academy: the student list, add/edit, parent and student logins, and monthly progress cards.
 import { useState } from 'react';
 import { Chip, Confirm, Field, Modal, Table, NameField, useToast, DateInput } from '../../ui';
-import { post, put, patch, thisMonth, useApi, qs } from '../../lib';
+import { post, put, patch, thisMonth, useApi, qs, formatPhone } from '../../lib';
 import { Async, FilterBar, Select, errMsg, monthName, useDebounced } from './common';
 
 export interface Student {
@@ -29,7 +29,7 @@ export default function Students({ tick, adding, setAdding }: { tick: number; ad
         <Table rows={d.items} empty="No students yet. Add the first one." cols={[
           { head: 'Student', cell: (s) => <><span className="strong nw">{s.name}</span>{s.status === 'left' && <> <Chip>Left</Chip></>}</> },
           { head: 'Batch', cell: (s) => s.batch || <span className="faint">—</span> },
-          { head: 'Parent', cell: (s) => <>{s.guardianName}{s.guardianPhone && <span className="muted small"> · {s.guardianPhone}</span>}</> },
+          { head: 'Parent', cell: (s) => <>{s.guardianName}{s.guardianPhone && <span className="muted small"> · {formatPhone(s.guardianPhone)}</span>}</> },
           { head: 'Parent app', cell: (s) => (s.linked ? <Chip tone="good">Linked</Chip> : <Chip>Not linked</Chip>) },
           { head: '', cell: (s) => <div className="row end"><button className="btn ghost sm" onClick={() => setProg(s)}>Progress</button><button className="btn ghost sm" onClick={() => setParent(s)}>Parent</button><button className="btn ghost sm" onClick={() => setEdit(s)}>Edit</button></div> },
         ]} />
