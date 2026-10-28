@@ -7,42 +7,54 @@ import { API_URL } from './api';
 const build = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   pad: { padding: 18, paddingBottom: 40 },
-  eyebrow: { color: C.gold, fontSize: 13, fontWeight: '700', marginBottom: 6 },
-  h1: { color: C.text, fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginBottom: 6 },
+  eyebrow: { color: C.onBg, fontSize: 13, fontWeight: '700', marginBottom: 6 },
+  h1: { color: C.head, fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginBottom: 6 },
   h2: { color: C.text, fontSize: 18, fontWeight: '700', marginBottom: 10 },
   text: { color: C.text, fontSize: 15 },
   muted: { color: C.muted, fontSize: 13, lineHeight: 19 },
+  note: { color: C.headMuted, fontSize: 13, lineHeight: 19 },
   err: { color: C.danger, fontSize: 13, marginVertical: 6 },
   card: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#0B2A18', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 1 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, gap: 10 },
-  input: { backgroundColor: C.bg, borderColor: C.line, borderWidth: 1, borderRadius: 12, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
+  input: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 12, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
 });
 /** The shared styles. They are built again (in place) when the theme changes, see refreshStyles. */
 export const s: ReturnType<typeof build> = build();
 export function refreshStyles(): void { Object.assign(s, build()); }
 
-export function Btn({ label, onPress, kind = 'primary', disabled, busy, style }: { label: string; onPress: () => void; kind?: 'primary' | 'outline' | 'ghost'; disabled?: boolean; busy?: boolean; style?: ViewStyle }) {
+export function Btn({ label, onPress, kind = 'primary', disabled, busy, style }: { label: string; onPress: () => void; kind?: 'primary' | 'outline' | 'ghost' | 'link'; disabled?: boolean; busy?: boolean; style?: ViewStyle }) {
   const p = kind === 'primary';
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled || busy}
-      style={[{ backgroundColor: p ? C.strong : 'transparent', borderColor: kind === 'ghost' ? 'transparent' : p ? C.strong : C.line, borderWidth: 1, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', opacity: disabled ? 0.45 : 1, marginBottom: 10 }, style]}>
-      {busy ? <ActivityIndicator color={p ? C.onStrong : C.gold} /> : <Text style={{ color: p ? C.onStrong : kind === 'ghost' ? C.gold : C.text, fontWeight: '700', fontSize: 15 }}>{label}</Text>}
+      style={[{ backgroundColor: p ? C.strong : 'transparent', borderColor: kind === 'ghost' || kind === 'link' ? 'transparent' : p ? C.strong : C.line, borderWidth: 1, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', opacity: disabled ? 0.45 : 1, marginBottom: 10 }, style]}>
+      {busy ? <ActivityIndicator color={p ? C.onStrong : C.gold} /> : <Text style={{ color: p ? C.onStrong : kind === 'link' ? C.onBg : kind === 'ghost' ? C.gold : C.text, fontWeight: '700', fontSize: 15 }}>{label}</Text>}
     </Pressable>
   );
 }
 
-export function Field({ label, ...rest }: { label: string } & TextInputProps) {
-  return (<View><Text style={[s.muted, { marginBottom: 4, fontSize: 12, fontWeight: '600' }]}>{label}</Text><TextInput placeholderTextColor={C.muted} autoCapitalize="none" style={s.input} {...rest} /></View>);
+// A field draws its name inside its own box, so it reads the same on the green and inside a card.
+const fieldBox = (): ViewStyle => ({ backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6, marginBottom: 12 });
+const fieldLabel = () => ({ color: C.muted, fontSize: 11, fontWeight: '700' as const, marginBottom: 2 });
+export function Field({ label, style, ...rest }: { label: string } & TextInputProps) {
+  const f = (StyleSheet.flatten(style) ?? {}) as { minHeight?: number; textAlignVertical?: 'top' };
+  return (
+    <View style={fieldBox()}>
+      <Text style={fieldLabel()}>{label}</Text>
+      <TextInput placeholderTextColor={C.muted} autoCapitalize="none" accessibilityLabel={label} style={{ color: C.text, fontSize: 15, paddingVertical: 4, paddingHorizontal: 0, minHeight: f.minHeight ? f.minHeight - 20 : undefined, textAlignVertical: f.textAlignVertical }} {...rest} />
+    </View>
+  );
 }
 
 /** A mobile number with its country code in front (+91 unless changed). Indian numbers are saved as 10 digits, others as +E.164. */
 export function PhoneField({ label = 'Mobile number', code, number, onCode, onNumber }: { label?: string; code: string; number: string; onCode: (v: string) => void; onNumber: (v: string) => void }) {
+  const inner = { color: C.text, fontSize: 15, paddingVertical: 4, paddingHorizontal: 0 };
   return (
-    <View>
-      <Text style={[s.muted, { marginBottom: 4, fontSize: 12, fontWeight: '600' }]}>{label}</Text>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TextInput accessibilityLabel="Country code" placeholderTextColor={C.muted} keyboardType="phone-pad" maxLength={4} value={code} onChangeText={(v) => onCode(v.startsWith('+') ? v : `+${v.replace(/\D/g, '')}`)} style={[s.input, { width: 72, textAlign: 'center' }]} />
-        <TextInput placeholder="98765 43210" placeholderTextColor={C.muted} keyboardType="phone-pad" autoComplete="tel" value={number} onChangeText={onNumber} style={[s.input, { flex: 1 }]} />
+    <View style={fieldBox()}>
+      <Text style={fieldLabel()}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <TextInput accessibilityLabel="Country code" placeholderTextColor={C.muted} keyboardType="phone-pad" maxLength={4} value={code} onChangeText={(v) => onCode(v.startsWith('+') ? v : `+${v.replace(/\D/g, '')}`)} style={[inner, { width: 48 }]} />
+        <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: C.line }} />
+        <TextInput accessibilityLabel={label} placeholder="98765 43210" placeholderTextColor={C.muted} keyboardType="phone-pad" autoComplete="tel" value={number} onChangeText={onNumber} style={[inner, { flex: 1 }]} />
       </View>
     </View>
   );
@@ -95,12 +107,12 @@ export function Steps({ at }: { at: number }) {
         const n = i + 1, done = n < at, on = n === at;
         return (
           <React.Fragment key={name}>
-            {i > 0 && <View style={{ flex: 1, height: 2, marginHorizontal: 6, borderRadius: 1, backgroundColor: n <= at ? C.gold : C.line }} />}
+            {i > 0 && <View style={{ flex: 1, height: 2, marginHorizontal: 6, borderRadius: 1, backgroundColor: n <= at ? C.onBg : 'rgba(255,255,255,0.22)' }} />}
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: done || on ? C.strong : 'transparent', borderWidth: 1.5, borderColor: done || on ? C.strong : C.line }}>
-                <Text style={{ color: done || on ? C.onStrong : C.muted, fontSize: 12, fontWeight: '700' }}>{done ? '✓' : n}</Text>
+              <View style={{ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: done || on ? C.strong : 'transparent', borderWidth: 1.5, borderColor: done || on ? C.strong : 'rgba(255,255,255,0.3)' }}>
+                <Text style={{ color: done || on ? C.onStrong : C.headMuted, fontSize: 12, fontWeight: '700' }}>{done ? '✓' : n}</Text>
               </View>
-              {on && <Text style={{ color: C.text, fontSize: 13, fontWeight: '700', marginLeft: 6 }}>{name}</Text>}
+              {on && <Text style={{ color: C.head, fontSize: 13, fontWeight: '700', marginLeft: 6 }}>{name}</Text>}
             </View>
           </React.Fragment>
         );
@@ -242,7 +254,7 @@ export const StatTile = ({ icon, value, label, tone, onPress }: { icon: IconName
 /** A section title with an optional link on the right ("See all"). */
 export const SectionHead = ({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) => (
   <View style={[s.row, { marginTop: 14, marginBottom: 6 }]}>
-    <Text style={{ color: C.text, fontSize: 17, fontWeight: '800' }}>{title}</Text>
+    <Text style={{ color: C.head, fontSize: 17, fontWeight: '800' }}>{title}</Text>
     {!!action && <Pressable accessibilityRole="button" onPress={onAction}><Text style={{ color: C.gold, fontSize: 13, fontWeight: '700' }}>{action}</Text></Pressable>}
   </View>
 );
@@ -250,7 +262,7 @@ export const SectionHead = ({ title, action, onAction }: { title: string; action
 /** The top of an inner page: a back arrow and the page's name. */
 export const BackBar = ({ title, onBack }: { title: string; onBack: () => void }) => (
   <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-    <Icon name="chevron-back" size={24} color={C.text} />
-    <Text style={{ color: C.text, fontSize: 20, fontWeight: '800' }}>{title}</Text>
+    <Icon name="chevron-back" size={24} color={C.head} />
+    <Text style={{ color: C.head, fontSize: 20, fontWeight: '800' }}>{title}</Text>
   </Pressable>
 );
