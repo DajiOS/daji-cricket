@@ -4,15 +4,17 @@ Status: this setup is live (www.dajicricket.com, Caddy and Docker on AWS Lightsa
 
 ## Updating the live server
 
+Merging into `main` updates the live server by itself (`.github/workflows/deploy.yml`): it copies the code to `~/cricket-booking` on the server and rebuilds there. Nothing needs running by hand.
+
+To restart it by hand (for example after changing `deploy/.env`), always use that same folder:
+
 ```
-cd ~/daji-cricket-new
-git pull origin main
-git log --oneline -1
-sudo cp ~/cricket-booking/deploy/.env deploy/.env
-sudo docker compose -f deploy/docker-compose.yml up -d --build
+cd ~/cricket-booking/deploy
+sudo nano .env            # only if a setting changes
+sudo docker compose up -d --build
 ```
 
-Then hard-refresh the site and the desk (Ctrl+Shift+R). Secrets (WhatsApp, payment and SMS keys) belong only in `deploy/.env`, never in chat or in git. The phone app is rebuilt separately with EAS (`mobile/`).
+Never build from another copy of the code on the server (such as an old `~/daji-cricket-new`). Both folders' containers are named `deploy`, so building from an older copy replaces the live site with that older version. Secrets (WhatsApp, payment, SMS and AI keys) belong only in `~/cricket-booking/deploy/.env`, never in chat or in git. The phone app is rebuilt separately with EAS (`mobile/`).
 
 ## What you need
 - A small Linux server (1 vCPU, 1 GB RAM is plenty to start) with Docker and the Compose plugin, ports 80 and 443 open.

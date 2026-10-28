@@ -16,16 +16,15 @@ Repo: the `daji-cricket` repository on GitHub. Everything is on `main`; the owne
 ## Where it runs
 - AWS Lightsail, Mumbai. Docker with Caddy (HTTPS certificates are automatic) and the `api` container.
 - Domain: dajicricket.com (DNS was in Wix Domains). `api.dajicricket.com` is also served.
-- Server folder: `~/daji-cricket-new`. Settings and secrets: `deploy/.env` (copied from `~/cricket-booking/deploy/.env`). **Secrets never go in git or chat.**
+- Server folder: `~/cricket-booking`. Settings and secrets: `~/cricket-booking/deploy/.env`. **Secrets never go in git or chat.**
 
 ### Update the live server after merging
+Merging into `main` deploys by itself (`.github/workflows/deploy.yml` copies the code to `~/cricket-booking` and rebuilds). To restart by hand, for example after changing `.env`:
 ```
-cd ~/daji-cricket-new
-git pull origin main
-sudo cp ~/cricket-booking/deploy/.env deploy/.env
-sudo docker compose -f deploy/docker-compose.yml up -d --build
+cd ~/cricket-booking/deploy
+sudo docker compose up -d --build
 ```
-Then hard-refresh the site and the desk (Ctrl+Shift+R). More in `deploy/DEPLOY.md` (first install, backups, restore).
+Never build from another folder on the server (such as an old `~/daji-cricket-new`): its containers share the name `deploy`, so an older copy replaces the live site. More in `deploy/DEPLOY.md` (first install, backups, restore).
 
 ## Keys and accounts to keep safe
 Keep these in a password manager, away from the server:
