@@ -173,7 +173,7 @@ export function customerRoutes(r: Router): void {
 
   r.get('/api/bookings', (c) => {
     const { limit, offset } = page(c);
-    return ok(listBookings({ customerId: U(c).id, status: c.query.get('status') ?? undefined, from: c.query.get('from') ?? undefined, to: c.query.get('to') ?? undefined, limit, offset }));
+    return ok(listBookings({ customerId: U(c).id, status: c.query.get('status') ?? undefined, from: c.query.get('from') ?? undefined, to: c.query.get('to') ?? undefined, collapse: c.query.get('group') === '1', limit, offset }));
   }, { auth: ['customer'] });
 
   r.get('/api/bookings/:id', (c) => {

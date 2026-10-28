@@ -1,14 +1,14 @@
 import type { Config } from './config.ts';
 import { aiConfigured } from './config.ts';
 import { now } from './clock.ts';
-import { many } from './db.ts';
+import { many, one } from './db.ts';
 import { HttpError } from './errors.ts';
 import { audit } from './audit.ts';
 import { Validator } from './input.ts';
 import { redact } from './ask/claude.ts';
 import { addDays, dayOfWeek, isValidDate, istDate, MIN } from './time.ts';
 import type { UserRow } from './auth.ts';
-import { accessBooking, loadBooking } from './bookings.ts';
+import { accessBooking, blockOf, loadBooking } from './bookings.ts';
 import { getGroundOr404, listGrounds } from './grounds.ts';
 import { groundFormats } from './formats.ts';
 import { groundRates } from './rates.ts';
@@ -116,7 +116,19 @@ const decorate = (lang: Lang, o: BookingOption, tag: Offer['tag']): Offer => ({ 
 
 function bookingView(id: string): BookingView | null {
   const b = loadBooking(id);
-  return b ? { id: b.id, ref: b.ref, status: b.status, date: b.date, totalPaise: b.totalPaise, paidPaise: b.paidPaise, balancePaise: b.balancePaise, advancePaise: b.advancePaise } : null;
+  if (!b) return null;
+  const k = b.seriesId ? blockOf(b.seriesId, false) : null;
+  if (!k) return { id: b.id, ref: b.ref, status: b.status, date: b.date, totalPaise: b.totalPaise, paidPaise: b.paidPaise, balancePaise: b.balancePaise, advancePaise: b.advancePaise };
+  // a multi-day booking is one booking: its first day's ref, and the money across every day
+  const first = one<{ id: string; ref: string; status: string; advance_paise: number }>('SELECT id, ref, status, advance_paise FROM bookings WHERE series_id = ? ORDER BY series_index LIMIT 1', k.seriesId)!;
+  const live = one<{ status: string }>("SELECT status FROM bookings WHERE series_id = ? AND status IN ('held','confirmed') ORDER BY series_index LIMIT 1", k.seriesId);
+  return { id: first.id, ref: first.ref, status: live?.status ?? first.status, date: k.fromDate, totalPaise: k.totalPaise, paidPaise: k.paidPaise, balancePaise: k.balancePaise, advancePaise: first.advance_paise };
+}
+/** The bookings a balance or payment question is about, each multi-day booking once, at most five. */
+function viewsOf(user: UserRow, ids: string[]): BookingView[] {
+  const views: BookingView[] = [];
+  for (const id of ids) { accessBooking(user, id); const bv = bookingView(id); if (bv && !views.some((v) => v.id === bv.id)) views.push(bv); }
+  return views.slice(0, 5);
 }
 const statusKey = (s: string): Key => (({ held: 'sHeld', confirmed: 'sConfirmed', cancelled: 'sCancelled', expired: 'sExpired', no_show: 'sNoShow', completed: 'sCompleted' }) as Record<string, Key>)[s] ?? 'sConfirmed';
 
@@ -190,9 +202,8 @@ export async function guppiUnderstand(cfg: Config, user: UserRow, body: unknown,
     let views: BookingView[] | undefined;
     if (f.payAct) {
       // what is owed is read from the booking system, never worked out here
-      const ids = ctxBooking ? [ctxBooking] : draft.holdBookingId ? [draft.holdBookingId] : many<{ id: string }>("SELECT id FROM bookings WHERE customer_id = ? AND status IN ('held','confirmed') ORDER BY start_at DESC LIMIT 5", user.id).map((r) => r.id);
-      views = [];
-      for (const id of ids) { accessBooking(user, id); const bv = bookingView(id); if (bv) views.push(bv); }
+      const ids = ctxBooking ? [ctxBooking] : draft.holdBookingId ? [draft.holdBookingId] : many<{ id: string }>("SELECT id FROM bookings WHERE customer_id = ? AND status IN ('held','confirmed') ORDER BY start_at DESC LIMIT 50", user.id).map((r) => r.id);
+      views = viewsOf(user, ids);
       const one = views[0];
       if (views.length === 1 && one) message += ' ' + say(lang, 'balance', { ref: one.ref, status: say(lang, statusKey(one.status)), balance: inr(one.balancePaise), total: inr(one.totalPaise), paid: inr(one.paidPaise) });
       else if (views.length > 1) { const total = views.reduce((n, b) => n + b.balancePaise, 0); message += ' ' + (total > 0 ? say(lang, 'balanceMany', { n: views.length, balance: inr(total) }) : say(lang, 'balanceNone')); }
@@ -200,9 +211,8 @@ export async function guppiUnderstand(cfg: Config, user: UserRow, body: unknown,
     return finish({ command: null, status: 'refused', criteria: emptyCriteria(), message, refusal: { code }, ...(views ? { bookings: views } : {}) });
   }
   if (text && (f.payClaim || f.payStatus)) {
-    const ids = ctxBooking ? [ctxBooking] : draft.holdBookingId ? [draft.holdBookingId] : many<{ id: string }>("SELECT id FROM bookings WHERE customer_id = ? AND status IN ('held','confirmed') ORDER BY start_at DESC LIMIT 5", user.id).map((r) => r.id);
-    const views: BookingView[] = [];
-    for (const id of ids) { accessBooking(user, id); const bv = bookingView(id); if (bv) views.push(bv); }
+    const ids = ctxBooking ? [ctxBooking] : draft.holdBookingId ? [draft.holdBookingId] : many<{ id: string }>("SELECT id FROM bookings WHERE customer_id = ? AND status IN ('held','confirmed') ORDER BY start_at DESC LIMIT 50", user.id).map((r) => r.id);
+    const views = viewsOf(user, ids);
     const wantsStatus = f.payClaim || /status|સ્ટેટસ|स्टेटस/.test(text.toLowerCase());
     const command: Command = wantsStatus ? 'CHECK_PAYMENT_STATUS' : 'SHOW_BALANCE';
     let message: string;

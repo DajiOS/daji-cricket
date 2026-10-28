@@ -111,7 +111,7 @@ function Palette({ me, visible, onClose }: { me: Me; visible: (i: NavItem) => bo
     const timer = setTimeout(async () => {
       const enc = encodeURIComponent(t);
       const jobs: Promise<Hit[]>[] = [];
-      if (can(me, 'manage_bookings')) jobs.push(api<{ items: any[] }>(`/api/staff/bookings?q=${enc}&limit=5`).then((r) => r.items.map((b) => ({ key: 'b:' + b.id, kind: 'Booking' as const, label: `${b.ref} · ${b.customerName}`, hint: `${fmtDate(b.date)} · ${b.groundName}`, icon: 'calendar', run: () => jump(`/bookings/${b.id}`) }))).catch(() => []));
+      if (can(me, 'manage_bookings')) jobs.push(api<{ items: any[] }>(`/api/staff/bookings?q=${enc}&group=1&limit=5`).then((r) => r.items.map((b) => ({ key: 'b:' + b.id, kind: 'Booking' as const, label: `${b.ref} · ${b.customerName}`, hint: `${b.block ? `${fmtDate(b.block.fromDate)} – ${fmtDate(b.block.toDate)}` : fmtDate(b.date)} · ${b.groundName}`, icon: 'calendar', run: () => jump(`/bookings/${b.id}`) }))).catch(() => []));
       if (seesMoney(me)) {
         jobs.push(api<{ items: any[] }>(`/api/accounting/bills?q=${enc}`).then((r) => r.items.slice(0, 5).map((b) => ({ key: 'bill:' + b.id, kind: 'Bill' as const, label: `${b.vendorName}${b.billNo ? ' · ' + b.billNo : ''}`, hint: `${inr(b.amountPaise)} · due ${fmtDate(b.dueDate)}`, icon: 'billing', run: () => jump(`/bills/${b.id}`) }))).catch(() => []));
         jobs.push(api<{ items: any[] }>(`/api/accounting/vendors?q=${enc}`).then((r) => r.items.slice(0, 3).map((v) => ({ key: 'v:' + v.id, kind: 'Vendor' as const, label: v.name, hint: 'Vendors', icon: 'warehouse', run: () => jump('/bills/vendors') }))).catch(() => []));
