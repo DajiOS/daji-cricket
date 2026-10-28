@@ -1,43 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from './App';
-import { Icon, Modal, Field, useToast } from './ui';
-import { api, post, can, go, fmtTime, setViewOwner } from './lib';
+import { Icon } from './ui';
+import { api, can, go, fmtTime } from './lib';
 import type { TodayData } from './parts/dash/Today';
 
 // The starter kit's property picker, for one ground: the business name opens a list of the grounds and what is on each right now.
-// The software owner, and an owner with a portfolio of businesses, also switch business here.
+// The software owner also switches business here, as before.
 interface Ground { id: string; name: string; ownerId: string }
-
-// The main website's owner adds another ground straight into their own portfolio: a new business with its own owner account,
-// kept apart from theirs. Nothing is sent to the new owner.
-function AddGround({ onClose }: { onClose: () => void }) {
-  const toast = useToast();
-  const blank = { businessName: '', ownerName: '', phone: '', email: '' };
-  const [f, setF] = useState(blank);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const set = (k: keyof typeof blank) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
-  async function add() {
-    setBusy(true); setMsg(null);
-    try {
-      const b = await post<{ id: string; businessName: string }>('/api/me/portfolio', f);
-      toast(`${b.businessName} added. Nothing was sent to its owner.`);
-      setViewOwner(b.id); location.reload();
-    } catch (e: any) { setMsg(e?.message ?? 'Could not add it.'); setBusy(false); }
-  }
-  return (
-    <Modal title="Add a ground" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn" disabled={busy} onClick={add}>Add ground</button></>}>
-      <p className="small muted">A separate business in your portfolio. Its bookings, customers, team and money are kept apart from yours. You switch to it here.</p>
-      <div className="form-grid">
-        <Field label="Ground name" required><input className="inp" value={f.businessName} onChange={set('businessName')} placeholder="Antroli Cricket Ground" /></Field>
-        <Field label="Its owner's name" required><input className="inp" autoComplete="off" value={f.ownerName} onChange={set('ownerName')} /></Field>
-        <Field label="Its owner's mobile" required><input className="inp" inputMode="tel" autoComplete="off" value={f.phone} onChange={set('phone')} /></Field>
-        <Field label="Its owner's email" required><input className="inp" type="email" autoComplete="off" value={f.email} onChange={set('email')} /></Field>
-      </div>
-      {msg && <p className="err-text" role="alert">{msg}</p>}
-    </Modal>
-  );
-}
 
 export function GroundPicker() {
   const s = useSession();
@@ -48,13 +17,9 @@ export function GroundPicker() {
   const owner = s.owners.find((o) => o.id === s.ownerId);
   const name = owner?.businessName || s.me.businessName || 'Daji Cricket Ground';
   const bookings = can(s.me, 'manage_bookings');
-  const [canAdd, setCanAdd] = useState(false);
-  const [adding, setAdding] = useState(false);
-  useEffect(() => { if (s.me.role === 'owner') api<{ canAdd?: boolean }>('/api/me/portfolio').then((r) => setCanAdd(!!r.canAdd)).catch(() => setCanAdd(false)); }, [s.me.role]);
   useEffect(() => {
     if (!open) return;
-    api<{ items: Ground[] }>('/api/staff/grounds').then((r) => setGrounds(r.items))
-      .catch(() => api<{ items: Ground[] }>('/api/grounds').then((r) => setGrounds(r.items.filter((g) => g.ownerId === s.ownerId)))).catch(() => setGrounds([]));
+    api<{ items: Ground[] }>('/api/grounds').then((r) => setGrounds(r.items.filter((g) => g.ownerId === s.ownerId))).catch(() => setGrounds([]));
     if (bookings) api<TodayData>('/api/staff/today').then(setToday).catch(() => setToday(null));
     const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
@@ -75,15 +40,13 @@ export function GroundPicker() {
 
   return (
     <div className="gpick hide-sm" ref={box}>
-      {adding && <AddGround onClose={() => setAdding(false)} />}
       <button className="gpick-btn" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="true">{name}<Icon name="chevron" size={13} /></button>
       {open && (
         <div className="gpick-menu" role="menu">
-          {(s.me.role === 'super_admin' || s.me.role === 'owner') && s.owners.length > 1 && <>
+          {s.me.role === 'super_admin' && s.owners.length > 1 && <>
             <div className="nav-group">Business</div>
             {s.owners.map((o) => <button key={o.id} role="menuitemradio" aria-checked={o.id === s.ownerId} className={`gpick-row${o.id === s.ownerId ? ' on' : ''}`} onClick={() => { setOpen(false); s.setOwner(o.id); }}><b>{o.businessName || o.name}</b></button>)}
           </>}
-          {canAdd && <button role="menuitem" className="gpick-row" onClick={() => { setOpen(false); setAdding(true); }}><Icon name="plus" size={15} /><b>Add a ground</b></button>}
           <div className="nav-group">Grounds</div>
           {!grounds ? <p className="small muted gpick-row">Loading…</p> : grounds.map((g) => {
             const st = status(g);

@@ -4,7 +4,6 @@ import { now } from './clock.ts';
 import { HttpError } from './errors.ts';
 import { Validator } from './input.ts';
 import { isValidDate } from './time.ts';
-import { mainSiteBusinessId } from './businesses.ts';
 
 // "Contacts" are the people who have played at one owner's grounds. They are customers, so consent is theirs:
 // every channel needs its own yes (users.consent_email / consent_sms / consent_whatsapp) before a broadcast reaches them.
@@ -17,12 +16,10 @@ const PLAYED: Record<ContactWho, string> = {
   account: "b.status IN ('confirmed','completed','no_show')",
 };
 
-/** The business a new account belongs to before it books. A customer account is not tied to a business when it is made: people sign
- *  up on the main website and its app, so a sign-up is the main site's business's from the start (mainSiteBusinessId), or, before one
- *  is set, the only active owner's. Any other business sees an account only once it books there, so no business sees another's sign-ups. */
+/** The business a new account belongs to before it books. A customer account is not tied to a business when it is made, so while the
+ *  platform has exactly one active owner (Daji today) a sign-up is theirs from the start. With more than one, an account becomes a
+ *  business's customer only by booking there, so one business never sees another's sign-ups. */
 export function soleOwner(): string | null {
-  const main = mainSiteBusinessId();
-  if (main) return main;
   const o = many<{ id: string }>("SELECT id FROM users WHERE role = 'owner' AND active = 1 LIMIT 2");
   return o.length === 1 ? o[0]!.id : null;
 }

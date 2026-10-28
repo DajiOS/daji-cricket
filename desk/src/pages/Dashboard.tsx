@@ -45,7 +45,7 @@ function StatCard({ icon, tone, label, value, foot, href, alert }: { icon: strin
 
 export default function Dashboard({ sub }: { sub: string }) {
   void sub;
-  const { me, ownerId, owners } = useSession();
+  const { me, ownerId } = useSession();
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
   const canBookings = can(me, 'manage_bookings');
@@ -146,8 +146,7 @@ export default function Dashboard({ sub }: { sub: string }) {
     return tab === 'upcoming' ? STATUS.upcoming : STATUS[phase(b, t)];
   };
   const when = (b: Booking) => tab !== 'upcoming' ? span(b) : b.block ? `${fmtDay(b.block.fromDate)} – ${fmtDay(b.block.toDate)}` : `${fmtDay(b.date)} · ${span(b)}`;
-  // the business this desk is for: the one the software owner picked, or the signed-in owner's own (never another's name)
-  const business = owners.find((o) => o.id === ownerId)?.businessName || me.businessName || 'Your business';
+  const business = me.role === 'super_admin' ? 'Daji Cricket Ground' : me.businessName || 'Daji Cricket Ground';
 
   return (
     <div className="xdash">

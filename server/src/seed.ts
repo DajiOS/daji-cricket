@@ -26,7 +26,7 @@ export const DAJI_LOCATION = { lat: 21.1815, lng: 72.912556, mapUrl: 'https://ma
 export function seedDemo(cfg: Config): { created: boolean } {
   if (!cfg.demoMode) throw new Error('Refusing to create demo accounts: DEMO_MODE is off');
   if (one('SELECT 1 FROM users LIMIT 1')) return { created: false };
-  createUser({ role: 'super_admin', name: 'Daji OS Admin', email: DEMO_ACCOUNTS.admin.email, phone: '9000000001', password: DEMO_ACCOUNTS.admin.password });
+  createUser({ role: 'super_admin', name: 'Platform Admin', email: DEMO_ACCOUNTS.admin.email, phone: '9000000001', password: DEMO_ACCOUNTS.admin.password });
   const o1 = createUser({ role: 'owner', name: 'Daji Owner', email: DEMO_ACCOUNTS.owner1.email, phone: '9000000002', password: DEMO_ACCOUNTS.owner1.password, businessName: 'Daji Cricket Ground', upiId: 'dajicricket@okhdfcbank' });
   const o2 = createUser({ role: 'owner', name: 'Riverside Owner', email: DEMO_ACCOUNTS.owner2.email, phone: '9000000003', password: DEMO_ACCOUNTS.owner2.password, businessName: 'Riverside Sports', upiId: 'riverside@oksbi' });
   createUser({ role: 'staff', name: 'Ground Staff', email: DEMO_ACCOUNTS.staff1.email, phone: '9000000004', password: DEMO_ACCOUNTS.staff1.password, ownerId: o1.id, permissions: ['manage_bookings', 'verify_payments', 'record_payments', 'manage_enquiries', 'view_customers'] });
