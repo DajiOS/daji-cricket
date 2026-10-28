@@ -7,7 +7,7 @@ export interface Innings {
   bowling: { name: string; overs: string | number; runs: number; wickets: number; economy: number | null }[];
   extras: { total: number; wides: number; noBalls: number; byes: number; legByes: number };
 }
-export interface Score { match: { id: string; title: string; teamA: string; teamB: string; status: string; result?: string | null }; innings: Innings[] }
+export interface Score { match: { id: string; title: string; teamA: string; teamB: string; status: string; result?: string | null; battingFirst?: 'a' | 'b' }; innings: Innings[] }
 
 export default function Scoreboard({ sc }: { sc: Score }) {
   if (!sc.innings.length) return <div className="card"><div className="empty">The match has not started.</div></div>;

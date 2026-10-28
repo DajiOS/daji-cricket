@@ -56,7 +56,7 @@ export interface TeamMember { id: string; name: string; firstName?: string; last
 export interface Promo { id: string; code: string; label: string | null; active: boolean; kind: 'percent' | 'flat'; value: number; usageLimit: number | null; used: number }
 export interface Student { id: string; name: string; bornOn: string | null; batch: string | null; guardianName: string; guardianEmail: string | null; guardianPhone: string | null; linked: boolean; status: 'active' | 'left' }
 export interface ProgressCard { id: string; month: string; ratings: { skill: string; rating: number }[]; comment: string | null; published: boolean }
-export interface MatchRow { id: string; title: string; teamA: string; teamB: string; overs: number; status: string; result: string | null; isPublic: boolean }
+export interface MatchRow { id: string; title: string; teamA: string; teamB: string; overs: number; status: string; result: string | null; isPublic: boolean; battingFirst?: 'a' | 'b' }
 export interface Innings { number: 1 | 2; team: string; runs: number; wickets: number; overs: string; closed: boolean; target: number | null; recent: string[]; batting: { name: string; runs: number; balls: number; out: string | null }[]; bowling: { name: string; overs: string; runs: number; wickets: number }[] }
 export interface Scorecard { match: MatchRow; innings: Innings[] }
 

@@ -7,6 +7,7 @@ import { useSession } from '../../App';
 import { errText } from '../admin/common';
 import { LinkedDocs } from '../docs/LinkedDocs';
 import { type Booking, BookingChip, METHOD_LABEL, PAY_STATUS, timeRange } from '../dash/common';
+import CareerView, { type CareerData } from '../club/Career';
 
 interface Pay { id: string; bookingId: string | null; method: string; status: string; amountPaise: number; createdAt: number }
 interface Enq { id: string; status: string; preferredDate: string | null; message: string | null; createdAt: number; groundName: string | null }
@@ -14,7 +15,7 @@ interface Detail {
   customer: { id: string; name: string; firstName?: string; lastName?: string; phone: string | null; email: string | null; consent?: { email: boolean; sms: boolean; whatsapp: boolean } | null };
   bookings: Booking[]; payments: Pay[]; enquiries: Enq[]; creditBalancePaise: number;
 }
-export const CUSTOMER_TABS: [string, string][] = [['overview', 'Overview'], ['bookings', 'Bookings'], ['money', 'Money'], ['documents', 'Documents'], ['activity', 'Activity']];
+export const CUSTOMER_TABS: [string, string][] = [['overview', 'Overview'], ['bookings', 'Bookings'], ['money', 'Money'], ['cricket', 'Cricket'], ['documents', 'Documents'], ['activity', 'Activity']];
 
 export function CustomerWorkspace({ id, tab: tabIn }: { id: string; tab?: string }) {
   const [d, err, reload, status] = useApi<Detail>(`/api/staff/customers/${encodeURIComponent(id)}`);
@@ -80,11 +81,18 @@ export function CustomerWorkspace({ id, tab: tabIn }: { id: string; tab?: string
                 { head: 'Amount', num: true, cell: (p) => inr(p.amountPaise) },
               ]} /></div>
             </div>)}
+          {tab === 'cricket' && <Cricket id={id} />}
           {tab === 'documents' && <div className="card card-pad"><LinkedDocs kind="customer" id={id} /></div>}
           {tab === 'activity' && <Activity d={x} />}
         </>)}</Load>
     </div>
   );
+}
+
+/** Their career record from matches scored at this business (playerStats.ts on the server). */
+function Cricket({ id }: { id: string }) {
+  const [d, err, reload, status] = useApi<CareerData>(`/api/staff/customers/${encodeURIComponent(id)}/cricket`);
+  return <Load data={d} error={err} status={status} retry={reload}>{(x) => <CareerView d={x} />}</Load>;
 }
 
 /** Bookings made, payments and enquiries, newest first. */

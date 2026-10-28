@@ -5,17 +5,19 @@ import { Async } from '../parts/club/common';
 import MatchDialog, { type Match } from '../parts/club/MatchDialog';
 import Scorer from '../parts/club/Scorer';
 import LiveNow from '../parts/club/LiveNow';
+import Leaders from '../parts/club/Leaders';
 
-// Fixtures: every match, and its Live now tab (the register's Live score, at /matches/live; the old /live opens it too). /matches/<id> scores one.
-const TABS: [string, string][] = [['all', 'All fixtures'], ['live', 'Live now']];
+// Fixtures: every match, its Live now tab (the register's Live score, at /matches/live; the old /live opens it too) and Player records
+// (/matches/leaders: the career leaders from scored matches). /matches/<id> scores one.
+const TABS: [string, string][] = [['all', 'All fixtures'], ['live', 'Live now'], ['leaders', 'Player records']];
 
 export default function Matches({ sub }: { sub: string }) {
   const id = sub.split('/')[0] || '';
-  if (id && id !== 'live') return <div className="stack"><PageHead eyebrow="Match day" title="Score a match" lede="Ball by ball from your phone; the public live page updates by itself." /><Scorer key={id} id={id} back={() => go('/matches')} /></div>;
-  return <List live={id === 'live'} />;
+  if (id && id !== 'live' && id !== 'leaders') return <div className="stack"><PageHead eyebrow="Match day" title="Score a match" lede="Ball by ball from your phone; the public live page updates by itself." /><Scorer key={id} id={id} back={() => go('/matches')} /></div>;
+  return <List tab={id === 'live' ? 'live' : id === 'leaders' ? 'leaders' : 'all'} />;
 }
 
-function List({ live }: { live: boolean }) {
+function List({ tab }: { tab: string }) {
   const [data, error, reload] = useApi<{ items: Match[] }>('/api/staff/matches');
   const [dlg, setDlg] = useState<Match | 'new' | null>(null);
   const items = data?.items ?? [];
@@ -24,8 +26,8 @@ function List({ live }: { live: boolean }) {
       <PageHead eyebrow="Ground" title="Fixtures" lede="Create a match, score it ball by ball from your phone, and the public live page updates by itself. Add a YouTube live link and viewers can watch from the same page.">
         <button className="btn primary" onClick={() => setDlg('new')}>New match</button>
       </PageHead>
-      <div><Tabs value={live ? 'live' : 'all'} onChange={(k) => go(k === 'live' ? '/matches/live' : '/matches')} items={TABS} label="Fixtures" /></div>
-      {live ? <LiveNow /> : <>
+      <div><Tabs value={tab} onChange={(k) => go(k === 'all' ? '/matches' : `/matches/${k}`)} items={TABS} label="Fixtures" /></div>
+      {tab === 'live' ? <LiveNow /> : tab === 'leaders' ? <Leaders /> : <>
       {data && <div className="grid g3"><Stat label="Matches" value={items.length} /><Stat label="Live now" value={items.filter((m) => m.status === 'live').length} /><Stat label="On the public page" value={items.filter((m) => m.isPublic).length} /></div>}
       <div className="card">
         <Async data={data} error={error}>{(d) => (

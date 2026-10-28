@@ -14,6 +14,7 @@ import { parseBooking } from '../guppiLang.ts';
 import { say } from '../guppiText.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
 import { myWaitlist, tierFor } from '../waitlist.ts';
+import { myCricket } from '../playerStats.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -39,12 +40,14 @@ export const CUSTOMER_EXAMPLES = [
   'How do I get there?',
   'Am I on the Sunday waitlist?',
   'How many games have I played?',
+  'What is my batting average?',
 ];
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const RULES: [string, RegExp][] = [
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?)\b/],
   ['games', /how many games|games (have i|i have|i've) played|games? played|my tier|which tier|what tier|check.?in|kitne (match|game)|કેટલી મેચ|कितने मैच/],
+  ['cricket', /\b(career|cricket|my) (stats|statistics|record)\b|\bmy stats\b|\bbatting\b|\bbowling\b|\baverage\b|strike rate|\beconomy\b|how many (runs|wickets|catches|sixes|fours)|\bmy (runs|wickets|catches|highest|best)\b|highest score|best (score|figures)|centur(y|ies)|fift(y|ies)|\bducks?\b|stumpings?|કેટલા રન|કેટલી વિકેટ|कितने रन|कितने विकेट/],
   ['waitlist', /wait.?list|waiting list|on the list|my (place|turn|request)|વેઇટિંગ|વેટિંગ|वेटिंग|प्रतीक्षा/],
   ['cancel_policy', /cancel|refund policy|refund rules?|can i get (a|my) refund/],
   ['credit', /\bcredits?\b|wallet|account balance/],
@@ -133,6 +136,16 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
       if (next) bits.push(`${next.minGames - w.games} more to reach ${next.name} (${next.minGames} games).`);
       bits.push('A game counts when you check in at the ground in the Daji app on your own phone (unlock, selfie, location), or the ground staff check you in. The person who booked adds you to the team list with your mobile number.');
       return out(bits.join(' '), { details: tiers.slice().reverse().map((t) => ({ label: t.name, text: `${t.minGames} games or more` })) });
+    }
+    case 'cricket': {
+      // the customer's own career record, from finished matches where they are in a squad linked to their profile
+      const r = myCricket(user);
+      const c = r.career, b = c.batting, w = c.bowling, f = c.fielding;
+      if (!c.matches) return out('You have no scored matches on your record yet. A match goes on your record when the scorer has you in a squad linked to your Daji profile (the ground adds you by your mobile number, or from your booking\'s team list) and the match is finished.');
+      const bits = [`In ${c.matches} ${c.matches === 1 ? 'match' : 'matches'} you have scored ${b.runs} ${b.runs === 1 ? 'run' : 'runs'} in ${b.innings} ${b.innings === 1 ? 'innings' : 'innings'}${b.highest ? ` (highest ${b.highest}${b.average !== null ? `, average ${b.average}` : ''}${b.strikeRate !== null ? `, strike rate ${b.strikeRate}` : ''})` : ''}`];
+      bits.push(`and taken ${w.wickets} ${w.wickets === 1 ? 'wicket' : 'wickets'}${w.best ? ` (best ${w.best}${w.economy !== null ? `, economy ${w.economy}` : ''})` : ''}.`);
+      if (f.catches || f.runOuts || f.stumpings) bits.push(`In the field: ${f.catches} ${f.catches === 1 ? 'catch' : 'catches'}, ${f.runOuts} run ${f.runOuts === 1 ? 'out' : 'outs'}, ${f.stumpings} ${f.stumpings === 1 ? 'stumping' : 'stumpings'}.`);
+      return out(bits.join(' '), { details: r.matches.slice(0, 5).map((m) => ({ label: `${niceDay(istDate(m.date))} v ${m.opponent}`, text: m.summary })), open: 'bookings' });
     }
     case 'waitlist': {
       // the customer's own requests only, and how the waitlist works; accepting is done on the Waitlist screen, never here
