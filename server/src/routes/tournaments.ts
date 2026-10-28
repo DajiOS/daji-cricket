@@ -2,7 +2,7 @@ import { Router, ok, created } from '../http.ts';
 import type { Ctx } from '../http.ts';
 import { U, ownerOrFail } from './helpers.ts';
 import { requirePermission } from '../auth.ts';
-import { addFixture, addTeam, createFixtureMatch, createTournament, deleteTournament, generateFixtures, listTournaments, removeFixture, removeTeam, syncFixtureResult, tournamentDetail, updateFixture, updateTeam, updateTournament } from '../tournaments.ts';
+import { addFixture, addTeam, createFixtureMatch, createTournament, deleteTournament, generateFixtures, listTournaments, removeFixture, removeTeam, scheduleFixtures, syncFixtureResult, tournamentDetail, updateFixture, updateTeam, updateTournament } from '../tournaments.ts';
 
 const A = { auth: ['owner', 'staff', 'super_admin'] as ('owner' | 'staff' | 'super_admin')[] };
 
@@ -21,6 +21,7 @@ export function tournamentsRoutes(r: Router): void {
   r.del(`${base}/:id/teams/:teamId`, (c) => { const g = gate(c); removeTeam(g.actor, g.owner, c.params.id!, c.params.teamId!); return ok({ removed: true }); }, A);
 
   r.post(`${base}/:id/fixtures`, (c) => { const g = gate(c); return created(addFixture(g.actor, g.owner, c.params.id!, c.json())); }, A);
+  r.post(`${base}/:id/fixtures/schedule`, (c) => { const g = gate(c); return created(scheduleFixtures(g.actor, g.owner, c.params.id!, c.json())); }, A);
   r.post(`${base}/:id/fixtures/generate`, (c) => { const g = gate(c); return created(generateFixtures(g.actor, g.owner, c.params.id!, c.json())); }, A);
   r.patch(`${base}/:id/fixtures/:fid`, (c) => { const g = gate(c); return ok(updateFixture(g.actor, g.owner, c.params.id!, c.params.fid!, c.json())); }, A);
   r.del(`${base}/:id/fixtures/:fid`, (c) => { const g = gate(c); removeFixture(g.actor, g.owner, c.params.id!, c.params.fid!); return ok({ removed: true }); }, A);
