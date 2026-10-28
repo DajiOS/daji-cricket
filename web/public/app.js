@@ -507,6 +507,9 @@ const hourSpan = (t) => { const [a, b] = t.split(':').map(Number); const m = (a 
 const niceHour = (t) => { const [a, b] = t.split(':').map(Number), x = a % 24; return `${x % 12 || 12}${b ? ':' + pad(b) : ''} ${x < 12 ? 'am' : 'pm'}`; };
 const BALL_SHORT = { combo: 'Red & White combo ball', leather: 'Leather ball', red: 'Leather ball', white: 'Leather ball', tennis: 'Tennis ball', practice: 'Practice session' };
 const money = (paise) => inr(paise);
+/** Prices are given on enquiry (Settings): slots show no price, and a picked slot is sent to the ground as a pricing enquiry. */
+const onEnquiry = () => !!(state.config && state.config.pricesOnEnquiry);
+const slotPrice = (p) => (onEnquiry() ? 'Available' : inr(p));
 /** The cheapest hourly price (or, with none, the cheapest session) for the "From" line. */
 function fromPrice(g) {
   const hourly = (g.rates || []).filter((r) => r.mode === 'hourly');
@@ -1165,11 +1168,12 @@ function fillStatic() {
   fillLibrary();
   const c = state.config, gs = state.grounds, g0 = gs[0];
   for (const el of $$('[data-tagline]')) el.textContent = c.tagline;
+  if (onEnquiry() && $('#grounds-lede')) $('#grounds-lede').textContent = 'Every ground shows live availability. Prices are given on enquiry: pick a free slot and the ground will reply with the price.';
   const minPrice = gs.length ? Math.min(...gs.map((g) => (g.rates && g.rates.length ? fromPrice(g).paise : g.pricePaise))) : 0;
   const facts = clear($('#facts'));
   facts.append(
     h('div', {}, h('strong', {}, g0 ? (() => { const [o, c2] = hoursFor(g0, istToday()); return `${niceHour(o)}–${niceHour(clock(c2))}`.replace(/ /g, ''); })() : '—'), h('span', {}, g0 && g0.closedDays && g0.closedDays.length ? `Open ${dayRange([1, 2, 3, 4, 5, 6, 0].filter((d) => !g0.closedDays.includes(d)))}. Closed every ${g0.closedDays.map((d) => (g0.closedDays.length === 1 ? DAY_FULL[d] : DAY_NAMES[d])).join(' & ')}` : 'Open every day')),
-    h('div', {}, h('strong', {}, minPrice ? inr(minPrice) : '—'), h('span', {}, 'From, per hour')),
+    onEnquiry() ? h('div', {}, h('strong', {}, 'On enquiry'), h('span', {}, 'Prices')) : h('div', {}, h('strong', {}, minPrice ? inr(minPrice) : '—'), h('span', {}, 'From, per hour')),
     h('div', {}, h('strong', {}, `${c.holdMinutesOnline} min`), h('span', {}, 'Slot held')));
   // academy
   const an = c.academy.name || '';
@@ -1209,8 +1213,8 @@ function fillStatic() {
         h('h4', {}, g.name),
         h('div', { class: 'chips' }, (g.facilities || []).map((f) => h('span', { class: 'chip' }, f))),
         g.description ? h('div', { class: 'hint', style: 'margin:0' }, g.description) : null,
-        g.rates && g.rates.length ? rateCardEl(g) : null,
-        h('div', { class: 'price' }, g.rates && g.rates.length ? h('div', {}, h('span', {}, 'From '), h('b', {}, inr(fromPrice(g).paise)), h('span', {}, fromPrice(g).unit)) : g.formats && g.formats.length ? h('div', {}, h('span', {}, 'From '), h('b', {}, inr(Math.min(...g.formats.map((f) => f.pricePaise)))), h('span', {}, ' / session')) : h('div', {}, h('b', {}, inr(g.pricePaise)), h('span', {}, ' / hour')),
+        g.rates && g.rates.length && !onEnquiry() ? rateCardEl(g) : null,
+        h('div', { class: 'price' }, onEnquiry() ? h('div', {}, h('b', {}, 'Price on enquiry')) : g.rates && g.rates.length ? h('div', {}, h('span', {}, 'From '), h('b', {}, inr(fromPrice(g).paise)), h('span', {}, fromPrice(g).unit)) : g.formats && g.formats.length ? h('div', {}, h('span', {}, 'From '), h('b', {}, inr(Math.min(...g.formats.map((f) => f.pricePaise)))), h('span', {}, ' / session')) : h('div', {}, h('b', {}, inr(g.pricePaise)), h('span', {}, ' / hour')),
           h('button', { class: 'arrow', type: 'button', onclick: () => { pickGround(g.id); jump('book'); } }, 'Book →')))));
   }
   paintPics();
@@ -1270,7 +1274,7 @@ async function loadSlots() {
   a.slots.forEach((s, i) => {
     const sel = state.sel.includes(i);
     const cls = sel ? 'sel' : s.state === 'available' ? 'av' : s.state;
-    const label = s.state === 'available' || sel ? inr(s.pricePaise) : { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' }[s.state] || s.state;
+    const label = s.state === 'available' || sel ? slotPrice(s.pricePaise) : { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' }[s.state] || s.state;
     grid.append(h('button', { class: 'slot ' + cls, type: 'button', disabled: s.state !== 'available' && !sel, 'aria-pressed': sel ? 'true' : 'false', onclick: () => clickSlot(i) }, s.time, h('small', {}, label)));
   });
   renderSummary();
@@ -1305,7 +1309,7 @@ function renderFormats() {
   wins.forEach((w) => {
     const on = state.win === w.time, ok = w.state === 'available';
     grid.append(h('button', { class: 'slot wide ' + (on ? 'sel' : ok ? 'av' : w.state), type: 'button', disabled: !ok, 'aria-pressed': on ? 'true' : 'false', onclick: () => { state.win = w.time; renderFormats(); } },
-      `${w.time} – ${w.endTime}`, h('small', {}, ok ? inr(w.pricePaise) : { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' }[w.state] || w.state)));
+      `${w.time} – ${w.endTime}`, h('small', {}, ok ? slotPrice(w.pricePaise) : { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' }[w.state] || w.state)));
   });
   renderSummary();
 }
@@ -1329,14 +1333,14 @@ function renderRates() {
   for (const o of fixed) {
     const on = state.win === o.ruleId, ok = o.state === 'available';
     grid.append(h('button', { class: 'slot wide ' + (on ? 'sel' : ok ? 'av' : o.state), type: 'button', disabled: !ok, 'aria-pressed': on ? 'true' : 'false', onclick: () => { state.win = o.ruleId; state.hr = null; renderRates(); } },
-      h('span', { class: 'sname' }, o.label), o.proRated ? h('span', { class: 'prn' }, `Part-session · ${o.hoursLeft} hour${o.hoursLeft === 1 ? '' : 's'} left (full ${inr(o.fullPricePaise)})`) : null, `${niceHour(o.time)} – ${niceHour(o.endTime)}${o.bundleDays > 1 ? ` + ${o.bundleDays - 1} more day${o.bundleDays > 2 ? 's' : ''}` : ''}`, h('small', {}, ok || on ? inr(o.pricePaise) : STATE[o.state] || o.state)));
+      h('span', { class: 'sname' }, o.label), o.proRated ? h('span', { class: 'prn' }, `Part-session · ${o.hoursLeft} hour${o.hoursLeft === 1 ? '' : 's'} left${onEnquiry() ? '' : ` (full ${inr(o.fullPricePaise)})`}`) : null, `${niceHour(o.time)} – ${niceHour(o.endTime)}${o.bundleDays > 1 ? ` + ${o.bundleDays - 1} more day${o.bundleDays > 2 ? 's' : ''}` : ''}`, h('small', {}, ok || on ? slotPrice(o.pricePaise) : STATE[o.state] || o.state)));
   }
   for (const o of opts.filter((x) => x.mode === 'hourly')) {
-    grid.append(h('div', { class: 'grp' }, `${o.label} · ${inr(o.pricePaise)} per hour · up to ${g.maxSlots} hours in a row`));
+    grid.append(h('div', { class: 'grp' }, `${o.label}${onEnquiry() ? '' : ` · ${inr(o.pricePaise)} per hour`} · up to ${g.maxSlots} hours in a row`));
     const sel = state.hr && state.hr.ruleId === o.ruleId ? state.hr.idx : [];
     o.slots.forEach((sl, i) => {
       const on = sel.includes(i), ok = sl.state === 'available';
-      grid.append(h('button', { class: 'slot ' + (on ? 'sel' : ok ? 'av' : sl.state), type: 'button', disabled: !ok && !on, 'aria-pressed': on ? 'true' : 'false', onclick: () => clickHour(o, i) }, hourSpan(sl.time), h('small', {}, ok || on ? inr(sl.pricePaise) : STATE[sl.state] || sl.state)));
+      grid.append(h('button', { class: 'slot ' + (on ? 'sel' : ok ? 'av' : sl.state), type: 'button', disabled: !ok && !on, 'aria-pressed': on ? 'true' : 'false', onclick: () => clickHour(o, i) }, hourSpan(sl.time), h('small', {}, ok || on ? slotPrice(sl.pricePaise) : STATE[sl.state] || sl.state)));
     });
   }
   renderSummary();
@@ -1375,7 +1379,7 @@ function clickSlot(i) {
     el.className = 'slot ' + (on ? 'sel' : s.state === 'available' ? 'av' : s.state);
     el.setAttribute('aria-pressed', on ? 'true' : 'false');
     el.disabled = s.state !== 'available' && !on;
-    $('small', el).textContent = s.state === 'available' || on ? inr(s.pricePaise) : { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' }[s.state] || s.state;
+    $('small', el).textContent = s.state === 'available' || on ? slotPrice(s.pricePaise) : { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' }[s.state] || s.state;
   });
   renderSummary();
 }
@@ -1426,6 +1430,15 @@ function renderSummary() {
   $('#p-repeat-row').hidden = !s; if (!s) { $('#p-repeat').value = ''; $('#p-repeat-n').hidden = true; }
   const holdMin = state.config.razorpayEnabled ? state.config.holdMinutesOnline : state.config.holdMinutesUpi;
   if (!s) { btn.disabled = true; btn.textContent = state.ground && state.ground.rates && state.ground.rates.length ? 'Choose ball and session' : state.ground && state.ground.formats && state.ground.formats.length ? 'Choose ball, match and time' : 'Choose your slots'; renderCreditRow(); return; }
+  if (onEnquiry()) {
+    // no price to show or pay: the picked slot goes to the ground, which replies with the price
+    $('#p-promo-row').hidden = true; $('#p-repeat-row').hidden = true;
+    sum.append(h('div', { class: 'row' }, h('span', {}, slotText(s)), h('b', {}, 'On enquiry')),
+      h('div', { class: 'note' }, 'Prices are given on enquiry. Send this slot to the ground and they will reply with the price. Nothing is charged now.'));
+    btn.disabled = false; btn.textContent = 'Send enquiry for this slot';
+    renderCreditRow();
+    return;
+  }
   if (state.promo && !s.promoCode) { state.promo = null; $('#p-promo-msg').textContent = ''; $('#p-promo').value = ''; }
   const head = h('div', { class: 'row' }, h('span', {}, s.text || `${s.count} ${s.count === 1 ? 'slot' : 'slots'} · ${niceDate(state.date)} · ${s.first.time} – ${hhmm(s.last.end)}`), h('b', { id: 'p-sum-total' }, '…'));
   const money = h('div', { id: 'p-sum-money' }, h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Working out the price…')));
@@ -1495,6 +1508,7 @@ $('#p-credit').addEventListener('change', (e) => { state.useCredit = e.target.ch
 
 $('#p-hold').addEventListener('click', () => {
   if (!selection()) return;
+  if (onEnquiry()) return openEnquiry('ground', selection());
   if (!state.user) return openAuth({ note: 'Sign in or create an account to hold these slots. Your choice is kept.', after: holdNow });
   if (state.user.role !== 'customer') { toast('Online booking is for customer accounts. Staff add walk-in bookings from the owner desk.', true); return; }
   holdNow();
@@ -1710,20 +1724,29 @@ function showConfirmed(b) {
 
 // ------------------------------------------------------------------ enquiry
 
-function openEnquiry(kind) {
+const slotText = (s) => s.text || `${s.count} ${s.count === 1 ? 'slot' : 'slots'} · ${niceDate(state.date)} · ${s.first.time} – ${hhmm(s.last.end)}`;
+/** The picked slot as the enquiry names it: the day, the start, how many of the ground's slots and the session's name. */
+function enquirySlot(s) {
+  const mins = state.ground.slotMinutes || 60;
+  const n = s.first && s.last && s.first.start && s.last.end ? Math.max(1, Math.round((s.last.end - s.first.start) / (mins * 60000))) : s.count;
+  return { preferredDate: state.date, preferredTime: s.startTime || s.first.time, preferredSlots: n, ...(s.first && s.first.label ? { preferredLabel: String(s.first.label).slice(0, 80) } : {}), text: slotText(s) };
+}
+function openEnquiry(kind, sel) {
+  const slot = sel ? enquirySlot(sel) : null;
   const u = state.user && state.user.role === 'customer' ? state.user : null;
   const gsel = h('select', {}, state.grounds.map((g) => h('option', { value: g.id, selected: state.ground && g.id === state.ground.id }, g.name)));
   const first = input('firstName', 'text', { value: u ? (u.firstName || u.name.split(' ')[0] || '') : '', autocomplete: 'given-name', autocapitalize: 'words', required: true });
   const last = input('lastName', 'text', { value: u ? (u.lastName || u.name.split(' ').slice(1).join(' ')) : '', autocomplete: 'family-name', autocapitalize: 'words' });
   const phone = input('phone', 'tel', { value: u && u.phone ? u.phone : '', autocomplete: 'tel', required: true });
   const email = input('email', 'email', { value: u && u.email ? u.email : '', autocomplete: 'email' });
-  const date = input('preferredDate', 'date', { min: firstDay() });
+  const date = input('preferredDate', 'date', { min: firstDay(), ...(slot ? { value: slot.preferredDate } : {}) });
   const players = input('players', 'number', { min: '1', max: '500' });
-  const msg = h('textarea', { name: 'message', required: true, placeholder: kind === 'academy' ? 'Tell us about the player and what you are looking for.' : 'What are you planning? Match, practice, tournament…' }, kind === 'academy' ? 'I would like to know about MP13 Academy. ' : '');
+  const msg = h('textarea', { name: 'message', required: true, placeholder: kind === 'academy' ? 'Tell us about the player and what you are looking for.' : 'What are you planning? Match, practice, tournament…' }, kind === 'academy' ? 'I would like to know about MP13 Academy. ' : slot ? `Please send me the price for ${slot.text}.` : '');
   const err = h('div', { class: 'fe formerr', 'aria-live': 'assertive' });
   const submit = h('button', { class: 'btn primary block', type: 'submit' }, 'Send enquiry');
   const form = h('form', { novalidate: true },
-    field('Ground', gsel), h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('First name', first), field('Last name', last)), field('Mobile number', phone), field('Email (optional)', email),
+    slot ? h('div', { class: 'note' }, `Slot: ${slot.text}. The ground will reply with the price; the slot is not held until they confirm it.`) : null,
+    slot ? null : field('Ground', gsel), h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('First name', first), field('Last name', last)), field('Mobile number', phone), field('Email (optional)', email),
     h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('Preferred date', date), field('Players', players)),
     field('Message', msg), err, submit);
   form.addEventListener('submit', async (ev) => {
@@ -1735,10 +1758,11 @@ function openEnquiry(kind) {
     if (email.value.trim()) body.email = email.value.trim();
     if (date.value) body.preferredDate = date.value;
     if (players.value) body.players = Number(players.value);
-    try { await api('/api/enquiries', { method: 'POST', body }); busyBtn(submit, false); closeModal(); toast('Thank you. We have your enquiry and will get back to you soon.'); }
+    if (slot) { body.groundId = state.ground.id; body.preferredDate = slot.preferredDate; body.preferredTime = slot.preferredTime; body.preferredSlots = slot.preferredSlots; if (slot.preferredLabel) body.preferredLabel = slot.preferredLabel; }
+    try { await api('/api/enquiries', { method: 'POST', body }); busyBtn(submit, false); closeModal(); toast(slot ? 'Thank you. The ground has your slot and will reply with the price.' : 'Thank you. We have your enquiry and will get back to you soon.'); if (slot) { state.sel = []; state.win = null; state.hr = null; loadSlots(); } }
     catch (e) { busyBtn(submit, false); formFail(form, err, e); }
   });
-  openModal([h('div', { class: 'eyebrow' }, 'Enquiry'), h('h3', {}, kind === 'academy' ? 'Ask about MP13 Academy' : 'Send an enquiry'), form]);
+  openModal([h('div', { class: 'eyebrow' }, 'Enquiry'), h('h3', {}, kind === 'academy' ? 'Ask about MP13 Academy' : slot ? 'Ask the price of this slot' : 'Send an enquiry'), form]);
 }
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-enquiry]'); if (b) { e.preventDefault(); openEnquiry(b.dataset.enquiry); } });
 

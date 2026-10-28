@@ -118,6 +118,10 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const [rep, setRep] = useState<{ f: RepeatFrequency; n: number } | null>(null);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const [guppi, setGuppi] = useState(false); // the Guppi booking screen (any language), when the release switch is on
+  const [sent, setSent] = useState('');
+  // prices are given on enquiry (Settings): slots show no price, and the picked slot is sent to the ground, which replies with the price
+  const enq = !!cfg?.pricesOnEnquiry;
+  const price = (p: number) => (enq ? 'Available' : inr(p));
 
   const loadGrounds = useCallback(async () => {
     setErr('');
@@ -165,7 +169,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const quoteKey = body ? JSON.stringify({ groundId: gid, date, ...body, useCredit: useCredit && credit > 0, promoCode: promo.trim() }) : '';
   useEffect(() => {
     setQuote(null); setQuoteErr('');
-    if (!quoteKey) return;
+    if (!quoteKey || enq) return;
     let live = true;
     const t = setTimeout(() => {
       const q = JSON.parse(quoteKey) as Record<string, unknown>;
@@ -202,8 +206,24 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
     });
   };
 
+  // the slot as a pricing enquiry: the day, the start, how many of the ground's slots and the session's name
+  const enquire = async () => {
+    if (!body) return;
+    if (onNeedSignIn) { onNeedSignIn(); return; }
+    const o = hasRates ? opts.find((x) => x.ruleId === (win ?? hr?.ruleId)) : undefined;
+    const mins = (a: string, b: string) => { const [h1, m1] = a.split(':').map(Number), [h2, m2] = b.split(':').map(Number); const d = (h2! * 60 + m2!) - (h1! * 60 + m1!); return d > 0 ? d : d + 1440; };
+    const slots = typeof body.slots === 'number' ? body.slots : o ? Math.max(1, Math.round(mins(o.time, o.endTime) / (ground?.slotMinutes || 60))) : 1;
+    setErr(''); setBusy(true);
+    try {
+      await api('/api/enquiries', { method: 'POST', body: { groundId: gid, preferredDate: date, preferredTime: String(body.startTime), preferredSlots: slots, ...(o ? { preferredLabel: o.label } : {}), message: `Please send me the price for ${chosenText} on ${date}.` } });
+      setSent(`Sent. ${ground?.name ?? 'The ground'} has your slot (${chosenText}) and will reply with the price.`);
+      setPick([]); setWin(null); setHr(null); void loadSlots();
+    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+  };
+
   const hold = async () => {
     if (!body) return;
+    if (enq) { await enquire(); return; }
     setErr(''); setBusy(true);
     try {
       onHold(await api<HoldResponse>('/api/bookings', { method: 'POST', body: { groundId: gid, date, ...body, useCredit: useCredit && credit > 0, ...(promo.trim() ? { promoCode: promo.trim() } : {}), ...(rep ? { repeat: { frequency: rep.f, count: rep.n } } : {}) } }));
@@ -244,13 +264,13 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
         {!ball ? <Text style={s.note}>Choose the ball you want to play with.</Text> : !opts.length ? <Text style={s.note}>Nothing is on sale for this ball on this day. Pick another day, or call us.</Text> : (<>
           {fixed.length > 0 && <Label>Sessions</Label>}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {fixed.map((o) => <SlotTile key={o.ruleId} wide title={o.label} line={`${o.time} – ${o.endTime}`} price={o.state === 'available' ? `${inr(o.pricePaise)}${o.proRated ? ' · part session' : ''}` : o.state} on={win === o.ruleId} disabled={o.state !== 'available'} onPress={() => { setWin(o.ruleId); setHr(null); }} />)}
+            {fixed.map((o) => <SlotTile key={o.ruleId} wide title={o.label} line={`${o.time} – ${o.endTime}`} price={o.state === 'available' ? `${price(o.pricePaise)}${o.proRated ? ' · part session' : ''}` : o.state} on={win === o.ruleId} disabled={o.state !== 'available'} onPress={() => { setWin(o.ruleId); setHr(null); }} />)}
           </View>
           {hourly.map((o) => (
             <View key={o.ruleId}>
-              <Text style={[s.note, { marginVertical: 6 }]}>{o.label} · {inr(o.pricePaise)} per hour · up to {maxSlots} hours in a row</Text>
+              <Text style={[s.note, { marginVertical: 6 }]}>{o.label}{enq ? '' : ` · ${inr(o.pricePaise)} per hour`} · up to {maxSlots} hours in a row</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {(o.slots ?? []).map((sl, i) => <SlotTile key={sl.start} title={sl.time} price={sl.state === 'available' ? inr(sl.pricePaise) : sl.state} on={!!hr && hr.ruleId === o.ruleId && hr.idx.includes(i)} disabled={sl.state !== 'available'} onPress={() => toggleHour(o, i)} />)}
+                {(o.slots ?? []).map((sl, i) => <SlotTile key={sl.start} title={sl.time} price={sl.state === 'available' ? price(sl.pricePaise) : sl.state} on={!!hr && hr.ruleId === o.ruleId && hr.idx.includes(i)} disabled={sl.state !== 'available'} onPress={() => toggleHour(o, i)} />)}
               </View>
             </View>
           ))}
@@ -260,12 +280,12 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
         <Label>Time</Label>
         <Text style={[s.note, { marginBottom: 10 }]}>Choose up to {maxSlots} slots in a row.</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {av.slots.map((sl) => <SlotTile key={sl.start} title={sl.time} price={inr(sl.pricePaise)} on={pick.includes(sl.start)} disabled={sl.state !== 'available'} onPress={() => toggleSlot(sl)} />)}
+          {av.slots.map((sl) => <SlotTile key={sl.start} title={sl.time} price={sl.state === 'available' ? price(sl.pricePaise) : sl.state} on={pick.includes(sl.start)} disabled={sl.state !== 'available'} onPress={() => toggleSlot(sl)} />)}
           {!av.slots.length && <Text style={s.note}>No slots on this day.</Text>}
         </View>
       </>)}
 
-      {!!body && (<>
+      {!!body && !enq && (<>
         <Label>Repeat this booking</Label>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           <Chip label="Does not repeat" on={!rep} onPress={() => setRep(null)} />
@@ -280,10 +300,12 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
           <Text style={s.note}>Repeats {REPEATS[rep.f].word}. You pay for the first date now; the other {rep.n - 1} are reserved for you and their balance is paid at the ground{cfg?.autoDebitEnabled ? ' (or by auto-debit)' : ''}. Closed or taken dates are left out.</Text>
         </>)}
       </>)}
-      <View style={{ marginTop: 14 }}><Field label="Promo code" value={promo} onChangeText={setPromo} autoCapitalize="characters" placeholder="Have a code?" /></View>
-      {credit > 0 && <Chip label={`${useCredit ? '✓ ' : ''}Use my ${inr(credit)} account credit`} on={useCredit} onPress={() => setUseCredit(!useCredit)} />}
+      {!enq && <View style={{ marginTop: 14 }}><Field label="Promo code" value={promo} onChangeText={setPromo} autoCapitalize="characters" placeholder="Have a code?" /></View>}
+      {credit > 0 && !enq && <Chip label={`${useCredit ? '✓ ' : ''}Use my ${inr(credit)} account credit`} on={useCredit} onPress={() => setUseCredit(!useCredit)} />}
       {!!err && <Text style={s.err}>{err}</Text>}
-      {!!body && (
+      {!!sent && <Text style={[s.note, { marginTop: 10 }]}>{sent}</Text>}
+      {!!body && enq && <View style={s.card}><KV k={chosenText} v="On enquiry" /><Text style={s.note}>Prices are given on enquiry. Send this slot to the ground and they will reply with the price. Nothing is charged now.</Text></View>}
+      {!!body && !enq && (
         <View style={s.card}>
           {quote ? (<>
             <KV k="Price" v={inr(quote.fullPricePaise)} />
@@ -294,7 +316,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
           </>) : quoteErr ? <Text style={s.err}>We could not work out the price just now: {quoteErr}</Text> : <Text style={s.muted}>Working out the price…</Text>}
         </View>
       )}
-      <Btn label={body ? `Hold · ${chosenText}${quote ? ` · ${inr(quote.fullPricePaise)}` : ''}` : hasRates ? 'Choose ball and session' : 'Choose your slots'} onPress={hold} disabled={!body} busy={busy} style={{ marginTop: 16 }} />
+      <Btn label={body ? (enq ? 'Send enquiry for this slot' : `Hold · ${chosenText}${quote ? ` · ${inr(quote.fullPricePaise)}` : ''}`) : hasRates ? 'Choose ball and session' : 'Choose your slots'} onPress={hold} disabled={!body} busy={busy} style={{ marginTop: 16 }} />
       {!!cfg && <Text style={[s.note, { textAlign: 'center' }]}>Free cancellation more than {cfg.freeCancelHours} hours before the start.</Text>}
     </ScrollView>
   );

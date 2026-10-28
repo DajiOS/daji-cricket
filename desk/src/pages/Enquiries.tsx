@@ -3,14 +3,14 @@ import { PageHead, Tabs, Table, Status, Modal, Field, ErrorBox, Load, useToast }
 import { useApi, post, go, qs, inr, toPaise, fmtDay, fmtDateTime, formatPhone, can } from '../lib';
 import { useSession } from '../App';
 import { useDebounced } from '../parts/club/common';
-import { errText } from '../parts/dash/common';
+import { errText, HAND_METHODS } from '../parts/dash/common';
 
 // Enquiries from the website and the app: who asked, for what, and where each one stands. The server keeps the status, the notes and the
-// quotations; this page lists them, adds notes and quotations, and closes them. Turning one into a booking is done from the booking form.
+// quotations; this page lists them, adds notes and quotations, closes them, and books one at its quoted price. A pricing enquiry names its slot.
 type St = 'new' | 'follow_up' | 'quoted' | 'converted' | 'closed';
 interface Quote { id: string; amountPaise: number; validUntil: number | null; details: string | null; status: string; createdAt: number }
 interface Note { id: string; kind: string; body: string; createdAt: number }
-interface Enquiry { id: string; groundName: string | null; name: string; phone: string; email: string | null; preferredDate: string | null; players: number | null; message: string; status: St; closedReason: string | null; bookingId: string | null; quotations: Quote[]; notes: Note[]; createdAt: number; updatedAt: number }
+interface Enquiry { id: string; groundName: string | null; name: string; phone: string; email: string | null; preferredDate: string | null; preferredTime?: string | null; preferredSlots?: number | null; preferredLabel?: string | null; players: number | null; message: string; status: St; closedReason: string | null; bookingId: string | null; quotations: Quote[]; notes: Note[]; createdAt: number; updatedAt: number }
 const STATUS: Record<string, ['good' | 'warn' | 'bad' | 'mute' | 'info' | 'gold', string]> = { new: ['warn', 'New'], follow_up: ['info', 'Following up'], quoted: ['gold', 'Quoted'], converted: ['good', 'Booked'], closed: ['mute', 'Closed'] };
 const TABS: [string, string][] = [['all', 'All'], ['new', 'New'], ['follow_up', 'Following up'], ['quoted', 'Quoted'], ['converted', 'Booked'], ['closed', 'Closed']];
 const LIMIT = 50;
@@ -63,6 +63,7 @@ function EnquiryDetail({ id, onClose, onChanged }: { id: string; onClose: () => 
   const [reason, setReason] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bk, setBk] = useState<{ date: string; time: string; slots: string; method: string; amount: string; reference: string } | null>(null);
   const act = async (path: string, body: unknown, done: string, after?: () => void) => {
     setBusy(true); setMsg(null);
     try { await post(`/api/staff/enquiries/${encodeURIComponent(id)}/${path}`, body); toast(done); after?.(); reload(); onChanged(); } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
@@ -77,7 +78,7 @@ function EnquiryDetail({ id, onClose, onChanged }: { id: string; onClose: () => 
             <div><span>Phone</span><b>{formatPhone(e.phone)}</b></div>
             <div><span>Email</span><b>{e.email ?? '—'}</b></div>
             <div><span>Ground</span><b>{e.groundName ?? 'Any'}</b></div>
-            <div><span>Date wanted</span><b>{e.preferredDate ? fmtDay(e.preferredDate) : '—'}</b>{e.players ? <div className="small muted">{e.players} players</div> : null}</div>
+            <div><span>{e.preferredTime ? 'Slot wanted' : 'Date wanted'}</span><b>{e.preferredDate ? fmtDay(e.preferredDate) : '—'}{e.preferredTime ? ` · ${e.preferredTime}` : ''}</b>{(e.preferredSlots || e.preferredLabel || e.players) ? <div className="small muted">{[e.preferredLabel, e.preferredSlots ? `${e.preferredSlots} ${e.preferredSlots === 1 ? 'slot' : 'slots'}` : '', e.players ? `${e.players} players` : ''].filter(Boolean).join(' · ')}</div> : null}</div>
             <div><span>Received</span><b>{fmtDateTime(e.createdAt)}</b></div>
           </div>
           <div className="card card-pad small" style={{ whiteSpace: 'pre-wrap' }}>{e.message}</div>
@@ -108,6 +109,26 @@ function EnquiryDetail({ id, onClose, onChanged }: { id: string; onClose: () => 
                 <div><button className="btn sm primary" disabled={busy} onClick={() => { const p = toPaise(amount); if (!p || p < 100) { setMsg('Enter the price in rupees.'); return; } act('quotations', { amountPaise: p, details: details.trim() || undefined }, 'Price sent to the customer.', () => { setAmount(''); setDetails(''); }); }}>Send price</button></div>
               </div>
               <div className="stack" style={{ gap: 6 }}>
+                {!bk ? <div><button className="btn sm" disabled={busy} onClick={() => setBk({ date: e.preferredDate ?? '', time: e.preferredTime ?? '', slots: String(e.preferredSlots ?? 1), method: 'cash', amount: '', reference: '' })}>Book it at the price sent</button></div> : (<>
+                  <div className="row" style={{ gap: 6 }}>
+                    <Field label="Date"><input className="inp" type="date" value={bk.date} onChange={(ev) => setBk({ ...bk, date: ev.target.value })} /></Field>
+                    <Field label="Start"><input className="inp" type="time" step={1800} value={bk.time} onChange={(ev) => setBk({ ...bk, time: ev.target.value })} /></Field>
+                    <Field label="Slots"><input className="inp" inputMode="numeric" style={{ width: 70 }} value={bk.slots} onChange={(ev) => setBk({ ...bk, slots: ev.target.value.replace(/\D/g, '') })} /></Field>
+                  </div>
+                  <div className="row" style={{ gap: 6 }}>
+                    <Field label="Received"><select className="inp" value={bk.method} onChange={(ev) => setBk({ ...bk, method: ev.target.value })}>{HAND_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
+                    <Field label="Amount (₹)"><input className="inp" inputMode="decimal" value={bk.amount} onChange={(ev) => setBk({ ...bk, amount: ev.target.value })} /></Field>
+                    {bk.method !== 'cash' && <Field label="Reference"><input className="inp" maxLength={60} value={bk.reference} onChange={(ev) => setBk({ ...bk, reference: ev.target.value })} /></Field>}
+                  </div>
+                  <div className="row"><button className="btn sm primary" disabled={busy} onClick={() => {
+                    const q = [...e.quotations].reverse().find((x) => x.status !== 'declined' && x.status !== 'expired');
+                    if (!q) { setMsg('Send a price first: the booking is made at the price you sent.'); return; }
+                    if (!bk.date || !bk.time || !Number(bk.slots)) { setMsg('Enter the date, the start time and the number of slots.'); return; }
+                    const paid = bk.amount.trim() ? toPaise(bk.amount) : 0;
+                    if (paid === null) { setMsg('Enter the amount received in rupees, or leave it empty.'); return; }
+                    act('convert', { date: bk.date, startTime: bk.time, slots: Number(bk.slots), quotationId: q.id, payment: { method: bk.method, amountPaise: paid, ...(bk.reference.trim() ? { reference: bk.reference.trim() } : {}) } }, 'Booked at the price sent.', () => setBk(null));
+                  }}>Confirm booking</button><button className="btn sm ghost" onClick={() => setBk(null)}>Cancel</button></div>
+                </>)}
                 <Field label="Close it, because"><input className="inp" maxLength={300} value={reason} onChange={(ev) => setReason(ev.target.value)} placeholder="Booked elsewhere" /></Field>
                 <div><button className="btn sm danger" disabled={busy || reason.trim().length < 2} onClick={() => act('close', { reason: reason.trim() }, 'Enquiry closed.')}>Close enquiry</button></div>
               </div>

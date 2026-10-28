@@ -67,6 +67,8 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   aiAssistantName: DEFAULT_AI_NAME,
   /** Siri and phone voice shortcuts for this business. Each person still turns voice on for themselves on their own phone; off here turns it off for everyone. */
   voiceShortcutsEnabled: true,
+  /** Customers see free slots without prices and send a pricing enquiry for a slot instead of paying online (priceOnEnquiry.ts). The saved prices are kept. */
+  pricesOnEnquiry: false,
 };
 
 /** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
@@ -106,7 +108,7 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
   const next: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULT_SETTINGS)) { fields.push({ field: k, message: 'Unknown setting' }); continue; }
-    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled' || k === 'voiceShortcutsEnabled') {
+    if (k === 'razorpayEnabled' || k === 'requireApproval' || k === 'autoDebitEnabled' || k === 'festivalForEveryone' || k === 'guppiAssistEnabled' || k === 'customerRescheduleEnabled' || k === 'retentionDisputesEnabled' || k === 'securityDepositEnabled' || k === 'voiceShortcutsEnabled' || k === 'pricesOnEnquiry') {
       if (typeof v !== 'boolean') fields.push({ field: k, message: 'Must be true or false' }); else next[k] = v;
     } else if (k === 'rescheduleCutoffHours' || k === 'rescheduleMaxMoves') {
       const [lo, hi] = k === 'rescheduleCutoffHours' ? [0, 720] : [0, 10];

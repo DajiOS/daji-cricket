@@ -1,3 +1,4 @@
+import { refuseOnlineBooking } from '../priceOnEnquiry.ts';
 import { Router, ok, created } from '../http.ts';
 import { U } from './helpers.ts';
 import { guppiContext, guppiHold, guppiOptions, guppiReschedule } from '../guppi.ts';
@@ -11,9 +12,9 @@ export function guppiRoutes(r: Router): void {
     return typeof v === 'string' ? v : null;
   };
   r.get('/api/guppi/context', (c) => ok(guppiContext(U(c))), { auth: 'user' });
-  r.post('/api/guppi/options', (c) => ok(guppiOptions(c.cfg, U(c), c.json())), { auth: ['customer', 'owner', 'staff'], maxBody: 4096 });
+  r.post('/api/guppi/options', (c) => { refuseOnlineBooking(c.user); return ok(guppiOptions(c.cfg, U(c), c.json())); }, { auth: ['customer', 'owner', 'staff'], maxBody: 4096 });
   // One turn of the booking conversation in any supported language; answers with the booking system's own options and never creates anything.
-  r.post('/api/guppi/understand', async (c) => ok(await guppiUnderstand(c.cfg, U(c), c.json())), { auth: ['customer'], maxBody: 8192 });
-  r.post('/api/guppi/hold', async (c) => created(await guppiHold(c.cfg, U(c), idemKey(c), c.json())), { auth: ['customer'], idempotent: 'required', maxBody: 4096 });
+  r.post('/api/guppi/understand', async (c) => { refuseOnlineBooking(c.user); return ok(await guppiUnderstand(c.cfg, U(c), c.json())); }, { auth: ['customer'], maxBody: 8192 });
+  r.post('/api/guppi/hold', async (c) => { refuseOnlineBooking(c.user); return created(await guppiHold(c.cfg, U(c), idemKey(c), c.json())); }, { auth: ['customer'], idempotent: 'required', maxBody: 4096 });
   r.post('/api/guppi/reschedule', (c) => ok(guppiReschedule(c.cfg, U(c), idemKey(c), c.json())), { auth: ['customer'], idempotent: 'required', maxBody: 4096 });
 }
