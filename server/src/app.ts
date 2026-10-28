@@ -25,6 +25,7 @@ import { payrollRoutes } from './routes/payroll.ts';
 import { approvalsRoutes } from './routes/approvals.ts';
 import { membershipsRoutes } from './routes/memberships.ts';
 import { tournamentsRoutes } from './routes/tournaments.ts';
+import { auctionRoutes } from './routes/auction.ts';
 import { complianceRoutes } from './routes/compliance.ts';
 import { deskViewRoutes } from './routes/deskviews.ts';
 import { remindersRoutes } from './routes/reminders.ts';
@@ -49,6 +50,7 @@ export function buildRouter(): Router {
   approvalsRoutes(r);
   membershipsRoutes(r);
   tournamentsRoutes(r);
+  auctionRoutes(r);
   remindersRoutes(r);
   mediaRoutes(r);
   libraryRoutes(r);

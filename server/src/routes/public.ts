@@ -80,6 +80,7 @@ export function publicRoutes(r: Router): void {
       aiName: s.aiAssistantName,
       voiceEnabled: s.voiceShortcutsEnabled,
       pricesOnEnquiry: s.pricesOnEnquiry,
+      auctionsEnabled: s.auctionTournamentsEnabled,
       // the booking assistant books and quotes online, so it rests while prices are given on enquiry
       guppiBookingEnabled: s.guppiAssistEnabled && !s.pricesOnEnquiry,
       securityDepositEnabled: s.securityDepositEnabled,
