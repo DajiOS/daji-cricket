@@ -13,6 +13,7 @@ import { niceDay, parseRange } from './dates.ts';
 import { parseBooking } from '../guppiLang.ts';
 import { say } from '../guppiText.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
+import { mainSiteBusinessId } from '../businesses.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -90,7 +91,8 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
   const t = now();
   const today = istDate(t);
   const s = getSettings();
-  const grounds = listGrounds();
+  // the customer assistant speaks for the main website and its app, so it knows only the main site's business's grounds
+  const grounds = listGrounds({ ownerId: mainSiteBusinessId() ?? undefined });
   const named = grounds.find((g) => question.toLowerCase().includes(g.name.toLowerCase()))
     ?? grounds.find((g) => g.name.toLowerCase().split(/\s+/).filter((w) => w.length > 3 && !['daji', 'cricket', 'ground'].includes(w)).some((w) => question.toLowerCase().includes(w)))
     ?? null;

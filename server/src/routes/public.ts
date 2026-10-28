@@ -1,7 +1,7 @@
 import { pricesFor } from '../priceOnEnquiry.ts';
 import { MAX_DAYS_AHEAD } from '../hold.ts';
 import { BRAND, type PublicConfig } from '@daji/shared';
-import { Router, ok, created } from '../http.ts';
+import { Router, ok, created, type Ctx, type Reply } from '../http.ts';
 import { razorpayConfigured } from '../config.ts';
 import { getSettings } from '../settings.ts';
 import { availability, getGroundOr404, listGrounds, toGround } from '../grounds.ts';
@@ -19,6 +19,7 @@ import { now } from '../clock.ts';
 import { one, run } from '../db.ts';
 import { festivalOn, festivalPreview } from '../festivals.ts';
 import { siteDesign } from '../packs.ts';
+import { readLogo, siteBrand, siteBusinessFor, tenantOfHost } from '../businesses.ts';
 
 export function publicRoutes(r: Router): void {
   // Used by Docker's health check and by deploy/check-live.sh. It reads the database, so "ok" means bookings can be served. `demo` is true while
@@ -77,6 +78,7 @@ export function publicRoutes(r: Router): void {
       publicUrl: c.cfg.publicUrl,
       mediaBase: c.cfg.mediaCdn || null,
       aiName: s.aiAssistantName,
+      softwareOwner: s.softwareOwnerName,
       voiceEnabled: s.voiceShortcutsEnabled,
       pricesOnEnquiry: s.pricesOnEnquiry,
       // the booking assistant books and quotes online, so it rests while prices are given on enquiry
@@ -87,23 +89,49 @@ export function publicRoutes(r: Router): void {
     return ok(cfg);
   });
 
-  r.get('/api/grounds', (c) => ok({ items: pricesFor(c.user, listGrounds({ city: c.query.get('city') ?? undefined, q: c.query.get('q') ?? undefined })) }));
+  // Each web address shows one business's grounds (white-label): its own domain, its booking page (?business=<slug>), or the main
+  // site's business. Before a main site is set, every business is shown, as it was with one business.
+  const site = (c: Ctx) => siteBusinessFor(c.req.headers.host ?? null, c.cfg.platformHost, c.query.get('business'));
+  const onSite = (c: Ctx, ownerId: string) => { const s = site(c); if (s && s !== ownerId) throw new HttpError(404, 'NOT_FOUND', 'Ground not found'); };
+
+  r.get('/api/grounds', (c) => ok({ items: pricesFor(c.user, listGrounds({ city: c.query.get('city') ?? undefined, q: c.query.get('q') ?? undefined, ownerId: site(c) ?? undefined })) }));
+
+  // Caddy asks this before it gets an HTTPS certificate for a new address (deploy/Caddyfile, on_demand_tls), so certificates are
+  // only ever made for a customer business's own domain or <slug>.<platform address>, never for any name pointed at the server.
+  r.get('/api/platform/domain-check', (c) => {
+    if (!tenantOfHost(c.query.get('domain'), c.cfg.platformHost)) throw new HttpError(404, 'NOT_FOUND', 'Not a business address on this platform');
+    return ok({ ok: true });
+  }, { rate: 'none' });
+
+  // the business this address is for: its name and logos, for a white-label page; business is null on the main site before one is set
+  r.get('/api/site-brand', (c) => ok(siteBrand(c.req.headers.host ?? null, c.cfg.platformHost, c.query.get('business'))));
+  r.get('/api/brand-logo/:id', (c): Reply => {
+    const f = readLogo(c.cfg.dataDir, c.params.id!);
+    return { status: 200, raw: f.data, contentType: f.mime, headers: { 'Cache-Control': 'public, max-age=31536000, immutable', 'Content-Security-Policy': "default-src 'none'; sandbox", 'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'cross-origin' } };
+  }, { rate: 'none' });
 
   r.get('/api/grounds/:id', (c) => {
     const g = getGroundOr404(c.params.id!);
     if (!g.active) throw new HttpError(404, 'NOT_FOUND', 'Ground not found');
+    onSite(c, g.owner_id);
     return ok(pricesFor(c.user, toGround(g)));
   });
 
   r.get('/api/grounds/:id/availability', (c) => {
     const g = getGroundOr404(c.params.id!);
     if (!g.active) throw new HttpError(404, 'NOT_FOUND', 'Ground not found');
+    onSite(c, g.owner_id);
     const date = c.query.get('date');
     if (!isValidDate(date)) throw new HttpError(400, 'VALIDATION_FAILED', 'Send a date like 2026-10-21', { fields: [{ field: 'date', message: 'Must be a date like 2026-10-21' }] });
     return ok(pricesFor(c.user, availability(g, date)));
   });
 
-  r.post('/api/enquiries', (c) => created(createEnquiry(c.user?.role === 'customer' ? c.user : null, c.json())), { rate: 'auth', idempotent: true });
+  r.post('/api/enquiries', (c) => {
+    // an enquiry sent from one business's page can only be about that business's grounds
+    const gid = (c.json() as { groundId?: unknown } | null)?.groundId;
+    if (typeof gid === 'string') { const g = one<{ owner_id: string }>('SELECT owner_id FROM grounds WHERE id = ?', gid); if (g) onSite(c, g.owner_id); }
+    return created(createEnquiry(c.user?.role === 'customer' ? c.user : null, c.json()));
+  }, { rate: 'auth', idempotent: true });
 
   r.post('/api/auth/register', (c) => {
     const v = new Validator(c.json());
