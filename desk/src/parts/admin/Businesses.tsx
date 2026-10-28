@@ -1,7 +1,7 @@
 // The software owner's customers: every business on the software (Daji Cricket Ground first), how far each is set up, its booking
 // page and web address, and which one the main website shows. Never a business's takings or its customers: those stay in its own desk.
 import { useState } from 'react';
-import { useApi, post, put, fmtDateTime, formatPhone } from '../../lib';
+import { useApi, post, put, del, fmtDateTime, formatPhone } from '../../lib';
 import { Loading, ErrorBox, Chip, Field, Empty, useToast } from '../../ui';
 import { Panel, errText } from './common';
 
@@ -42,7 +42,54 @@ function AddBusiness({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-function Row({ b, onSaved }: { b: Business; onSaved: () => void }) {
+interface Person { userId: string; name: string; businessName: string; addedAt: number }
+
+// Portfolio: other business owners whose own sign-in also opens this business (each switches to it at the top of the desk).
+// It shares nothing between the businesses; removing someone splits them again at once.
+function Portfolio({ b, all }: { b: Business; all: Business[] }) {
+  const toast = useToast();
+  const [data, error, reload] = useApi<{ items: Person[] }>(`/api/admin/businesses/${encodeURIComponent(b.id)}/portfolio`);
+  const [pick, setPick] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (error) return <ErrorBox msg={error} />;
+  if (!data) return null;
+  const have = new Set(data.items.map((p) => p.userId));
+  const others = all.filter((o) => o.id !== b.id && !have.has(o.id));
+  async function add() {
+    if (!pick) return toast('Choose whose portfolio to add it to');
+    const who = all.find((o) => o.id === pick);
+    if (!window.confirm(`Let ${who?.ownerName} (${who?.businessName}) open ${b.businessName} with their own sign-in, with an owner's full access to it?`)) return;
+    setBusy(true);
+    try { await post(`/api/admin/businesses/${encodeURIComponent(b.id)}/portfolio`, { userId: pick }); toast(`${b.businessName} is now in ${who?.ownerName}'s portfolio.`); setPick(''); reload(); } catch (e) { toast(errText(e)); }
+    setBusy(false);
+  }
+  async function remove(p: Person) {
+    if (!window.confirm(`Take ${b.businessName} out of ${p.name}'s portfolio? They cannot open it from their next click.`)) return;
+    setBusy(true);
+    try { await del(`/api/admin/businesses/${encodeURIComponent(b.id)}/portfolio/${encodeURIComponent(p.userId)}`); toast('Removed.'); reload(); } catch (e) { toast(errText(e)); }
+    setBusy(false);
+  }
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div className="small muted">Also opened by (portfolio): {data.items.length ? '' : 'nobody else'}</div>
+      {data.items.map((p) => (
+        <div key={p.userId} className="row" style={{ alignItems: 'center' }}>
+          <span>{p.name} <span className="small muted">({p.businessName}) · since {fmtDateTime(p.addedAt)}</span></span>
+          <button className="btn sm ghost" disabled={busy} onClick={() => remove(p)}>Remove</button>
+        </div>))}
+      {others.length > 0 && (
+        <div className="row" style={{ alignItems: 'center', marginTop: 4 }}>
+          <select className="inp" aria-label={`Add ${b.businessName} to someone's portfolio`} value={pick} onChange={(e) => setPick(e.target.value)}>
+            <option value="">Add to the portfolio of…</option>
+            {others.map((o) => <option key={o.id} value={o.id}>{o.ownerName} ({o.businessName})</option>)}
+          </select>
+          <button className="btn sm" disabled={busy} onClick={add}>Add</button>
+        </div>)}
+    </div>
+  );
+}
+
+function Row({ b, all, onSaved }: { b: Business; all: Business[]; onSaved: () => void }) {
   const toast = useToast();
   const [slug, setSlug] = useState(b.slug);
   const [domain, setDomain] = useState(b.siteDomain ?? '');
@@ -82,6 +129,7 @@ function Row({ b, onSaved }: { b: Business; onSaved: () => void }) {
         <button className="btn sm" disabled={busy} onClick={save}>Save</button>
         {!b.mainSite && <button className="btn sm ghost" disabled={busy} onClick={makeMain}>Show on the main website instead</button>}
       </div>
+      <Portfolio b={b} all={all} />
     </div>
   );
 }
@@ -93,7 +141,7 @@ export default function Businesses() {
   return (
     <div className="stack">
       <Panel title={`Customers of ${data.softwareOwner}`} note={`${data.softwareOwner} owns and runs the software. Each business here is a customer with its own name, logo, grounds, customers, team and money, kept apart from every other business. This list shows who they are and how far they are set up, never their figures.`}>
-        {data.items.map((b) => <Row key={b.id} b={b} onSaved={reload} />)}
+        {data.items.map((b) => <Row key={b.id} b={b} all={data.items} onSaved={reload} />)}
         {!data.items.length && <Empty>No customer businesses yet.</Empty>}
         {!data.mainSiteBusinessId && data.items.length > 0 && <p className="small muted">The main website shows every business's grounds until you choose one with "Show on the main website". Adding a second business chooses the first one for you.</p>}
       </Panel>

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, Suspense } from 'react';
-import { api, can, go, roleLabel, setAiName, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
+import { api, can, go, roleLabel, setAiName, setIsSuper, setPortfolioBusiness, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
 import { Icon, ToastHost, Loading, Crest, ErrorBox } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
@@ -198,6 +198,14 @@ export function App() {
         const keep = getViewOwner();
         const pick = list.find((o) => o.id === keep)?.id ?? list[0]?.id ?? null;
         setViewOwner(pick); setOwnerId(pick);
+      } else if (u.role === 'owner') {
+        // a portfolio: the owner's own business first, then the others the software owner put in it
+        const pf = await api<{ items: { id: string; businessName: string; own: boolean }[] }>('/api/me/portfolio').then((x) => x.items).catch(() => []);
+        const list = pf.length ? pf.map((b) => ({ id: b.id, name: u.name, businessName: b.businessName })) : [{ id: u.id, name: u.name, businessName: u.businessName }];
+        setOwners(list);
+        const keep = getViewOwner();
+        const pick = list.find((o) => o.id === keep)?.id ?? u.id;
+        setViewOwner(pick); setPortfolioBusiness(pick === u.id ? null : pick); setOwnerId(pick);
       } else { setOwnerId(u.ownerId ?? u.id); setOwners([{ id: u.ownerId ?? u.id, name: u.name, businessName: u.businessName }]); }
       if (u.role === 'staff') {
         const t = await api<Terms & { accepted: unknown }>('/api/legal/staff-terms').catch(() => null);
@@ -209,7 +217,7 @@ export function App() {
   if (me === undefined) return <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}><Crest size={72} /></div>;
   if (!me) return null;
   if (terms) return <TermsGate terms={terms} onDone={() => setTerms(null)} onSignOut={() => { const t = getToken(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + (t ?? '') } }).catch(() => {}).finally(() => { setToken(null); location.href = './'; }); }} />;
-  const setOwner = (id: string) => { setViewOwner(id); setOwnerId(id); };
+  const setOwner = (id: string) => { setViewOwner(id); if (me.role === 'owner') setPortfolioBusiness(id === me.id ? null : id); setOwnerId(id); };
   // the key makes every page reload its data when a super admin switches business
   return (
     <ToastHost>

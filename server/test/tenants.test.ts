@@ -225,7 +225,7 @@ const SECRET_KEYS = (o: World, side: 'daji' | 'antroli') => side === 'daji'
 const isPublic = (auth: unknown) => auth === undefined;
 
 const swept = { calls: 0, ok: 0 };
-async function sweep(token: string, other: 'daji' | 'antroli'): Promise<string[]> {
+async function sweep(token: string, other: 'daji' | 'antroli', headers?: Record<string, string>): Promise<string[]> {
   const leaks: string[] = [];
   const secrets = SECRET_KEYS(w, other);
   const ids = secrets.slice(0, other === 'daji' ? 6 : 3) as string[];
@@ -240,12 +240,14 @@ async function sweep(token: string, other: 'daji' | 'antroli'): Promise<string[]
     // a change can only be aimed at the other business through an id in the address; changes with no id (sign out, a new record of
     // one's own) are left out so the sweep does not sign itself out
     if (r.method !== 'GET' && !r.keys.length) continue;
+    // switched to a business of the portfolio, the person's own account (who am I, sign-in) is still theirs by design
+    if (headers && /^\/api\/(me|auth)\b/.test(pattern)) continue;
     const fills = r.keys.length ? ids : [''];
     for (const id of fills) {
       let path = pattern;
       for (let i = 0; i < r.keys.length; i++) path = path.replace('([^/]+)', encodeURIComponent(id));
       path += (path.includes('?') ? '&' : '?') + `ownerId=${encodeURIComponent(other === 'daji' ? w.dajiId : w.antroliId)}`;
-      const res = await h.call(r.method, path, { token, body: r.method === 'GET' || r.method === 'DELETE' ? undefined : {} });
+      const res = await h.call(r.method, path, { token, headers, body: r.method === 'GET' || r.method === 'DELETE' ? undefined : {} });
       swept.calls++;
       if (res.status >= 200 && res.status < 300) {
         swept.ok++;
@@ -282,6 +284,17 @@ test('sweep: Daji\'s owner, on every route, with Antroli\'s ids in the address a
   assert.ok(one("SELECT 1 FROM enquiries WHERE id = ? AND status = 'new'", w.antroliEnquiry), 'Antroli\'s enquiry is untouched');
 });
 
+test('sweep: Daji\'s owner switched to Antroli from the portfolio, on every route, with Daji\'s ids, sees and changes nothing of Daji\'s', async () => {
+  assert.equal((await h.post(`/api/admin/businesses/${w.antroliId}/portfolio`, { userId: w.dajiId }, w.admin)).status, 200);
+  const before = JSON.stringify(one('SELECT status, paid_paise, total_paise FROM bookings WHERE id = ?', w.dajiBooking.id));
+  swept.calls = 0; swept.ok = 0;
+  const leaks = await sweep(w.daji, 'daji', { 'x-daji-business': w.antroliId });
+  assert.deepEqual(leaks, []);
+  assert.ok(swept.calls > 400 && swept.ok > 80, JSON.stringify(swept));
+  console.log(`sweep portfolio Daji-as-Antroli->Daji: ${swept.calls} calls, ${swept.ok} answered`);
+  assert.equal(JSON.stringify(one('SELECT status, paid_paise, total_paise FROM bookings WHERE id = ?', w.dajiBooking.id)), before, 'Daji\'s booking is untouched');
+});
+
 test('control: the same sweep does find Daji\'s data when it is run as the software owner, so a leak would be caught', async () => {
   const leaks = await sweep(w.admin, 'daji');
   assert.ok(leaks.some((l) => l.includes('/api/staff/bookings')), leaks.slice(0, 5).join('\n'));
@@ -302,4 +315,46 @@ test('GST invoice numbers start with each business\'s own initials; Daji keeps D
   assert.equal(a.status, 200); assert.equal(a.body.prefix, 'ACG');
   const d = await h.get('/api/accounting/gst-profile', w.daji);
   assert.equal(d.status, 200); assert.equal(d.body.prefix, 'DCG');
+});
+
+// Sunny (28 Oct 2026): "add Antroli Cricket Ground to my portfolio", for testing now, separated later. One owner sign-in opens
+// both businesses, each still answered from its own records only; taking Antroli out of the portfolio splits them at once.
+test('portfolio: Daji\'s owner switches to Antroli and back; each answer is that business\'s only; removing it splits them again', async () => {
+  const as = (ownerId: string) => ({ token: w.daji, headers: { 'x-daji-business': ownerId } });
+  // not in the portfolio yet: refused, and nothing of Antroli's comes back
+  const before = await h.call('GET', '/api/staff/grounds', as(w.antroliId));
+  assert.equal(before.status, 403); assert.equal(before.body.error.code, 'NOT_IN_PORTFOLIO');
+  // only the software owner adds it; Antroli's owner and Daji's owner cannot
+  assert.equal((await h.post(`/api/admin/businesses/${w.antroliId}/portfolio`, { userId: w.dajiId }, w.daji)).status, 403);
+  assert.equal((await h.post(`/api/admin/businesses/${w.antroliId}/portfolio`, { userId: w.dajiId }, w.antroli)).status, 403);
+  assert.equal((await h.post(`/api/admin/businesses/${w.antroliId}/portfolio`, { userId: w.customerId }, w.admin)).status, 400);
+  const add = await h.post(`/api/admin/businesses/${w.antroliId}/portfolio`, { userId: w.dajiId }, w.admin);
+  assert.equal(add.status, 200, JSON.stringify(add.body)); assert.deepEqual(add.body.items.map((x: any) => x.userId), [w.dajiId]);
+  const pf = (await h.get('/api/me/portfolio', w.daji)).body.items;
+  assert.deepEqual(pf.map((x: any) => [x.id, x.own]), [[w.dajiId, true], [w.antroliId, false]]);
+  assert.equal(pf[1].businessName, 'Antroli Cricket Ground');
+  // switched to Antroli: Antroli's grounds and enquiries only, none of Daji's
+  const g = await h.call('GET', '/api/staff/grounds', as(w.antroliId));
+  assert.equal(g.status, 200); assert.deepEqual(g.body.items.map((x: any) => x.id), [w.antroliGround]);
+  const enq = JSON.stringify((await h.call('GET', '/api/staff/enquiries', as(w.antroliId))).body);
+  assert.match(enq, /Antroli Enquirer/); assert.doesNotMatch(enq, /Daji Enquirer|9822200011/);
+  // Daji's ground or booking asked for while switched to Antroli: not found
+  assert.equal((await h.call('PATCH', `/api/staff/grounds/${w.dajiGround}`, { ...as(w.antroliId), body: { name: 'Taken over' } })).status, 404);
+  // back on Daji (no header): Daji's only
+  const dg = (await h.get('/api/staff/grounds', w.daji)).body.items.map((x: any) => x.id);
+  assert.ok(dg.includes(w.dajiGround)); assert.ok(!dg.includes(w.antroliGround));
+  // the profile stays the person's own; a change made while switched is logged under the real person, in Antroli's log
+  assert.equal((await h.call('GET', '/api/me', as(w.antroliId))).body.user.id, w.dajiId);
+  const put = await h.call('PUT', '/api/desk/brand', { ...as(w.antroliId), body: { name: 'Antroli Cricket Ground', appName: 'Antroli Test' } });
+  assert.equal(put.status, 200, JSON.stringify(put.body));
+  const row = one<{ actor_id: string; owner_id: string; detail: string }>("SELECT actor_id, owner_id, detail FROM audit_log WHERE action LIKE 'business.brand%' ORDER BY id DESC LIMIT 1");
+  assert.ok(row, 'the brand change is in the audit log');
+  assert.equal(row!.actor_id, w.dajiId); assert.equal(row!.owner_id, w.antroliId); assert.match(row!.detail, /viaPortfolio/);
+  // Antroli's own owner is not given Daji by this
+  assert.equal((await h.call('GET', '/api/staff/grounds', { token: w.antroli, headers: { 'x-daji-business': w.dajiId } })).status, 403);
+  // removed: the very next request is refused, and Antroli's data is still all there for its own owner
+  assert.equal((await h.del(`/api/admin/businesses/${w.antroliId}/portfolio/${w.dajiId}`, w.admin)).status, 200);
+  assert.equal((await h.call('GET', '/api/staff/grounds', as(w.antroliId))).status, 403);
+  assert.deepEqual((await h.get('/api/me/portfolio', w.daji)).body.items.map((x: any) => x.id), [w.dajiId]);
+  assert.deepEqual((await h.get('/api/staff/grounds', w.antroli)).body.items.map((x: any) => x.id), [w.antroliGround]);
 });

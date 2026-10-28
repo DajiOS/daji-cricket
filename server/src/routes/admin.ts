@@ -23,6 +23,7 @@ import { saveAaSettings, viewAaSettings } from '../accounting/aa.ts';
 import { saveYodleeSettings, subscribeYodleeWebhooks, testYodlee, viewYodleeSettings } from '../yodleeSettings.ts';
 import { readiness } from '../readiness.ts';
 import { addBusiness, listBusinesses, requireMainBusiness } from '../businesses.ts';
+import { addToPortfolio, portfolioMembers, removeFromPortfolio } from '../portfolio.ts';
 import { backupNow, BACKUP_AT, lastOffsiteCopy, lastRestorePractice, listBackups, nextBackupAt, practiceRestore } from '../backup.ts';
 
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
@@ -111,6 +112,13 @@ export function adminRoutes(r: Router): void {
   // The software owner's customer businesses (Daji Cricket Ground first): who they are and how far set up, never their figures.
   r.get('/api/admin/businesses', () => ok(listBusinesses()), SAO);
   r.post('/api/admin/businesses', (c) => { const u = U(c); return created(addBusiness({ id: u.id, role: u.role }, c.json())); }, SAO);
+  // Portfolios: which other business owners' sign-ins also open this business. Removing one splits them again at once.
+  r.get('/api/admin/businesses/:id/portfolio', (c) => ok({ items: portfolioMembers(c.params.id!) }), SAO);
+  r.post('/api/admin/businesses/:id/portfolio', (c) => {
+    const u = U(c); const v = new Validator(c.json()); const userId = v.str('userId', { required: true, max: 64 }); v.done();
+    return ok({ items: addToPortfolio({ id: u.id, role: u.role }, c.params.id!, userId!) });
+  }, SAO);
+  r.del('/api/admin/businesses/:id/portfolio/:userId', (c) => { const u = U(c); return ok({ items: removeFromPortfolio({ id: u.id, role: u.role }, c.params.id!, c.params.userId!) }); }, SAO);
 
   r.get('/api/admin/users', (c) => {
     const { limit, offset } = page(c, 50);

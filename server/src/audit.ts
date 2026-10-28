@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AuditEntry } from '@daji/shared';
 import { many, run } from './db.ts';
 import { now } from './clock.ts';
@@ -9,7 +10,16 @@ export interface Actor {
 }
 export const SYSTEM: Actor = { id: null, role: 'system' };
 
+/** A request switched to a business in its owner's portfolio (portfolio.ts): who is really making it. Set per request in http.ts. */
+export const acting = new AsyncLocalStorage<{ realId: string; ownerId: string } | undefined>();
+
 export function audit(actor: Actor | null, action: string, entity: string, entityId: string | null, detail: unknown = null, ownerId: string | null = null): void {
+  // switched to another business: the entry names the real person, and says which business they were working in
+  const a = acting.getStore();
+  if (a && actor && actor.id === a.ownerId) {
+    actor = { id: a.realId, role: 'owner' };
+    detail = { ...(detail && typeof detail === 'object' && !Array.isArray(detail) ? detail : detail === null ? {} : { detail }), viaPortfolio: a.ownerId };
+  }
   run(
     'INSERT INTO audit_log(at, actor_id, actor_role, action, entity, entity_id, owner_id, detail) VALUES(?,?,?,?,?,?,?,?)',
     now(), actor?.id ?? null, actor?.role ?? null, action, entity, entityId, ownerId, detail === null ? null : JSON.stringify(detail),

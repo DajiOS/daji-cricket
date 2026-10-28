@@ -147,7 +147,7 @@ export default function Dashboard({ sub }: { sub: string }) {
   };
   const when = (b: Booking) => tab !== 'upcoming' ? span(b) : b.block ? `${fmtDay(b.block.fromDate)} – ${fmtDay(b.block.toDate)}` : `${fmtDay(b.date)} · ${span(b)}`;
   // the business this desk is for: the one the software owner picked, or the signed-in owner's own (never another's name)
-  const business = (me.role === 'super_admin' ? owners.find((o) => o.id === ownerId)?.businessName : me.businessName) || 'Your business';
+  const business = owners.find((o) => o.id === ownerId)?.businessName || me.businessName || 'Your business';
 
   return (
     <div className="xdash">

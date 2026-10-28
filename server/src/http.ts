@@ -6,6 +6,8 @@ import { originAllowed, type Config } from './config.ts';
 import { authenticate, type UserRow } from './auth.ts';
 import { refuseIfReadOnly } from './readOnly.ts';
 import { tenantOfHost } from './businesses.ts';
+import { switchTo } from './portfolio.ts';
+import { acting } from './audit.ts';
 import { HttpError, forbidden } from './errors.ts';
 import { now } from './clock.ts';
 import { serveWeb } from './site.ts';
@@ -31,6 +33,8 @@ export interface Ctx {
   ip: string;
   cfg: Config;
   user: UserRow | null;
+  /** Who signed in: differs from user only while an owner works in another business of their portfolio (portfolio.ts). */
+  realUser?: UserRow | null;
   raw: Buffer;
   /** Parsed JSON body; `{}` when the body is empty. */
   json(): unknown;
@@ -138,7 +142,7 @@ function corsHeaders(cfg: Config, origin: string | undefined): Record<string, st
     }
   }
   if (h['Access-Control-Allow-Origin']) {
-    h['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, Idempotency-Key, X-Daji-Env';
+    h['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, Idempotency-Key, X-Daji-Env, X-Daji-Business';
     h['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
     h['Access-Control-Max-Age'] = '600';
   }
@@ -264,6 +268,12 @@ export function createApp(cfg: Config, router: Router): Server {
         if (cfg.log) console.error(JSON.stringify({ t: new Date().toISOString(), level: 'error', path: pathForLog, where: 'authenticate', error: String((e as Error)?.message ?? e) }));
         throw new HttpError(503, 'AUTH_UNAVAILABLE', 'We could not check your access just now. Please try again in a moment.');
       }
+      // Portfolio: an owner working in another business of their portfolio (X-Daji-Business) is answered as that business's owner,
+      // so every scope check keeps the two businesses apart; their own account, sign-in and profile (/api/me, /api/auth) stay theirs.
+      const realUser = user;
+      const want = req.headers['x-daji-business'];
+      if (user && typeof want === 'string' && want && want !== user.id && !/^\/api\/(me|auth)(\/|$)/.test(url.pathname)) user = switchTo(user, want);
+      acting.enterWith(user && realUser && user !== realUser ? { realId: realUser.id, ownerId: user.id } : undefined);
       const a = route.opts.auth;
       if (a) {
         if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Please sign in');
@@ -282,7 +292,7 @@ export function createApp(cfg: Config, router: Router): Server {
       if (route.opts.upload) await gateUpload(raw, route.opts.upload, user ? { id: user.id, role: user.role } : null, user ? (user.role === 'staff' ? user.owner_id : user.id) : null);
       let parsed: unknown;
       const ctx: Ctx = {
-        req, res, url, params, query: url.searchParams, ip, cfg, user, raw,
+        req, res, url, params, query: url.searchParams, ip, cfg, user, realUser, raw,
         json() {
           if (parsed !== undefined) return parsed;
           if (raw.length === 0) return (parsed = {});
@@ -291,7 +301,7 @@ export function createApp(cfg: Config, router: Router): Server {
       };
       const idemKey = route.opts.idempotent ? parseIdempotencyKey(req.headers['idempotency-key']) : null;
       if (route.opts.idempotent === 'required' && !idemKey) throw new HttpError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'Send an Idempotency-Key header so a retry cannot repeat this action');
-      const scope = user ? `u:${user.id}` : `ip:${ip}`;
+      const scope = user ? (realUser && realUser !== user ? `u:${realUser.id}@${user.id}` : `u:${user.id}`) : `ip:${ip}`;
       if (idemKey) {
         const begin = idemBegin(scope, idemKey, method, url.pathname + url.search, requestHash(method, url.pathname + url.search, raw));
         if (begin.kind === 'replay') {
