@@ -301,3 +301,19 @@ rel('REL-DESK-015', 'pages that showed the same things are merged, and every old
   assert.doesNotMatch(read('desk/src/pages/Settings.tsx'), /<People \/>|<Services \/>|<Backups \/>/);
   ev('merged', MERGED);
 });
+
+rel('REL-DESK-016', 'the dashboard Upcoming count matches the bookings still to come, not only today\'s', async () => {
+  // Found on the live desk: Upcoming tournaments listed a tournament ahead while the bookings card read "Upcoming (0)", because the card counted today only.
+  const later = await bookAndPay(h, cust, g.id, dayFromNow(12), '07:00', 2);
+  run("UPDATE bookings SET format_label = 'Saturday tournament' WHERE id = ?", later.id);
+  const today = await h.get('/api/staff/today', owner);
+  assert.ok(!today.body.bookings.some((b: any) => b.id === later.id), 'a booking on another day is not one of today\'s');
+  const ahead = await h.get('/api/staff/bookings?upcoming=1&group=1&limit=100', owner);
+  assert.ok(ahead.body.items.some((b: any) => b.id === later.id), 'it is one of the bookings still to come');
+  const tours = await h.get('/api/staff/bookings?kind=tournament&upcoming=1&group=1', owner);
+  assert.ok(tours.body.items.every((t: any) => ahead.body.items.some((b: any) => b.id === t.id)), 'every upcoming tournament is counted under Upcoming');
+  const dash = read('desk/src/pages/Dashboard.tsx');
+  assert.match(dash, /'\/api\/staff\/bookings\?upcoming=1&group=1&limit=100'/, 'the Upcoming tab reads the bookings still to come');
+  assert.match(dash, /k === 'upcoming' \? upcoming/, 'its count is that list, not today\'s');
+  ev('upcoming', { ahead: ahead.body.total, today: today.body.bookings.length });
+});
