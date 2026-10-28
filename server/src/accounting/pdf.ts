@@ -87,6 +87,6 @@ export function pdfBuffer(sheet: SheetSpec, business: string, subtitle: string):
   objs.forEach((o, i) => { offs.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
   const xref = Buffer.byteLength(out, 'latin1');
   out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('');
-  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R /Info << /Producer (${business.replace(/[()\\]/g, '')}) >> >>\nstartxref\n${xref}\n%%EOF\n`;
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R /Info << /Producer (Daji Cricket Ground) >> >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(out, 'latin1');
 }

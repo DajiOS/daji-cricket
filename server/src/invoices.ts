@@ -6,7 +6,6 @@ import { HttpError } from './errors.ts';
 import { Validator } from './input.ts';
 import { istDate } from './time.ts';
 import { gstInside, gstPercent } from './accounting/ledger.ts';
-import { defaultInvoicePrefix } from './businesses.ts';
 
 // GST tax invoices for ground bookings. The rules this enforces (CGST Rules, rule 46):
 //   - the invoice number is at most 16 characters, made only of letters, digits, "/" and "-", and unique in the financial year;
@@ -80,7 +79,7 @@ interface ProfRow { legal_name: string | null; gstin: string | null; address: st
 
 export function getProfile(ownerId: string): GstProfile {
   const r = one<ProfRow>('SELECT * FROM gst_profile WHERE owner_id = ?', ownerId);
-  return { legalName: r?.legal_name ?? null, gstin: r?.gstin ?? null, address: r?.address ?? null, stateCode: r?.state_code ?? '24', prefix: r?.prefix ?? defaultInvoicePrefix(ownerId), sac: r?.sac ?? DEFAULT_SAC };
+  return { legalName: r?.legal_name ?? null, gstin: r?.gstin ?? null, address: r?.address ?? null, stateCode: r?.state_code ?? '24', prefix: r?.prefix ?? 'DCG', sac: r?.sac ?? DEFAULT_SAC };
 }
 
 export function saveProfile(ownerId: string, actor: Actor, body: unknown): GstProfile {

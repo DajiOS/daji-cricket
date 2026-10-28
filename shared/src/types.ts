@@ -497,8 +497,6 @@ export interface PublicConfig {
   pricesOnEnquiry?: boolean;
   /** Customers can host auction tournaments and sign up as players (Settings). Clients show the Auctions screens only when true. */
   auctionsEnabled?: boolean;
-  /** Who owns and runs the software ("Daji OS"). The business customers book with is `brand` and each ground's owner. */
-  softwareOwner?: string;
   /** The Guppi booking assistant (any language) is switched on. Clients show its screen only when this is true. */
   guppiBookingEnabled?: boolean;
   /** The owner has switched the refundable security deposit on: screens show it separately from the booking advance. */
@@ -591,10 +589,6 @@ export interface GlobalSettings {
   checkInOpensMinutes: number;
   /** The tiers, earned by games played here in the last 12 months. Anyone below every tier is in the last wave. */
   waitlistTiers: WaitlistTier[];
-  /** The name of the company that owns and runs the software ("Daji OS"). Every business on it is a customer. Only the software owner changes it. */
-  softwareOwnerName: string;
-  /** The customer business the main web address shows (an owner's id); empty shows every business. Software owner only. */
-  mainSiteBusinessId: string;
 }
 
 /** A waitlist tier: a name and the games played in the last 12 months it takes to earn it. */

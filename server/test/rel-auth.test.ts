@@ -201,9 +201,7 @@ rel('REL-AUTH-007', 'there is no unprotected way to the data: every route refuse
   const router = buildRouter();
   // POST /api/bookings/quote (rev5, reviewed): the price of a selection before a hold, for signed-out visitors as for customers. It writes nothing
   // (REL-FIX-009-002), refuses a promo code without sign-in, gives account credit only to the signed-in customer, and is rate-limited like every route.
-  // GET /api/site-brand, /api/brand-logo/:p and /api/platform/domain-check (reviewed, white-label sites): the name and logo a booking page
-  // shows, the logo picture itself, and the yes/no Caddy asks before it gets a certificate. No figures, no customers, no other business.
-  const PUBLIC = new Set(['GET /api/site-brand', 'GET /api/brand-logo/:p', 'GET /api/platform/domain-check', 'POST /api/bookings/quote', 'GET /api/health', 'GET /api/festival', 'GET /api/config', 'GET /api/grounds', 'GET /api/grounds/:p', 'GET /api/grounds/:p/availability', 'POST /api/enquiries', 'POST /api/auth/register', 'POST /api/auth/logout',
+  const PUBLIC = new Set(['POST /api/bookings/quote', 'GET /api/health', 'GET /api/festival', 'GET /api/config', 'GET /api/grounds', 'GET /api/grounds/:p', 'GET /api/grounds/:p/availability', 'POST /api/enquiries', 'POST /api/auth/register', 'POST /api/auth/logout',
     'POST /api/auth/login', 'POST /api/auth/password/forgot', 'POST /api/auth/password/reset', 'POST /api/auth/otp/request', 'POST /api/auth/otp/verify', 'GET /api/avatar/:p', 'POST /api/webhooks/razorpay', 'GET /api/unsubscribe', 'POST /api/unsubscribe',
     'POST /api/webhooks/yodlee', 'POST /api/webhooks/aa/:p', 'GET /api/matches', 'GET /api/matches/:p', 'POST /api/platform/leads', 'GET /api/media/:p', 'GET /api/library/public', 'PUT /api/cameras/:p/frame', 'GET /api/cameras/:p/stream', 'GET /api/cameras/:p/snapshot']);
   const pat = (r: { re: RegExp }) => r.re.source.replace(/^\^/, '').replace(/\\\/\?\$$/, '').replace(/\/\?\$$/, '').replace(/\\\//g, '/').replace(/\(\[\^\/\]\+\)/g, ':p');

@@ -4,7 +4,6 @@ import { isValidDate, istDate } from '../time.ts';
 import * as T from './tools.ts';
 import { searchDocs, seesDocs } from '../docs.ts';
 import { aiNameFor } from '../aiNames.ts';
-import { getSettings } from '../settings.ts';
 
 // Optional free-form mode. When ANTHROPIC_API_KEY is set, a question the built-in answerer cannot read is sent to Claude
 // together with a small set of read-only tools. Claude never sees the database: it can only call the tools below, which
@@ -104,7 +103,6 @@ export function redact(q: string): string {
 function system(ctx: T.Ctx, today: string): string {
   return [
     'You answer questions for the owner or staff of a cricket ground booking business in India, inside their booking software.',
-    `The software is owned and run by ${JSON.stringify(getSettings().softwareOwnerName)} (the software owner). The business you work for is one of its customers, and you only ever read that business's records.`,
     `Today is ${today} (Indian time). Money is in Indian rupees. Weeks run Monday to Sunday. The financial year runs 1 April to 31 March.`,
     'Use the tools to get every figure. Never work a figure out from memory and never guess. If the tools cannot answer, say so in one sentence.',
     'Tool results show each amount twice: a number in paise and a "Text" version such as ₹1,23,456. Quote the Text version exactly; do not convert paise yourself.',

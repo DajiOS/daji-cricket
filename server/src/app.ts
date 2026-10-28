@@ -6,6 +6,7 @@ import { mediaRoutes } from './routes/media.ts';
 import type { Server } from 'node:http';
 import type { Config } from './config.ts';
 import { Router, createApp } from './http.ts';
+import './retiredSchema.ts';
 import { publicRoutes } from './routes/public.ts';
 import { customerRoutes } from './routes/customer.ts';
 import { staffRoutes } from './routes/staff.ts';
