@@ -4,7 +4,7 @@ import { startHarness, grounds, setNow, slotStart, bookAndPay, dayFromNow, HOUR,
 import { gamesPlayed, distanceMeters, sweepFaceForgets } from '../src/players.ts';
 import { signRekognition } from '../src/faceMatch.ts';
 import { createServer, type Server } from 'node:http';
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { now } from '../src/clock.ts';
 import { DAJI_LOCATION } from '../src/seed.ts';
@@ -317,14 +317,14 @@ async function stubRekognition(): Promise<{ url: string; calls: { path: string; 
   const port = (srv.address() as { port: number }).port;
   return { url: `http://127.0.0.1:${port}/`, calls, faces, close: () => new Promise<void>((r) => srv.close(() => r())) };
 }
-const allFiles = (dir: string): string[] => readdirSync(dir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => join(e.parentPath, e.name));
+const allFiles = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir, { recursive: true, withFileTypes: true }) : []).filter((e) => e.isFile()).map((e) => join(e.parentPath, e.name));
 const shotWith = (word: string) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xda, 0x00, 0x02]), Buffer.from(`${word}-${++shots}`), Buffer.from([0xff, 0xd9])]);
 const sendShot = (path: string, token: string, body: Buffer, headers: Record<string, string> = {}) => h.call('POST', path, { token, raw: body, headers: { 'content-type': 'application/octet-stream', 'x-app-shot-at': String(now()), ...headers } });
 
 test('face check on: enrol once with consent, every check-in selfie must match, nothing is kept but the answer', async () => {
   const svc = await stubRekognition();
-  Object.assign(h.cfg.faceMatch, { endpoint: svc.url, keyId: 'test-id', secret: 'test-secret' });
   const filesBefore = new Set(allFiles(h.cfg.dataDir));
+  Object.assign(h.cfg.faceMatch, { endpoint: svc.url, keyId: 'test-id', secret: 'test-secret' });
   try {
     assert.equal((await h.get('/api/config')).body.faceCheckIn, true);
     const p = await newCustomer(), friend = await newCustomer();

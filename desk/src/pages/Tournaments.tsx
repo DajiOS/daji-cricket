@@ -7,6 +7,7 @@ import { FixturesTab } from '../parts/tournaments/FixturesTab';
 import { TableTab } from '../parts/tournaments/TableTab';
 import { FeesTab } from '../parts/tournaments/FeesTab';
 import { UpcomingTournaments } from '../parts/tournaments/Upcoming';
+import { AuctionPanel, useAuctions } from '../parts/tournaments/AuctionPanel';
 import { API, STATUS, formatLabel, type Detail, type Tournament } from '../parts/tournaments/shared';
 
 type Tab = 'fixtures' | 'table' | 'teams' | 'fees';
@@ -14,6 +15,7 @@ type Tab = 'fixtures' | 'table' | 'teams' | 'fees';
 function List() {
   const [data, err, reload] = useApi<{ items: Tournament[] }>(API);
   const [form, setForm] = useState(false);
+  const auctions = useAuctions();
   const items = data?.items ?? [];
   const sum = (f: (t: Tournament) => number) => items.reduce((s, t) => s + f(t), 0);
   return (
@@ -34,7 +36,7 @@ function List() {
             cols={[
               { head: 'Tournament', cell: (t) => <><b>{t.name}</b><div className="small muted">{formatLabel(t.format)} · {t.overs} overs</div></> },
               { head: 'Dates', cell: (t) => `${fmtDate(t.startDate)} to ${fmtDate(t.endDate)}` },
-              { head: 'Status', cell: (t) => <span className="row" style={{ gap: 6 }}><Status s={t.status} map={STATUS} />{t.booking && <Chip tone="info">Ground booked</Chip>}</span> },
+              { head: 'Status', cell: (t) => <span className="row" style={{ gap: 6 }}><Status s={t.status} map={STATUS} />{t.booking && <Chip tone="info">Ground booked</Chip>}{auctions.has(t.id) && <Chip tone={auctions.get(t.id)!.hidden ? 'bad' : 'gold'}>{auctions.get(t.id)!.hidden ? 'Hidden by the ground' : auctions.get(t.id)!.mode === 'teams' ? 'Customer-hosted' : 'Player auction'}</Chip>}</span> },
               { head: 'Teams', num: true, cell: (t) => t.teamCount },
               { head: 'Played', num: true, cell: (t) => `${t.playedCount}/${t.fixtureCount}` },
               { head: 'Entry fee', num: true, cell: (t) => inr(t.entryFeePaise) },
@@ -57,6 +59,7 @@ function One({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>('fixtures');
   const [edit, setEdit] = useState(false);
   const [delErr, setDelErr] = useState<string | null>(null);
+  const auction = useAuctions().get(id);
   if (err) return <div className="stack"><PageHead eyebrow="Compete" title="Tournament"><button className="btn" onClick={() => go('/tournaments')}>All tournaments</button></PageHead><ErrorBox msg={err} /></div>;
   if (!d) return <div className="stack"><PageHead eyebrow="Compete" title="Tournament" /><Loading /></div>;
   const t = d.tournament;
@@ -75,6 +78,7 @@ function One({ id }: { id: string }) {
             <div className="small muted">{t.booking.groundName} · {fmtDate(t.booking.fromDate)} to {fmtDate(t.booking.toDate)} · {inr(t.booking.paidPaise)} of {inr(t.booking.totalPaise)} received</div></div>
           {t.booking.firstBookingId && <button className="btn sm" onClick={() => go('/bookings/' + t.booking!.firstBookingId)}>Open booking</button>}
         </div>)}
+      {auction && <AuctionPanel auctionId={auction.id} />}
       <div className="grid g4">
         <Stat label="Teams" value={t.teamCount} foot={`${d.fees.paidTeams} paid, ${d.fees.unpaidTeams} due`} />
         <Stat label="Matches played" value={`${t.playedCount}/${t.fixtureCount}`} meter={t.fixtureCount ? (t.playedCount / t.fixtureCount) * 100 : 0} />
