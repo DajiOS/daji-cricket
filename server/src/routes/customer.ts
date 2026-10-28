@@ -1,5 +1,5 @@
 import { pricesFor, pricesHidden, refuseOnlineBooking, refuseOnlineMove } from '../priceOnEnquiry.ts';
-import { portfolioOf } from '../portfolio.ts';
+import { addBusinessToOwnPortfolio, mayAddBusinesses, portfolioOf } from '../portfolio.ts';
 import { myDashboard } from '../mydash.ts';
 import { Router, ok, created } from '../http.ts';
 import { U, page } from './helpers.ts';
@@ -40,7 +40,9 @@ export function customerRoutes(r: Router): void {
   // ---- profile and consent
   r.get('/api/me', (c) => ok({ user: toUser(U(c)) }), { auth: 'user' });
   // the businesses this owner's sign-in opens (their own, then their portfolio); the desk switches with X-Daji-Business
-  r.get('/api/me/portfolio', (c) => ok({ items: portfolioOf(U(c)) }), { auth: ['owner'] });
+  r.get('/api/me/portfolio', (c) => ok({ items: portfolioOf(U(c)), canAdd: mayAddBusinesses(U(c)) }), { auth: ['owner'] });
+  // the main website's owner adds another ground straight into their own portfolio (a new business, kept apart; nothing is sent)
+  r.post('/api/me/portfolio', (c) => created(addBusinessToOwnPortfolio(U(c), c.json())), { auth: ['owner'] });
 
   // ---- phone push notifications (the app registers its Expo push token after sign-in)
   r.post('/api/me/push-token', (c) => {
