@@ -1744,6 +1744,7 @@ function openEnquiry(kind, sel) {
   const msg = h('textarea', { name: 'message', required: true, placeholder: kind === 'academy' ? 'Tell us about the player and what you are looking for.' : 'What are you planning? Match, practice, tournament…' }, kind === 'academy' ? 'I would like to know about MP13 Academy. ' : slot ? `Please send me the price for ${slot.text}.` : '');
   const err = h('div', { class: 'fe formerr', 'aria-live': 'assertive' });
   const submit = h('button', { class: 'btn primary block', type: 'submit' }, 'Send enquiry');
+  const sendKey = 'enq-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); // one key per open form: a retry after a lost answer files the enquiry once
   const form = h('form', { novalidate: true },
     slot ? h('div', { class: 'note' }, `Slot: ${slot.text}. The ground will reply with the price; the slot is not held until they confirm it.`) : null,
     slot ? null : field('Ground', gsel), h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('First name', first), field('Last name', last)), field('Mobile number', phone), field('Email (optional)', email),
@@ -1759,7 +1760,7 @@ function openEnquiry(kind, sel) {
     if (date.value) body.preferredDate = date.value;
     if (players.value) body.players = Number(players.value);
     if (slot) { body.groundId = state.ground.id; body.preferredDate = slot.preferredDate; body.preferredTime = slot.preferredTime; body.preferredSlots = slot.preferredSlots; if (slot.preferredLabel) body.preferredLabel = slot.preferredLabel; }
-    try { await api('/api/enquiries', { method: 'POST', body }); busyBtn(submit, false); closeModal(); toast(slot ? 'Thank you. The ground has your slot and will reply with the price.' : 'Thank you. We have your enquiry and will get back to you soon.'); if (slot) { state.sel = []; state.win = null; state.hr = null; loadSlots(); } }
+    try { await api('/api/enquiries', { method: 'POST', body, headers: { 'idempotency-key': sendKey } }); busyBtn(submit, false); closeModal(); toast(slot ? 'Thank you. The ground has your slot and will reply with the price.' : 'Thank you. We have your enquiry and will get back to you soon.'); if (slot) { state.sel = []; state.win = null; state.hr = null; loadSlots(); } }
     catch (e) { busyBtn(submit, false); formFail(form, err, e); }
   });
   openModal([h('div', { class: 'eyebrow' }, 'Enquiry'), h('h3', {}, kind === 'academy' ? 'Ask about MP13 Academy' : slot ? 'Ask the price of this slot' : 'Send an enquiry'), form]);

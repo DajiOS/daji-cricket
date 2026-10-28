@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { api } from './api';
 import type { AppConfig, Availability, Ball, Ground, HoldQuote, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
@@ -119,6 +119,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const [guppi, setGuppi] = useState(false); // the Guppi booking screen (any language), when the release switch is on
   const [sent, setSent] = useState('');
+  const sendKey = useRef<{ what: string; id: string } | null>(null);
   // prices are given on enquiry (Settings): slots show no price, and the picked slot is sent to the ground, which replies with the price
   const enq = !!cfg?.pricesOnEnquiry;
   const price = (p: number) => (enq ? 'Available' : inr(p));
@@ -210,12 +211,16 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const enquire = async () => {
     if (!body) return;
     if (onNeedSignIn) { onNeedSignIn(); return; }
+    // one key per slot asked about: pressing again after a lost answer files the enquiry once
+    const what = `${gid}|${date}|${JSON.stringify(body)}`;
+    if (!sendKey.current || sendKey.current.what !== what) sendKey.current = { what, id: `enq-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}` };
     const o = hasRates ? opts.find((x) => x.ruleId === (win ?? hr?.ruleId)) : undefined;
     const mins = (a: string, b: string) => { const [h1, m1] = a.split(':').map(Number), [h2, m2] = b.split(':').map(Number); const d = (h2! * 60 + m2!) - (h1! * 60 + m1!); return d > 0 ? d : d + 1440; };
     const slots = typeof body.slots === 'number' ? body.slots : o ? Math.max(1, Math.round(mins(o.time, o.endTime) / (ground?.slotMinutes || 60))) : 1;
     setErr(''); setBusy(true);
     try {
-      await api('/api/enquiries', { method: 'POST', body: { groundId: gid, preferredDate: date, preferredTime: String(body.startTime), preferredSlots: slots, ...(o ? { preferredLabel: o.label } : {}), message: `Please send me the price for ${chosenText} on ${date}.` } });
+      await api('/api/enquiries', { method: 'POST', body: { groundId: gid, preferredDate: date, preferredTime: String(body.startTime), preferredSlots: slots, ...(o ? { preferredLabel: o.label } : {}), message: `Please send me the price for ${chosenText} on ${date}.` }, headers: { 'Idempotency-Key': sendKey.current.id } });
+      sendKey.current = null;
       setSent(`Sent. ${ground?.name ?? 'The ground'} has your slot (${chosenText}) and will reply with the price.`);
       setPick([]); setWin(null); setHr(null); void loadSlots();
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
