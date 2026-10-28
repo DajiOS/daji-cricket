@@ -19,6 +19,9 @@ registerSchema('avatar-1', `ALTER TABLE users ADD COLUMN avatar_id TEXT;
 ALTER TABLE users ADD COLUMN avatar_ext TEXT;
 ALTER TABLE users ADD COLUMN avatar_mime TEXT;`);
 
+// A team member the owner has marked "Read only" sees their role's screens but cannot change anything (server/src/readOnly.ts).
+registerSchema('staff-read-only-1', `ALTER TABLE users ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0;`);
+
 export interface UserRow {
   id: string; role: Role; name: string; email: string | null; phone: string | null; password_hash: string | null;
   owner_id: string | null; permissions: string; active: number;
@@ -26,6 +29,7 @@ export interface UserRow {
   business_name: string | null; upi_id: string | null; token_version: number; created_at: number; updated_at: number;
   first_name: string | null; last_name: string | null;
   avatar_id: string | null; avatar_ext: string | null; avatar_mime: string | null;
+  read_only: number;
 }
 
 // ---- passwords (scrypt) ----
@@ -112,6 +116,7 @@ export function toUser(r: UserRow): User {
     permissions: perms, active: !!r.active, consent, businessName: r.business_name, upiId: r.upi_id, createdAt: r.created_at,
     avatarUrl: r.avatar_id ? `/api/avatar/${r.avatar_id}` : null, hasPassword: !!r.password_hash,
     aiName: aiNameFor(r.id), aiNameOwn: ownAiName(r.id), aiNameNotice: aiNameNotice(r.id),
+    readOnly: isReadOnly(r),
   };
 }
 export const userRow = (id: string): UserRow | undefined => one<UserRow>('SELECT * FROM users WHERE id = ?', id);
@@ -211,6 +216,8 @@ export function permissionList(raw: string | null | undefined): string[] {
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
   } catch { return []; }
 }
+/** A team member marked "Read only" by the owner. Only team members can be: an owner or admin is never read only. */
+export const isReadOnly = (u: Pick<UserRow, 'role' | 'read_only'>): boolean => u.role === 'staff' && u.read_only === 1;
 export function hasPermission(u: UserRow, perm: StaffPermission): boolean {
   if (u.role === 'super_admin' || u.role === 'owner') return true;
   if (u.role !== 'staff') return false;

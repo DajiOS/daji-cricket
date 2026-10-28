@@ -8,6 +8,7 @@ import { askClaude, AiError } from './claude.ts';
 import { niceRange } from './dates.ts';
 import * as T from './tools.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
+import { isReadOnlyQuestion, readOnlyAnswer } from '../readOnly.ts';
 import { isDocQuestion, searchDocs, searchWords, seesDocs, waitingCount, type SearchHit } from '../docs.ts';
 
 export const MAX_QUESTION = 500;
@@ -77,6 +78,12 @@ export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuesti
   if (isNameQuestion(question)) {
     audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: 'assistant_name' }, ownerId);
     return { question, answer: aiNameAnswer(user.id), details: [], understood: 'A question about the assistant itself', period: null, intent: 'help', source: 'builtin', verified: true, open: null, notes: [], suggestions: [] };
+  }
+  // "Am I view only?", "Who on the team is read only?": answered from the Team page's Read only switch, never by Claude.
+  if (isReadOnlyQuestion(question)) {
+    audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: 'read_only' }, ownerId);
+    const r = readOnlyAnswer(user);
+    return { question, answer: r.answer, details: r.details, understood: 'Who can change things', period: null, intent: 'help', source: 'builtin', verified: true, open: null, notes: [], suggestions: [] };
   }
   const { intent } = classify(question);
   // a question that asks for a document is answered from the pages of the uploaded documents, with the page itself to look at;

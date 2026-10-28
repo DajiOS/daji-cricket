@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { Alert } from 'react-native';
 
 import { envHeaders, resolveTarget, EnvConfigError, type ClientTarget } from './envGuard';
 
@@ -47,8 +48,16 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
-  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? 'ERROR', data?.error?.message ?? `Something went wrong (${res.status})`, data?.error?.details);
+  if (!res.ok) { readOnlyNotice(data?.error); throw new ApiError(res.status, data?.error?.code ?? 'ERROR', data?.error?.message ?? `Something went wrong (${res.status})`, data?.error?.details); }
   return data as T;
+}
+
+// A view-only login (Team › Read only) is told why a change did not happen, even on a screen that would not show the error itself.
+let readOnlyShownAt = 0;
+function readOnlyNotice(e: { code?: string; message?: string } | undefined): void {
+  if (e?.code !== 'READ_ONLY' || Date.now() - readOnlyShownAt < 4000) return;
+  readOnlyShownAt = Date.now();
+  Alert.alert('View-only account', e.message ?? 'Changes are switched off.');
 }
 
 /** Sends a picture from the phone as the raw body. `headers` carries extras such as when it was shot. */
@@ -62,7 +71,7 @@ export async function upload<T = any>(path: string, uri: string, headers: Record
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
-  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? 'ERROR', data?.error?.message ?? `Something went wrong (${res.status})`, data?.error?.details);
+  if (!res.ok) { readOnlyNotice(data?.error); throw new ApiError(res.status, data?.error?.code ?? 'ERROR', data?.error?.message ?? `Something went wrong (${res.status})`, data?.error?.details); }
   return data as T;
 }
 /** An image address that needs the sign-in header (task photos). Public pictures (profile) use the plain address. */

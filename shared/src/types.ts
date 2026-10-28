@@ -65,6 +65,8 @@ export interface User {
   ownerId: string | null;
   permissions: StaffPermission[];
   active: boolean;
+  /** A team member the owner marked "Read only": they see their role's screens but every change is refused (READ_ONLY). */
+  readOnly: boolean;
   consent: Consent;
   businessName: string | null;
   upiId: string | null;

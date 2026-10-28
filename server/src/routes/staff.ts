@@ -6,6 +6,8 @@ import { audit } from '../audit.ts';
 import { checkPasswordStrength, createUser, hasPermission, listStaff, requirePermission, requireRevenue, scopeOwnerId, toUser, userRow } from '../auth.ts';
 import { one, many, run, tx } from '../db.ts';
 import { now } from '../clock.ts';
+import { applyAccountEdits, readAccountEdits } from '../accountEdit.ts';
+import { mfaEnabled } from '../mfa.ts';
 import { ROLE_PRESETS, STAFF_PERMISSIONS, type StaffPermission } from '@daji/shared';
 import { accessBooking, approveBooking, blockOf, bookingPayments, clearReview, deleteCancelled, listBookings, markNoShow, viewBooking } from '../bookings.ts';
 import { reconcile } from '../finevents.ts';
@@ -380,9 +382,29 @@ export function staffRoutes(r: Router): void {
     if (!cust || cust.role !== 'customer' || !bookings || bookings.total === 0) throw notFound('Customer not found');
     const payments = many<any>('SELECT * FROM payments WHERE customer_id = ? AND owner_id = ? ORDER BY created_at DESC LIMIT 100', cust.id, owner);
     const enquiries = listEnquiries(u.role === 'super_admin' ? u : u, { limit: 100, offset: 0 }).items.filter((e) => e.customerId === cust.id || e.phone === cust.phone);
-    const { id, name, phone, email, consent } = toUser(cust);
-    return ok({ customer: { id, name, phone, email, consent }, bookings: bookings.items, payments: payments.map((p) => ({ id: p.id, bookingId: p.booking_id, method: p.method, status: p.status, amountPaise: p.amount_paise, createdAt: p.created_at })), enquiries, creditBalancePaise: credits.balance(cust.id, owner) });
+    const { id, name, firstName, lastName, phone, email, consent } = toUser(cust);
+    return ok({ customer: { id, name, firstName, lastName, phone, email, consent }, bookings: bookings.items, payments: payments.map((p) => ({ id: p.id, bookingId: p.booking_id, method: p.method, status: p.status, amountPaise: p.amount_paise, createdAt: p.created_at })), enquiries, creditBalancePaise: credits.balance(cust.id, owner) });
   }, A);
+
+  // The owner corrects a customer's sign-in details for them (a wrong email, a new number, a forgotten password).
+  // Owner only, and only for a customer who books with this business alone: someone who also books elsewhere keeps control of their own account.
+  r.patch('/api/staff/customers/:id', (c) => {
+    const u = U(c);
+    const owner = ownerFilter(c);
+    if (!owner) throw new HttpError(400, 'OWNER_REQUIRED', 'Pass ?ownerId= to edit one owner\'s customer');
+    const cust = userRow(c.params.id!);
+    if (!cust || cust.role !== 'customer' || !one('SELECT 1 FROM bookings WHERE customer_id = ? AND owner_id = ?', cust.id, owner)) throw notFound('Customer not found');
+    if (u.role !== 'super_admin' && one('SELECT 1 FROM bookings WHERE customer_id = ? AND owner_id <> ? UNION SELECT 1 FROM payments WHERE customer_id = ? AND owner_id <> ?', cust.id, owner, cust.id, owner)) {
+      throw new HttpError(409, 'SHARED_CUSTOMER', 'This customer also books with another business, so only they (or the software owner) can change their sign-in details.');
+    }
+    const v = new Validator(c.json());
+    const edits = readAccountEdits(v);
+    v.done();
+    const changed = tx(() => applyAccountEdits(cust, edits));
+    audit({ id: u.id, role: u.role }, 'customer.update', 'user', cust.id, changed, owner);
+    const { id, name, firstName, lastName, phone, email, consent } = toUser(userRow(cust.id)!);
+    return ok({ customer: { id, name, firstName, lastName, phone, email, consent } });
+  }, { auth: ['owner', 'super_admin'] });
 
   r.post('/api/staff/customers/:id/credit', (c) => {
     const u = U(c);
@@ -467,7 +489,7 @@ export function staffRoutes(r: Router): void {
   r.get('/api/staff/team', (c) => {
     const u = U(c);
     const ownerId = u.role === 'owner' ? u.id : ownerOrFail(c, 'see the team');
-    return ok({ items: listStaff(ownerId).map(toUser), allPermissions: STAFF_PERMISSIONS, presets: ROLE_PRESETS });
+    return ok({ items: listStaff(ownerId).map((m) => ({ ...toUser(m), mfa: mfaEnabled(m.id) })), allPermissions: STAFF_PERMISSIONS, presets: ROLE_PRESETS });
   }, { auth: ['owner', 'super_admin'] });
 
   r.post('/api/staff/team', (c) => {
@@ -481,11 +503,16 @@ export function staffRoutes(r: Router): void {
     if (preset && !(preset in ROLE_PRESETS)) v.fail('preset', `Unknown preset. Use one of: ${Object.keys(ROLE_PRESETS).join(', ')}`);
     const explicit = perms(v, 'permissions');
     const permissions = explicit ?? (preset && preset in ROLE_PRESETS ? [...ROLE_PRESETS[preset]!.permissions] : []);
+    const readOnly = v.bool('readOnly');
     if (password) { const pw = checkPasswordStrength(password); if (pw) v.fail('password', pw); }
     v.done();
     const ownerId = u.role === 'owner' ? u.id : ownerOrFail(c, 'add a team member');
-    const s = createUser({ role: 'staff', name: name!, ...(nm.firstName ? { firstName: nm.firstName, lastName: nm.lastName } : {}), email: email!, phone: phone ?? null, password: password!, ownerId, permissions });
-    audit({ id: u.id, role: u.role }, 'staff.create', 'user', s.id, { permissions }, ownerId);
+    const s = tx(() => {
+      const made = createUser({ role: 'staff', name: name!, ...(nm.firstName ? { firstName: nm.firstName, lastName: nm.lastName } : {}), email: email!, phone: phone ?? null, password: password!, ownerId, permissions });
+      if (readOnly) run('UPDATE users SET read_only = 1 WHERE id = ?', made.id);
+      return userRow(made.id)!;
+    });
+    audit({ id: u.id, role: u.role }, 'staff.create', 'user', s.id, { permissions, ...(readOnly ? { readOnly: true } : {}) }, ownerId);
     return created(toUser(s));
   }, { auth: ['owner', 'super_admin'] });
 
@@ -494,14 +521,19 @@ export function staffRoutes(r: Router): void {
     const s = userRow(c.params.id!);
     if (!s || s.role !== 'staff' || (u.role === 'owner' && s.owner_id !== u.id)) throw notFound('Staff member not found');
     const v = new Validator(c.json());
-    const name = v.str('name', { min: 2, max: 80 });
-    const phone = v.phone('phone');
+    const edits = readAccountEdits(v);
     const active = v.bool('active');
     const permissions = perms(v, 'permissions');
+    // Read only takes effect on their next request, so they stay signed in: the server refuses each change as it comes.
+    const readOnly = v.bool('readOnly');
     v.done();
-    run('UPDATE users SET name = COALESCE(?, name), phone = COALESCE(?, phone), active = COALESCE(?, active), permissions = COALESCE(?, permissions), token_version = token_version + ?, updated_at = ? WHERE id = ?',
-      name ?? null, phone ?? null, active === undefined ? null : active ? 1 : 0, permissions ? JSON.stringify(permissions) : null, permissions || active === false ? 1 : 0, now(), s.id);
-    audit({ id: u.id, role: u.role }, 'staff.update', 'user', s.id, { permissions, active }, s.owner_id);
+    const changed = tx(() => {
+      const ch = applyAccountEdits(s, edits);
+      run('UPDATE users SET active = COALESCE(?, active), permissions = COALESCE(?, permissions), read_only = COALESCE(?, read_only), token_version = token_version + ?, updated_at = ? WHERE id = ?',
+        active === undefined ? null : active ? 1 : 0, permissions ? JSON.stringify(permissions) : null, readOnly === undefined ? null : readOnly ? 1 : 0, permissions || active === false ? 1 : 0, now(), s.id);
+      return ch;
+    });
+    audit({ id: u.id, role: u.role }, 'staff.update', 'user', s.id, { permissions, active, ...(readOnly !== undefined ? { readOnly } : {}), ...changed }, s.owner_id);
     return ok(toUser(userRow(s.id)!));
   }, { auth: ['owner', 'super_admin'] });
 }

@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Role } from '@daji/shared';
 import { originAllowed, type Config } from './config.ts';
 import { authenticate, type UserRow } from './auth.ts';
+import { refuseIfReadOnly } from './readOnly.ts';
 import { HttpError, forbidden } from './errors.ts';
 import { now } from './clock.ts';
 import { serveWeb } from './site.ts';
@@ -269,6 +270,9 @@ export function createApp(cfg: Config, router: Router): Server {
       if (cfg.requireStaffTerms && user && user.role === 'staff' && !/^\/api\/(legal\/|auth\/logout|me$)/.test(url.pathname) && needsTerms(user)) {
         throw new HttpError(403, 'TERMS_REQUIRED', 'Please read and accept the team terms of use to continue');
       }
+
+      // A team member marked "Read only" can look at everything their role opens, but every change is refused here.
+      if (a) refuseIfReadOnly(user, method, url.pathname);
 
       const raw = method === 'GET' || method === 'HEAD' || route.opts.stream ? Buffer.alloc(0) : await readBody(req, route.opts.maxBody ?? DEFAULT_BODY);
       if (route.opts.upload) await gateUpload(raw, route.opts.upload, user ? { id: user.id, role: user.role } : null, user ? (user.role === 'staff' ? user.owner_id : user.id) : null);

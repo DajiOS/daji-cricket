@@ -1,7 +1,9 @@
 // The parts of the server's responses the app reads. They mirror shared/src/types.ts on the server.
 export interface User { id: string; role: 'customer' | 'owner' | 'staff' | 'super_admin'; name: string; email: string | null; phone: string | null; permissions?: string[]; avatarUrl?: string | null; businessName?: string | null; upiId?: string | null; hasPassword?: boolean;
   /** The assistant's name as this person sees it (their pick, else the business default), their own pick, and a notice when it was reserved later. A label only. */
-  aiName?: string; aiNameOwn?: string | null; aiNameNotice?: string | null }
+  aiName?: string; aiNameOwn?: string | null; aiNameNotice?: string | null;
+  /** A team member the owner marked "Read only": every screen opens, but the server refuses changes (READ_ONLY). */
+  readOnly?: boolean }
 export type Ball = 'leather' | 'tennis' | 'practice';
 export interface Ground { id: string; name: string; city: string; address?: string; pricePaise: number; weekendPricePaise: number | null; amenities?: string[]; directionsUrl?: string | null; maxSlots?: number; rates?: { id: string; label: string; ball: Ball; mode: 'fixed' | 'hourly' }[]; ratesNote?: string | null; slotMinutes?: number }
 /** One line of the price list for a day: a fixed session, or an hourly price with its own hours. */
@@ -50,7 +52,7 @@ export interface PaymentRow { id: string; bookingId: string; method: string; sta
 export interface TaskPhoto { id: string; url: string; takenAt: number; uploadedByName: string | null; note: string | null; source: string }
 export type TaskRepeat = 'daily' | 'weekly' | 'monthly';
 export interface Task { id: string; title: string; details: string | null; assignedTo: string | null; assignedName: string | null; dueDate: string | null; overdue: boolean; priority?: 'low' | 'medium' | 'high' | 'urgent'; repeat?: TaskRepeat | null; checklist?: { text: string; done: boolean }[]; photosRequired: number; status: 'open' | 'done' | 'cancelled'; completedAt: number | null; completedByName: string | null; photos: TaskPhoto[] }
-export interface TeamMember { id: string; name: string; email: string | null; phone: string | null; active: boolean; permissions: string[] }
+export interface TeamMember { id: string; name: string; firstName?: string; lastName?: string; email: string | null; phone: string | null; active: boolean; readOnly?: boolean; mfa?: boolean; permissions: string[] }
 export interface Promo { id: string; code: string; label: string | null; active: boolean; kind: 'percent' | 'flat'; value: number; usageLimit: number | null; used: number }
 export interface Student { id: string; name: string; bornOn: string | null; batch: string | null; guardianName: string; guardianEmail: string | null; guardianPhone: string | null; linked: boolean; status: 'active' | 'left' }
 export interface ProgressCard { id: string; month: string; ratings: { skill: string; rating: number }[]; comment: string | null; published: boolean }
