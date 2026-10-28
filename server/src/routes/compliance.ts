@@ -1,9 +1,10 @@
 import { Router, ok, created } from '../http.ts';
 import { U, ownerOrFail } from './helpers.ts';
-import { forbidden } from '../errors.ts';
+import { forbidden, HttpError } from '../errors.ts';
 import { Validator } from '../input.ts';
 import { accessBooking } from '../bookings.ts';
 import { changes, lastChecks, logChange, markReviewed, register, runCheck, setLimit } from '../compliance.ts';
+import { addAlert, alerts, feedStatus, handleAlert, syncLawFeed } from '../lawUpdates.ts';
 import { acceptTerms, acceptanceOf, acceptanceReport, currentTerms } from '../legal.ts';
 import { getProfile, invoiceForBooking, listInvoices, saveProfile } from '../invoices.ts';
 
@@ -11,8 +12,15 @@ const OWNER = { auth: ['owner', 'super_admin'] as ('owner' | 'staff' | 'super_ad
 
 export function complianceRoutes(r: Router): void {
   // ---- compliance register, law-change log and the daily check (owner and software owner)
-  r.get('/api/compliance', () => ok({ items: register(), changes: changes(), checks: lastChecks() }), OWNER);
+  r.get('/api/compliance', (c) => ok({ items: register(), changes: changes(), checks: lastChecks(), alerts: alerts(), feed: feedStatus(c.cfg) }), OWNER);
   r.post('/api/compliance/check', () => ok(runCheck({ force: true })), OWNER);
+  // ---- law and policy updates: from the feed (Settings › Connections) or added by hand
+  r.post('/api/compliance/alerts', (c) => created(addAlert({ id: U(c).id, role: U(c).role }, c.json())), OWNER);
+  r.post('/api/compliance/alerts/:id/handle', (c) => ok(handleAlert({ id: U(c).id, role: U(c).role }, c.params.id!, c.json())), OWNER);
+  r.post('/api/compliance/feed/fetch', async (c) => {
+    if (!c.cfg.lawFeed.urls.length) throw new HttpError(409, 'NOT_CONNECTED', 'No law updates feed is connected. Add LAW_FEED_URL in Settings › Connections, or add updates by hand.');
+    return ok({ run: await syncLawFeed(c.cfg, undefined, { force: true }), feed: feedStatus(c.cfg) });
+  }, { ...OWNER, rate: 'auth' });
   r.post('/api/compliance/changes', (c) => created(logChange({ id: U(c).id, role: U(c).role }, c.json())), OWNER);
   r.post('/api/compliance/:code/limit', (c) => ok(setLimit({ id: U(c).id, role: U(c).role }, c.params.code!, c.json())), OWNER);
   r.post('/api/compliance/:code/review', (c) => ok(markReviewed({ id: U(c).id, role: U(c).role }, c.params.code!, c.json())), OWNER);

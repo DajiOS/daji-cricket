@@ -54,7 +54,7 @@ export const SUBS: Record<string, [string, string][]> = {
   '/accounting': [['overview', 'Overview'], ['reports', 'Reports'], ['reconcile', 'Reconcile'], ['recurring', 'Recurring'], ['journals', 'Journals'], ['cashflow', 'Cash flow'], ['budget', 'Budget'], ['gst', 'GST'], ['assets', 'Fixed assets'], ['setup', 'Setup']],
   '/settings': [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']],
   '/bills': [['', 'Bills'], ['vendors', 'Vendors']],
-  '/compliance': [['rules', 'Rules and review dates'], ['renewals', 'Renewals'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']],
+  '/compliance': [['rules', 'Rules and review dates'], ['renewals', 'Renewals'], ['updates', 'Law updates'], ['changes', 'Law-change log'], ['gst', 'GST invoices'], ['terms', 'Team terms']],
   '/payroll': [['run', 'Payroll run'], ['attendance', 'Attendance'], ['advances', 'Advances and deductions'], ['staff', 'Staff']],
   '/memberships': [['', 'Members'], ['expiring', 'Expiring soon'], ['plans', 'Plans'], ['activity', 'Activity']],
   '/reminders': [['', 'Queue'], ['templates', 'Templates'], ['one', 'Send one'], ['history', 'History']],
@@ -170,6 +170,7 @@ export const NAV: NavGroup[] = [
   { section: 'reports', group: 'Compliance', items: [
     { to: '/compliance', label: 'Register', icon: 'audit', ...owner },
     { to: '/compliance/renewals', label: 'Renewals', icon: 'calendar', ...owner },
+    { to: '/compliance/updates', label: 'Law updates', icon: 'bell', ...owner },
     { to: '/compliance/changes', href: '/compliance/change-log', label: 'Change log', icon: 'book', ...owner },
   ] },
 
@@ -268,7 +269,7 @@ export const SUB_ICONS: Record<string, string> = {
   '/accounting:journals': 'book', '/accounting:cashflow': 'payments', '/accounting:budget': 'pie', '/accounting:gst': 'percent', '/accounting:assets': 'warehouse', '/accounting:setup': 'settings',
   '/settings:prices': 'tag', '/settings:booking': 'calendar', '/settings:payments': 'payments', '/settings:website': 'globe', '/settings:festivals': 'calendar', '/settings:ai': 'ai', '/settings:connections': 'key',
   '/bills:': 'billing', '/bills:vendors': 'warehouse',
-  '/compliance:rules': 'audit', '/compliance:changes': 'book', '/compliance:gst': 'percent', '/compliance:terms': 'shield',
+  '/compliance:rules': 'audit', '/compliance:updates': 'bell', '/compliance:changes': 'book', '/compliance:gst': 'percent', '/compliance:terms': 'shield',
   '/payroll:run': 'payroll', '/payroll:attendance': 'clock', '/payroll:advances': 'swap', '/payroll:staff': 'users',
   '/memberships:': 'users', '/memberships:expiring': 'bell', '/memberships:plans': 'tag', '/memberships:activity': 'list',
   '/reminders:': 'inbox', '/reminders:templates': 'edit', '/reminders:one': 'chat', '/reminders:history': 'clock',
