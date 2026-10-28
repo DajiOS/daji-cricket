@@ -140,6 +140,20 @@ rel('REL-MIG-001', 'forward migration of a real old database: every old row is u
 
 // ------------------------------------------------------------------ REL-MIG-002
 
+// Columns a released module fills with the time the migration ran (ai-names-1 seeds ai_user_names with strftime('%s','now')). A restarted
+// migration runs later than the uninterrupted one, so only these columns may differ; every other column of every row must match, and the
+// stamped ones must still hold a time no earlier than the old database and no later than now.
+const STAMPED_AT_RUN: Record<string, string[]> = { ai_user_names: ['created_at', 'updated_at'] };
+function sameApartFromRunTime(refPath: string, gotPath: string, table: string, cols: string[], id: string): void {
+  const read = (p: string) => { const d = lite(p); const rows = d.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all() as Record<string, unknown>[]; d.close(); return rows; };
+  const a = read(refPath), b = read(gotPath);
+  const strip = (r: Record<string, unknown>) => Object.fromEntries(Object.entries(r).filter(([k]) => !cols.includes(k)));
+  assert.deepEqual(b.map(strip), a.map(strip), `${id}: table ${table} identical to the uninterrupted migration, apart from ${cols.join(' and ')}`);
+  const now = Date.now();
+  for (const r of b) for (const c of cols) assert.ok(typeof r[c] === 'number' && (r[c] as number) > 1_600_000_000_000 && (r[c] as number) <= now, `${id}: ${table}.${c} is a real time (${String(r[c])})`);
+}
+
+
 rel('REL-MIG-002', 'a migration killed at the worst moment (inside each module, before it commits) leaves the database consistent, and restarting finishes it', async () => {
   if (!haveFixture) return skip('OLD_FIXTURE_DIR is not set');
   // the reference: an uninterrupted migration of the same database
@@ -170,7 +184,11 @@ rel('REL-MIG-002', 'a migration killed at the worst moment (inside each module, 
     const d2 = lite(w.db);
     assert.equal(JSON.stringify(d2.prepare("SELECT type, name, tbl_name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name").all()), refSchema, `${id}: same structures as an uninterrupted migration`);
     d2.close();
-    for (const t of Object.keys(refTables)) if (t !== 'schema_migrations' && t !== 'audit_log') assert.equal(res.tables[t]?.sha256, refTables[t].sha256, `${id}: table ${t} identical to the uninterrupted migration`);
+    for (const t of Object.keys(refTables)) {
+      if (t === 'schema_migrations' || t === 'audit_log') continue;
+      if (STAMPED_AT_RUN[t]) { sameApartFromRunTime(ref.db, w.db, t, STAMPED_AT_RUN[t]!, id); continue; }
+      assert.equal(res.tables[t]?.sha256, refTables[t].sha256, `${id}: table ${t} identical to the uninterrupted migration`);
+    }
     const books = reconcileCli(w.db); assert.equal(books.code, 0, `${id}: books agree after the restart`);
     killed[id] = { killedBySignal: k.signal, restartApplied: res.appliedNow, integrity: res.integrity };
   }
