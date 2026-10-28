@@ -74,6 +74,13 @@
       "question": "How much credit do I have?"
     },
     {
+      "id": "live",
+      "title": "Live score",
+      "phrase": "Show the live score in APP",
+      "personal": "Tell NAME to show the live score",
+      "screen": "live"
+    },
+    {
       "id": "book",
       "title": "Book a slot",
       "phrase": "Book a slot in APP",

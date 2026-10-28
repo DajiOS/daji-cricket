@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api } from './api';
 import type { AppConfig, Booking, Child, Dashboard, User } from './types';
-import { Badge, Btn, Chip, KV, Loading, s } from './ui';
+import { Badge, Btn, Chip, KV, Loading, Segmented, s } from './ui';
 import { AutoDebit } from './AutoDebit';
 import { PayScreen } from './PayScreen';
 import { DepositScreen, RescheduleScreen, differenceAsHold } from './ManageBooking';
@@ -71,13 +71,11 @@ export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: Use
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
       <Text style={s.eyebrow}>Your games at Daji</Text>
       <Text style={s.h1}>My Bookings</Text>
-      {kids.length > 0 && (<View style={{ flexDirection: 'row', marginBottom: 10 }}><Chip label="Ground" on={view === 'ground'} onPress={() => setView('ground')} /><Chip label="Academy" on={view === 'academy'} onPress={() => setView('academy')} /></View>)}
+      {kids.length > 0 && <Segmented items={[['ground', 'Ground'], ['academy', 'Academy']]} value={view} onChange={setView} />}
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
 
       {view === 'ground' && (<>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6, marginBottom: 4 }}>
-          {KINDS.map(([k, name]) => { const n = k === 'all' ? books.length : books.filter((b) => kindOf(b) === k).length; return <Chip key={k} label={`${name} (${n})`} on={show === k} onPress={() => setShow(k)} />; })}
-        </ScrollView>
+        <Segmented items={KINDS.map(([k, name]) => [k, `${name} ${k === 'all' ? books.length : books.filter((b) => kindOf(b) === k).length}`] as [Kind, string])} value={show} onChange={setShow} />
         {confirm && (<View style={[s.card, { borderColor: C.gold }]}><Text style={s.text}>{confirm.message}</Text><View style={{ height: 12 }} /><Btn label="Cancel this booking" onPress={doCancel} /><Btn kind="ghost" label="Keep it" onPress={() => setConfirm(null)} /></View>)}
         {books.length === 0 ? <Text style={[s.muted, { marginBottom: 14 }]}>No bookings yet.</Text> : !shown.length && <Text style={[s.muted, { marginBottom: 14 }]}>Nothing here.</Text>}
         {shown.map((b) => (
@@ -122,7 +120,6 @@ export function MeScreen({ onSignOut, user }: { onSignOut: () => void; user: Use
           ))}
         </>)}
       </>)}
-      <Btn kind="ghost" label="Sign out" onPress={onSignOut} style={{ marginTop: 20 }} />
     </ScrollView>
   );
 }

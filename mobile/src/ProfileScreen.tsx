@@ -3,20 +3,24 @@ import { ScrollView, Text, View } from 'react-native';
 import { api, setToken, upload } from './api';
 import { pickProfilePhoto } from './camera';
 import type { User } from './types';
-import { Avatar, Btn, Field, PhoneField, Section, s, NameFields, splitName, splitPhone } from './ui';
+import { Avatar, BackBar, Btn, Field, ListCard, ListRow, PhoneField, s, NameFields, splitName, splitPhone } from './ui';
+import { useAppearance } from './photo';
 import { C } from './theme';
 import { biometricName, lockOn, setLockOn, unlock } from './lock';
 import { VoiceShortcuts } from './VoiceShortcuts';
 
 const ROLE: Record<string, string> = { customer: 'Customer', staff: 'Team member', owner: 'Owner', super_admin: 'Super admin' };
+type Page = null | 'edit' | 'voice' | 'password' | 'delete';
+const PAGES: Record<Exclude<Page, null>, string> = { edit: 'Edit profile', voice: 'Voice Shortcuts', password: 'Password', delete: 'Delete my account' };
 
-/** A person's own details: picture (or their initial), name, email, mobile, password, and Sign out at the top. */
+/** A person's own details as a settings list: their card, then Edit profile, Appearance, Voice Shortcuts, unlock, Password and Sign out, each opening its own page. */
 export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser: (u: User) => void; onSignOut: () => void }) {
   const [name, setName] = useState(user.name); const [email, setEmail] = useState(user.email ?? ''); const [phone, setPhone] = useState(splitPhone(user.phone).number); const [cc, setCc] = useState(splitPhone(user.phone).code);
   const [biz, setBiz] = useState(user.businessName ?? ''); const [upi, setUpi] = useState(user.upiId ?? '');
   const [cur, setCur] = useState(''); const [nw, setNw] = useState('');
-  const [delOpen, setDelOpen] = useState(false); const [delPw, setDelPw] = useState(''); const [delWord, setDelWord] = useState('');
+  const [delPw, setDelPw] = useState(''); const [delWord, setDelWord] = useState('');
   const [err, setErr] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState<Page>(null); const look = useAppearance();
   const owner = user.role === 'owner';
   const [bio, setBio] = useState<string | null>(null); const [bioOn, setBioOn] = useState(false);
   const [aiName, setAiName] = useState(user.aiNameOwn ?? ''); const [aiWarn, setAiWarn] = useState('');
@@ -66,49 +70,70 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
     try { await api('/api/me/delete', { method: 'POST', body: { confirm: delWord.trim(), ...(delPw ? { password: delPw } : {}) } }); onSignOut(); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
   };
 
+  const go = (p: Page) => { setErr(''); setNote(''); setPage(p); };
+  const msgs = <>{!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok, marginBottom: 8 }]}>{note}</Text>}</>;
+  const lockName = bio === 'Face ID' || bio === 'Touch ID' ? bio : 'Fingerprint or face';
   return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} keyboardShouldPersistTaps="handled">
-      <Text style={s.eyebrow}>{ROLE[user.role] ?? user.role}</Text><Text style={s.h1}>Your profile</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
-        <Avatar name={user.name} url={user.avatarUrl} size={72} />
-        <View style={{ marginLeft: 16, flex: 1 }}>
-          <Btn kind="outline" label="Choose a picture" onPress={pic} style={{ marginBottom: 6 }} />
-          {!!user.avatarUrl && <Btn kind="ghost" label="Remove picture" onPress={dropPic} style={{ marginBottom: 0 }} />}
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} keyboardShouldPersistTaps="handled">
+      {page ? <BackBar title={PAGES[page]} onBack={() => go(null)} /> : <><Text style={s.eyebrow}>{ROLE[user.role] ?? user.role}</Text><Text style={s.h1}>Profile & settings</Text></>}
+      {!page && (<>
+        <View style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 14 }]}>
+          <Avatar name={user.name} url={user.avatarUrl} size={60} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.text, fontSize: 18, fontWeight: '800' }}>{user.name}</Text>
+            {!!(user.email || user.phone) && <Text style={s.muted}>{user.email || user.phone}</Text>}
+            <Text style={[s.muted, { color: C.gold, fontWeight: '600' }]}>{owner && user.businessName ? `${ROLE[user.role]} · ${user.businessName}` : ROLE[user.role] ?? user.role}</Text>
+          </View>
         </View>
-      </View>
-      <Btn kind="outline" label="Sign out" onPress={onSignOut} />
-      {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
-      <NameFields value={name} onChange={setName} />
-      <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
-      <PhoneField code={cc} number={phone} onCode={setCc} onNumber={setPhone} />
-      {owner && <><Field label="Business name" value={biz} onChangeText={setBiz} autoCapitalize="words" /><Field label="UPI ID for payments" value={upi} onChangeText={setUpi} /></>}
-      <Btn label="Save profile" onPress={save} busy={busy} />
-      {!!bio && <>
-        <Section>{bio === 'Face ID' || bio === 'Touch ID' ? bio : 'Fingerprint or face'} unlock</Section>
-        <Text style={[s.muted, { marginBottom: 10 }]}>{bioOn ? `On. The app asks for ${bio} when it opens and when you come back to it.` : `Ask for ${bio} when the app opens, so nobody else can use it on this phone.`}</Text>
-        <Btn kind="outline" label={bioOn ? `Turn off ${bio} unlock` : `Turn on ${bio} unlock`} onPress={flipBio} />
-      </>}
-      <Section>Preferences</Section>
-      <Field label="AI assistant name" value={aiName} onChangeText={setAiName} placeholder="Ask AI" autoCapitalize="words" />
-      {!!aiWarn && <Text style={s.err}>{aiWarn}</Text>}
-      {!!user.aiNameNotice && <Text style={[s.muted, { color: C.gold, marginBottom: 6 }]}>{user.aiNameNotice}</Text>}
-      <Text style={[s.muted, { marginBottom: 10 }]}>Any name you like, shown exactly as you type it, on your screens only. Leave it empty for the business default. It changes only the name, not what the assistant can see or do.</Text>
-      <Btn kind="outline" label="Save assistant name" onPress={saveAi} disabled={aiName.trim() === (user.aiNameOwn ?? '')} />
-      <VoiceShortcuts user={user} />
-      <Section>Password</Section>
-      {user.hasPassword === false ? <Text style={[s.muted, { marginBottom: 10 }]}>Set a password to sign in with your email or mobile number.</Text>
-        : <Field label="Current password" value={cur} onChangeText={setCur} secureTextEntry />}
-      <Field label="New password" value={nw} onChangeText={setNw} secureTextEntry />
-      <Btn kind="outline" label={user.hasPassword === false ? 'Set password' : 'Change password'} onPress={pw} disabled={(user.hasPassword !== false && !cur) || !nw} />
-      {user.role === 'customer' && <>
-        <Section>Delete my account</Section>
-        {!delOpen ? <Btn kind="ghost" label="Delete my account…" onPress={() => setDelOpen(true)} /> : <>
-          <Text style={s.muted}>This removes your name, email, mobile number, picture and sign-in. Past bookings stay in the ground's records without your details. It cannot be undone. Cancel upcoming bookings first.</Text>
-          <Field label="Password (if you have one)" value={delPw} onChangeText={setDelPw} secureTextEntry />
-          <Field label="Type DELETE to confirm" value={delWord} onChangeText={setDelWord} autoCapitalize="characters" />
-          <Btn kind="outline" label="Delete my account for good" onPress={del} disabled={delWord.trim() !== 'DELETE'} />
-        </>}
-      </>}
+        {msgs}
+        <ListCard>
+          <ListRow icon="person-outline" title="Edit profile" sub="Picture, name, email and mobile" onPress={() => go('edit')} />
+          <ListRow icon="contrast-outline" title="Appearance" sub={look.mode === 'dark' ? 'Dark' : 'Light'} onPress={look.flip} right={<Text style={{ color: C.gold, fontWeight: '700' }}>{look.mode === 'dark' ? 'Use light' : 'Use dark'}</Text>} />
+          <ListRow icon="mic-outline" title="Voice Shortcuts" sub={`Siri and Android, and the assistant's name (${user.aiName || 'Ask AI'})`} onPress={() => go('voice')} />
+          {!!bio && <ListRow icon="finger-print-outline" title={`${lockName} unlock`} sub={bioOn ? 'On' : 'Off'} onPress={flipBio} right={<Text style={{ color: C.gold, fontWeight: '700' }}>{bioOn ? 'Turn off' : 'Turn on'}</Text>} />}
+          <ListRow icon="lock-closed-outline" title="Password" sub={user.hasPassword === false ? 'Set a password' : 'Change your password'} onPress={() => go('password')} last={user.role !== 'customer'} />
+          {user.role === 'customer' && <ListRow icon="trash-outline" title="Delete my account" onPress={() => go('delete')} last />}
+        </ListCard>
+        <ListCard><ListRow icon="log-out-outline" title="Sign out" tone="danger" onPress={onSignOut} right={<View />} last /></ListCard>
+      </>)}
+      {page === 'edit' && (<>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
+          <Avatar name={user.name} url={user.avatarUrl} size={72} />
+          <View style={{ marginLeft: 16, flex: 1 }}>
+            <Btn kind="outline" label="Choose a picture" onPress={pic} style={{ marginBottom: 6 }} />
+            {!!user.avatarUrl && <Btn kind="ghost" label="Remove picture" onPress={dropPic} style={{ marginBottom: 0 }} />}
+          </View>
+        </View>
+        {msgs}
+        <NameFields value={name} onChange={setName} />
+        <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
+        <PhoneField code={cc} number={phone} onCode={setCc} onNumber={setPhone} />
+        {owner && <><Field label="Business name" value={biz} onChangeText={setBiz} autoCapitalize="words" /><Field label="UPI ID for payments" value={upi} onChangeText={setUpi} /></>}
+        <Btn label="Save profile" onPress={save} busy={busy} />
+      </>)}
+      {page === 'voice' && (<>
+        {msgs}
+        <Field label="AI assistant name" value={aiName} onChangeText={setAiName} placeholder="Ask AI" autoCapitalize="words" />
+        {!!aiWarn && <Text style={s.err}>{aiWarn}</Text>}
+        {!!user.aiNameNotice && <Text style={[s.muted, { color: C.gold, marginBottom: 6 }]}>{user.aiNameNotice}</Text>}
+        <Text style={[s.muted, { marginBottom: 10 }]}>Any name you like, shown exactly as you type it, on your screens only. Leave it empty for the business default. It changes only the name, not what the assistant can see or do.</Text>
+        <Btn kind="outline" label="Save assistant name" onPress={saveAi} disabled={aiName.trim() === (user.aiNameOwn ?? '')} />
+        <VoiceShortcuts user={user} />
+      </>)}
+      {page === 'password' && (<>
+        {msgs}
+        {user.hasPassword === false ? <Text style={[s.muted, { marginBottom: 10 }]}>Set a password to sign in with your email or mobile number.</Text>
+          : <Field label="Current password" value={cur} onChangeText={setCur} secureTextEntry />}
+        <Field label="New password" value={nw} onChangeText={setNw} secureTextEntry />
+        <Btn label={user.hasPassword === false ? 'Set password' : 'Change password'} onPress={pw} disabled={(user.hasPassword !== false && !cur) || !nw} />
+      </>)}
+      {page === 'delete' && user.role === 'customer' && (<>
+        {msgs}
+        <Text style={[s.muted, { marginBottom: 12 }]}>This removes your name, email, mobile number, picture and sign-in. Past bookings stay in the ground's records without your details. It cannot be undone. Cancel upcoming bookings first.</Text>
+        <Field label="Password (if you have one)" value={delPw} onChangeText={setDelPw} secureTextEntry />
+        <Field label="Type DELETE to confirm" value={delWord} onChangeText={setDelWord} autoCapitalize="characters" />
+        <Btn kind="outline" label="Delete my account for good" onPress={del} disabled={delWord.trim() !== 'DELETE'} />
+      </>)}
     </ScrollView>
   );
 }
