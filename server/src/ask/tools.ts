@@ -13,6 +13,8 @@ import { listOpen, getFlow, describe, looksAfterAny, APPROVAL_KINDS, KIND_INFO }
 import { changes as lawChanges, lastChecks, register } from '../compliance.ts';
 import { alerts as lawAlerts, lastFeedRun } from '../lawUpdates.ts';
 import { sheetSummary } from '../sheets.ts';
+import { staffAuctionFacts } from '../auction.ts';
+import { depositsAt } from '../auctionDeposit.ts';
 import { staffWaitlist } from '../waitlist.ts';
 import { checkInsOn } from '../players.ts';
 
@@ -21,10 +23,10 @@ import { checkInsOn } from '../players.ts';
 // The built-in answerer and the optional Claude mode use exactly these.
 
 export interface Ctx { ownerId: string; user: UserRow }
-export type Area = 'reports' | 'bookings' | 'customers' | 'tasks' | 'team' | 'approvals' | 'compliance';
+export type Area = 'reports' | 'bookings' | 'customers' | 'tasks' | 'team' | 'approvals' | 'compliance' | 'tournaments';
 
-const AREA_PERMISSION: Record<Area, string> = { reports: 'view_reports', bookings: 'manage_bookings', customers: 'view_customers', tasks: 'manage_tasks', team: 'owner', approvals: 'manage_accounting', compliance: 'owner' };
-const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', bookings: 'bookings', customers: 'customers', tasks: 'the jobs', team: 'the team', approvals: 'the approvals', compliance: 'the compliance register' };
+const AREA_PERMISSION: Record<Area, string> = { reports: 'view_reports', bookings: 'manage_bookings', customers: 'view_customers', tasks: 'manage_tasks', team: 'owner', approvals: 'manage_accounting', compliance: 'owner', tournaments: 'manage_matches' };
+const AREA_WORDS: Record<Area, string> = { reports: 'the money reports', bookings: 'bookings', customers: 'customers', tasks: 'the jobs', team: 'the team', approvals: 'the approvals', compliance: 'the compliance register', tournaments: 'the tournaments' };
 
 export function can(ctx: Ctx, area: Area): boolean {
   const u = ctx.user;
@@ -35,6 +37,8 @@ export function can(ctx: Ctx, area: Area): boolean {
   if (area === 'approvals') return looksAfterAny(u);
   // the same people as the Compliance page: the owner and the software owner
   if (area === 'compliance') return u.role === 'owner' || u.role === 'super_admin';
+  // the same people as the Tournaments page
+  if (area === 'tournaments') return hasPermission(u, 'manage_matches');
   return hasPermission(u, 'view_customers');
 }
 export function need(ctx: Ctx, area: Area): void {
@@ -354,6 +358,15 @@ export function compliance(ctx: Ctx) {
 export function sheet(ctx: Ctx) {
   need(ctx, 'bookings');
   return sheetSummary(ctx.ownerId, can(ctx, 'customers'));
+}
+
+/** Tournaments customers host at this business (player auctions and teams entering directly): status, host, teams, players, and the hosting deposits due, held or waived. Bids are points; no contact details. */
+export function auctionTournaments(ctx: Ctx) {
+  need(ctx, 'tournaments');
+  const items = staffAuctionFacts(ctx.ownerId);
+  const dep = depositsAt(ctx.ownerId);
+  return withText({ count: items.length, running: items.filter((i) => i.status === 'Auction running').length, signingUp: items.filter((i) => i.status === 'Players signing up').length,
+    depositsHeldPaise: dep.heldPaise, depositsDuePaise: dep.duePaise, waiverRequestsWaiting: dep.waiversWaiting, items: items.slice(0, 20) });
 }
 
 /**

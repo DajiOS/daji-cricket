@@ -27,7 +27,7 @@ export interface VoiceAction {
   personal: string;
   /** The question the assistant is asked; or the screen it opens. */
   question?: string;
-  screen?: 'tasks' | 'book' | 'live' | 'ask';
+  screen?: 'tasks' | 'book' | 'live' | 'ask' | 'auctions';
 }
 
 const STAFF: VoiceAction[] = ACTIONS.staff as VoiceAction[];

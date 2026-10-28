@@ -6,6 +6,8 @@ import { HttpError, conflict } from './errors.ts';
 import { Validator } from './input.ts';
 import { verifyPassword, type UserRow } from './auth.ts';
 import { clearAvatar } from './avatar.ts';
+import './auction.ts'; // its tables are read below
+import { heldForHost } from './auctionDeposit.ts';
 
 // Account deletion, as the app stores require. The person is removed (name, email, phone, password, picture, push tokens, sign-in); the business records that
 // mention them (bookings, payments, receipts) are kept because the ground must keep its books, but they now show "Deleted user" with no way back to the person.
@@ -22,8 +24,12 @@ export function deleteMyAccount(dataDir: string, u: UserRow, body: unknown): { d
   const upcoming = one<{ n: number }>("SELECT COUNT(*) n FROM bookings WHERE customer_id = ? AND status IN ('held','confirmed') AND end_at > ?", u.id, now())!.n;
   if (upcoming > 0) throw conflict('HAS_UPCOMING', `You have ${upcoming} upcoming booking${upcoming === 1 ? '' : 's'}. Cancel ${upcoming === 1 ? 'it' : 'them'} first, then delete the account.`);
   if (one('SELECT 1 FROM autodebit_mandates WHERE customer_id = ? AND status IN (\'pending\',\'active\')', u.id)) throw conflict('HAS_AUTODEBIT', 'Switch off auto-debit under Mine first, then delete the account.');
+  if (one("SELECT 1 FROM auctions WHERE host_id = ? AND status IN ('registration','live')", u.id)) throw conflict('HOSTS_AUCTION', 'You are hosting an auction tournament. Finish or cancel it first, then delete the account.');
+  if (heldForHost(u.id) > 0) throw conflict('DEPOSIT_HELD', 'The ground still holds your tournament hosting deposit. Ask the ground to give it back first, then delete the account.');
   const t = now();
   tx(() => {
+    // signed up for an auction that has not started: taken off the list (a player already picked stays in that team's record as "Deleted user")
+    run("UPDATE auction_players SET status = 'withdrawn', updated_at = ?, updated_by = ? WHERE user_id = ? AND status = 'registered' AND auction_id IN (SELECT id FROM auctions WHERE status = 'registration')", t, u.id, u.id);
     run("UPDATE users SET name = 'Deleted user', email = NULL, phone = NULL, password_hash = NULL, active = 0, consent_email = 0, consent_sms = 0, consent_whatsapp = 0, consent_updated_at = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?", t, t, u.id);
     run('DELETE FROM push_tokens WHERE user_id = ?', u.id);
     forgetFaces(u.id);
