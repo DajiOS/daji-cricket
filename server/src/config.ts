@@ -62,6 +62,12 @@ export interface Config {
   ai: { apiKey: string; model: string; apiUrl: string; mode: 'builtin' | 'auto' | 'claude'; limitPerHour: number; timeoutMs: number };
   /** Law and policy updates: one or more RSS, Atom or JSON feeds read once a day into Compliance › Law updates. Empty = off; updates are then added by hand. */
   lawFeed: { urls: string[]; token: string; keepAll: boolean };
+  /** Shared spreadsheet (Settings › Connections): the platform's app registrations with Microsoft (Excel on OneDrive or SharePoint) and Google (Sheets).
+   *  Each business then signs in with its own account. Empty = that kind of sheet can't be linked yet; download and upload still work. */
+  sheets: {
+    microsoft: { clientId: string; clientSecret: string; tenant: string; loginUrl: string; graphUrl: string };
+    google: { clientId: string; clientSecret: string; authUrl: string; tokenUrl: string; userUrl: string; sheetsUrl: string };
+  };
 }
 
 export const DEV_SECRET = 'dev-only-secret-change-me-dev-only-secret';
@@ -216,6 +222,23 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       urls: (env.LAW_FEED_URL || '').split(/[\s,]+/).map((u) => u.trim()).filter(Boolean),
       token: env.LAW_FEED_TOKEN || '',
       keepAll: truthy(env.LAW_FEED_KEEP_ALL, false),
+    },
+    sheets: {
+      microsoft: {
+        clientId: env.MICROSOFT_CLIENT_ID || '',
+        clientSecret: env.MICROSOFT_CLIENT_SECRET || '',
+        tenant: env.MICROSOFT_TENANT || 'common',
+        loginUrl: (env.MICROSOFT_LOGIN_URL || 'https://login.microsoftonline.com').replace(/\/+$/, ''),
+        graphUrl: (env.MICROSOFT_GRAPH_URL || 'https://graph.microsoft.com').replace(/\/+$/, ''),
+      },
+      google: {
+        clientId: env.GOOGLE_CLIENT_ID || '',
+        clientSecret: env.GOOGLE_CLIENT_SECRET || '',
+        authUrl: (env.GOOGLE_AUTH_URL || 'https://accounts.google.com/o/oauth2/v2/auth').replace(/\/+$/, ''),
+        tokenUrl: (env.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token').replace(/\/+$/, ''),
+        userUrl: (env.GOOGLE_USERINFO_URL || 'https://openidconnect.googleapis.com/v1/userinfo').replace(/\/+$/, ''),
+        sheetsUrl: (env.GOOGLE_SHEETS_URL || 'https://sheets.googleapis.com').replace(/\/+$/, ''),
+      },
     },
   };
 }

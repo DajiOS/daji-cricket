@@ -8,6 +8,9 @@ import Festivals from '../parts/admin/Festivals';
 import { Connections } from '../parts/admin/Platform';
 import GoLive from '../parts/admin/GoLive';
 import AiName from '../parts/admin/AiName';
+import SharedSheet from '../parts/admin/SharedSheet';
+import { useSession } from '../App';
+import { can } from '../lib';
 
 // The ground's own settings. People, Services and Backups are the software owner's, so they live on the Platform page only; their old
 // addresses here open them there (routes.ts, MERGED). Connections stays here for everyone (Settings, Connections: CLAUDE.md).
@@ -26,10 +29,16 @@ export default function Settings({ sub }: { sub: string }) {
       {tab === 'website' && <Website />}
       {tab === 'festivals' && <Festivals />}
       {tab === 'ai' && <AiName />}
-      {tab === 'connections' && <Connections />}
+      {tab === 'connections' && <ConnectionsTab />}
       {tab === 'golive' && <GoLive />}
     </div>
   );
+}
+
+/** The business's own shared spreadsheet first (it needs a business picked), then the platform's services. */
+function ConnectionsTab() {
+  const { me, ownerId } = useSession();
+  return <div className="stack">{can(me, 'manage_bookings') && (me.role !== 'super_admin' || ownerId) && <SharedSheet />}<Connections /></div>;
 }
 
 const ABOUT: Record<string, string> = {
@@ -39,7 +48,7 @@ const ABOUT: Record<string, string> = {
   website: 'The website design pack and how it looks.',
   festivals: 'Festival looks and offers that switch on by themselves on the day.',
   ai: 'The name everyone sees the assistant called, voice shortcuts, and the reserved names no one may use.',
-  connections: 'The services the server is connected to, and what each one still needs.',
+  connections: 'The shared spreadsheet for this business, the services the server is connected to, and what each one still needs.',
   golive: 'Everything to tick off before the ground opens for real bookings.',
 };
 

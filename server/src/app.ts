@@ -27,6 +27,7 @@ import { tournamentsRoutes } from './routes/tournaments.ts';
 import { complianceRoutes } from './routes/compliance.ts';
 import { deskViewRoutes } from './routes/deskviews.ts';
 import { remindersRoutes } from './routes/reminders.ts';
+import { sheetsRoutes } from './routes/sheets.ts';
 
 export function buildRouter(): Router {
   const r = new Router();
@@ -56,6 +57,7 @@ export function buildRouter(): Router {
   cardRoutes(r);
   complianceRoutes(r);
   deskViewRoutes(r);
+  sheetsRoutes(r);
   return r;
 }
 
