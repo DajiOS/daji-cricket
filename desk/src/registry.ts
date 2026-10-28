@@ -36,6 +36,7 @@ const Spots = lazy(() => import('./pages/Spots'));
 const Hub = lazy(() => import('./pages/Hub'));
 const Enquiries = lazy(() => import('./pages/Enquiries'));
 const Blocks = lazy(() => import('./pages/Blocks'));
+const Waitlist = lazy(() => import('./pages/Waitlist'));
 const Guppi = lazy(() => import('./pages/Guppi'));
 const BookingsReport = lazy(() => import('./pages/BookingsReport'));
 
@@ -84,7 +85,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
   { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub }, { path: '/grounds', page: Spots },
-  { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/guppi', page: Guppi }, { path: '/booking-report', page: BookingsReport }, { path: '/documents', page: Documents },
+  { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/waitlist', page: Waitlist }, { path: '/guppi', page: Guppi }, { path: '/booking-report', page: BookingsReport }, { path: '/documents', page: Documents },
 ];
 export const HOME = Dashboard;
 
@@ -114,6 +115,7 @@ export const NAV: NavGroup[] = [
   { section: 'bookings', group: 'Bookings', items: [
     { to: '/bookings', label: 'All bookings', icon: 'list', perm: 'manage_bookings' },
     { to: '/calendar', href: '/bookings/calendar', label: 'Calendar', icon: 'calendar' },
+    { to: '/waitlist', label: 'Waitlist', icon: 'clock', perm: 'manage_bookings' },
   ] },
   { section: 'bookings', group: 'Matches & tournaments', items: [
     { to: '/matches', label: 'Fixtures', icon: 'ball', perm: 'manage_matches' },

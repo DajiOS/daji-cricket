@@ -1,3 +1,4 @@
+import { faceMatchReady } from '../faceMatch.ts';
 import { pricesFor } from '../priceOnEnquiry.ts';
 import { MAX_DAYS_AHEAD } from '../hold.ts';
 import { BRAND, type PublicConfig } from '@daji/shared';
@@ -85,6 +86,8 @@ export function publicRoutes(r: Router): void {
       guppiBookingEnabled: s.guppiAssistEnabled && !s.pricesOnEnquiry,
       securityDepositEnabled: s.securityDepositEnabled,
       customerRescheduleEnabled: s.customerRescheduleEnabled && s.rescheduleCutoffHours !== null && s.rescheduleMaxMoves !== null,
+      waitlistEnabled: s.waitlistEnabled,
+      faceCheckIn: faceMatchReady(c.cfg),
     };
     return ok(cfg);
   });

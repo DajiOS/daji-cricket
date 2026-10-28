@@ -18,6 +18,8 @@ import { runBackupIfDue } from './backup.ts';
 import type { Config } from './config.ts';
 import { chargeDue } from './autodebit.ts';
 import { sweepQuarantine } from './intake.ts';
+import { sweepFaceForgets } from './players.ts';
+import { sweepWaitlist, type WaitlistSweep } from './waitlist.ts';
 
 export interface ExpiryResult { released: number; confirmed: number; extended: number }
 
@@ -93,24 +95,28 @@ export function sweepReminders(): number {
   return rows.length;
 }
 
-export interface SweepResult { expiry: ExpiryResult; creditsExpiredPaise: number; reminders: number; completed: number; refundsProcessed: number }
+export interface SweepResult { expiry: ExpiryResult; creditsExpiredPaise: number; reminders: number; completed: number; refundsProcessed: number; waitlist: WaitlistSweep | null }
 
 const logErr = (where: string) => (e: unknown) => console.error(JSON.stringify({ level: 'error', where, error: String((e as Error)?.message ?? e) }));
 
-/** The time-critical part: holds, reminders and refunds. It never waits on bank feeds or billing. */
+/** The time-critical part: holds, the waitlist, reminders and refunds. It never waits on bank feeds or billing. */
 export async function runFastSweeps(cfg: Config): Promise<SweepResult> {
   const expiry = sweepHolds();
+  // after the holds, so a waitlist hold that was not paid has already been released and its session goes back to the others
+  let waitlist: WaitlistSweep | null = null;
+  try { waitlist = sweepWaitlist(); } catch (e) { logErr('waitlist')(e); }
   const ce = credits.expireDue();
   const reminders = sweepReminders();
   const completed = sweepCompleted();
   const refunds = await processRefunds(cfg);
-  return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done };
+  return { expiry, creditsExpiredPaise: ce.totalPaise, reminders, completed, refundsProcessed: refunds.done, waitlist };
 }
 
-/** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries, the compliance check and the law updates feed. */
+/** The slow part, which calls other services and may take a while: auto-debit, bank feeds, billing, recurring entries, faces players removed (asked of the face service), the compliance check and the law updates feed. */
 export async function runSlowSweeps(cfg: Config): Promise<void> {
   await chargeDue(cfg).catch(logErr('autodebit'));
   try { sweepQuarantine(cfg.dataDir); } catch (e) { logErr('quarantine')(e); }
+  await sweepFaceForgets(cfg).catch(logErr('face-forget'));
   runRecurring(null, null);
   runDepreciation(null, SYSTEM);
   await runFeedSync(cfg, logErr('bank-feed'));

@@ -14,10 +14,11 @@ export const DEMO_ACCOUNTS = {
 } as const;
 
 /**
- * Where Daji Cricket Ground is, from the Google Maps link the owner sent (https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7).
+ * Where Daji Cricket Ground is: the pin the owner sent on 28 Oct 2026 (https://maps.app.goo.gl/wGawo7LdNzKT8k4Y9, 21°10'53.4"N 72°54'45.2"E).
+ * It is also the check-in point for players (players.ts).
  * The street address is not known yet: the owner can type it into the ground's settings.
  */
-export const DAJI_LOCATION = { lat: 21.1818855, lng: 72.9134859, mapUrl: 'https://maps.app.goo.gl/Qs2Wivwv76jt9zjG7' } as const;
+export const DAJI_LOCATION = { lat: 21.1815, lng: 72.912556, mapUrl: 'https://maps.app.goo.gl/wGawo7LdNzKT8k4Y9' } as const;
 
 /**
  * Demo data with well-known passwords. It refuses to run unless DEMO_MODE is on, which defaults to off for any real domain.
