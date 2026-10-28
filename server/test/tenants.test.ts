@@ -358,3 +358,23 @@ test('portfolio: Daji\'s owner switches to Antroli and back; each answer is that
   assert.deepEqual((await h.get('/api/me/portfolio', w.daji)).body.items.map((x: any) => x.id), [w.dajiId]);
   assert.deepEqual((await h.get('/api/staff/grounds', w.antroli)).body.items.map((x: any) => x.id), [w.antroliGround]);
 });
+
+// Sunny (28 Oct 2026): "this is getting too complicated". The main website's owner adds another ground straight into their own
+// portfolio, from their own sign-in, with no software owner account.
+test('the main website\'s owner adds a ground into their own portfolio; nobody else can; it stays apart', async () => {
+  const pf = (await h.get('/api/me/portfolio', w.daji)).body;
+  assert.equal(pf.canAdd, true);
+  assert.equal((await h.get('/api/me/portfolio', w.antroli)).body.canAdd, false);
+  const add = { businessName: 'Second Test Ground', ownerName: 'Second Owner', phone: '9123456781', email: 'second-owner@example.test' };
+  assert.equal((await h.post('/api/me/portfolio', add, w.antroli)).status, 403);
+  const r = await h.post('/api/me/portfolio', add, w.daji);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.canSignIn, false); // no password: nothing is sent to the new owner
+  const items = (await h.get('/api/me/portfolio', w.daji)).body.items;
+  assert.ok(items.some((x: any) => x.id === r.body.id && !x.own));
+  // switched to it: an empty business, none of Daji's grounds
+  const g = await h.call('GET', '/api/staff/grounds', { token: w.daji, headers: { 'x-daji-business': r.body.id } });
+  assert.equal(g.status, 200); assert.deepEqual(g.body.items, []);
+  // the same name again is refused
+  assert.equal((await h.post('/api/me/portfolio', { ...add, phone: '9123456782', email: 'x2@example.test' }, w.daji)).status, 409);
+});
