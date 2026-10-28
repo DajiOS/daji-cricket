@@ -44,8 +44,11 @@ test('options: the hold started from an option id books exactly what was offered
   // another person cannot use it
   const other = await register(h, 'Borrower', '9810000002');
   assert.equal((await h.post('/api/bookings', { optionId: id }, other)).body.error.code, 'OPTION_INVALID');
-  // a tampered id is refused
-  assert.equal((await h.post('/api/bookings', { optionId: id.slice(0, -2) + 'AA' }, cust)).body.error.code, 'OPTION_INVALID');
+  // a tampered id is refused. The first signature character is changed: the last ones carry unused bits, so overwriting them can leave the signature as it was
+  const dot = id.indexOf('.');
+  const tampered = id.slice(0, dot + 1) + (id[dot + 1] === 'A' ? 'B' : 'A') + id.slice(dot + 2);
+  assert.notEqual(tampered, id);
+  assert.equal((await h.post('/api/bookings', { optionId: tampered }, cust)).body.error.code, 'OPTION_INVALID');
   // the option fixes the slot and price: other fields are refused
   const sneaky = await h.post('/api/bookings', { optionId: id, totalPaise: 1, slots: 5 }, cust);
   assert.equal(sneaky.status, 400); assert.equal(sneaky.body.error.code, 'OPTION_FIELDS_NOT_ALLOWED');
