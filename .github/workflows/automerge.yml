@@ -1,0 +1,42 @@
+# Merges a pull request by itself once the server tests pass, but only one that carries the "auto-merge" label.
+# Sunny's rule (29 Oct 2026): changes made from the Antroli owner's sessions (Dipan has no GitHub account) go live without
+# waiting for a review, once every test passes. Every other pull request still waits for Sunny to merge it.
+# Taking the label off stops it. A failed test run, a newer push the tests have not finished on, a pull request from a fork,
+# or one that cannot be merged cleanly is left alone for Sunny.
+# A merge made by this workflow does not start Deploy on its own (GitHub's rule for its own token), so it starts Deploy after.
+name: Auto-merge
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+concurrency: automerge
+jobs:
+  merge:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Merge when labelled and tested
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+        run: |
+          set -e
+          if [ "$HEAD_REPO" != "$GH_REPO" ]; then echo "From a fork: left for Sunny"; exit 0; fi
+          pr=$(gh pr list --head "$HEAD_BRANCH" --base main --state open --json number --jq '.[0].number')
+          if [ -z "$pr" ]; then echo "No open pull request into main for $HEAD_BRANCH"; exit 0; fi
+          info=$(gh pr view "$pr" --json headRefOid,labels,isDraft)
+          if ! echo "$info" | jq -e '.labels | map(.name) | index("auto-merge")' > /dev/null; then echo "#$pr has no auto-merge label: left for Sunny"; exit 0; fi
+          if [ "$(echo "$info" | jq -r .isDraft)" = "true" ]; then echo "#$pr is a draft"; exit 0; fi
+          if [ "$(echo "$info" | jq -r .headRefOid)" != "$TESTED_SHA" ]; then echo "#$pr has a newer push; its own test run decides"; exit 0; fi
+          # --match-head-commit refuses the merge if anything was pushed after the tested commit
+          gh pr merge "$pr" --merge --match-head-commit "$TESTED_SHA"
+          gh pr comment "$pr" --body "Merged by itself: it carries the auto-merge label and every server test passed on $TESTED_SHA."
+          gh workflow run deploy.yml --ref main

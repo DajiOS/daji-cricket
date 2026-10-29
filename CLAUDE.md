@@ -24,6 +24,11 @@ These rules come from the owner, Sunny Patel. They apply to every module and fea
 - Voice may prepare work (a draft task) but never approves or releases money.
 - Apple's built-in phrases must use the app's own name; personal phrases (Add to Siri) use the assistant name the person picked. The app's name is never hard-coded into the voice layer.
 
+## Pull requests
+
+- Merging to main puts the change live. Sunny merges his own pull requests himself.
+- A pull request opened for anyone else, such as the Antroli owner (who has no GitHub account), gets the `auto-merge` label. `.github/workflows/automerge.yml` merges it once every server test passes; a failed test leaves it for Sunny.
+
 ## Other standing rules
 
 - Work on Daji only. Never touch any other project or its code.
