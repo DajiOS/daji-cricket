@@ -197,6 +197,20 @@ Generated from `server/src/routes`. All bodies are JSON unless noted; errors use
 | GET | `/api/staff/customers/:id/cricket` | customers or matches (career record at this business) |
 | GET | `/api/my/cricket` | customer (own career record, every ground) |
 | POST | `/api/my/cricket/matches/:id/not-me` | customer (`{ reason? }`: takes a wrong match off) |
+| GET | `/api/staff/fantasy` | matches (fantasy contests of this business, and the matches that can still get one) |
+| POST | `/api/staff/fantasy` | matches (`{ matchId, teamSize?, maxFromSide?, locksAt?, points? }`: public match, both squads, before the first ball) |
+| GET | `/api/staff/fantasy/season` | matches (season table; `?tournamentId=` for one tournament's matches) |
+| GET | `/api/staff/fantasy/:id` | matches (leaderboard, player points, removed teams; team owner's name only with view_customers) |
+| PATCH | `/api/staff/fantasy/:id` | matches (`{ locksAt }` while open; `null` locks at the first ball) |
+| POST | `/api/staff/fantasy/:id/cancel` | matches (`{ reason }`; teams kept, leaves the season table) |
+| POST | `/api/staff/fantasy/:id/entries/:eid/remove` | matches (`{ reason }`; that player cannot re-enter this contest) |
+| GET | `/api/fantasy` | customer (contests on public matches, with the player's own team) |
+| GET | `/api/fantasy/:id` | customer (squads with points, own team; leaderboard of team names after the lock) |
+| PUT | `/api/fantasy/:id/entry` | customer (`{ teamName, players[], captain, viceCaptain }` while open; free to play, no money) |
+| DELETE | `/api/fantasy/:id/entry` | customer (withdraw while open) |
+| GET | `/api/fantasy/:id/entries/:eid` | customer (another team after the lock; own team any time) |
+| GET | `/api/fantasy/:id/season` | customer (that business's season table, team names only) |
+| GET | `/api/my/fantasy` | customer (every team entered, points and place) |
 | GET | `/api/staff/payments` | staff |
 | GET | `/api/staff/payments/:id/history` | staff |
 | POST | `/api/staff/payments/:id/verify` | staff |
