@@ -5,6 +5,10 @@ import { Field, Modal, useToast } from '../../ui';
 import { useSession } from '../../App';
 import { errText } from './common';
 
+/** Tells the dashboard and the ground picker that a ground was added or switched on or off, so they show it without a reload. */
+export const GROUNDS_CHANGED = 'daji:grounds-changed';
+export const groundsChanged = () => window.dispatchEvent(new Event(GROUNDS_CHANGED));
+
 /**
  * Adds another ground or practice pitch to this business (Antroli, or a net next to Daji's own ground): same owner, same team, same books, so it shows in the
  * ground picker, on the website and in the reports straight away. Prices, timings and the check-in point are then set on its own card.
@@ -27,7 +31,7 @@ export function AddGround({ city, onAdded, onClose }: { city: string; onAdded: (
         name: f.name.trim(), city: f.city.trim(), pricePaise: Math.round(Number(f.price) * 100), active: f.open,
         ...(f.mapUrl.trim() ? { mapUrl: f.mapUrl.trim() } : {}), ...(s.me.role === 'super_admin' ? { ownerId: s.ownerId } : {}),
       });
-      toast(`${f.name.trim()} added`); onAdded(); onClose();
+      toast(`${f.name.trim()} added`); groundsChanged(); onAdded(); onClose();
     } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
   }
   return (

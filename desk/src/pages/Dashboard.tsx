@@ -9,6 +9,7 @@ import { METHOD_LABEL, PAY_STATUS, whatOf } from '../parts/dash/common';
 import { BookingDetail } from '../parts/dash/Detail';
 import { title as activityTitle } from '../parts/dash/activity';
 import { askAssistant } from '../CommandSearch';
+import { GROUNDS_CHANGED } from '../parts/admin/AddGround';
 
 // The Dashboard: today at a glance. Stat cards, today's bookings, quick actions, what each ground and net is doing now,
 // recent payments, the assistant and what needs someone. Every figure comes from the same endpoints as the pages it links to,
@@ -48,6 +49,8 @@ export default function Dashboard({ sub }: { sub: string }) {
   const { me, ownerId } = useSession();
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
+  // a ground added or switched on in the picker or in Settings shows here at once
+  useEffect(() => { addEventListener(GROUNDS_CHANGED, bump); return () => removeEventListener(GROUNDS_CHANGED, bump); }, []);
   const canBookings = can(me, 'manage_bookings');
   const canMoney = (can(me, 'view_reports') || can(me, 'manage_accounting')) && can(me, 'view_revenue');
   const canPay = can(me, 'verify_payments') || can(me, 'record_payments') || can(me, 'view_reports');
@@ -61,7 +64,7 @@ export default function Dashboard({ sub }: { sub: string }) {
   // everything still to come, not only today's: the same list the Bookings page and Upcoming tournaments read, a multi-day booking as one row
   const [ahead, aheadErr] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?upcoming=1&group=1&limit=20' : null, [version, ownerId]);
   const [pending, pendingErr] = useApi<Page<Booking>>(canBookings ? '/api/staff/bookings?approval=pending&limit=1' : null, [version, ownerId]);
-  const [grounds, groundsErr] = useApi<{ items: Ground[] }>(canBookings ? '/api/staff/grounds' : null, [ownerId]);
+  const [grounds, groundsErr] = useApi<{ items: Ground[] }>(canBookings ? '/api/staff/grounds' : null, [version, ownerId]);
   // the same people the Contacts page opens on (confirmed or played customers), so the tile and the page agree
   const [people, peopleErr] = useApi<{ total: number }>(canPeople && ownerId ? '/api/staff/contacts?who=booked&limit=1' : null, [ownerId]);
   const [appr, apprErr] = useApi<{ count: number }>(can(me, 'manage_accounting') ? '/api/accounting/approvals/count' : null, [ownerId]);
