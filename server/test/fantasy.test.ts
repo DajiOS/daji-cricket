@@ -319,6 +319,13 @@ test('Ask AI: players ask about their fantasy team; the ground asks how contests
   await playOut(id);
   const mine = await h.post('/api/ask', { question: 'fantasy points?' }, a.token);
   assert.match(mine.body.answer, /Your team Asha XI in Daji XI v Surat Strikers has 196.5 points, 1 of 1/);
+  // the same question in Gujarati, Hindi and romanised Hindi gets the same answer about the player's own team only
+  for (const q of ['મારી ફેન્ટસી ટીમ કેવી છે?', 'मेरी फैंटसी टीम कैसी है?', 'meri fantasy team ke points batao']) {
+    const r = await h.post('/api/ask', { question: q }, a.token);
+    assert.equal(r.body.intent, 'fantasy', q); assert.match(r.body.answer, /Asha XI .* 196.5 points/, q);
+  }
+  // asked to pay a fee for it, the assistant refuses like any other payment: it never moves money
+  assert.equal((await h.post('/api/ask', { question: 'pay the fantasy entry fee for me' }, a.token)).body.intent, 'payment_boundary');
   const staffAsk = await h.post('/api/staff/ask', { question: 'How is the fantasy contest going?' }, owner);
   assert.equal(staffAsk.body.intent, 'fantasy'); assert.match(staffAsk.body.answer, /1 contest: 0 open, 0 under way and 1 finished, with 1 team entered/);
   assert.ok(staffAsk.body.details.some((d: any) => /Asha XI 196.5/.test(d.text)));
