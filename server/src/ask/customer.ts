@@ -17,6 +17,7 @@ import { customerAuctionFacts, editableHosted, rulesWordsOf } from '../auction.t
 import { draftRuleChange, rulesInWords } from '../auctionRules.ts';
 import { myWaitlist, tierFor } from '../waitlist.ts';
 import { myCricket } from '../playerStats.ts';
+import { listForPlayer, myFantasy } from '../fantasy.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -27,7 +28,7 @@ export interface CustomerAnswer {
   answer: string;
   details: { label: string; text: string }[];
   /** A page the customer can open to act on the answer. */
-  open: 'bookings' | 'book' | 'contact' | 'auction' | null;
+  open: 'bookings' | 'book' | 'contact' | 'auction' | 'fantasy' | null;
   /** The auction the answer is about, when open is 'auction'. */
   auctionId?: string;
   suggestions: string[];
@@ -46,11 +47,13 @@ export const CUSTOMER_EXAMPLES = [
   'Am I on the Sunday waitlist?',
   'How many games have I played?',
   'What is my batting average?',
+  'How is my fantasy team doing?',
 ];
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const RULES: [string, RegExp][] = [
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?)\b/],
+  ['fantasy', /\bfantasy\b|\bdream ?11\b|ફેન્ટસી|फैंटसी|फैंटेसी/],
   ['auction', /\bauctions?\b|\bsquads?\b|\bpurse\b|\bbid(s|ding)?\b|(was|am|have) i (been )?(picked|sold|bought|selected)|which team (picked|bought|got|has) me|who (picked|bought) me|base price/],
   ['games', /how many games|games (have i|i have|i've) played|games? played|my tier|which tier|what tier|check.?in|kitne (match|game)|કેટલી મેચ|कितने मैच/],
   ['cricket', /\b(career|cricket|my) (stats|statistics|record)\b|\bmy stats\b|\bbatting\b|\bbowling\b|\baverage\b|strike rate|\beconomy\b|how many (runs|wickets|catches|sixes|fours)|\bmy (runs|wickets|catches|highest|best)\b|highest score|best (score|figures)|centur(y|ies)|fift(y|ies)|\bducks?\b|stumpings?|કેટલા રન|કેટલી વિકેટ|कितने रन|कितने विकेट/],
@@ -143,6 +146,21 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
       if (next) bits.push(`${next.minGames - w.games} more to reach ${next.name} (${next.minGames} games).`);
       bits.push('A game counts when you check in at the ground in the Daji app on your own phone (unlock, selfie, location), or the ground staff check you in. The person who booked adds you to the team list with your mobile number.');
       return out(bits.join(' '), { details: tiers.slice().reverse().map((t) => ({ label: t.name, text: `${t.minGames} games or more` })) });
+    }
+    case 'fantasy': {
+      // the customer's own fantasy teams and the contests open to join; picking a team is done on the Fantasy screen, never here
+      const mine = myFantasy(user);
+      const open = listForPlayer(user).items.filter((c) => c.state === 'open' && !c.mine);
+      const bits: string[] = [];
+      if (!mine.items.length) bits.push('You have not picked a fantasy team yet.');
+      else {
+        const last = mine.items[0]!;
+        bits.push(`Your team ${last.teamName} in ${last.match} has ${last.points} ${last.points === 1 ? 'point' : 'points'}${last.rank ? `, ${last.rank} of ${last.teams}` : last.state === 'open' ? ' so far: the contest has not locked yet' : ''}${last.removed ? ' (the ground removed this team)' : ''}.`);
+        if (mine.wins || mine.totalPoints) bits.push(`In finished contests you have ${mine.totalPoints} points${mine.wins ? ` and ${mine.wins} ${mine.wins === 1 ? 'win' : 'wins'}` : ''}.`);
+      }
+      bits.push(open.length ? `${open.length} ${open.length === 1 ? 'contest is' : 'contests are'} open to join.` : 'No contest is open to join right now.');
+      bits.push('Fantasy is free to play: points only, no entry fee and no prize.');
+      return out(bits.join(' '), { details: mine.items.slice(0, 5).map((x) => ({ label: `${x.match} · ${x.teamName}`, text: `${x.points} points${x.rank ? `, place ${x.rank} of ${x.teams}` : ''}` })), open: 'fantasy' });
     }
     case 'cricket': {
       // the customer's own career record, from finished matches where they are in a squad linked to their profile

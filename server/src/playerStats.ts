@@ -166,24 +166,27 @@ export function removeSquadPlayer(actor: Actor, ownerId: string, matchId: string
 // ------------------------------------------------------------------ the record, worked out from the balls
 
 interface BatLine { runs: number; balls: number; fours: number; sixes: number; out: boolean; how: string | null }
-interface BowlLine { balls: number; runs: number; wickets: number; maidens: number }
+interface BowlLine { balls: number; runs: number; wickets: number; maidens: number; bowledOrLbw: number }
 interface FieldLine { catches: number; runOuts: number; stumpings: number }
 export interface MatchLine {
   matchId: string; title: string; date: number; groundName: string | null; team: string; opponent: string; result: string | null;
   batting: BatLine | null; bowling: BowlLine | null; fielding: FieldLine; name: string;
 }
 
-/** One finished match, for every linked player in it: what they made with the bat, the ball and in the field. */
-function linesOf(m: MatchRow & { ground_name: string | null }, linked: SquadRow[]): Map<string, MatchLine> {
+/**
+ * One match, for every squad player given: what they made with the bat, the ball and in the field, keyed by the squad row's id.
+ * The career record gives it the linked players of finished matches; fantasy points (fantasy.ts) give it the whole squad, live or finished.
+ */
+export function linesOf(m: MatchRow & { ground_name: string | null }, linked: Pick<SquadRow, 'id' | 'side' | 'name' | 'name_key'>[]): Map<string, MatchLine> {
   const out = new Map<string, MatchLine>();
   const balls = many<BallRow>('SELECT * FROM match_balls WHERE match_id = ? ORDER BY innings, seq', m.id);
   const bySideKey = new Map(linked.map((r) => [`${r.side}|${r.name_key}`, r]));
-  const line = (r: SquadRow): MatchLine => {
-    let l = out.get(r.user_id!);
+  const line = (r: Pick<SquadRow, 'id' | 'side' | 'name'>): MatchLine => {
+    let l = out.get(r.id);
     if (!l) {
       l = { matchId: m.id, title: m.title, date: m.scheduled_for ?? m.created_at, groundName: m.ground_name, team: r.side === 'a' ? m.team_a : m.team_b, opponent: r.side === 'a' ? m.team_b : m.team_a,
         result: m.result, batting: null, bowling: null, fielding: { catches: 0, runOuts: 0, stumpings: 0 }, name: r.name };
-      out.set(r.user_id!, l);
+      out.set(r.id, l);
     }
     return l;
   };
@@ -191,8 +194,8 @@ function linesOf(m: MatchRow & { ground_name: string | null }, linked: SquadRow[
   for (const inn of [1, 2] as const) {
     const bat = battingSide(m, inn), field = bat === 'a' ? 'b' : 'a';
     const who = (side: 'a' | 'b', n: string | null) => (n ? bySideKey.get(`${side}|${nameKey(n)}`) : undefined);
-    const batting = (r: SquadRow) => { const l = line(r); return (l.batting ??= { runs: 0, balls: 0, fours: 0, sixes: 0, out: false, how: null }); };
-    const bowling = (r: SquadRow) => { const l = line(r); return (l.bowling ??= { balls: 0, runs: 0, wickets: 0, maidens: 0 }); };
+    const batting = (r: Pick<SquadRow, 'id' | 'side' | 'name'>) => { const l = line(r); return (l.batting ??= { runs: 0, balls: 0, fours: 0, sixes: 0, out: false, how: null }); };
+    const bowling = (r: Pick<SquadRow, 'id' | 'side' | 'name'>) => { const l = line(r); return (l.bowling ??= { balls: 0, runs: 0, wickets: 0, maidens: 0, bowledOrLbw: 0 }); };
     // overs, for maidens: six legal balls by one bowler with nothing charged to him
     const overs = new Map<number, { bowlers: Set<string>; legal: number; charged: number }>();
     let legal = 0;
@@ -216,6 +219,7 @@ function linesOf(m: MatchRow & { ground_name: string | null }, linked: SquadRow[
         if (isLegal) w.balls++;
         w.runs += charged;
         if (b.wicket && !['run out', 'retired'].includes(b.wicket_kind ?? '')) w.wickets++;
+        if (b.wicket && (b.wicket_kind === 'bowled' || b.wicket_kind === 'lbw')) w.bowledOrLbw++;
       }
       if (b.wicket) {
         const outP = who(bat, b.out_player ?? b.batter);
@@ -281,7 +285,8 @@ function matchLines(o: { userId?: string; ownerId: string | null }): (MatchLine 
   const out: (MatchLine & { userId: string })[] = [];
   for (const [mid, linked] of byMatch) {
     const m = one<MatchRow & { ground_name: string | null }>('SELECT m.*, g.name ground_name FROM matches m LEFT JOIN grounds g ON g.id = m.ground_id WHERE m.id = ?', mid)!;
-    for (const [userId, l] of linesOf(m, linked)) if (!o.userId || userId === o.userId) out.push({ ...l, userId });
+    const userOf = new Map(linked.map((r) => [r.id, r.user_id!]));
+    for (const [rowId, l] of linesOf(m, linked)) { const userId = userOf.get(rowId)!; if (!o.userId || userId === o.userId) out.push({ ...l, userId }); }
   }
   return out.sort((a, b) => b.date - a.date);
 }
