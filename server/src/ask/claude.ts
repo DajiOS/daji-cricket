@@ -46,6 +46,7 @@ export const TOOL_DEFS = [
   { name: 'get_waitlist', description: 'The weekly waitlist (Sunday leather ball unless the owner changed it): how many people wait and for which day, each request (no names), how many games each has played and their tier, the session offered to them now and the rules (hours before, priority waves).', input_schema: { type: 'object', properties: {} } },
   { name: 'get_check_ins', description: 'Team lists and check-ins at the ground for one day (today unless a date is given): games, players on the lists, how many checked in (by phone at the ground or by staff), guests without a profile, check-ins undone. Counts only, no names.', input_schema: { type: 'object', properties: { date: { type: 'string', description: 'YYYY-MM-DD, IST' } } } },
   { name: 'get_player_records', description: 'Player career records from finished matches scored ball by ball at this business (only players linked to a Daji profile): how many players have a record, and the top five by runs, wickets and fielding dismissals with matches, highest score, average, strike rate, best bowling and economy. No names.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_fantasy', description: 'Fantasy cricket at this business (free to play, points only, no money): how many contests are open, under way and finished, teams entered, the latest contest\'s top five points and the season table\'s top five. No team or player names.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_server_status', description: 'Owner only (not staff): whether the server is healthy (database, demo mode, version, uptime, memory and disk use, last backup and off-site copy, warnings) and which Lightsail instance the Connect using SSH button in Settings › Server opens. Never secrets.', input_schema: { type: 'object', properties: {} } },
   { name: 'list_grounds', description: 'The names and ids of the grounds.', input_schema: { type: 'object', properties: {} } },
   { name: 'search_documents', description: 'Searches every page of the uploaded documents (statements, bills, agreements, licences, scans) for words, and gives each matching document with its best page and the words around the match.', input_schema: { type: 'object', properties: { text: { type: 'string', description: 'The words to look for, for example "ground lease Arvindbhai".' } }, required: ['text'] } },
@@ -94,6 +95,7 @@ export function runTool(ctx: T.Ctx, name: string, i: Input): unknown {
     case 'get_waitlist': return T.waitlist(ctx, false);
     case 'get_check_ins': return T.checkIns(ctx, false, typeof i.date === 'string' ? i.date : undefined);
     case 'get_player_records': return T.playerRecords(ctx);
+    case 'get_fantasy': return T.fantasy(ctx);
     case 'get_server_status': return T.server(ctx);
     case 'list_grounds': return T.grounds(ctx);
     case 'search_documents': if (!seesDocs(ctx.user)) throw new Error('This login cannot see documents'); return { documents: searchDocs(ctx.ownerId, typeof i.text === 'string' ? i.text.slice(0, 200) : '', 5) };

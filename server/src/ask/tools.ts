@@ -18,6 +18,7 @@ import { depositsAt } from '../auctionDeposit.ts';
 import { staffWaitlist } from '../waitlist.ts';
 import { checkInsOn } from '../players.ts';
 import { leaders } from '../playerStats.ts';
+import { fantasyOverview } from '../fantasy.ts';
 import { serverConsole, serverStatus } from '../serverConsole.ts';
 import type { Config } from '../config.ts';
 
@@ -408,6 +409,12 @@ export function playerRecords(ctx: Ctx) {
   const l = leaders(ctx.ownerId, 5);
   const strip = ({ userId: _u, name: _n, ...x }: (typeof l.runs)[number], i: number) => ({ rank: i + 1, ...x });
   return { playersWithARecord: l.players, finishedMatches: l.matches, mostRuns: l.runs.map(strip), mostWickets: l.wickets.map(strip), mostFieldingDismissals: l.fielding.map(strip) };
+}
+
+/** Fantasy cricket at this business: contests, teams entered, the latest contest's and the season's top points. No team or player names. */
+export function fantasy(ctx: Ctx) {
+  if (!hasPermission(ctx.user, 'manage_matches')) throw forbidden('You do not have access to fantasy contests. Ask the owner to give you the "manage_matches" permission.');
+  return fantasyOverview(ctx.ownerId, false);
 }
 
 // ---------------------------------------------------------------- the server

@@ -8,7 +8,7 @@ import { useGroundPhoto } from './photo';
 
 const hhmm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
 const greeting = (): string => { const h = new Date(Date.now() + 330 * 60000).getUTCHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
-export type CustomerGo = 'book' | 'me' | 'academy' | 'live' | 'ask' | 'profile' | 'auctions';
+export type CustomerGo = 'book' | 'me' | 'academy' | 'live' | 'ask' | 'profile' | 'auctions' | 'fantasy';
 
 /** The customer's first screen: a greeting, quick ways in (book, nets, academy, live score) and their next game at Daji. */
 export function CustomerHome({ user, aiName, go }: { user: User | null; aiName: string; go: (to: CustomerGo) => void }) {
@@ -72,6 +72,14 @@ export function CustomerHome({ user, aiName, go }: { user: User | null; aiName: 
         <View style={{ flex: 1 }}>
           <Text style={{ color: C.head, fontSize: 15, fontWeight: '700' }}>Tournaments</Text>
           <Text style={s.note} numberOfLines={1}>Host one, or join a player auction with your profile</Text>
+        </View>
+        <Icon name="chevron-forward" size={18} color={C.headMuted} />
+      </Pressable>}
+      {user && <Pressable accessibilityRole="button" onPress={() => go('fantasy')} style={[tileStyle(), { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10, paddingVertical: 16 }]}>
+        <Icon name="podium-outline" size={26} color={C.onBg} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: C.head, fontSize: 15, fontWeight: '700' }}>Fantasy cricket</Text>
+          <Text style={s.note} numberOfLines={1}>Pick a team for a match here. Free to play, points only</Text>
         </View>
         <Icon name="chevron-forward" size={18} color={C.headMuted} />
       </Pressable>}

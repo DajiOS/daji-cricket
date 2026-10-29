@@ -7,6 +7,7 @@ import { rulesIn } from '../lawUpdates.ts';
 import { many, one } from '../db.ts';
 import { hasPermission } from '../auth.ts';
 import { careerOf, leaders } from '../playerStats.ts';
+import { fantasyOverview } from '../fantasy.ts';
 import { nameKey } from '../matches.ts';
 
 // The built-in answerer: reads a question, works out what is being asked and for which dates, asks the software through
@@ -15,7 +16,7 @@ import { nameKey } from '../matches.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'server' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'fantasy' | 'server' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -32,6 +33,7 @@ export interface Built {
 }
 
 const RULES: [Intent, RegExp][] = [
+  ['fantasy', /\bfantasy\b|\bdream ?11\b/],
   ['player_stats', /\b(top|most|leading|highest|best)\b.*\b(runs?|run.?scorers?|scorers?|wickets?|wicket.?takers?|catch(es)?|batters?|batsm[ae]n|bowlers?|fielders?)\b|\b(player|career|batting|bowling|cricket) (stats|statistics|records?|averages?)\b|\b(stats|record|average) (for|of)\b|\bhow many (runs|wickets|catches)\b|\bleader ?boards?\b/],
   ['fixtures', /\bfixtures?\b|\btournaments?\b|\bnext match(es)?\b|\bmatch (schedule|times?)\b/],
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?|how does (this|it) work|what (do|can) you (do|know))\b/],
@@ -66,7 +68,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'server', 'auctions', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'server', 'auctions', 'fantasy', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -141,7 +143,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', sheet: 'Shared spreadsheet', server: 'Server status', auctions: 'Auction tournaments', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', fantasy: 'Fantasy cricket', sheet: 'Shared spreadsheet', server: 'Server status', auctions: 'Auction tournaments', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -150,7 +152,7 @@ export const EXAMPLES = {
   bookings: ['Who is on the Sunday waitlist?', 'Who checked in today?', 'How many bookings did we have last week?', "What's booked for tomorrow?", 'Who still owes us money?', 'How busy was the cricket ground in September?', 'How many no-shows this month?', 'How much account credit do customers hold?'],
   customers: ['How many new customers played this month?'],
   compliance: ['Which compliance rules are due for review?', 'Any law updates waiting?'],
-  tournaments: ['Which auction tournaments are running?'],
+  tournaments: ['Which auction tournaments are running?', 'How is the fantasy contest going?'],
 };
 
 // ---------------------------------------------------------------- the answerer
@@ -174,6 +176,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'fixtures') return fixturesAnswer(ctx, base);
   if (intent === 'auctions') return auctionsAnswer(ctx, base);
   if (intent === 'player_stats') return playerStatsAnswer(ctx, question, base);
+  if (intent === 'fantasy') return fantasyAnswer(ctx, base);
   if (intent === 'unknown') {
     const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
     return base('unknown', "I'm not sure what you're asking. I can answer questions about revenue, expenses, profit, account balances, bookings, money owed, cancellations and more, for any dates you like.", { suggestions: lot });
@@ -620,4 +623,21 @@ function playerStatsAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answe
       { label: 'Most dismissals in the field', text: top(l.fielding, (x) => `${x.dismissals}`) },
     ], notes, suggestions: r0 ? [`Stats for ${r0.name}`] : [],
   });
+}
+
+/**
+ * Fantasy cricket (fantasy.ts) at this business, for those who run matches: the contests, teams entered, the latest contest's top teams and
+ * the season table. Team names are the ones players chose; a player's own name is never given. Free to play: there is no money in it.
+ */
+function fantasyAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  if (!hasPermission(ctx.user, 'manage_matches')) return base('fantasy', 'You do not have access to fantasy contests. Ask the owner to give you the "manage_matches" permission.');
+  const f = fantasyOverview(ctx.ownerId, true);
+  const notes = ['Free to play: points only, no entry fee and no prize. Points come from the ball by ball score.'];
+  if (!f.contests) return base('fantasy', 'No fantasy contests yet. Open one from Fixtures, Fantasy, on a public match that has both squads, before its first ball.', { notes, open: null });
+  const head = `${count(f.contests, 'contest')}: ${f.open} open, ${f.live} under way and ${f.finished} finished, with ${count(f.teamsEntered, 'team')} entered.`;
+  const details = [
+    ...(f.latest ? [{ label: `${f.latest.match} (${f.latest.state})`, text: f.latest.top.length ? f.latest.top.map((x) => `${x.rank}. ${x.teamName} ${x.points}`).join('; ') : `${count(f.latest.teams, 'team')} entered` }] : []),
+    { label: 'Season table', text: f.season.top.length ? f.season.top.map((x) => `${x.rank}. ${x.teamName} ${x.points} (${count(x.contests, 'contest')})`).join('; ') : 'No finished contests yet' },
+  ];
+  return base('fantasy', head, { details, notes });
 }
