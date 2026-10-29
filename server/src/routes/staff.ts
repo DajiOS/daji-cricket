@@ -1,4 +1,4 @@
-import { ownsCustomer } from '../contacts.ts';
+import { ownsCustomer, setContactRemoved } from '../contacts.ts';
 import { playedAt } from '../playerStats.ts';
 import { Router, ok, created } from '../http.ts';
 import { U, page, ownerFilter, ownerOrFail, groundInScope } from './helpers.ts';
@@ -425,6 +425,20 @@ export function staffRoutes(r: Router): void {
     audit({ id: u.id, role: u.role }, 'customer.update', 'user', cust.id, changed, owner);
     const { id, name, firstName, lastName, phone, email, consent } = toUser(userRow(cust.id)!);
     return ok({ customer: { id, name, firstName, lastName, phone, email, consent } });
+  }, { auth: ['owner', 'super_admin'] });
+
+  // Takes a person off this business's contacts (hidden from lists, counts and broadcasts), or puts them back. Owner only. Nothing else changes.
+  r.post('/api/staff/customers/:id/remove', (c) => {
+    const owner = ownerFilter(c);
+    if (!owner) throw new HttpError(400, 'OWNER_REQUIRED', 'Pass ?ownerId= to change one owner\'s contacts');
+    const u = U(c);
+    return ok(setContactRemoved({ id: u.id, role: u.role }, owner, c.params.id!, true));
+  }, { auth: ['owner', 'super_admin'] });
+  r.post('/api/staff/customers/:id/restore', (c) => {
+    const owner = ownerFilter(c);
+    if (!owner) throw new HttpError(400, 'OWNER_REQUIRED', 'Pass ?ownerId= to change one owner\'s contacts');
+    const u = U(c);
+    return ok(setContactRemoved({ id: u.id, role: u.role }, owner, c.params.id!, false));
   }, { auth: ['owner', 'super_admin'] });
 
   r.post('/api/staff/customers/:id/credit', (c) => {

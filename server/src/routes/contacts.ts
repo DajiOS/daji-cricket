@@ -23,7 +23,7 @@ function filterFromQuery(c: Ctx) {
   for (const k of FILTER_FIELDS) {
     const v = c.query.get(k);
     if (v === null || v === '') continue;
-    raw[k] = k === 'minTimes' ? Number(v) : v;
+    raw[k] = k === 'minTimes' ? Number(v) : k === 'removed' ? v === '1' || v === 'true' : v;
   }
   return parseContactFilter(raw);
 }

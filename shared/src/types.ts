@@ -693,6 +693,8 @@ export interface ContactFilter {
   /** Last played before this date: lapsed players. */
   inactiveSince?: string;
   q?: string;
+  /** true: only the people the business removed from its contacts (to put one back). Otherwise they are left out of lists, counts and broadcasts. */
+  removed?: boolean;
 }
 
 export interface BroadcastPlan {
