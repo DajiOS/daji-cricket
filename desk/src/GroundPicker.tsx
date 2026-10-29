@@ -3,10 +3,11 @@ import { useSession } from './App';
 import { Icon } from './ui';
 import { api, can, go, fmtTime } from './lib';
 import type { TodayData } from './parts/dash/Today';
+import { AddGround } from './parts/admin/AddGround';
 
 // The starter kit's property picker, for one ground: the business name opens a list of the grounds and what is on each right now.
 // The software owner also switches business here, as before.
-interface Ground { id: string; name: string; ownerId: string }
+interface Ground { id: string; name: string; ownerId: string; city: string }
 
 export function GroundPicker() {
   const s = useSession();
@@ -17,6 +18,8 @@ export function GroundPicker() {
   const owner = s.owners.find((o) => o.id === s.ownerId);
   const name = owner?.businessName || s.me.businessName || 'Daji Cricket Ground';
   const bookings = can(s.me, 'manage_bookings');
+  const manage = can(s.me, 'manage_grounds');
+  const [adding, setAdding] = useState(false);
   useEffect(() => {
     if (!open) return;
     api<{ items: Ground[] }>('/api/grounds').then((r) => setGrounds(r.items.filter((g) => g.ownerId === s.ownerId))).catch(() => setGrounds([]));
@@ -56,8 +59,10 @@ export function GroundPicker() {
                 <span><b>{g.name}</b>{st && <span className="small muted">{st[1]}</span>}</span>
               </button>);
           })}
+          {manage && <button className="gpick-row gpick-foot" onClick={() => { setOpen(false); setAdding(true); }}><Icon name="plus" size={15} />Add a ground or pitch</button>}
           {bookings && <button className="gpick-row gpick-foot" onClick={() => { setOpen(false); go('/booking-report/compare/grounds'); }}><Icon name="pie" size={15} />Compare the grounds</button>}
         </div>)}
+      {adding && <AddGround city={grounds?.[0]?.city ?? ''} onAdded={() => setGrounds(null)} onClose={() => setAdding(false)} />}
     </div>
   );
 }

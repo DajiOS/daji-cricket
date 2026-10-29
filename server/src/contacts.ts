@@ -1,5 +1,6 @@
 import type { BroadcastChannel, Contact, ContactFilter, ContactSummary, ContactWho } from '@daji/shared';
-import { many, one } from './db.ts';
+import { many, one, registerSchema, run } from './db.ts';
+import { audit, type Actor } from './audit.ts';
 import { now } from './clock.ts';
 import { HttpError } from './errors.ts';
 import { Validator } from './input.ts';
@@ -7,6 +8,22 @@ import { isValidDate } from './time.ts';
 
 // "Contacts" are the people who have played at one owner's grounds. They are customers, so consent is theirs:
 // every channel needs its own yes (users.consent_email / consent_sms / consent_whatsapp) before a broadcast reaches them.
+
+// A business can take a person off its contacts (a test account, someone who asked not to be listed). It only hides them from this
+// business's contact lists, counts and broadcasts: their account, bookings, payments and books stay as they are, they can still sign in
+// and book, and the row is kept so they can be put back. Deleting the account itself is the customer's own choice (accountDeletion.ts).
+registerSchema('contact-removed-1', `
+CREATE TABLE contact_removed (
+  owner_id TEXT NOT NULL REFERENCES users(id),
+  customer_id TEXT NOT NULL REFERENCES users(id),
+  removed_at INTEGER NOT NULL,
+  removed_by TEXT,
+  restored_at INTEGER,
+  restored_by TEXT,
+  PRIMARY KEY (owner_id, customer_id)
+);
+`);
+const REMOVED = 'EXISTS (SELECT 1 FROM contact_removed cr WHERE cr.owner_id = ? AND cr.customer_id = u.id AND cr.restored_at IS NULL)';
 
 const PLAYED: Record<ContactWho, string> = {
   // A confirmed session whose end time has passed counts as played even if the 24-hour sweep has not marked it 'completed' yet.
@@ -48,6 +65,7 @@ export function parseContactFilter(src: unknown): ContactFilter {
   const inactiveSince = v.str('inactiveSince', { max: 10 });
   const minTimes = v.int('minTimes', { min: 1, max: 10_000 });
   const q = v.str('q', { max: 80 });
+  const removed = v.bool('removed');
   for (const [k, d] of [['playedFrom', playedFrom], ['playedTo', playedTo], ['inactiveSince', inactiveSince]] as const) {
     if (d !== undefined && !isValidDate(d)) v.fail(k, 'Must be a date like 2026-10-01');
   }
@@ -61,6 +79,7 @@ export function parseContactFilter(src: unknown): ContactFilter {
   if (inactiveSince) f.inactiveSince = inactiveSince;
   if (minTimes) f.minTimes = minTimes;
   if (q) f.q = q;
+  if (removed) f.removed = true;
   return f;
 }
 
@@ -79,6 +98,7 @@ function base(ownerId: string, f: ContactFilter): { sql: string; p: (string | nu
     where.push("(u.name LIKE ? ESCAPE '\\' OR u.phone LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')");
     p.push(like, like, like);
   }
+  where.push(f.removed ? REMOVED : `NOT ${REMOVED}`); p.push(ownerId);
   const t = Math.floor(Number(now())); // a number from the clock, written into the query as one
   const having: string[] = [];
   if (f.minTimes) { having.push('COUNT(*) >= ?'); p.push(f.minTimes); }
@@ -108,6 +128,7 @@ function withAccounts(ownerId: string, f: ContactFilter): { sql: string; p: (str
     where.push("(u.name LIKE ? ESCAPE '\\' OR u.phone LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')");
     p.push(like, like, like);
   }
+  where.push(f.removed ? REMOVED : `NOT ${REMOVED}`); p.push(ownerId);
   const t = Math.floor(Number(now()));
   const having: string[] = [];
   if (f.groundId || f.playedFrom || f.playedTo) having.push('COUNT(b.id) > 0');
@@ -170,4 +191,17 @@ export function audience(ownerId: string, f: ContactFilter): Contact[] {
   return many<Row>(`SELECT * FROM (${sql}) ORDER BY last_at DESC, name`, ...p).map(toContact);
 }
 
-export const FILTER_FIELDS = ['who', 'groundId', 'playedFrom', 'playedTo', 'minTimes', 'inactiveSince', 'q'] as const;
+export const FILTER_FIELDS = ['who', 'groundId', 'playedFrom', 'playedTo', 'minTimes', 'inactiveSince', 'q', 'removed'] as const;
+
+/** Takes a person off this business's contacts, or puts them back. Only someone who is this business's customer (ownsCustomer). */
+export function setContactRemoved(actor: Actor, ownerId: string, customerId: string, removed: boolean): { removed: boolean } {
+  if (!one("SELECT 1 FROM users WHERE id = ? AND role = 'customer'", customerId) || !ownsCustomer(ownerId, customerId)) throw new HttpError(404, 'NOT_FOUND', 'Customer not found');
+  const t = now();
+  const changed = removed
+    ? run(`INSERT INTO contact_removed(owner_id, customer_id, removed_at, removed_by) VALUES(?,?,?,?)
+           ON CONFLICT(owner_id, customer_id) DO UPDATE SET removed_at = excluded.removed_at, removed_by = excluded.removed_by, restored_at = NULL, restored_by = NULL
+           WHERE contact_removed.restored_at IS NOT NULL`, ownerId, customerId, t, actor.id).changes
+    : run('UPDATE contact_removed SET restored_at = ?, restored_by = ? WHERE owner_id = ? AND customer_id = ? AND restored_at IS NULL', t, actor.id, ownerId, customerId).changes;
+  if (changed) audit(actor, removed ? 'contact.remove' : 'contact.restore', 'user', customerId, null, ownerId);
+  return { removed };
+}

@@ -348,3 +348,24 @@ test('a forged, cut-off or mixed-up unsubscribe link does nothing', async () => 
   assert.equal(one<{ c: number }>('SELECT consent_email c FROM users WHERE id = ?', people.asha!.id)!.c, 1);
   assert.equal(one<{ c: number }>('SELECT consent_email c FROM users WHERE id = ?', people.bhavin!.id)!.c, 0);
 });
+
+// ------------------------------------------------------------------ taking someone off the contacts
+
+test('the owner removes a person from the contacts and puts them back; their bookings and money stay', async () => {
+  const before = one<{ n: number; p: number }>('SELECT COUNT(*) n, SUM(paid_paise) p FROM bookings WHERE customer_id = ?', people.asha!.id)!;
+  assert.equal((await h.post(`/api/staff/customers/${people.asha!.id}/remove`, {}, staff)).status, 403, 'a team member cannot');
+  assert.equal((await h.post(`/api/staff/customers/${people.chirag!.id}/remove`, {}, owner)).status, 404, 'another business\'s customer');
+  const r = await h.post(`/api/staff/customers/${people.asha!.id}/remove`, {}, owner);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(names(await h.get('/api/staff/contacts', owner)), ['Bhavin Shah'], 'gone from the list');
+  assert.equal((await h.get('/api/staff/contacts?who=all', owner)).body.summary.total, 2, 'and from the counts');
+  assert.deepEqual(names(await h.get('/api/staff/contacts?removed=1&who=all', owner)), ['Asha Patel'], 'listed under removed people');
+  assert.deepEqual(names(await h.get('/api/staff/contacts', owner2)), ['Chirag Mehta'], 'another business is not affected');
+  const after = one<{ n: number; p: number }>('SELECT COUNT(*) n, SUM(paid_paise) p FROM bookings WHERE customer_id = ?', people.asha!.id)!;
+  assert.deepEqual(after, before, 'bookings and money untouched');
+  assert.equal((await h.get('/api/me', people.asha!.token)).status, 200, 'she can still sign in');
+  assert.equal((await h.post(`/api/staff/customers/${people.asha!.id}/remove`, {}, owner)).status, 200, 'removing twice is harmless');
+  assert.equal((await h.post(`/api/staff/customers/${people.asha!.id}/restore`, {}, owner)).status, 200);
+  assert.deepEqual(names(await h.get('/api/staff/contacts', owner)), ['Asha Patel', 'Bhavin Shah'], 'back in the list');
+  assert.deepEqual(many<{ action: string }>("SELECT action FROM audit_log WHERE action LIKE 'contact.%' ORDER BY rowid").map((x) => x.action), ['contact.remove', 'contact.restore']);
+});

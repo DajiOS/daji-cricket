@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Chip, Field, PageHead, Stat, Table, useToast } from '../ui';
-import { addDaysISO, can, download, go, fmtDate, fmtDateTime, getViewOwner, inr, qs, todayISO, useApi, formatPhone } from '../lib';
+import { Chip, Confirm, Field, PageHead, Stat, Table, useToast } from '../ui';
+import { addDaysISO, can, download, go, fmtDate, fmtDateTime, getViewOwner, inr, post, qs, todayISO, useApi, formatPhone } from '../lib';
 import { useSession } from '../App';
 import { Async, FilterBar, Select, errMsg, useDebounced } from '../parts/club/common';
 import Composer, { loadTemplates } from '../parts/club/Composer';
@@ -23,13 +23,19 @@ export default function Contacts({ sub }: { sub: string }) {
 
 function Directory() {
   const { me } = useSession(); const toast = useToast();
-  const [who, setWho] = useState('account'); const [ground, setGround] = useState(''); const [inactive, setInactive] = useState(''); const [min, setMin] = useState(''); const [q, setQ] = useState(''); const [offset, setOffset] = useState(0);
+  const [who, setWho] = useState('account'); const [ground, setGround] = useState(''); const [inactive, setInactive] = useState(''); const [min, setMin] = useState(''); const [q, setQ] = useState(''); const [offset, setOffset] = useState(0); const [removed, setRemoved] = useState('');
   const [templates, setTemplates] = useState<Awaited<ReturnType<typeof loadTemplates>> | null>(null); const [sent, setSent] = useState(0);
   const dq = useDebounced(q), dmin = useDebounced(min);
   const filter: Record<string, string | number> = { who };
-  if (ground) filter.groundId = ground; if (inactive) filter.inactiveSince = inactive; if (Number(dmin) > 0) filter.minTimes = Number(dmin); if (dq.trim()) filter.q = dq.trim();
+  if (ground) filter.groundId = ground; if (inactive) filter.inactiveSince = inactive; if (Number(dmin) > 0) filter.minTimes = Number(dmin); if (dq.trim()) filter.q = dq.trim(); if (removed) filter.removed = 1;
   const [grounds] = useApi<{ items: { id: string; name: string }[] }>('/api/staff/grounds');
-  const [data, error] = useApi<Result>('/api/staff/contacts' + qs({ ...filter, limit: LIMIT, offset }));
+  const [data, error, reload] = useApi<Result>('/api/staff/contacts' + qs({ ...filter, limit: LIMIT, offset }));
+  // Owner only: takes a person off the contacts (lists, counts, messages) or puts them back. Their account, bookings and money stay as they are.
+  const curate = me?.role === 'owner' || me?.role === 'super_admin';
+  const setGone = async (id: string, gone: boolean) => {
+    const owner = me?.role === 'super_admin' ? getViewOwner() : null;
+    try { await post(`/api/staff/customers/${encodeURIComponent(id)}/${gone ? 'remove' : 'restore'}` + qs({ ownerId: owner }), {}); toast(gone ? 'Removed from contacts' : 'Put back in contacts'); reload(); } catch (e) { toast(errMsg(e)); }
+  };
   const [hist, , reloadHist] = useApi<{ items: Broadcast[] }>('/api/staff/broadcasts?limit=10', [sent]);
   const change = (fn: () => void) => { fn(); setOffset(0); };
   const csv = () => {
@@ -59,11 +65,12 @@ function Directory() {
             <Field label="Activity"><Select value={inactive} onChange={(v) => change(() => setInactive(v))} options={[['', 'Any time'], [addDaysISO(today, -30), 'Not played in 30 days'], [addDaysISO(today, -90), 'Not played in 90 days']]} /></Field>
             <Field label="Played at least"><input className="inp" type="number" min="1" inputMode="numeric" placeholder="e.g. 3" value={min} onChange={(e) => change(() => setMin(e.target.value))} /></Field>
             <Field label="Search"><input className="inp" type="search" placeholder="Name, phone or email" value={q} onChange={(e) => change(() => setQ(e.target.value))} /></Field>
+            {curate && <Field label="List"><Select value={removed} onChange={(v) => change(() => setRemoved(v))} options={[['', 'Contacts'], ['1', 'Removed people']]} /></Field>}
           </FilterBar>
         </div>
         <Async data={data} error={error}>{(d) => (
           <>
-            <Table rows={d.items} rowKey={(c) => c.id} onRow={(c) => go(`/customers/${encodeURIComponent(c.id)}`)} empty="Nobody matches yet." cols={[
+            <Table rows={d.items} rowKey={(c) => c.id} onRow={(c) => go(`/customers/${encodeURIComponent(c.id)}`)} empty={removed ? 'Nobody has been removed.' : 'Nobody matches yet.'} cols={[
               { head: 'Person', cell: (c) => <><a className="strong" href={`#/customers/${encodeURIComponent(c.id)}`} onClick={(e) => e.stopPropagation()}>{c.name}</a><div className="muted small">{[formatPhone(c.phone), c.email].filter(Boolean).join(' · ')}</div></> },
               { head: who === 'played' ? 'Times played' : 'Bookings', num: true, cell: (c) => c.timesPlayed },
               // a booking ahead is not a game played: the last one that has started, and the next one under it
@@ -72,6 +79,7 @@ function Directory() {
               { head: 'Paid', num: true, cell: (c) => (c.paidPaise == null ? '—' : inr(c.paidPaise)) },
               // only the channels this person said yes to (and has an address for): the counts above add these up
               { head: 'Can reach on', cell: (c) => { const on = (['email', 'whatsapp', 'sms'] as const).filter((k) => c.reachable[k]); return on.length ? <div className="row" style={{ gap: 6 }}>{on.map((k) => <Chip key={k} tone="good">{k === 'sms' ? 'SMS' : k === 'email' ? 'Email' : 'WhatsApp'}</Chip>)}</div> : <span className="muted small">No channel agreed</span>; } },
+              ...(curate ? [{ head: '', cell: (c: Contact) => <span onClick={(e) => e.stopPropagation()}>{removed ? <button className="btn sm" onClick={() => setGone(c.id, false)}>Put back</button> : <Confirm label="Remove" className="btn ghost sm" ask={`Remove ${c.name} from contacts? Their bookings and payments stay.`} onYes={() => setGone(c.id, true)} />}</span> }] : []),
             ]} />
             <div className="card-pad row" style={{ justifyContent: 'space-between' }}>
               <button className="btn ghost sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LIMIT))}>Previous</button>

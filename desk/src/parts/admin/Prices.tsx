@@ -1,7 +1,8 @@
 // Prices and timings: one card per ground. Same fields and rules as the old desk; nothing is saved until Save is pressed.
 import { useState } from 'react';
 import { useApi, patch } from '../../lib';
-import { Loading, ErrorBox, Empty, Field, useToast } from '../../ui';
+import { Loading, ErrorBox, Empty, Field, Icon, useToast } from '../../ui';
+import { AddGround } from './AddGround';
 import GroundLinks from './GroundLinks';
 import { Panel, Pill, errText, DAY_NAMES, DAY_ORDER, hourLabel, slotTimes } from './common';
 
@@ -143,13 +144,17 @@ function GroundCard({ g }: { g: Ground }) {
 }
 
 export default function Prices() {
-  const [data, error] = useApi<{ items: Ground[] }>('/api/staff/grounds');
+  const [data, error, reload] = useApi<{ items: Ground[] }>('/api/staff/grounds');
+  const [adding, setAdding] = useState(false);
   if (error) return <ErrorBox msg={error} />;
   if (!data) return <Loading />;
-  if (!data.items.length) return <Empty>No grounds yet.</Empty>;
+  const add = <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" />Add a ground or pitch</button>;
+  const dialog = adding && <AddGround city={(data.items[0] as any)?.city ?? ''} onAdded={reload} onClose={() => setAdding(false)} />;
+  if (!data.items.length) return <><Empty>No grounds yet.</Empty><div className="row">{add}</div>{dialog}</>;
   return <div className="dl-ground">
-    <div className="hint" style={{ margin: 0 }}>Set what each ball costs, on which days and at what times. Customers see the changes as soon as you save.</div>
+    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}><div className="hint" style={{ margin: 0 }}>Set what each ball costs, on which days and at what times. Customers see the changes as soon as you save.</div>{add}</div>
     {data.items.map((g) => <GroundCard key={g.id} g={g} />)}
     <GroundLinks />
+    {dialog}
   </div>;
 }
