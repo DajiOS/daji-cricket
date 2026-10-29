@@ -2,13 +2,13 @@
 import { useState } from 'react';
 import { useApi, patch } from '../../lib';
 import { Loading, ErrorBox, Empty, Field, Icon, useToast } from '../../ui';
-import { AddGround } from './AddGround';
+import { AddGround, groundsChanged } from './AddGround';
 import GroundLinks from './GroundLinks';
 import { Panel, Pill, errText, DAY_NAMES, DAY_ORDER, hourLabel, slotTimes } from './common';
 
 type Ball = 'leather' | 'tennis' | 'practice';
 interface Row { id?: string; label: string; ball: Ball; days: number[]; from: string; to: string; mode: 'fixed' | 'hourly'; price: string; bundle: number }
-interface Ground { id: string; name: string; ownerName: string | null; rates: any[]; closedDays: number[]; openTime: string; closeTime: string; winterOpenTime: string | null; winterCloseTime: string | null; slotMinutes: number; eveningFrom: string; maxSlots: number; ratesNote: string | null }
+interface Ground { id: string; name: string; active: boolean; ownerName: string | null; rates: any[]; closedDays: number[]; openTime: string; closeTime: string; winterOpenTime: string | null; winterCloseTime: string | null; slotMinutes: number; eveningFrom: string; maxSlots: number; ratesNote: string | null }
 
 const BALLS: [Ball, string, string?][] = [['leather', 'Leather ball prices'], ['tennis', 'Tennis ball prices'], ['practice', 'Practice session prices', 'Nets and practice, shown as its own tab next to the balls. Usually a by-the-hour price.']];
 const startOpts = slotTimes(0, 23 * 60 + 30), endOpts = slotTimes(30, 27 * 60);
@@ -34,6 +34,12 @@ function GroundCard({ g }: { g: Ground }) {
   const [closed, setClosed] = useState<number[]>(g.closedDays || []);
   const [f, setF] = useState({ openTime: g.openTime, closeTime: g.closeTime, winterOpenTime: g.winterOpenTime || '', winterCloseTime: g.winterCloseTime || g.closeTime, slotMinutes: String(g.slotMinutes), eveningFrom: g.eveningFrom, maxSlots: String(g.maxSlots), note: g.ratesNote || '' });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [open, setOpen] = useState(g.active);
+  // Switching booking on or off is saved at once, apart from the prices below: off hides the ground from customers, the picker and the dashboard.
+  async function setBookable(on: boolean) {
+    try { await patch(`/api/staff/grounds/${encodeURIComponent(g.id)}`, { active: on }); setOpen(on); groundsChanged(); toast(on ? `${g.name}: customers can book it` : `${g.name}: hidden from customers`); }
+    catch (e) { setMsg({ ok: false, text: errText(e) }); }
+  }
   const [busy, setBusy] = useState(false);
   const setField = (k: keyof typeof f) => (e: any) => setF((s) => ({ ...s, [k]: e.target.value }));
   const upd = (i: number, p: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...p } : r)));
@@ -72,7 +78,9 @@ function GroundCard({ g }: { g: Ground }) {
   };
 
   return (
-    <Panel title={g.name} note={g.ownerName ? `Owner: ${g.ownerName}` : undefined} actions={<button className="btn sm ghost" onClick={loadDaji}>Load the Daji price list</button>}>
+    <Panel title={g.name} note={open ? 'Customers can book it' : 'Hidden: customers cannot book it yet'} actions={<>
+      <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={open} onChange={(e) => setBookable(e.target.checked)} />Customers can book it</label>
+      <button className="btn sm ghost" onClick={loadDaji}>Load the Daji price list</button></>}>
       <div className="dl-sub">Days the ground is closed</div>
       <div className="hint" style={{ margin: '0 0 8px' }}>Tap a day to close it, for example Monday for maintenance. Nothing can be booked on a closed day.</div>
       <div className="pills">{DAY_ORDER.map((d) => <Pill key={d} on={closed.includes(d)} onClick={() => setClosed(flipDay(closed, d))}>{DAY_NAMES[d]}</Pill>)}</div>

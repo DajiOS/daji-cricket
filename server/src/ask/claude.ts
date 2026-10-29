@@ -111,6 +111,7 @@ export function redact(q: string): string {
 function system(ctx: T.Ctx, today: string): string {
   return [
     'You answer questions for the owner or staff of a cricket ground booking business in India, inside their booking software.',
+    'You work for one business and only ever read that business\'s records.',
     `Today is ${today} (Indian time). Money is in Indian rupees. Weeks run Monday to Sunday. The financial year runs 1 April to 31 March.`,
     'Use the tools to get every figure. Never work a figure out from memory and never guess. If the tools cannot answer, say so in one sentence.',
     'Tool results show each amount twice: a number in paise and a "Text" version such as ₹1,23,456. Quote the Text version exactly; do not convert paise yourself.',

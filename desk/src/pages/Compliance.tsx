@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApi, post, put, go, fmtDate, fmtDateTime, inr } from '../lib';
+import { isMainBusiness } from '../registry';
 import { PageHead, Tabs, Table, Chip, Modal, Field, ErrorBox, Loading, useToast, useForm, type Tone } from '../ui';
 
 type Tab = 'rules' | 'renewals' | 'updates' | 'changes' | 'gst' | 'terms';
@@ -16,12 +17,14 @@ const LABEL: Record<string, string> = { ok: 'Up to date', soon: 'Review soon', d
 /** The compliance register: each legal rule the software enforces, its review date, the law-change log and the team's accepted terms. */
 export default function Compliance({ sub }: { sub: string }) {
   const first = sub.split('/')[0] as Tab;
-  const tab: Tab = TABS.some(([k]) => k === first) ? first : 'rules';
-  const [reg, err, reload] = useApi<Reg>('/api/compliance');
+  // the register of rules and law changes is the main business's; another customer business sees its own GST invoices and team terms
+  const tabs = isMainBusiness() ? TABS : TABS.filter(([k]) => k === 'gst' || k === 'terms');
+  const tab: Tab = tabs.some(([k]) => k === first) ? first : tabs[0][0];
+  const [reg, err, reload] = useApi<Reg>(isMainBusiness() ? '/api/compliance' : null);
   return (
     <div className="stack">
       <PageHead eyebrow="Settings" title="Compliance" lede="The Indian rules this software enforces, when each was last checked, and a record of every change in the law." />
-      <Tabs<Tab> value={tab} onChange={(t) => go(`/compliance/${t}`)} items={TABS} label="Compliance sections" />
+      <Tabs<Tab> value={tab} onChange={(t) => go(`/compliance/${t}`)} items={tabs} label="Compliance sections" />
       <ErrorBox msg={err} />
       {tab === 'rules' && (reg ? <Rules reg={reg} reload={reload} /> : !err && <Loading />)}
       {tab === 'renewals' && (reg ? <Renewals reg={reg} reload={reload} /> : !err && <Loading />)}
@@ -210,7 +213,7 @@ function GstForm({ p, inv, onSaved }: { p: Profile; inv: Inv[]; onSaved: () => v
           <Field label="Business name on invoices"><input className="inp" {...f.bind('legalName')} /></Field>
           <Field label="GSTIN" hint="Leave empty if you are not registered. You will then give receipts with no tax."><input className="inp" {...f.bind('gstin')} placeholder="24ABCDE1234F1Z5" /></Field>
           <Field label="Address" full><input className="inp" {...f.bind('address')} /></Field>
-          <Field label="Invoice prefix" hint="Up to 4 letters or digits. Numbers look like DCG/26-27/000001 and never pass 16 characters."><input className="inp" {...f.bind('prefix')} /></Field>
+          <Field label="Invoice prefix" hint="Up to 4 letters or digits. Numbers look like PREFIX/26-27/000001 and never pass 16 characters."><input className="inp" {...f.bind('prefix')} /></Field>
           <Field label="SAC code" hint="Ask your accountant to confirm the code for ground hire"><input className="inp" {...f.bind('sac')} /></Field>
           <Field label="State code" hint="24 is Gujarat"><input className="inp" {...f.bind('stateCode')} /></Field>
         </div><ErrorBox msg={err} /></div>

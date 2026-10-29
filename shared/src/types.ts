@@ -589,6 +589,8 @@ export interface GlobalSettings {
   checkInOpensMinutes: number;
   /** The tiers, earned by games played here in the last 12 months. Anyone below every tier is in the last wave. */
   waitlistTiers: WaitlistTier[];
+  /** The customer business the main web address shows (an owner's id); empty shows every business. Platform admin only. */
+  mainSiteBusinessId: string;
 }
 
 /** A waitlist tier: a name and the games played in the last 12 months it takes to earn it. */

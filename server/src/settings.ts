@@ -83,6 +83,8 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   waitlistTiers: [{ name: 'Diamond', minGames: 150 }, { name: 'Platinum', minGames: 100 }, { name: 'Gold', minGames: 75 }, { name: 'Silver', minGames: 50 }, { name: 'Bronze', minGames: 25 }],
   checkInRadiusMeters: 150,
   checkInOpensMinutes: 60,
+  /** The customer business the main web address and app show. Empty: every business, as before there was more than one. Platform admin only. */
+  mainSiteBusinessId: '',
 };
 
 /** A release switch for a newer way to change a booking. Off refuses that way only, with a clear message; nothing else reads these. */
@@ -154,6 +156,8 @@ export function updateSettings(patch: Record<string, unknown>, actorId: string |
     } else if (k === 'upiId') {
       if (typeof v !== 'string' || (v !== '' && !/^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/.test(v))) fields.push({ field: k, message: 'Must look like name@bank' });
       else next[k] = v;
+    } else if (k === 'mainSiteBusinessId') {
+      if (typeof v !== 'string' || (v !== '' && !one("SELECT 1 FROM users WHERE id = ? AND role = 'owner'", v))) fields.push({ field: k, message: 'Must be one of the customer businesses, or empty for all' }); else next[k] = v;
     } else if (k === 'upiPayee') {
       if (typeof v !== 'string' || v.trim().length < 1 || v.length > 60) fields.push({ field: k, message: 'Between 1 and 60 characters' }); else next[k] = v.trim();
     } else if (k === 'contactName' || k === 'academyName' || k === 'academyRunBy') {
