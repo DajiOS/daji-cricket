@@ -17,6 +17,7 @@ import { staffAuctionFacts } from '../auction.ts';
 import { depositsAt } from '../auctionDeposit.ts';
 import { staffWaitlist } from '../waitlist.ts';
 import { checkInsOn } from '../players.ts';
+import { leaders } from '../playerStats.ts';
 import { serverConsole, serverStatus } from '../serverConsole.ts';
 import type { Config } from '../config.ts';
 
@@ -399,6 +400,14 @@ export function checkIns(ctx: Ctx, names: boolean, date?: string) {
   const day = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : istDate(now());
   const from = istMidnight(day);
   return { date: day, ...checkInsOn(ctx.ownerId, from, from + 24 * 3600 * 1000, names && can(ctx, 'customers')) };
+}
+
+/** Player records at this business (from finished scored matches, linked players only): the leaders by runs, wickets and dismissals. No names. */
+export function playerRecords(ctx: Ctx) {
+  if (!hasPermission(ctx.user, 'manage_matches') && !hasPermission(ctx.user, 'view_customers')) throw forbidden('You do not have access to player records. Ask the owner to give you the "manage_matches" permission.');
+  const l = leaders(ctx.ownerId, 5);
+  const strip = ({ userId: _u, name: _n, ...x }: (typeof l.runs)[number], i: number) => ({ rank: i + 1, ...x });
+  return { playersWithARecord: l.players, finishedMatches: l.matches, mostRuns: l.runs.map(strip), mostWickets: l.wickets.map(strip), mostFieldingDismissals: l.fielding.map(strip) };
 }
 
 // ---------------------------------------------------------------- the server

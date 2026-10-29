@@ -50,7 +50,7 @@ export const REGISTER: RegisterRoute[] = [
   R(27, 'Customers', 'Customer: Overview', '/customers/:id', '/contacts/:id', 'MATCHES'),
   R(28, 'Customers', 'Customer: Bookings', '/customers/:id/bookings', '/contacts/:id/bookings', 'MATCHES'),
   R(29, 'Customers', 'Customer: Money', '/customers/:id/money', '/contacts/:id/money', 'MATCHES'),
-  R(30, 'Customers', 'Customer: Teams / Players', '/customers/:id/teams', null, 'MISSING', 'The server has no team or player roster per customer.'),
+  R(30, 'Customers', 'Customer: Teams / Players', '/customers/:id/teams', '/contacts/:id/cricket', 'PARTIAL', 'The Cricket tab: the customer\'s career batting, bowling and fielding from matches scored at this business. Teams are squads per match; there is no standing team roster per customer.'),
   R(31, 'Customers', 'Customer: Messages', '/customers/:id/messages', null, 'MISSING', 'Messages are sent to groups of customers. The server keeps no per-customer message history to show.'),
   R(32, 'Customers', 'Customer: Documents', '/customers/:id/documents', '/contacts/:id/documents', 'MATCHES', 'Every uploaded document whose pages mention the customer or one of their bookings.'),
   R(33, 'Customers', 'Customer: Activity', '/customers/:id/activity', '/contacts/:id/activity', 'MATCHES'),

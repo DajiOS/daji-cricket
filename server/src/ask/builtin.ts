@@ -6,6 +6,8 @@ import * as T from './tools.ts';
 import { rulesIn } from '../lawUpdates.ts';
 import { many, one } from '../db.ts';
 import { hasPermission } from '../auth.ts';
+import { careerOf, leaders } from '../playerStats.ts';
+import { nameKey } from '../matches.ts';
 
 // The built-in answerer: reads a question, works out what is being asked and for which dates, asks the software through
 // the same tools as the Reports tab, and writes the answer in plain words. No outside service is involved.
@@ -13,7 +15,7 @@ import { hasPermission } from '../auth.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'server' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'server' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -30,6 +32,7 @@ export interface Built {
 }
 
 const RULES: [Intent, RegExp][] = [
+  ['player_stats', /\b(top|most|leading|highest|best)\b.*\b(runs?|run.?scorers?|scorers?|wickets?|wicket.?takers?|catch(es)?|batters?|batsm[ae]n|bowlers?|fielders?)\b|\b(player|career|batting|bowling|cricket) (stats|statistics|records?|averages?)\b|\b(stats|record|average) (for|of)\b|\bhow many (runs|wickets|catches)\b|\bleader ?boards?\b/],
   ['fixtures', /\bfixtures?\b|\btournaments?\b|\bnext match(es)?\b|\bmatch (schedule|times?)\b/],
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?|how does (this|it) work|what (do|can) you (do|know))\b/],
   ['balance_sheet', /balance ?sheet|\bassets\b|liabilit|net worth|\bequity\b|what (do )?(we|i) own/],
@@ -63,7 +66,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'server', 'auctions', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'server', 'auctions', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -138,7 +141,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', sheet: 'Shared spreadsheet', server: 'Server status', auctions: 'Auction tournaments', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', sheet: 'Shared spreadsheet', server: 'Server status', auctions: 'Auction tournaments', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -170,6 +173,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'server') return serverAnswer(ctx, base);
   if (intent === 'fixtures') return fixturesAnswer(ctx, base);
   if (intent === 'auctions') return auctionsAnswer(ctx, base);
+  if (intent === 'player_stats') return playerStatsAnswer(ctx, question, base);
   if (intent === 'unknown') {
     const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
     return base('unknown', "I'm not sure what you're asking. I can answer questions about revenue, expenses, profit, account balances, bookings, money owed, cancellations and more, for any dates you like.", { suggestions: lot });
@@ -583,5 +587,37 @@ function fixturesAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Pa
   const first = rows[0]!;
   return base('fixtures', `${count(rows.length, 'fixture')} coming up${rows.length === 10 ? ' (the next 10)' : ''}. Next: ${first.a} v ${first.b} (${first.tname}) on ${when(first.starts_at)}${first.ground ? ` at ${first.ground}` : ''}.`, {
     details: rows.map((r) => ({ label: `${when(r.starts_at)}`, text: `${r.a} v ${r.b} · ${r.tname}, round ${r.round}${r.ground ? ` · ${r.ground}` : ''}${r.block_until ? ' · ground blocked' : ''}` })), notes,
+  });
+}
+
+/**
+ * Player records (career batting, bowling, fielding) from finished matches scored at this business, for those who score matches or may see
+ * customers. Names are the ones on the scorecards. A player named in the question gets their own record; otherwise the leaders.
+ */
+function playerStatsAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  if (!hasPermission(ctx.user, 'manage_matches') && !hasPermission(ctx.user, 'view_customers')) return base('player_stats', 'You do not have access to player records. Ask the owner to give you the "manage_matches" permission.');
+  const all = leaders(ctx.ownerId, 1000);
+  const l = { ...all, runs: all.runs.slice(0, 5), wickets: all.wickets.slice(0, 5), fielding: all.fielding.slice(0, 5) };
+  const notes = ['Built from the ball by ball score of finished matches. Only players in a squad linked to their Daji profile have a record; guests have none.'];
+  if (!l.players) return base('player_stats', 'No player records yet. Add squads to a match (from a booking\'s team list or by mobile number) and score it to the end, and the records build themselves.', { notes });
+  const t = normalise(question);
+  const named = [...new Map([...all.runs, ...all.wickets, ...all.fielding].map((x) => [x.userId, x])).values()].filter((x) => new RegExp(`\\b${nameKey(x.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(t));
+  if (named.length === 1) {
+    const p = named[0]!;
+    const c = careerOf(p.userId, ctx.ownerId);
+    const b = c.career.batting, w = c.career.bowling, f = c.career.fielding;
+    return base('player_stats', `${p.name}: ${count(c.career.matches, 'match', 'matches')}, ${count(b.runs, 'run')} in ${count(b.innings, 'innings', 'innings')}${b.highest ? ` (highest ${b.highest}${b.average !== null ? `, average ${b.average}` : ''}${b.strikeRate !== null ? `, strike rate ${b.strikeRate}` : ''})` : ''}, ${count(w.wickets, 'wicket')}${w.best ? ` (best ${w.best}${w.economy !== null ? `, economy ${w.economy}` : ''})` : ''}, ${count(f.catches, 'catch', 'catches')}, ${count(f.runOuts, 'run out')} and ${count(f.stumpings, 'stumping')}.`, {
+      details: c.matches.slice(0, 8).map((m) => ({ label: `${niceDay(istDate(m.date))} v ${m.opponent}`, text: m.summary })), notes,
+    });
+  }
+  const top = (xs: typeof l.runs, f: (x: (typeof l.runs)[number]) => string) => xs.length ? xs.map((x, i) => `${i + 1}. ${x.name} ${f(x)}`).join('; ') : 'nobody yet';
+  const r0 = l.runs[0], w0 = l.wickets[0];
+  const head = `${count(l.players, 'player')} with a record from ${count(l.matches, 'finished match', 'finished matches')}.${r0 ? ` Most runs: ${r0.name}, ${count(r0.runs, 'run')}.` : ''}${w0 ? ` Most wickets: ${w0.name}, ${count(w0.wickets, 'wicket')}.` : ''}`;
+  return base('player_stats', head, {
+    details: [
+      { label: 'Most runs', text: top(l.runs, (x) => `${x.runs} (HS ${x.highest ?? '-'})`) },
+      { label: 'Most wickets', text: top(l.wickets, (x) => `${x.wickets} (best ${x.best ?? '-'})`) },
+      { label: 'Most dismissals in the field', text: top(l.fielding, (x) => `${x.dismissals}`) },
+    ], notes, suggestions: r0 ? [`Stats for ${r0.name}`] : [],
   });
 }

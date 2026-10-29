@@ -1,4 +1,5 @@
 import { forgetFaces } from './players.ts';
+import { forgetPlayerLinks } from './playerStats.ts';
 import { one, run, tx } from './db.ts';
 import { now } from './clock.ts';
 import { audit } from './audit.ts';
@@ -33,6 +34,7 @@ export function deleteMyAccount(dataDir: string, u: UserRow, body: unknown): { d
     run("UPDATE users SET name = 'Deleted user', email = NULL, phone = NULL, password_hash = NULL, active = 0, consent_email = 0, consent_sms = 0, consent_whatsapp = 0, consent_updated_at = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?", t, t, u.id);
     run('DELETE FROM push_tokens WHERE user_id = ?', u.id);
     forgetFaces(u.id);
+    forgetPlayerLinks(u.id);
     if (u.phone) run('DELETE FROM otp_codes WHERE phone = ?', u.phone);
   });
   try { clearAvatar(dataDir, u); } catch { /* no picture */ }

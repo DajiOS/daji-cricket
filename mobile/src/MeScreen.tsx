@@ -6,6 +6,7 @@ import { Badge, Btn, Chip, KV, Loading, Segmented, s } from './ui';
 import { AutoDebit } from './AutoDebit';
 import { Waitlist } from './Waitlist';
 import { MyTeamGames, TeamList } from './TeamList';
+import { MyCricket } from './MyCricket';
 import { PayScreen } from './PayScreen';
 import { DepositScreen, RescheduleScreen, differenceAsHold } from './ManageBooking';
 import type { HoldResponse } from './types';
@@ -107,6 +108,8 @@ export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; us
           {dash.paidAheadPaise > 0 && <KV k="Paid ahead" v={inr(dash.paidAheadPaise)} />}{dash.creditPaise > 0 && <KV k="Account credit" v={inr(dash.creditPaise)} />}
           {dash.firstPlayed && <KV k="Playing with us since" v={niceDate(dash.firstPlayed)} />}
         </View>
+        <Text style={[s.h2, { color: C.head }]}>Your career record</Text>
+        <MyCricket />
         <Text style={[s.h2, { color: C.head }]}>Last 12 months</Text>
         <View style={[s.card, { flexDirection: 'row', alignItems: 'flex-end', height: 120, gap: 4 }]}>
           {dash.byMonth.map((m) => (<View key={m.month} style={{ flex: 1, alignItems: 'center' }}><View style={{ width: '100%', height: Math.max(2, (m.spentPaise / maxM) * 80), backgroundColor: C.gold, borderRadius: 2 }} /><Text style={{ color: C.muted, fontSize: 8, marginTop: 4 }}>{MON[Number(m.month.slice(5, 7)) - 1]}</Text></View>))}

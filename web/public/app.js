@@ -2054,6 +2054,35 @@ bookingsExtras.push((ex) => {
   }).catch(() => {});
 });
 
+// the player's career record (like CricHeroes): batting, bowling and fielding from finished matches where they are in a squad linked to
+// their profile. The server works it out from the balls (server/src/playerStats.ts); a wrong match can be taken off with "This was not me".
+bookingsExtras.push((ex) => {
+  if (!state.user || state.user.role !== 'customer') return;
+  const card = h('div', { class: 'card', style: 'margin:0 0 14px;padding:18px 20px' });
+  const dash = (v) => (v === null || v === undefined ? '–' : String(v));
+  const draw = () => api('/api/my/cricket').then((r) => {
+    clear(card);
+    if (!card.isConnected) ex.append(card);
+    const c = r.career, b = c.batting, w = c.bowling, f = c.fielding;
+    card.append(h('h4', { style: 'margin:0 0 4px;font-size:18px;letter-spacing:.04em' }, 'Your career record'));
+    if (!c.matches) { card.append(h('p', { class: 'hint' }, `No scored matches yet. ${r.note} The ground adds you to a match by your mobile number, or from your booking's team list.`)); return; }
+    const facts = (title, rows) => h('div', {}, h('div', { class: 'hint', style: 'margin:8px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.08em' }, title),
+      ...rows.map(([k, v]) => h('div', { style: 'display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px solid rgba(127,127,127,.15)' }, h('span', { class: 'hint', style: 'margin:0' }, k), h('b', {}, dash(v)))));
+    card.append(h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:4px 28px' },
+      facts('Batting', [['Matches', c.matches], ['Innings', b.innings], ['Runs', b.runs], ['Highest', b.highest], ['Average', b.average], ['Strike rate', b.strikeRate], ['4s / 6s', `${b.fours} / ${b.sixes}`], ['50s / 100s', `${b.fifties} / ${b.hundreds}`]]),
+      facts('Bowling', [['Overs', w.overs], ['Wickets', w.wickets], ['Best', w.best], ['Economy', w.economy], ['Average', w.average], ['Maidens', w.maidens]]),
+      facts('Fielding', [['Catches', f.catches], ['Run outs', f.runOuts], ['Stumpings', f.stumpings]])),
+      h('div', { class: 'hint', style: 'margin:14px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.08em' }, 'Matches'),
+      ...r.matches.slice(0, 10).map((m) => h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;flex-wrap:wrap' },
+        h('span', {}, `${new Date(m.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })} · ${m.team} v ${m.opponent}: ${m.summary}`),
+        h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => {
+          if (!confirm(`Take ${m.team} v ${m.opponent} off your record? The ground is told, and it cannot be linked to you again.`)) return;
+          try { await api(`/api/my/cricket/matches/${encodeURIComponent(m.matchId)}/not-me`, { method: 'POST', body: {} }); toast('Taken off your record.'); draw(); } catch (e) { toast(e.message, true); }
+        } }, 'This was not me'))));
+  }).catch(() => {});
+  draw();
+});
+
 bookingsExtras.push((ex) => {
   if (!state.config.autoDebitEnabled || !state.user || state.user.role !== 'customer') return;
   const card = h('div', { class: 'card', style: 'margin:0 0 14px' }); ex.append(card);

@@ -188,6 +188,15 @@ Generated from `server/src/routes`. All bodies are JSON unless noted; errors use
 | PATCH | `/api/staff/matches/:id` | matches |
 | POST | `/api/staff/matches/:id/balls` | matches |
 | POST | `/api/staff/matches/:id/undo` | matches |
+| GET | `/api/staff/matches/:id/players` | matches (squads: names linked to Daji profiles or guests) |
+| POST | `/api/staff/matches/:id/players` | matches (`{ side, name, phone? }`; a phone with a profile links it) |
+| POST | `/api/staff/matches/:id/players/import` | matches (`{ side, bookingRef }`: a booking's team list) |
+| PATCH | `/api/staff/matches/:id/players/:pid` | matches (`{ name? , phone? }`; `phone: null` unlinks) |
+| DELETE | `/api/staff/matches/:id/players/:pid` | matches (only while no ball uses the name) |
+| GET | `/api/staff/cricket/leaders` | matches (most runs, wickets, fielding dismissals) |
+| GET | `/api/staff/customers/:id/cricket` | customers or matches (career record at this business) |
+| GET | `/api/my/cricket` | customer (own career record, every ground) |
+| POST | `/api/my/cricket/matches/:id/not-me` | customer (`{ reason? }`: takes a wrong match off) |
 | GET | `/api/staff/payments` | staff |
 | GET | `/api/staff/payments/:id/history` | staff |
 | POST | `/api/staff/payments/:id/verify` | staff |

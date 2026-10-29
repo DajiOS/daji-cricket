@@ -6,7 +6,8 @@ import { Validator } from './input.ts';
 import { audit, type Actor } from './audit.ts';
 
 // Match day: ball by ball scoring for matches played at an owner's ground, a scorecard that is built from the balls (never typed in twice),
-// and a public page that can show a YouTube Live stream. Players are plain names typed by the scorer.
+// and a public page that can show a YouTube Live stream. Players are the names the scorer uses; when a match has squads (playerStats.ts)
+// each name can be linked to a player's Daji profile, the scorer must use the squad's names, and the balls build that player's career record.
 
 registerSchema('matches-1', `
 CREATE TABLE matches (
@@ -48,6 +49,41 @@ CREATE TABLE match_balls (
 );
 `);
 
+// Player career records (owner, 28 Oct 2026: "track players' records like CricHeroes"). Squads per match: a name the scorer uses, linked to a
+// Daji profile (found by mobile number or brought in from a booking's team list) or a guest with no profile. And the fielder of a catch,
+// run out or stumping. Registered here, after matches-1, so the tables it changes always exist first. The rest is in playerStats.ts.
+registerSchema('player-stats-1', `
+ALTER TABLE match_balls ADD COLUMN fielder TEXT;
+CREATE TABLE match_players (
+  id TEXT PRIMARY KEY,
+  match_id TEXT NOT NULL REFERENCES matches(id),
+  owner_id TEXT NOT NULL REFERENCES users(id),
+  side TEXT NOT NULL CHECK (side IN ('a','b')),
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL,
+  user_id TEXT REFERENCES users(id),
+  linked_via TEXT CHECK (linked_via IN ('phone','team_list')),
+  linked_by TEXT,
+  linked_at INTEGER,
+  disowned_user_id TEXT,
+  disowned_at INTEGER,
+  booking_player_id TEXT,
+  added_by TEXT,
+  created_at INTEGER NOT NULL,
+  removed_at INTEGER,
+  removed_by TEXT
+);
+CREATE UNIQUE INDEX uq_match_players_name ON match_players(match_id, name_key) WHERE removed_at IS NULL;
+CREATE UNIQUE INDEX uq_match_players_user ON match_players(match_id, user_id) WHERE user_id IS NOT NULL AND removed_at IS NULL;
+CREATE INDEX ix_match_players_match ON match_players(match_id, side);
+CREATE INDEX ix_match_players_user ON match_players(user_id);
+`);
+
+/** How a player's name is compared: spaces tidied, case ignored ("Amit  Shah" is "amit shah"). */
+export const nameKey = (s: string): string => s.trim().replace(/\s+/g, ' ').toLowerCase();
+/** The dismissals a fielder can be named for. */
+export const FIELDER_KINDS = ['caught', 'run out', 'stumped'];
+
 /** Accepts the usual YouTube links and keeps only the video id, so the page never embeds anything else. */
 export function youtubeId(url: string): string | null {
   let u: URL;
@@ -65,8 +101,8 @@ export function youtubeId(url: string): string | null {
 
 const DISMISSALS = ['bowled', 'caught', 'lbw', 'run out', 'stumped', 'hit wicket', 'retired'] as const;
 
-interface MatchRow { id: string; owner_id: string; ground_id: string | null; title: string; team_a: string; team_b: string; overs: number; players_per_side: number; batting_first: 'a' | 'b'; status: 'scheduled' | 'live' | 'completed'; youtube_id: string | null; is_public: number; scheduled_for: number | null; result: string | null; created_at: number }
-interface BallRow { id: number; innings: 1 | 2; seq: number; batter: string; bowler: string; runs_bat: number; extra_type: string | null; extra_runs: number; wicket: number; wicket_kind: string | null; out_player: string | null }
+export interface MatchRow { id: string; owner_id: string; ground_id: string | null; title: string; team_a: string; team_b: string; overs: number; players_per_side: number; batting_first: 'a' | 'b'; status: 'scheduled' | 'live' | 'completed'; youtube_id: string | null; is_public: number; scheduled_for: number | null; result: string | null; created_at: number }
+export interface BallRow { id: number; innings: 1 | 2; seq: number; batter: string; bowler: string; runs_bat: number; extra_type: string | null; extra_runs: number; wicket: number; wicket_kind: string | null; out_player: string | null; fielder: string | null }
 
 export interface Match { id: string; title: string; teamA: string; teamB: string; overs: number; playersPerSide: number; battingFirst: 'a' | 'b'; status: string; youtubeId: string | null; embedUrl: string | null; isPublic: boolean; scheduledFor: number | null; result: string | null; groundId: string | null }
 const toMatch = (r: MatchRow): Match => ({
@@ -154,11 +190,34 @@ function inningsState(m: MatchRow, balls: BallRow[], innings: 1 | 2): { closed: 
   return { closed: false, why: null };
 }
 
-const ballsOf = (matchId: string, innings: 1 | 2): BallRow[] => many<BallRow>('SELECT * FROM match_balls WHERE match_id = ? AND innings = ? ORDER BY seq', matchId, innings);
+export const ballsOf = (matchId: string, innings: 1 | 2): BallRow[] => many<BallRow>('SELECT * FROM match_balls WHERE match_id = ? AND innings = ? ORDER BY seq', matchId, innings);
 
 function battingTeam(m: MatchRow, innings: 1 | 2): string {
-  const firstIsA = m.batting_first === 'a';
-  return (innings === 1) === firstIsA ? m.team_a : m.team_b;
+  return battingSide(m, innings) === 'a' ? m.team_a : m.team_b;
+}
+/** Which side ('a' or 'b') bats in an innings. */
+export function battingSide(m: Pick<MatchRow, 'batting_first'>, innings: 1 | 2): 'a' | 'b' {
+  return (innings === 1) === (m.batting_first === 'a') ? 'a' : 'b';
+}
+
+/**
+ * With squads, the scorer must use their names: the batter (and whoever is out) from the batting side, the bowler and fielder from the
+ * other. A side with no squad yet takes any name, as before. Gives back each name as the squad spells it, so one player is one name.
+ */
+function squadNames(m: MatchRow, innings: 1 | 2, names: { batter: string; outPlayer: string | null; bowler: string; fielder: string | null }) {
+  const rows = many<{ side: 'a' | 'b'; name: string; name_key: string }>('SELECT side, name, name_key FROM match_players WHERE match_id = ? AND removed_at IS NULL', m.id);
+  const bat = battingSide(m, innings), field = bat === 'a' ? 'b' : 'a';
+  const pick = (side: 'a' | 'b', name: string, field_: string): string => {
+    const squad = rows.filter((r) => r.side === side);
+    if (!squad.length) return name;
+    const hit = squad.find((r) => r.name_key === nameKey(name));
+    if (!hit) throw new HttpError(400, 'NOT_IN_SQUAD', `${name} is not in the ${side === 'a' ? m.team_a : m.team_b} squad. Add them to the squad first.`, { fields: [{ field: field_, message: 'Not in the squad' }] });
+    return hit.name;
+  };
+  return {
+    batter: pick(bat, names.batter, 'batter'), outPlayer: names.outPlayer ? pick(bat, names.outPlayer, 'outPlayer') : null,
+    bowler: pick(field, names.bowler, 'bowler'), fielder: names.fielder ? pick(field, names.fielder, 'fielder') : null,
+  };
 }
 
 export interface BallInput { batter: string; bowler: string; runsBat: number; extraType: string | null; extraRuns: number; wicket: boolean; wicketKind: string | null; outPlayer: string | null }
@@ -176,6 +235,8 @@ export function addBall(actor: Actor, ownerId: string, matchId: string, src: unk
   const wicket = v.bool('wicket') ?? false;
   const wicketKind = v.oneOf('wicketKind', DISMISSALS);
   const outPlayer = v.str('outPlayer', { max: 40 });
+  const fielder = v.str('fielder', { max: 40 });
+  if (fielder && (!wicket || !FIELDER_KINDS.includes(wicketKind ?? ''))) v.fail('fielder', 'A fielder is named only for a catch, run out or stumping');
   if (wicket && !wicketKind) v.fail('wicketKind', 'Say how the batter was out');
   if (!wicket && wicketKind) v.fail('wicket', 'Set wicket to true when giving a dismissal');
   if (extraType && (extraType === 'bye' || extraType === 'legbye') && runsBat > 0) v.fail('runsBat', 'Byes and leg byes are not scored off the bat');
@@ -194,9 +255,10 @@ export function addBall(actor: Actor, ownerId: string, matchId: string, src: unk
   const st = inningsState(m, balls, innings!);
   if (st.closed) throw new HttpError(409, 'INNINGS_CLOSED', `This innings is over (${st.why}).`);
   const seq = (balls[balls.length - 1]?.seq ?? 0) + 1;
+  const who = squadNames(m, innings!, { batter: batter!, outPlayer: wicket ? (outPlayer ?? null) : null, bowler: bowler!, fielder: wicket ? (fielder ?? null) : null });
   tx(() => {
-    run('INSERT INTO match_balls(match_id, innings, seq, batter, bowler, runs_bat, extra_type, extra_runs, wicket, wicket_kind, out_player, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
-      matchId, innings!, seq, batter!, bowler!, runsBat, extraType ?? null, extraRuns ?? 0, wicket ? 1 : 0, wicket ? wicketKind! : null, wicket ? (outPlayer ?? batter!) : null, now());
+    run('INSERT INTO match_balls(match_id, innings, seq, batter, bowler, runs_bat, extra_type, extra_runs, wicket, wicket_kind, out_player, fielder, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      matchId, innings!, seq, who.batter, who.bowler, runsBat, extraType ?? null, extraRuns ?? 0, wicket ? 1 : 0, wicket ? wicketKind! : null, wicket ? (who.outPlayer ?? who.batter) : null, who.fielder, now());
     if (m.status === 'scheduled') run("UPDATE matches SET status = 'live', updated_at = ? WHERE id = ?", now(), matchId);
   });
   settle(ownerId, matchId, actor);
@@ -240,6 +302,16 @@ export interface Scorecard {
   }[];
 }
 
+/** The dismissal as a scorecard writes it: "caught b Zed", or with the fielder known "c Ravi b Zed", "c & b Zed", "st Ravi b Zed", "run out (Ravi)". */
+export function howOut(b: Pick<BallRow, 'wicket_kind' | 'bowler' | 'fielder'>): string {
+  const f = b.fielder;
+  if (b.wicket_kind === 'retired') return 'retired';
+  if (b.wicket_kind === 'run out') return f ? `run out (${f})` : 'run out';
+  if (f && b.wicket_kind === 'caught') return nameKey(f) === nameKey(b.bowler) ? `c & b ${b.bowler}` : `c ${f} b ${b.bowler}`;
+  if (f && b.wicket_kind === 'stumped') return `st ${f} b ${b.bowler}`;
+  return `${b.wicket_kind} b ${b.bowler}`;
+}
+
 function ballLabel(b: BallRow): string {
   if (b.wicket) return 'W';
   if (b.extra_type === 'wide') return b.extra_runs > 1 ? `${b.extra_runs}wd` : 'wd';
@@ -268,7 +340,7 @@ export function scorecard(matchId: string, includePrivate: boolean, ownerId?: st
       if (b.wicket) {
         const who = b.out_player ?? b.batter;
         const o = bat.get(who) ?? { runs: 0, balls: 0, fours: 0, sixes: 0, out: null }; bat.set(who, o);
-        o.out = b.wicket_kind === 'run out' || b.wicket_kind === 'retired' ? b.wicket_kind : `${b.wicket_kind} b ${b.bowler}`;
+        o.out = howOut(b);
       }
       const w = bowl.get(b.bowler) ?? { legal: 0, runs: 0, wickets: 0 }; bowl.set(b.bowler, w);
       if (b.extra_type !== 'wide' && b.extra_type !== 'noball') w.legal++;
