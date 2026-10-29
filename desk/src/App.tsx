@@ -1,15 +1,16 @@
 import { createContext, useContext, useEffect, useRef, useState, Suspense } from 'react';
-import { api, can, go, roleLabel, setAiName, setIsSuper, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
+import { api, can, go, roleLabel, setAiName, setIsSuper, setPortfolioBusiness, setToken, setUnauthorizedHandler, setViewOwner, getViewOwner, useApi, useRoute, getToken, type Me } from './lib';
 import { Icon, ToastHost, Loading, Crest, ErrorBox } from './ui';
 import { ThemeToggle } from './ThemeToggle';
 import { Intro } from './Intro';
-import { HOME, PAGES, SIDE, sideOf, navItem, itemFor, navVisible, hrefOf, type NavItem } from './registry';
+import { HOME, PAGES, SIDE, sideOf, navItem, itemFor, navVisible, hrefOf, setMainBusiness, type NavItem } from './registry';
 import { resolveRoute } from './routes';
 import { NotBuilt } from './parts/NotBuilt';
 import { CommandSearch, askAssistant } from './CommandSearch';
 import { AskPanel } from './AskPanel';
 import { GroundPicker } from './GroundPicker';
 import { AiNamePrefs } from './parts/admin/AiNamePrefs';
+import { brandSrc, type Brand } from './parts/admin/Brand';
 
 // ---------- session shared by every page ----------
 export interface Owner { id: string; name: string; businessName: string | null }
@@ -37,6 +38,9 @@ function Shell({ route }: { route: string }) {
     addEventListener('keydown', esc); addEventListener('mousedown', away);
     return () => { removeEventListener('keydown', esc); removeEventListener('mousedown', away); };
   }, []);
+  // white-label: the desk wears the business's own name and logo; only the main site's business shows the main website's mark
+  const [brand] = useApi<Brand>(s.ownerId ? '/api/desk/brand' : null, [s.ownerId]);
+  setMainBusiness(!brand || brand.mainSettings || s.me.role === 'super_admin');
   const visible = (i: NavItem) => navVisible(s.me, i);
   // the one menu item for this address (the longest match), and the sidebar entry it sits under
   const active = itemFor(route);
@@ -59,18 +63,25 @@ function Shell({ route }: { route: string }) {
   s.refreshCounts = () => { reloadCounts(); reloadToday(); };
   const signOut = () => { const t = getToken(); const done = () => { setToken(null); location.href = './'; }; if (!t) return done(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + t } }).catch(() => {}).finally(done); };
   const owner = s.owners.find((o) => o.id === s.ownerId);
-  const groundLabel = owner?.businessName || s.me.businessName || 'Daji Cricket Ground';
+  const groundLabel = brand?.name || owner?.businessName || s.me.businessName || 'Your business';
+  const ownMark = !!brand && (!!brand.logoUrl || !brand.mainSettings);
   // the pages that sit with this one, as chips above it (the same list the sidebar shows under its entry)
   const siblings = here && !here.to ? side.find((x) => x.key === here.key)?.list ?? [] : [];
 
   return (
     <div className="dapp">
       <nav className={`dside${open ? ' open' : ''}`} aria-label="Menu" id="main-menu">
-        <a className="dside-brand" href="./" aria-label="Daji Cricket Ground, back to the website">
-          <span className="dside-word">Daji<img src="assets/icon.svg" alt="" width={30} height={30} /></span>
-          <span className="dside-name">Cricket Ground</span>
-          <span className="dside-tag">Play · Practice · Grow</span>
-        </a>
+        {ownMark ? (
+          <a className="dside-brand" href={brand!.mainSite ? './' : `./b/${brand!.slug}`} aria-label={`${brand!.name}, open the booking page`}>
+            {brand!.logoUrl ? <img src={brandSrc(brand!.logoUrl)!} alt={brand!.name} style={{ maxWidth: 180, maxHeight: 64, objectFit: 'contain' }} /> : <span className="dside-name">{brand!.name}</span>}
+          </a>
+        ) : (
+          <a className="dside-brand" href="./" aria-label="Daji Cricket Ground, back to the website">
+            <span className="dside-word">Daji<img src="assets/icon.svg" alt="" width={30} height={30} /></span>
+            <span className="dside-name">Cricket Ground</span>
+            <span className="dside-tag">Play · Practice · Grow</span>
+          </a>
+        )}
         <div className="dside-items">
           {side.map((x) => {
             const on = here?.key === x.key;
@@ -185,6 +196,14 @@ export function App() {
         const keep = getViewOwner();
         const pick = list.find((o) => o.id === keep)?.id ?? list[0]?.id ?? null;
         setViewOwner(pick); setOwnerId(pick);
+      } else if (u.role === 'owner') {
+        // a portfolio: the owner's own business first, then the others the software owner put in it
+        const pf = await api<{ items: { id: string; businessName: string; own: boolean }[] }>('/api/me/portfolio').then((x) => x.items).catch(() => []);
+        const list = pf.length ? pf.map((b) => ({ id: b.id, name: u.name, businessName: b.businessName })) : [{ id: u.id, name: u.name, businessName: u.businessName }];
+        setOwners(list);
+        const keep = getViewOwner();
+        const pick = list.find((o) => o.id === keep)?.id ?? u.id;
+        setViewOwner(pick); setPortfolioBusiness(pick === u.id ? null : pick); setOwnerId(pick);
       } else { setOwnerId(u.ownerId ?? u.id); setOwners([{ id: u.ownerId ?? u.id, name: u.name, businessName: u.businessName }]); }
       if (u.role === 'staff') {
         const t = await api<Terms & { accepted: unknown }>('/api/legal/staff-terms').catch(() => null);
@@ -196,7 +215,7 @@ export function App() {
   if (me === undefined) return <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}><Crest size={72} /></div>;
   if (!me) return null;
   if (terms) return <TermsGate terms={terms} onDone={() => setTerms(null)} onSignOut={() => { const t = getToken(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + (t ?? '') } }).catch(() => {}).finally(() => { setToken(null); location.href = './'; }); }} />;
-  const setOwner = (id: string) => { setViewOwner(id); setOwnerId(id); };
+  const setOwner = (id: string) => { setViewOwner(id); if (me.role === 'owner') setPortfolioBusiness(id === me.id ? null : id); setOwnerId(id); };
   // the key makes every page reload its data when a super admin switches business
   return (
     <ToastHost>

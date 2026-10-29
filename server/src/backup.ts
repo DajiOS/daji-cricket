@@ -87,7 +87,7 @@ export function listBackups(cfg: Config): BackupInfo[] {
 /** Folders under the data directory that are copied into every snapshot (the database is copied separately). The photo and video
  *  library is left out: it runs to tens of GB of drone footage that would fill the disk with a copy every day. It lives on its own
  *  storage disk, which Lightsail snapshots (deploy/STORAGE.md), and the owner keeps the original files. */
-export const BACKED_UP_FOLDERS = ['uploads', 'task-photos', 'avatars', 'cards', 'media'];
+export const BACKED_UP_FOLDERS = ['uploads', 'task-photos', 'avatars', 'cards', 'media', 'brand'];
 
 /** Takes a snapshot now. Throws if the copy cannot be read back; nothing is left behind in that case. */
 export function backupNow(cfg: Config, reason: 'scheduled' | 'manual', actor: Actor = SYSTEM): BackupInfo {

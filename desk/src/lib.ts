@@ -36,13 +36,17 @@ export const getViewOwner = () => viewOwner;
 export const setViewOwner = (id: string | null) => { viewOwner = id; store.set('daji.viewOwner', id); };
 let isSuper = false;
 export const setIsSuper = (v: boolean) => { isSuper = v; };
+/** An owner working in another business of their portfolio: every request says which (X-Daji-Business). Null on their own. */
+let portfolioBiz: string | null = null;
+export const setPortfolioBusiness = (id: string | null) => { portfolioBiz = id; };
+const bizHeader = (): Record<string, string> => (portfolioBiz ? { 'x-daji-business': portfolioBiz } : {});
 const OWNER_SCOPED = ['/api/legal/staff-terms/report', '/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras', '/api/docs'];
 
 export interface ApiOptions { method?: string; body?: unknown; headers?: Record<string, string>; raw?: BodyInit }
 
 export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise<T> {
   if (isSuper && viewOwner && OWNER_SCOPED.some((p) => path.startsWith(p)) && !/[?&]ownerId=/.test(path)) path += (path.includes('?') ? '&' : '?') + 'ownerId=' + encodeURIComponent(viewOwner);
-  const headers: Record<string, string> = { ...(opts.headers || {}) };
+  const headers: Record<string, string> = { ...bizHeader(), ...(opts.headers || {}) };
   const t = getToken(); if (t) headers.authorization = 'Bearer ' + t;
   let body: BodyInit | undefined;
   if (opts.raw !== undefined) { headers['content-type'] ??= 'application/octet-stream'; body = opts.raw; }
@@ -75,7 +79,7 @@ export const sendFile = <T = any>(path: string, file: Blob, headers?: Record<str
 export async function fetchBytes(path: string): Promise<ArrayBuffer> {
   if (isSuper && viewOwner && OWNER_SCOPED.some((p) => path.startsWith(p)) && !/[?&]ownerId=/.test(path)) path += (path.includes('?') ? '&' : '?') + 'ownerId=' + encodeURIComponent(viewOwner);
   const t = getToken();
-  const res = await fetch(API + path, { headers: t ? { authorization: 'Bearer ' + t } : {} });
+  const res = await fetch(API + path, { headers: { ...bizHeader(), ...(t ? { authorization: 'Bearer ' + t } : {}) } });
   if (!res.ok) throw new ApiError(res.status, 'DOWNLOAD', 'Could not load that file.');
   return res.arrayBuffer();
 }

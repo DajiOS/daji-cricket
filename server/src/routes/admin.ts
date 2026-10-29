@@ -23,6 +23,8 @@ import { saveAaSettings, viewAaSettings } from '../accounting/aa.ts';
 import { saveYodleeSettings, subscribeYodleeWebhooks, testYodlee, viewYodleeSettings } from '../yodleeSettings.ts';
 import { readiness } from '../readiness.ts';
 import { noteServerOpen, saveServerConsole, serverConsole, serverStatus } from '../serverConsole.ts';
+import { addBusiness, listBusinesses, requireMainBusiness } from '../businesses.ts';
+import { addToPortfolio, portfolioMembers, removeFromPortfolio } from '../portfolio.ts';
 import { backupNow, BACKUP_AT, lastOffsiteCopy, lastRestorePractice, listBackups, nextBackupAt, practiceRestore } from '../backup.ts';
 
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
@@ -33,14 +35,18 @@ export function adminRoutes(r: Router): void {
   // People, passwords, the audit log, backups, outside services and connections belong to the software owner only: an owner running one business must not reach other businesses or the platform.
   const SAO = { auth: ['super_admin' as const] };
 
-  r.get('/api/admin/settings', () => ok(getSettings()), A);
+  // Platform-wide settings: the software owner and the main site's business only (requireMainBusiness)
+  const M = (c: Ctx) => requireMainBusiness(U(c));
+  r.get('/api/admin/settings', (c) => { M(c); return ok(getSettings()); }, A);
 
   r.put('/api/admin/settings', (c) => {
     const body = c.json();
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'VALIDATION_FAILED', 'Send a JSON object of settings', { fields: [{ field: '(body)', message: 'Expected a JSON object' }] });
     const u = U(c);
-    // Where customers' money goes and the public contact details are shared by every business, so only the software owner changes them.
-    const locked = ['razorpayEnabled', 'upiId', 'contactPhone', 'academyCoaches'].filter((k) => k in (body as object));
+    M(c);
+    // Where customers' money goes and the public contact details are shared by every business, so only the software owner changes them,
+    // and the software owner's own name is theirs alone.
+    const locked = ['razorpayEnabled', 'upiId', 'contactPhone', 'academyCoaches', 'mainSiteBusinessId'].filter((k) => k in (body as object));
     if (u.role !== 'super_admin' && locked.length) throw new HttpError(403, 'FORBIDDEN', `Only the software owner can change: ${locked.join(', ')}`);
     const changed = updateSettings(body as Record<string, unknown>, u.id);
     for (const [k, v] of Object.entries(changed)) audit({ id: u.id, role: u.role }, k === 'razorpayEnabled' ? 'settings.razorpay_toggle' : 'settings.update', 'setting', k, v);
@@ -49,19 +55,19 @@ export function adminRoutes(r: Router): void {
 
   // The go-live check: what is still unset before opening day, by name only (never a secret's value).
   // The festival calendar: the website changes its look by itself on these days.
-  r.get('/api/admin/festivals', () => ok(festivalCalendar()), A);
-  r.post('/api/admin/festivals', (c) => created(createFestival(U(c), c.json())), A);
-  r.put('/api/admin/festivals/:id', (c) => ok(updateFestival(U(c), c.params.id!, c.json())), A);
-  r.del('/api/admin/festivals/:id', (c) => { deleteFestival(U(c), c.params.id!); return ok({ deleted: true }); }, A);
+  r.get('/api/admin/festivals', (c) => { M(c); return ok(festivalCalendar()); }, A);
+  r.post('/api/admin/festivals', (c) => { M(c); return created(createFestival(U(c), c.json())); }, A);
+  r.put('/api/admin/festivals/:id', (c) => { M(c); return ok(updateFestival(U(c), c.params.id!, c.json())); }, A);
+  r.del('/api/admin/festivals/:id', (c) => { M(c); deleteFestival(U(c), c.params.id!); return ok({ deleted: true }); }, A);
   // The quarterly design packs: the live one, the next one, and the owner's approve, delay and switch.
-  r.get('/api/admin/design-packs', () => ok(packCalendar()), A);
-  r.put('/api/admin/design-packs/:id', (c) => ok(updatePack(U(c), c.params.id!, c.json())), A);
+  r.get('/api/admin/design-packs', (c) => { M(c); return ok(packCalendar()); }, A);
+  r.put('/api/admin/design-packs/:id', (c) => { M(c); return ok(updatePack(U(c), c.params.id!, c.json())); }, A);
 
   r.get('/api/admin/readiness', (c) => ok(readiness(c.cfg, U(c), c.query.get('ownerId'))), A);
 
   // Switch single days off (or back on) for online booking.
-  r.get('/api/admin/closed-dates', () => ok({ items: closedDates() }), A);
-  r.post('/api/admin/closed-dates', (c) => { const b = c.json() as Record<string, unknown>; return ok({ ...setClosed(U(c), b.dates, b.closed, b.reason, b.scopes), items: closedDates() }); }, A);
+  r.get('/api/admin/closed-dates', (c) => { M(c); return ok({ items: closedDates() }); }, A);
+  r.post('/api/admin/closed-dates', (c) => { M(c); const b = c.json() as Record<string, unknown>; return ok({ ...setClosed(U(c), b.dates, b.closed, b.reason, b.scopes), items: closedDates() }); }, A);
 
   // The connections: what each outside service needs, whether it is set up, and a safe live test where one exists.
   // Yodlee keys: the software owner only (it is the platform's account, not one business's)
@@ -93,22 +99,33 @@ export function adminRoutes(r: Router): void {
   r.post('/api/admin/yodlee/test', async (c) => { const res = await testYodlee(c.cfg); audit({ id: U(c).id, role: U(c).role }, 'yodlee.test', 'yodlee', null, { ok: res.ok }); return ok(res); }, { ...SA, rate: 'auth' });
   // the ground owner sees which services are set up and can test them (a test signs in or reads, it never sends or charges); keys
   // themselves are never shown
-  r.get('/api/admin/integrations', (c) => ok({ items: integrationStatuses(c.cfg) }), A);
-  r.post('/api/admin/integrations/:id/test', async (c) => ok(await testIntegration(c.cfg, U(c), c.params.id!)), A);
+  r.get('/api/admin/integrations', (c) => { M(c); return ok({ items: integrationStatuses(c.cfg) }); }, A);
+  r.post('/api/admin/integrations/:id/test', async (c) => { M(c); return ok(await testIntegration(c.cfg, U(c), c.params.id!)); }, A);
   // the owner's notes on each account (who signed up, account names, what is pending); keys and passwords are refused
-  r.put('/api/admin/integrations/:id/notes', (c) => ok(saveIntegrationNotes(c.cfg, U(c), c.params.id!, c.json())), A);
+  r.put('/api/admin/integrations/:id/notes', (c) => { M(c); return ok(saveIntegrationNotes(c.cfg, U(c), c.params.id!, c.json())); }, A);
   // Settings › Server: the live state of the server and the software owner's way in (Amazon's browser SSH page, the AI coding console).
-  // The ground owner and the software owner, never staff. The SSH button only links to Amazon's sign-in, so it gives nobody a way in by itself:
-  // no AWS keys are kept and no shell runs here.
-  r.get('/api/admin/server', (c) => ok({ status: serverStatus(c.cfg), console: serverConsole() }), A);
-  r.put('/api/admin/server/console', (c) => ok(saveServerConsole(U(c), c.json())), A);
-  r.post('/api/admin/server/opened', (c) => ok(noteServerOpen(U(c), (c.json() as { what?: unknown } | null)?.what)), A);
+  // The main website's owner and the software owner, never staff and never another business (the one server runs them all). The SSH
+  // button only links to Amazon's sign-in, so it gives nobody a way in by itself: no AWS keys are kept and no shell runs here.
+  r.get('/api/admin/server', (c) => { M(c); return ok({ status: serverStatus(c.cfg), console: serverConsole() }); }, A);
+  r.put('/api/admin/server/console', (c) => { M(c); return ok(saveServerConsole(U(c), c.json())); }, A);
+  r.post('/api/admin/server/opened', (c) => { M(c); return ok(noteServerOpen(U(c), (c.json() as { what?: unknown } | null)?.what)); }, A);
 
   // The notebook of outside services and the accounts they were opened with (never keys or passwords).
   r.get('/api/admin/services', () => ok({ items: listServices() }), SAO);
   r.post('/api/admin/services', (c) => created(addService(U(c), c.json())), SAO);
   r.patch('/api/admin/services/:id', (c) => ok(updateService(U(c), c.params.id!, c.json())), SAO);
   r.del('/api/admin/services/:id', (c) => { deleteService(U(c), c.params.id!); return ok({ removed: true }); }, SAO);
+
+  // The software owner's customer businesses (Daji Cricket Ground first): who they are and how far set up, never their figures.
+  r.get('/api/admin/businesses', () => ok(listBusinesses()), SAO);
+  r.post('/api/admin/businesses', (c) => { const u = U(c); return created(addBusiness({ id: u.id, role: u.role }, c.json())); }, SAO);
+  // Portfolios: which other business owners' sign-ins also open this business. Removing one splits them again at once.
+  r.get('/api/admin/businesses/:id/portfolio', (c) => ok({ items: portfolioMembers(c.params.id!) }), SAO);
+  r.post('/api/admin/businesses/:id/portfolio', (c) => {
+    const u = U(c); const v = new Validator(c.json()); const userId = v.str('userId', { required: true, max: 64 }); v.done();
+    return ok({ items: addToPortfolio({ id: u.id, role: u.role }, c.params.id!, userId!) });
+  }, SAO);
+  r.del('/api/admin/businesses/:id/portfolio/:userId', (c) => { const u = U(c); return ok({ items: removeFromPortfolio({ id: u.id, role: u.role }, c.params.id!, c.params.userId!) }); }, SAO);
 
   r.get('/api/admin/users', (c) => {
     const { limit, offset } = page(c, 50);
