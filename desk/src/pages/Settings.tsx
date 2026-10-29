@@ -11,20 +11,25 @@ import AiName from '../parts/admin/AiName';
 import SharedSheet from '../parts/admin/SharedSheet';
 import WaitlistSettings from '../parts/admin/Waitlist';
 import CheckInSettings from '../parts/admin/CheckIn';
+import ServerSettings from '../parts/admin/Server';
 import { useSession } from '../App';
 import { can } from '../lib';
 
 // The ground's own settings. People, Services and Backups are the software owner's, so they live on the Platform page only; their old
 // addresses here open them there (routes.ts, MERGED). Connections stays here for everyone (Settings, Connections: CLAUDE.md).
 const TABS: [string, string][] = [['prices', 'Prices and timings'], ['booking', 'Booking window'], ['waitlist', 'Waitlist'], ['checkin', 'Check-in'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']];
+/** Server status, the Lightsail SSH button and the AI coding console: the owner's (and the software owner's), never staff. */
+const SERVER_TAB: [string, string] = ['server', 'Server'];
 
 export default function Settings({ sub }: { sub: string }) {
+  const { me } = useSession();
+  const tabs = me.role === 'owner' || me.role === 'super_admin' ? [...TABS, SERVER_TAB] : TABS;
   // Admin, Settings opens on a list of every setting, rather than on prices (which already has its own menu item)
-  if (!sub.split('/')[0]) return <Hub tabs={TABS} />;
-  const tab = sectionOf(sub, TABS.map(([k]) => k));
+  if (!sub.split('/')[0]) return <Hub tabs={tabs} />;
+  const tab = sectionOf(sub, tabs.map(([k]) => k));
   return (
     <div className="stack">
-      <PageHead eyebrow="Settings" title={TABS.find(([k]) => k === tab)?.[1] ?? 'Settings'} />
+      <PageHead eyebrow="Settings" title={tabs.find(([k]) => k === tab)?.[1] ?? 'Settings'} />
       {tab === 'prices' && <Prices />}
       {tab === 'booking' && <Booking />}
       {tab === 'waitlist' && <WaitlistSettings />}
@@ -35,6 +40,7 @@ export default function Settings({ sub }: { sub: string }) {
       {tab === 'ai' && <AiName />}
       {tab === 'connections' && <ConnectionsTab />}
       {tab === 'golive' && <GoLive />}
+      {tab === 'server' && <ServerSettings />}
     </div>
   );
 }
@@ -56,6 +62,7 @@ const ABOUT: Record<string, string> = {
   ai: 'The name everyone sees the assistant called, voice shortcuts, and the reserved names no one may use.',
   connections: 'The shared spreadsheet for this business, the services the server is connected to, and what each one still needs.',
   golive: 'Everything to tick off before the ground opens for real bookings.',
+  server: 'Is the server healthy, the Connect using SSH button for Amazon Lightsail, and the AI coding console.',
 };
 
 function Hub({ tabs }: { tabs: [string, string][] }) {
