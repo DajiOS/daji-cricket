@@ -54,12 +54,24 @@ const skip = (why: string) => { ev('skipped', why); };
 const DECLARED_NEW_ROWS: { module: string; table: string; match: Record<string, unknown> }[] = [
   { module: 'prices-on-enquiry-1', table: 'settings', match: { key: 'pricesOnEnquiry' } }, // Sunny Patel switched prices on enquiry on for Daji (28 Oct 2026)
 ];
+// Old rows a released module deliberately edits. An edited old row passes only when it is listed here: the module was applied by this
+// migration, the old row matched `from`, and the new row is the old row with exactly the `to` values and nothing else. No money table is ever listed.
+const DECLARED_ROW_EDITS: { module: string; table: string; from: Record<string, unknown>; to: Record<string, unknown> }[] = [
+  // Sunny Patel sent Daji's exact pin for check-in (28 Oct 2026); grounds still on the old shared pin move to it
+  { module: 'daji-pin-2026-10-28', table: 'grounds', from: { lat: 21.1818855, lng: 72.9134859 }, to: { lat: 21.1815, lng: 72.912556, map_url: 'https://maps.app.goo.gl/wGawo7LdNzKT8k4Y9' } },
+];
 function rowDiff(beforeRows: Record<string, Map<number, string>>, now: DatabaseSync, oldCols: Record<string, string[]>, applied: string[]) {
   const changed: string[] = [], undeclared: string[] = [], declared: string[] = [];
   for (const t of Object.keys(beforeRows)) {
     if (t === 'audit_log') continue;
     const was = beforeRows[t]!, is = rowsByRowid(now, t, oldCols[t]!);
-    for (const [id, row] of was) if (is.get(id) !== row) changed.push(`${t} row ${id}`);
+    for (const [id, row] of was) {
+      const got = is.get(id);
+      if (got === row) continue;
+      const o = JSON.parse(row) as Record<string, unknown>;
+      const e = got && DECLARED_ROW_EDITS.find((x) => x.table === t && applied.includes(x.module) && Object.entries(x.from).every(([k, v]) => o[k] === v));
+      if (e && got === JSON.stringify({ ...o, ...e.to })) declared.push(`${t} row ${id} edited by ${e.module}`); else changed.push(`${t} row ${id}`);
+    }
     for (const [id, row] of is) {
       if (was.has(id)) continue;
       const r = JSON.parse(row) as Record<string, unknown>;
@@ -110,16 +122,23 @@ rel('REL-MIG-001', 'forward migration of a real old database: every old row is u
   pd.prepare("INSERT INTO settings(key, value, updated_at, updated_by) VALUES('undeclaredProbe', 'x', 0, NULL)").run();
   const firstUser = pd.prepare('SELECT rowid AS r FROM users ORDER BY rowid LIMIT 1').get() as { r: number };
   pd.prepare("UPDATE users SET name = name || ' (edited)' WHERE rowid = ?").run(firstUser.r);
+  // a declared edit covers only its own columns: the same ground with anything else changed is still caught
+  const pinned = pd.prepare("SELECT rowid AS r FROM grounds WHERE map_url = 'https://maps.app.goo.gl/wGawo7LdNzKT8k4Y9' ORDER BY rowid LIMIT 1").get() as { r: number } | undefined;
+  if (pinned) pd.prepare("UPDATE grounds SET name = name || ' (edited)' WHERE rowid = ?").run(pinned.r);
   const caught = rowDiff(beforeRows, pd, oldCols, res.appliedNow);
   pd.close();
   assert.ok(caught.undeclared.some((x) => x.startsWith('settings ')), `an undeclared settings row is caught: ${caught.undeclared}`);
   assert.ok(caught.changed.includes(`users row ${firstUser.r}`), `an edited old row is caught: ${caught.changed}`);
+  if (pinned) assert.ok(caught.changed.includes(`grounds row ${pinned.r}`), `a ground edited beyond the declared pin move is caught: ${caught.changed}`);
   const nowTables = tableNames(now);
   const added = nowTables.filter((t) => !oldTables.includes(t));
   const addedCols: Record<string, string[]> = {};
   for (const t of oldTables) { const c = cols(now, t).filter((x) => !oldCols[t]!.includes(x)); if (c.length) addedCols[t] = c; }
-  assert.ok(added.includes('booking_reschedules') && added.includes('retention_cases') && added.includes('file_intake_log') && added.includes('idempotency_keys'), `new tables: ${added}`);
-  assert.deepEqual(addedCols.bookings, ['deleted_at', 'deleted_by', 'reschedule_count']); // booking-deleted-1 (hidden, never deleted) and the reschedule count
+  // what the migrated database must have, whichever release the old database came from: added now if the old one lacked it, kept if it had it
+  for (const t of ['booking_reschedules', 'retention_cases', 'file_intake_log', 'idempotency_keys']) assert.ok(nowTables.includes(t), `table ${t} after migration (new tables: ${added})`);
+  const BOOKING_COLS = ['deleted_at', 'deleted_by', 'reschedule_count']; // booking-deleted-1 (hidden, never deleted) and the reschedule count
+  for (const c of BOOKING_COLS) assert.ok(cols(now, 'bookings').includes(c), `bookings.${c} after migration`);
+  assert.deepEqual((addedCols.bookings ?? []).filter((c) => !BOOKING_COLS.includes(c)), [], 'no other column is added to bookings');
   assert.equal((now.prepare('SELECT COUNT(*) n FROM bookings WHERE deleted_at IS NOT NULL').get() as { n: number }).n, 0, 'no old booking is hidden by the migration');
   assert.equal((now.prepare('SELECT COUNT(*) n FROM bookings WHERE reschedule_count <> 0').get() as { n: number }).n, 0, 'the new column starts at zero for every old booking');
   const triggers = (now.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_ao_%'").all() as { name: string }[]).length;
