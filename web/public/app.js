@@ -2083,6 +2083,79 @@ bookingsExtras.push((ex) => {
   draw();
 });
 
+// Fantasy cricket (server/src/fantasy.ts): free to play, points only, no entry fee and no prize. The ground opens a contest on a public
+// match; the player picks a team from both squads with a captain (2x) and vice-captain (1.5x) until it locks; points come from the live score.
+bookingsExtras.push((ex) => {
+  if (!state.user || state.user.role !== 'customer') return;
+  const card = h('div', { class: 'card', id: 'fantasy-card', style: 'margin:0 0 14px;padding:18px 20px' });
+  const LABEL = { open: 'Open', locked: 'Locked', live: 'Live', final: 'Final', cancelled: 'Cancelled' };
+  const when = (ms) => new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+  const draw = () => api('/api/fantasy').then((r) => {
+    clear(card);
+    if (!card.isConnected) ex.append(card);
+    card.append(h('h4', { style: 'margin:0 0 4px;font-size:18px;letter-spacing:.04em' }, 'Fantasy cricket'), h('p', { class: 'hint', style: 'margin:0 0 8px' }, r.note));
+    if (!r.items.length) { card.append(h('p', { class: 'hint' }, 'No contest is open right now. When the ground opens fantasy on a match, it shows here.')); return; }
+    card.append(...r.items.map((c) => h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(127,127,127,.15);flex-wrap:wrap' },
+      h('span', {}, h('b', {}, `${c.match.teamA} v ${c.match.teamB}`), h('span', { class: 'hint', style: 'margin:0' }, ` · ${LABEL[c.state]}${c.state === 'open' && c.locksAt ? `, locks ${when(c.locksAt)}` : ''}${c.match.score ? ` · ${c.match.score}` : ''}`),
+        c.mine ? h('div', { class: 'hint', style: 'margin:2px 0 0' }, c.mine.removed ? `${c.mine.teamName}: removed by the ground` : `${c.mine.teamName}: ${c.mine.points} points${c.mine.rank ? `, place ${c.mine.rank} of ${c.entries}` : ''}`) : null),
+      h('button', { class: c.state === 'open' && !c.mine ? 'btn primary sm' : 'btn ghost sm', type: 'button', onclick: () => openFantasy(c.id, draw) }, c.state === 'open' ? (c.mine ? 'Change team' : 'Pick a team') : 'Leaderboard'))));
+  }).catch(() => {});
+  draw();
+});
+
+async function openFantasy(id, after) {
+  const body = h('div', {}, h('div', { class: 'skeleton' }, 'Loading…'));
+  openModal([h('div', { class: 'eyebrow' }, 'Fantasy cricket'), body]);
+  const row = (a, b) => h('div', { style: 'display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid rgba(127,127,127,.15)' }, a, b);
+  const draw = async (msg) => {
+    let c; try { c = await api(`/api/fantasy/${encodeURIComponent(id)}`); } catch (e) { clear(body).append(h('div', { class: 'fe' }, e.message)); return; }
+    clear(body).append(h('h3', {}, `${c.match.teamA} v ${c.match.teamB}`), h('p', { class: 'muted' }, `${c.stateText}${c.match.score ? ` · ${c.match.score}` : ''}${c.match.result ? ` · ${c.match.result}` : ''}`));
+    if (msg) body.append(h('p', { class: 'ok-text' }, msg));
+    if (c.removedByGround) body.append(h('p', { class: 'fe' }, `The ground removed your team from this contest${c.removedByGround.reason ? `: ${c.removedByGround.reason}` : ''}.`));
+    if (c.canEdit) {
+      // the picker: every squad player as a tick box, captain and vice-captain from the ticked ones
+      const mine = c.mine;
+      const chosen = new Set(mine ? mine.picks.filter((p) => p.inSquad).map((p) => p.id) : []);
+      let cap = mine && chosen.has(mine.captainId) ? mine.captainId : '', vc = mine && chosen.has(mine.viceCaptainId) ? mine.viceCaptainId : '';
+      const name = h('input', { class: 'inp', maxlength: 24, placeholder: 'Team name', 'aria-label': 'Team name', value: mine ? mine.teamName : '' });
+      const count = h('p', { class: 'hint', style: 'margin:6px 0' });
+      const err = h('div', { class: 'fe' });
+      const roles = h('div', { class: 'row', style: 'gap:12px;flex-wrap:wrap' });
+      const sel = (label, get, set) => { const s = h('select', { 'aria-label': label }, h('option', { value: '' }, 'Pick one'), ...c.players.filter((p) => chosen.has(p.id)).map((p) => h('option', { value: p.id, selected: get() === p.id }, p.name))); s.onchange = () => set(s.value); return h('label', { class: 'field', style: 'flex:1;min-width:150px' }, h('span', {}, label), s); };
+      const refresh = () => { count.textContent = `${chosen.size} of ${c.teamSize} picked · at most ${c.maxFromSide} from one team`; clear(roles).append(sel('Captain (2x)', () => cap, (v) => { cap = v; }), sel('Vice-captain (1.5x)', () => vc, (v) => { vc = v; })); };
+      const sides = ['a', 'b'].map((side) => h('div', {}, h('div', { class: 'hint', style: 'margin:10px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.08em' }, side === 'a' ? c.match.teamA : c.match.teamB),
+        ...c.players.filter((p) => p.side === side).map((p) => { const box = h('input', { type: 'checkbox', checked: chosen.has(p.id) }); box.onchange = () => { if (box.checked) chosen.add(p.id); else { chosen.delete(p.id); if (cap === p.id) cap = ''; if (vc === p.id) vc = ''; } refresh(); }; return h('label', { style: 'display:flex;gap:8px;align-items:center;padding:4px 0' }, box, p.name); })));
+      refresh();
+      body.append(h('label', { class: 'field' }, h('span', {}, 'Team name'), name), h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:4px 24px' }, ...sides), count, roles,
+        h('div', { class: 'row', style: 'gap:8px;margin-top:12px;flex-wrap:wrap' },
+          h('button', { class: 'btn primary sm', type: 'button', onclick: async () => {
+            err.textContent = '';
+            if (name.value.trim().length < 3) { err.textContent = 'Give your team a name (3 letters or more).'; return; }
+            if (chosen.size !== c.teamSize) { err.textContent = `Pick exactly ${c.teamSize} players.`; return; }
+            if (!cap || !vc) { err.textContent = 'Pick a captain and a vice-captain.'; return; }
+            try { await api(`/api/fantasy/${encodeURIComponent(id)}/entry`, { method: 'PUT', body: { teamName: name.value.trim(), players: [...chosen], captain: cap, viceCaptain: vc } }); draw('Your team is in. You can change it until the contest locks.'); if (after) after(); }
+            catch (x) { err.textContent = x.message; }
+          } }, mine ? 'Save changes' : 'Enter this team'),
+          mine ? h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (!confirm('Take your team out of this contest? You can enter again before it locks.')) return; try { await api(`/api/fantasy/${encodeURIComponent(id)}/entry`, { method: 'DELETE' }); draw('Your team is out.'); if (after) after(); } catch (x) { err.textContent = x.message; } } }, 'Withdraw') : null),
+        err, h('p', { class: 'muted small' }, `${c.entries} ${c.entries === 1 ? 'team' : 'teams'} in so far. Other teams show once the contest locks.`));
+    } else if (c.mine) {
+      body.append(h('div', { class: 'hint', style: 'margin:8px 0 4px;font-weight:700' }, `Your team ${c.mine.teamName}: ${c.mine.points} points${c.mine.rank ? `, place ${c.mine.rank} of ${c.entries}` : ''}`),
+        ...c.mine.picks.map((p) => row(h('span', {}, p.name, p.role === 'captain' ? ' (C)' : p.role === 'vice' ? ' (VC)' : ''), h('b', {}, String(p.points)))));
+    }
+    if (c.leaderboard.length) body.append(h('div', { class: 'hint', style: 'margin:14px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.08em' }, 'Leaderboard'),
+      ...c.leaderboard.map((x) => row(h('span', {}, `${x.rank}. ${x.teamName}`, x.you ? h('b', {}, ' (you)') : null), h('b', {}, String(x.points)))),
+      ...(c.you && !c.leaderboard.some((x) => x.you) ? [row(h('span', {}, `${c.you.rank}. ${c.you.teamName} (you)`), h('b', {}, String(c.you.points)))] : []));
+    if (c.state !== 'open') body.append(h('details', { style: 'margin-top:12px' }, h('summary', {}, 'Player points'), ...c.players.map((p) => row(h('span', {}, p.name, h('span', { class: 'muted' }, ` · ${p.team}`)), h('b', {}, String(p.points))))));
+    const season = h('div');
+    body.append(h('details', { style: 'margin-top:8px' }, h('summary', { onclick: async () => {
+      if (season.firstChild) return;
+      try { const s = await api(`/api/fantasy/${encodeURIComponent(id)}/season`); season.append(...(s.table.length ? s.table.map((x) => row(h('span', {}, `${x.rank}. ${x.teamName}`, x.you ? h('b', {}, ' (you)') : null), h('b', {}, String(x.points)))) : [h('p', { class: 'hint' }, 'No finished contests yet.')])); } catch (e) { season.append(h('p', { class: 'fe' }, e.message)); }
+    } }, 'Season table'), season),
+      h('details', { style: 'margin-top:8px' }, h('summary', {}, 'How points work'), ...Object.keys(c.points).map((k) => row(h('span', {}, c.pointLabels[k] || k), h('b', {}, String(c.points[k])))), h('p', { class: 'hint' }, `Captain ${c.captainTimes}x, vice-captain ${c.viceCaptainTimes}x. ${c.note}`)));
+  };
+  draw();
+}
+
 bookingsExtras.push((ex) => {
   if (!state.config.autoDebitEnabled || !state.user || state.user.role !== 'customer') return;
   const card = h('div', { class: 'card', style: 'margin:0 0 14px' }); ex.append(card);
@@ -2986,6 +3059,7 @@ function askBox(out, opt = {}) {
       out.append(h('div', { class: 'answer' }, h('p', {}, r.answer), r.understood ? h('div', { class: 'why' }, r.understood + (r.source === 'claude' ? (r.verified ? '' : '  ·  Not fully verified') : '')) : null));
       if (r.details && r.details.length) out.append(h('div', { class: 'list' }, r.details.map((d) => h('div', { class: 'li' }, h('span', {}, d.label), h('b', {}, d.text)))));
       if (r.open === 'auction') out.append(h('p', { style: 'margin:12px 0 0' }, h('a', { class: 'btn outline sm', href: '#auctions' + (r.auctionId ? '/' + r.auctionId : '') }, r.intent === 'auction_rules_draft' ? 'Open the auction to confirm' : 'Open auctions')));
+      if (r.open === 'fantasy') out.append(h('p', { style: 'margin:12px 0 0' }, h('a', { class: 'btn outline sm', href: '#bookings', onclick: () => setTimeout(() => { const el = $('#fantasy-card'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 400) }, 'Open fantasy cricket')));
       if (r.open === 'book') out.append(h('p', { style: 'margin:12px 0 0' }, h('button', { class: 'btn outline sm', type: 'button', onclick: () => { location.hash = ''; show('home'); setTimeout(() => $('#book').scrollIntoView({ behavior: 'smooth' }), 50); } }, 'Open the booking panel')));
       for (const n of r.notes || []) out.append(h('p', { class: 'hint', style: 'margin:10px 0 0' }, n));
       if (r.suggestions && r.suggestions.length) out.append(h('div', { class: 'sugg' }, r.suggestions.map((s) => h('button', { type: 'button', onclick: () => run(s) }, s))));

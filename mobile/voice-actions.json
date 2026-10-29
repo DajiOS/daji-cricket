@@ -109,6 +109,13 @@
       "screen": "auctions"
     },
     {
+      "id": "fantasy",
+      "title": "My fantasy team",
+      "phrase": "Show my fantasy team in APP",
+      "personal": "Tell NAME to show my fantasy team",
+      "screen": "fantasy"
+    },
+    {
       "id": "ask",
       "title": "Ask a question",
       "phrase": "Ask APP a question",

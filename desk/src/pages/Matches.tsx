@@ -6,15 +6,17 @@ import MatchDialog, { type Match } from '../parts/club/MatchDialog';
 import Scorer from '../parts/club/Scorer';
 import LiveNow from '../parts/club/LiveNow';
 import Leaders from '../parts/club/Leaders';
+import Fantasy from '../parts/club/Fantasy';
 
 // Fixtures: every match, its Live now tab (the register's Live score, at /matches/live; the old /live opens it too) and Player records
-// (/matches/leaders: the career leaders from scored matches). /matches/<id> scores one.
-const TABS: [string, string][] = [['all', 'All fixtures'], ['live', 'Live now'], ['leaders', 'Player records']];
+// (/matches/leaders: the career leaders from scored matches) and Fantasy (/matches/fantasy: free-to-play fantasy contests on public matches).
+// /matches/<id> scores one.
+const TABS: [string, string][] = [['all', 'All fixtures'], ['live', 'Live now'], ['leaders', 'Player records'], ['fantasy', 'Fantasy']];
 
 export default function Matches({ sub }: { sub: string }) {
   const id = sub.split('/')[0] || '';
-  if (id && id !== 'live' && id !== 'leaders') return <div className="stack"><PageHead eyebrow="Match day" title="Score a match" lede="Ball by ball from your phone; the public live page updates by itself." /><Scorer key={id} id={id} back={() => go('/matches')} /></div>;
-  return <List tab={id === 'live' ? 'live' : id === 'leaders' ? 'leaders' : 'all'} />;
+  if (id && id !== 'live' && id !== 'leaders' && id !== 'fantasy') return <div className="stack"><PageHead eyebrow="Match day" title="Score a match" lede="Ball by ball from your phone; the public live page updates by itself." /><Scorer key={id} id={id} back={() => go('/matches')} /></div>;
+  return <List tab={id === 'live' || id === 'leaders' || id === 'fantasy' ? id : 'all'} />;
 }
 
 function List({ tab }: { tab: string }) {
@@ -27,7 +29,7 @@ function List({ tab }: { tab: string }) {
         <button className="btn primary" onClick={() => setDlg('new')}>New match</button>
       </PageHead>
       <div><Tabs value={tab} onChange={(k) => go(k === 'all' ? '/matches' : `/matches/${k}`)} items={TABS} label="Fixtures" /></div>
-      {tab === 'live' ? <LiveNow /> : tab === 'leaders' ? <Leaders /> : <>
+      {tab === 'live' ? <LiveNow /> : tab === 'leaders' ? <Leaders /> : tab === 'fantasy' ? <Fantasy /> : <>
       {data && <div className="grid g3"><Stat label="Matches" value={items.length} /><Stat label="Live now" value={items.filter((m) => m.status === 'live').length} /><Stat label="On the public page" value={items.filter((m) => m.isPublic).length} /></div>}
       <div className="card">
         <Async data={data} error={error}>{(d) => (

@@ -13,6 +13,7 @@ import { StaffScreen, type View_ as StaffView } from './src/StaffScreen';
 import { HomeScreen, type HomeGo } from './src/HomeScreen';
 import { CustomerHome } from './src/CustomerHome';
 import { AuctionScreen } from './src/AuctionScreen';
+import { FantasyScreen } from './src/FantasyScreen';
 import { LiveScreen } from './src/LiveScreen';
 import { TasksScreen } from './src/TasksScreen';
 import { ProfileScreen } from './src/ProfileScreen';
@@ -50,7 +51,7 @@ import { parseVoiceLink, voiceOn, type VoiceRequest } from './src/voice';
 //   messages     (staff with send_broadcasts / view_customers) WhatsApp reminders and Business cards under More
 //   owner        the same, plus Promo codes, Team, Booking controls, Staff pay and Compliance under More
 //   super admin  the same as the owner, working inside the owner chosen under More, plus Refunds and Software costs
-type Tab = 'home' | 'book' | 'me' | 'live' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'more' | 'signin' | 'auctions';
+type Tab = 'home' | 'book' | 'me' | 'live' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'more' | 'signin' | 'auctions' | 'fantasy';
 type More = null | 'accounts' | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings';
 
 const TAB_ICON: Record<string, IconName> = { home: 'home', book: 'calendar', me: 'receipt', live: 'radio', ask: 'sparkles', profile: 'person-circle', bookings: 'calendar', tasks: 'checkbox', more: 'grid', signin: 'log-in' };
@@ -113,6 +114,8 @@ function AppInner({ theme }: { theme: Mode }) {
       else if (a.screen === 'book' || a.screen === 'live') setTab(a.screen);
       // hosted tournaments are a customer screen; on the staff app the link opens the assistant instead
       else if (a.screen === 'auctions' && user.role === 'customer') setTab('auctions');
+      // fantasy teams are picked from a customer account; on the staff app the link opens the assistant instead
+      else if (a.screen === 'fantasy' && user.role === 'customer') setTab('fantasy');
       else { setVoiceAsk(a.question || v.question ? { q: (v.question ?? a.question)!, n: Date.now() } : null); setTab('ask'); }
     })();
   }, [voiceLink, user?.id]);
@@ -256,6 +259,7 @@ function AppInner({ theme }: { theme: Mode }) {
   else if (tab === 'profile') body = <ProfileScreen user={user} onUser={setUser} onSignOut={signOut} />;
   else if (tab === 'live') body = <LiveScreen />;
   else if (tab === 'auctions') body = <AuctionScreen aiName={aiName} onBack={() => setTab('home')} />;
+  else if (tab === 'fantasy') body = <FantasyScreen onBack={() => setTab('home')} />;
   else body = <AskScreen user={user} onUser={setUser} voice={voiceAsk} />;
 
   const tabs: [Tab, string][] = customer
@@ -266,7 +270,7 @@ function AppInner({ theme }: { theme: Mode }) {
       <StatusBar style="light" />
       {!!voiceNote && <Pressable onPress={() => setVoiceNote('')} style={{ backgroundColor: C.soft, paddingTop: insets.top + 8, paddingBottom: 10, paddingHorizontal: 16 }}><Text style={s.text}>{voiceNote}</Text></Pressable>}
       <View key={wake} style={{ flex: 1 }}>{body}</View>
-      {!hold && <TabBar tabs={tabs} on={customer && (tab === 'book' || tab === 'auctions') ? 'home' : tab} onPick={(id) => { setDone(null); setMore(null); setTab(id as Tab); }} bottom={insets.bottom} />}
+      {!hold && <TabBar tabs={tabs} on={customer && (tab === 'book' || tab === 'auctions' || tab === 'fantasy') ? 'home' : tab} onPick={(id) => { setDone(null); setMore(null); setTab(id as Tab); }} bottom={insets.bottom} />}
       {locked && <LockScreen name={user.name} onUnlock={unlocked} onSignOut={signOut} />}
     </View>
   );

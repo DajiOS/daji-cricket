@@ -48,7 +48,7 @@ export const seesMoney = (me: Me) => (can(me, 'view_reports') || can(me, 'manage
 /** The sections inside a page (the pills at its top), so the side menu can list them too. The first one is the page's own address. */
 export const SUBS: Record<string, [string, string][]> = {
   '/bookings': [['', 'All bookings'], ['day', 'Day view']],
-  '/matches': [['', 'All fixtures'], ['live', 'Live now'], ['leaders', 'Player records']],
+  '/matches': [['', 'All fixtures'], ['live', 'Live now'], ['leaders', 'Player records'], ['fantasy', 'Fantasy']],
   '/transactions': [['', 'Bank lines'], ['import', 'Import and bank feed']],
   '/booking-report': [['', 'Month by month'], ['compare', 'Compare']],
   '/academy': [['students', 'Students'], ['attendance', 'Attendance'], ['fees', 'Fees'], ['skills', 'Skills'], ['coaches', 'Coaches']],
