@@ -22,6 +22,7 @@ import { addService, deleteService, listServices, updateService } from '../servi
 import { saveAaSettings, viewAaSettings } from '../accounting/aa.ts';
 import { saveYodleeSettings, subscribeYodleeWebhooks, testYodlee, viewYodleeSettings } from '../yodleeSettings.ts';
 import { readiness } from '../readiness.ts';
+import { noteServerOpen, saveServerConsole, serverConsole, serverStatus } from '../serverConsole.ts';
 import { backupNow, BACKUP_AT, lastOffsiteCopy, lastRestorePractice, listBackups, nextBackupAt, practiceRestore } from '../backup.ts';
 
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,30}$/;
@@ -96,6 +97,12 @@ export function adminRoutes(r: Router): void {
   r.post('/api/admin/integrations/:id/test', async (c) => ok(await testIntegration(c.cfg, U(c), c.params.id!)), A);
   // the owner's notes on each account (who signed up, account names, what is pending); keys and passwords are refused
   r.put('/api/admin/integrations/:id/notes', (c) => ok(saveIntegrationNotes(c.cfg, U(c), c.params.id!, c.json())), A);
+  // Settings › Server: the live state of the server and the software owner's way in (Amazon's browser SSH page, the AI coding console).
+  // The ground owner and the software owner, never staff. The SSH button only links to Amazon's sign-in, so it gives nobody a way in by itself:
+  // no AWS keys are kept and no shell runs here.
+  r.get('/api/admin/server', (c) => ok({ status: serverStatus(c.cfg), console: serverConsole() }), A);
+  r.put('/api/admin/server/console', (c) => ok(saveServerConsole(U(c), c.json())), A);
+  r.post('/api/admin/server/opened', (c) => ok(noteServerOpen(U(c), (c.json() as { what?: unknown } | null)?.what)), A);
 
   // The notebook of outside services and the accounts they were opened with (never keys or passwords).
   r.get('/api/admin/services', () => ok({ items: listServices() }), SAO);
