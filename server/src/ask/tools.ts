@@ -18,12 +18,15 @@ import { depositsAt } from '../auctionDeposit.ts';
 import { staffWaitlist } from '../waitlist.ts';
 import { checkInsOn } from '../players.ts';
 import { leaders } from '../playerStats.ts';
+import { serverConsole, serverStatus } from '../serverConsole.ts';
+import type { Config } from '../config.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
 // can never disagree with a report. They are read-only, scoped to one owner and checked against the asker's permissions.
 // The built-in answerer and the optional Claude mode use exactly these.
 
-export interface Ctx { ownerId: string; user: UserRow }
+/** `cfg` is there for the server status only (Settings › Server); every other tool reads the database. */
+export interface Ctx { ownerId: string; user: UserRow; cfg?: Config }
 export type Area = 'reports' | 'bookings' | 'customers' | 'tasks' | 'team' | 'approvals' | 'compliance' | 'tournaments';
 
 const AREA_PERMISSION: Record<Area, string> = { reports: 'view_reports', bookings: 'manage_bookings', customers: 'view_customers', tasks: 'manage_tasks', team: 'owner', approvals: 'manage_accounting', compliance: 'owner', tournaments: 'manage_matches' };
@@ -405,4 +408,24 @@ export function playerRecords(ctx: Ctx) {
   const l = leaders(ctx.ownerId, 5);
   const strip = ({ userId: _u, name: _n, ...x }: (typeof l.runs)[number], i: number) => ({ rank: i + 1, ...x });
   return { playersWithARecord: l.players, finishedMatches: l.matches, mostRuns: l.runs.map(strip), mostWickets: l.wickets.map(strip), mostFieldingDismissals: l.fielding.map(strip) };
+}
+
+// ---------------------------------------------------------------- the server
+
+/**
+ * Settings › Server, for the ground owner and the software owner (never staff): is the server healthy, how full are the disk and memory, when was the last backup, and which Lightsail
+ * instance the SSH button opens. Never a secret, and nothing here can reach the server: the SSH session itself happens at Amazon.
+ */
+export function server(ctx: Ctx) {
+  if (ctx.user.role !== 'owner' && ctx.user.role !== 'super_admin') throw forbidden('Only the owner can see the server status (Settings › Server).');
+  if (!ctx.cfg) throw new HttpError(503, 'NOT_AVAILABLE', 'The server status is not available here.');
+  const s = serverStatus(ctx.cfg), c = serverConsole();
+  return {
+    healthy: s.ok, database: s.database, environment: s.env, demoMode: s.demo, version: s.version ?? 'not recorded on this server', startedAt: new Date(s.startedAt).toISOString(), upHours: Math.round(s.upSeconds / 360) / 10,
+    memoryUsedPercent: s.memory.usedPercent, diskUsedPercent: s.disk?.usedPercent ?? null, diskFreeGb: s.disk?.freeGb ?? null, load: s.load,
+    backups: { switchedOn: s.backups.enabled, kept: s.backups.count, lastAt: s.backups.lastAt ? new Date(s.backups.lastAt).toISOString() : null, lastOffsiteCopyAt: s.backups.offsiteAt ? new Date(s.backups.offsiteAt).toISOString() : null },
+    warnings: s.warnings,
+    sshButton: c.instance ? `Opens Amazon Lightsail's browser SSH for instance ${c.instance} in ${c.regionName} (${c.region}); you sign in to AWS there.` : 'Not set up: enter the Lightsail instance name in Settings › Server.',
+    codingConsole: c.codingUrl,
+  };
 }

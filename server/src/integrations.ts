@@ -5,6 +5,7 @@ import { now } from './clock.ts';
 import { audit } from './audit.ts';
 import type { UserRow } from './auth.ts';
 import { checkLogin, mailOptions } from './gmail.ts';
+import { serverConsole } from './serverConsole.ts';
 
 /**
  * Every outside service the platform talks to is described once here: which settings it needs (by name, never their values),
@@ -235,6 +236,18 @@ registerIntegration({
     }
     return { ok: true, message: `Read ${parts.join('; ')}. Nothing was saved.` };
   },
+});
+
+registerIntegration({
+  id: 'lightsail', name: 'Server SSH (Amazon Lightsail)', what: 'A Connect using SSH button in Settings › Server that opens Amazon\'s own browser terminal for the server. You sign in to AWS there; Daji keeps no AWS keys and runs no shell itself.',
+  setup: 'In Settings › Server, enter the Lightsail instance name and region exactly as the Lightsail console shows them. Only the owner sees that page, never staff.',
+  steps: [
+    { text: 'Sign in to the Lightsail console and open Instances. Copy the name of the server\'s instance and note its region (Daji runs in Mumbai, ap-south-1).', link: { label: 'Lightsail instances', url: 'https://lightsail.aws.amazon.com/ls/webapp/home/instances' } },
+    { text: 'In this desk, open Settings › Server, enter the instance name, pick the region and save. The Connect using SSH button then opens the browser terminal for that instance.' },
+    { text: 'Optional: in AWS, turn on two-step sign-in (MFA) for the account that opens the terminal, since it has full control of the server.', link: { label: 'AWS MFA', url: 'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa.html' } },
+  ],
+  env: ['Lightsail instance name (Settings › Server)'],
+  have: () => ({ 'Lightsail instance name (Settings › Server)': !!serverConsole().instance }),
 });
 
 export function integrationStatuses(cfg: Config): IntegrationStatus[] {

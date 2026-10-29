@@ -194,6 +194,7 @@ export const NAV: NavGroup[] = [
     { to: '/settings/festivals', label: 'Festivals', icon: 'calendar', ...owner },
     { to: '/settings/connections', href: '/admin/integrations', label: 'Integrations', icon: 'key', ...owner },
     { to: '/settings/golive', label: 'Go-live check', icon: 'check', ...owner },
+    { to: '/settings/server', label: 'Server', icon: 'pulse', ...owner },
   ] },
   { section: 'admin', group: 'Audit & media', items: [
     { to: '/activity', href: '/admin/audit', label: 'Audit', icon: 'bell' },

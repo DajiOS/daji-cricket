@@ -71,7 +71,7 @@ export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuesti
   const question = cleanQuestion(rawQuestion);
   // a question that came by voice (Siri, a shortcut) is logged as such; it is answered exactly like a typed one, with the same access
   const via = opts.via === 'voice' ? { via: 'voice' } : {};
-  const ctx: T.Ctx = { ownerId, user };
+  const ctx: T.Ctx = { ownerId, user, cfg };
   takeSlot(cfg, user.id);
   const actor: Actor = { id: user.id, role: user.role };
   // "What is your name?": the display name this person chose (or the business default) over Platform AI. Answered here, never by Claude.
