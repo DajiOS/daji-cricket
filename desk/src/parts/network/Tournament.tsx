@@ -94,6 +94,7 @@ function Fixtures({ d, reload }: { d: Detail; reload: () => void }) {
             { head: 'Scorer', cell: (f) => f.scorer ?? <span className="muted">—</span> },
             { head: '', num: true, cell: (f) => live && <div className="row" style={{ gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               {((f.status === 'proposed' && f.hostIsMe) || f.move?.hostIsMe) && <>
+                {f.otherRequests > 0 && <Chip tone="warn">Another tournament asked for this time too: the first you confirm gets it</Chip>}
                 <button className="btn sm primary" disabled={busy} onClick={() => a.act(() => post(`${base}/${f.id}/confirm`), 'Slot confirmed and held')}>Confirm slot</button>
                 <input className="inp" style={{ width: 150 }} placeholder="Reason to turn down" value={why[f.id] ?? ''} onChange={(e) => setWhy((s) => ({ ...s, [f.id]: e.target.value }))} />
                 <button className="btn sm" disabled={busy} onClick={() => a.act(() => post(`${base}/${f.id}/decline`, { reason: why[f.id] ?? '' }), 'Turned down: the organiser will pick another time')}>Turn down</button>
@@ -245,7 +246,7 @@ function Grounds({ d, reload }: { d: Detail; reload: () => void }) {
           cols={[
             { head: 'Ground', cell: (g) => <><b>{g.ground}</b><div className="small muted">{g.business}</div></> },
             { head: 'Status', cell: (g) => <Status s={g.status} map={G_STATUS} /> },
-            { head: 'Charge per match', num: true, cell: (g) => (g.chargePerMatchPaise ? inr(g.chargePerMatchPaise) : 'No charge') },
+            { head: 'Charge per match', num: true, cell: (g) => (g.chargePerMatchPaise === null ? <span className="muted" title="Agreed between the organiser and that ground">—</span> : g.chargePerMatchPaise ? inr(g.chargePerMatchPaise) : 'No charge') },
             { head: 'Note', cell: (g) => g.note ?? <span className="muted">—</span> },
             { head: '', num: true, cell: (g) => g.isMine && g.status === 'invited' && <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
               <input className="inp" style={{ width: 160 }} placeholder="Note (optional)" value={note[g.id] ?? ''} onChange={(e) => setNote((s) => ({ ...s, [g.id]: e.target.value }))} />
@@ -270,7 +271,7 @@ function Teams({ d, reload }: { d: Detail; reload: () => void }) {
     const x = add[teamId] ?? { name: '', key: '' };
     const k = x.key.trim(), body: Record<string, string> = { name: x.name };
     if (/^KID-/i.test(k)) body.childCode = k.toUpperCase(); else if (/^usr_/.test(k)) body.playerId = k; else if (k) body.phone = k;
-    a.act(() => post(`${NT}/${t.id}/teams/${teamId}/players`, body), 'Player added').then((ok) => ok && setAdd((s) => ({ ...s, [teamId]: { name: '', key: '' } })));
+    a.act(() => post(`${NT}/${t.id}/teams/${teamId}/players`, body), body.phone || body.playerId ? 'Player added as a guest. If they have a Daji profile, they are asked to agree before it is linked.' : 'Player added').then((ok) => ok && setAdd((s) => ({ ...s, [teamId]: { name: '', key: '' } })));
   };
   return (
     <div className="stack">
@@ -286,7 +287,7 @@ function Teams({ d, reload }: { d: Detail; reload: () => void }) {
             {org && draft && <Confirm label="Remove team" ask="Remove this team?" onYes={() => a.act(() => del(`${NT}/${t.id}/teams/${team.id}`), 'Team removed')} />}</div>
           {team.players && <div className="card-pad stack">
             {team.players.map((p) => <div key={p.id} className="row" style={{ justifyContent: 'space-between' }}>
-              <span>{p.name} {p.hasProfile ? <Chip tone="good">Network profile</Chip> : <Chip>Guest</Chip>}</span>
+              <span>{p.name} {p.hasProfile ? <Chip tone="good">Network profile</Chip> : <Chip>Guest</Chip>}{p.asked && <Chip tone="info">Asked to link a profile</Chip>}</span>
               {org && <button className="btn sm ghost" disabled={busy} onClick={() => a.act(() => del(`${NT}/${t.id}/teams/${team.id}/players/${p.id}`), 'Player removed')}>Remove</button>}
             </div>)}
             {org && <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
@@ -296,7 +297,7 @@ function Teams({ d, reload }: { d: Detail; reload: () => void }) {
             </div>}
           </div>}
         </div>))}
-      <div className="small muted">A child is added only with the code their parent or guardian gives you, and only while the guardian has agreed to the match record. Host grounds see team names and squad sizes, not player names.</div>
+      <div className="small muted">A player added by mobile number or network profile plays as a guest until they agree in their own profile; you see the same either way. A child is added only with the code their parent or guardian gives you, and only while the guardian has agreed to the match record; the child leaves the team at once if the guardian withdraws. Host grounds see team names and squad sizes, not player names.</div>
     </div>
   );
 }

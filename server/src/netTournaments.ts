@@ -198,6 +198,19 @@ CREATE TRIGGER trg_ao_net_settlement_events_update BEFORE UPDATE ON net_settleme
 CREATE TRIGGER trg_ao_net_settlement_events_delete BEFORE DELETE ON net_settlement_events BEGIN SELECT RAISE(ABORT, 'net_settlement_events is append-only: delete refused'); END;
 `);
 
+// Review of PR #202 (Sunny, 30 Oct 2026). A profile found by mobile number or picked from the network is only asked: the row plays as a
+// guest under the name the organiser typed until the player agrees (invited_user_id is who was asked; user_id is set only on yes).
+// The organiser sees the same "asked" whether or not the number has a profile, so a number cannot be tested for an account.
+// removed_reason: why a row left the team when the organiser did not remove it (a guardian's withdrawal, a removed profile).
+registerSchema('network-tournaments-2', `
+ALTER TABLE net_team_players ADD COLUMN invited_user_id TEXT REFERENCES users(id);
+ALTER TABLE net_team_players ADD COLUMN invited_via TEXT CHECK (invited_via IN ('phone','profile'));
+ALTER TABLE net_team_players ADD COLUMN invite_answer TEXT CHECK (invite_answer IN ('accepted','declined'));
+ALTER TABLE net_team_players ADD COLUMN invite_answered_at INTEGER;
+ALTER TABLE net_team_players ADD COLUMN removed_reason TEXT;
+CREATE INDEX ix_net_team_players_invited ON net_team_players(invited_user_id) WHERE invited_user_id IS NOT NULL;
+`);
+
 const FORMATS = ['round_robin', 'double_round_robin'] as const;
 const OUTCOMES = ['team_a', 'team_b', 'tie', 'no_result'] as const;
 const SETTLEMENT_KINDS = ['entry_fee', 'ground_charge', 'prize', 'other'] as const;
@@ -210,7 +223,7 @@ export const BOOKS_NOTE = 'Not posted to any books. Each business records its ow
 interface TRow { id: string; organiser_id: string; name: string; format: (typeof FORMATS)[number]; overs: number; match_minutes: number; start_date: string; end_date: string; points_win: number; points_tie: number; status: 'draft' | 'published' | 'completed' | 'cancelled'; notes: string | null; created_at: number; published_at: number | null; closed_at: number | null; close_reason: string | null }
 interface GRow { id: string; tournament_id: string; ground_id: string; owner_id: string; status: 'invited' | 'accepted' | 'declined' | 'withdrawn'; charge_per_match_paise: number; invited_at: number; answered_at: number | null; note: string | null }
 interface TeamRow { id: string; tournament_id: string; name: string; captain: string | null }
-interface PRow { id: string; team_id: string; name: string; user_id: string | null }
+interface PRow { id: string; team_id: string; tournament_id: string; name: string; user_id: string | null; invited_user_id: string | null; invited_via: 'phone' | 'profile' | null; invite_answer: 'accepted' | 'declined' | null }
 interface FRow { id: string; tournament_id: string; round: number; team_a_id: string; team_b_id: string; ground_id: string | null; owner_id: string | null; starts_at: number | null; status: 'unscheduled' | 'proposed' | 'confirmed' | 'declined' | 'cancelled'; move_ground_id: string | null; move_starts_at: number | null; move_reason: string | null; hold_ground_id: string | null; hold_from: number | null; hold_until: number | null; hold_note: string | null; match_id: string | null; scorer_id: string | null }
 interface RRow { id: string; fixture_id: string; version: number; outcome: (typeof OUTCOMES)[number]; winner_team_id: string | null; a_runs: number | null; a_balls: number | null; b_runs: number | null; b_balls: number | null; result_text: string | null; from_match: number; submitted_by: string; submitted_owner: string; submitted_at: number; reason: string | null; verified_by: string | null; verified_at: number | null; rejected_by: string | null; rejected_at: number | null; reject_reason: string | null; superseded_at: number | null }
 interface SRow { id: string; tournament_id: string; fixture_id: string | null; kind: (typeof SETTLEMENT_KINDS)[number]; payer_kind: (typeof PARTY_KINDS)[number]; payer_ref: string | null; payer_label: string; payee_kind: (typeof PARTY_KINDS)[number]; payee_ref: string | null; payee_label: string; amount_paise: number; note: string | null; created_at: number }
@@ -256,27 +269,49 @@ const touch = (tid: string) => run('UPDATE net_tournaments SET updated_at = ? WH
 
 // ------------------------------------------------------------------ slots: opening hours, bookings, blocks, shared space, other network fixtures
 
-/** Why this time does not work on this ground, or null when it is free. `fixtureId` is the fixture asking (its own hold and proposal do not count). */
-export function slotProblem(groundId: string, startsAt: number, minutes: number, fixtureId?: string): string | null {
+/**
+ * Why this time does not work on this ground, or null when it is free. `asking` is the tournament asking and the fixture (its own hold and
+ * proposal do not count); `replacing` is a fresh proposal that replaces all the tournament's fixtures, so they do not count either.
+ * Another tournament's proposals are advice, not a claim: only its confirmed (held) matches block the time, so an unconfirmed draft never
+ * stops another tournament. When two tournaments propose the same time, the first host confirmation wins; the second is refused here.
+ */
+export function slotProblem(groundId: string, startsAt: number, minutes: number, asking: { tournamentId: string; fixtureId?: string; replacing?: boolean }): string | null {
   const g = groundRow(groundId);
   if (!g || !g.active) return 'The ground is not open for bookings';
   const date = istDate(startsAt), end = startsAt + minutes * MIN;
   const starts = slotStarts(g, date).filter((s) => s >= startsAt && s < end);
   const need = Math.ceil(minutes / g.slot_minutes);
   if (starts[0] !== startsAt || starts.length < need || starts.some((s, i) => s !== startsAt + i * g.slot_minutes * MIN)) return `${g.name} is not open for the whole match (${date} ${hhmm(startsAt)}, ${minutes} minutes)`;
+  const fixtureId = asking.fixtureId;
   const own = fixtureId ? one<FRow>('SELECT * FROM net_fixtures WHERE id = ?', fixtureId) : undefined;
   const taken = one<{ kind: string; note: string | null }>('SELECT kind, note FROM booking_slots WHERE ground_id = ? AND slot_start >= ? AND slot_start < ? AND NOT (kind = \'block\' AND ? IS NOT NULL AND note IS ? AND ground_id = ?) LIMIT 1',
     g.id, startsAt, end, own?.hold_note ?? null, own?.hold_note ?? null, own?.hold_ground_id ?? '');
   if (taken) return `${g.name} is already ${taken.kind === 'block' ? 'blocked' : 'booked'} at ${date} ${hhmm(startsAt)}`;
   const linked = linkedBusy(g, starts);
   if (linked.size) return `${[...linked.values()][0]} (shares space with ${g.name}) is booked then`;
-  const other = many<{ id: string; at: number; until: number }>(`SELECT f.id, COALESCE(f.move_starts_at, f.starts_at) at, COALESCE(f.move_starts_at, f.starts_at) + t.match_minutes * 60000 until FROM net_fixtures f JOIN net_tournaments t ON t.id = f.tournament_id
-    WHERE f.status IN ('proposed','confirmed') AND t.status IN ('draft','published') AND COALESCE(f.move_ground_id, f.ground_id) = ? AND f.id <> ?`, g.id, fixtureId ?? '')
-    .concat(many<{ id: string; at: number; until: number }>(`SELECT f.id, f.starts_at at, f.starts_at + t.match_minutes * 60000 until FROM net_fixtures f JOIN net_tournaments t ON t.id = f.tournament_id
-    WHERE f.status IN ('proposed','confirmed') AND t.status IN ('draft','published') AND f.move_ground_id IS NOT NULL AND f.ground_id = ? AND f.id <> ?`, g.id, fixtureId ?? ''))
-    .find((x) => x.at < end && x.until > startsAt);
-  if (other) return `${g.name} already has another network match at ${when(other.at)}`;
+  type Busy = { id: string; at: number; until: number };
+  const overlaps = (x: Busy) => x.at < end && x.until > startsAt;
+  // this tournament: its other proposed and confirmed matches on the ground (both a move's new time and the time it keeps until then)
+  const mine = asking.replacing ? [] : many<Busy>(`SELECT f.id, COALESCE(f.move_starts_at, f.starts_at) at, COALESCE(f.move_starts_at, f.starts_at) + t.match_minutes * 60000 until FROM net_fixtures f JOIN net_tournaments t ON t.id = f.tournament_id
+    WHERE f.tournament_id = ? AND f.status IN ('proposed','confirmed') AND COALESCE(f.move_ground_id, f.ground_id) = ? AND f.id <> ?`, asking.tournamentId, g.id, fixtureId ?? '')
+    .concat(many<Busy>(`SELECT f.id, f.starts_at at, f.starts_at + t.match_minutes * 60000 until FROM net_fixtures f JOIN net_tournaments t ON t.id = f.tournament_id
+    WHERE f.tournament_id = ? AND f.status = 'confirmed' AND f.move_ground_id IS NOT NULL AND f.ground_id = ? AND f.id <> ?`, asking.tournamentId, g.id, fixtureId ?? ''));
+  if (mine.find(overlaps)) return `${g.name} already has another match of this tournament at ${when(mine.find(overlaps)!.at)}`;
+  // other tournaments: confirmed times only (their hold is already a block above; this also covers a hold that was lost)
+  const theirs = many<Busy>(`SELECT f.id, f.starts_at at, f.starts_at + t.match_minutes * 60000 until FROM net_fixtures f JOIN net_tournaments t ON t.id = f.tournament_id
+    WHERE f.tournament_id <> ? AND f.status = 'confirmed' AND t.status IN ('draft','published') AND f.ground_id = ?`, asking.tournamentId, g.id).find(overlaps);
+  if (theirs) return `${g.name} already has another network match at ${when(theirs.at)}`;
   return null;
+}
+
+/** For the host: other tournaments' unconfirmed requests for an overlapping time on the same ground (advice; the first confirmation wins). */
+function competingRequests(t: TRow, f: FRow): number {
+  const gid = f.move_ground_id ?? f.ground_id, at = f.move_starts_at ?? f.starts_at;
+  if (!gid || at === null) return 0;
+  const end = at + t.match_minutes * MIN;
+  return many<{ at: number; until: number }>(`SELECT COALESCE(f.move_starts_at, f.starts_at) at, COALESCE(f.move_starts_at, f.starts_at) + t.match_minutes * 60000 until FROM net_fixtures f JOIN net_tournaments t ON t.id = f.tournament_id
+    WHERE f.tournament_id <> ? AND t.status IN ('draft','published') AND COALESCE(f.move_ground_id, f.ground_id) = ? AND (f.status = 'proposed' OR (f.status = 'confirmed' AND f.move_ground_id IS NOT NULL))`, t.id, gid)
+    .filter((x) => x.at < end && x.until > at).length;
 }
 
 /** A team plays one match at a time: another live fixture of the tournament overlapping this time. */
@@ -327,6 +362,8 @@ function fixtureOut(t: TRow, f: FRow, names: Map<string, string>, me: string | n
     groundId: f.ground_id, ground: groundName(f.ground_id), host: host ? businessName(host) : null, hostIsMe: !!me && host === me, startsAt: f.starts_at, endsAt: f.starts_at ? f.starts_at + t.match_minutes * MIN : null,
     status: f.status, timeHeld: !!f.hold_ground_id,
     move: f.move_ground_id ? { groundId: f.move_ground_id, ground: groundName(f.move_ground_id), startsAt: f.move_starts_at, reason: f.move_reason, hostIsMe: !!me && moveOwner === me } : null,
+    // only for the ground asked to confirm: how many other tournaments asked for an overlapping time there (the first to be confirmed wins)
+    otherRequests: (f.status === 'proposed' && !!me && host === me) || (!!f.move_ground_id && !!me && moveOwner === me) ? competingRequests(t, f) : 0,
     matchId: f.match_id, scorer: userName(f.scorer_id), scorerId: f.scorer_id,
     result: v ? resultOut(v, names) : null, waiting: p ? resultOut(p, names) : null,
   };
@@ -393,9 +430,10 @@ export function netTournamentDetail(u: UserRow, ownerId: string, tid: string) {
   return {
     tournament: { ...summary(t, ownerId), pointsWin: t.points_win, pointsTie: t.points_tie, notes: t.notes, publishedAt: t.published_at, closedAt: t.closed_at, closeReason: t.close_reason },
     myRole: role,
-    grounds: groundsOf(tid).map((g) => ({ id: g.id, groundId: g.ground_id, ground: groundName(g.ground_id), business: businessName(g.owner_id), isMine: g.owner_id === ownerId, status: g.status, chargePerMatchPaise: g.charge_per_match_paise, invitedAt: g.invited_at, answeredAt: g.answered_at, note: g.note })),
+    // the charge agreed with a ground and its answer note are between the organiser and that ground: another host sees null
+    grounds: groundsOf(tid).map((g) => { const party = role === 'organiser' || g.owner_id === ownerId; return { id: g.id, groundId: g.ground_id, ground: groundName(g.ground_id), business: businessName(g.owner_id), isMine: g.owner_id === ownerId, status: g.status, chargePerMatchPaise: party ? g.charge_per_match_paise : null, invitedAt: g.invited_at, answeredAt: g.answered_at, note: party ? g.note : null }; }),
     // a host sees team names and squad sizes; player names are for the organiser and for the host that scores the match
-    teams: teams.map((x) => ({ id: x.id, name: x.name, captain: x.captain, players: role === 'organiser' ? playersOf(x.id).map((p) => ({ id: p.id, name: p.user_id && isChild(p.user_id) ? shortName(p.name) : p.name, hasProfile: !!p.user_id })) : undefined, playerCount: playersOf(x.id).length })),
+    teams: teams.map((x) => ({ id: x.id, name: x.name, captain: x.captain, players: role === 'organiser' ? playersOf(x.id).map(playerOut) : undefined, playerCount: playersOf(x.id).length })),
     fixtures: liveFixtures(tid).map((f) => fixtureOut(t, f, names, ownerId)),
     standings: standings(t), standingsNote: 'Only verified results count.',
     settlements, settlementTotals: settlementTotals(settlements), booksNote: BOOKS_NOTE,
@@ -531,9 +569,20 @@ export function removeNetTeam(u: UserRow, ownerId: string, tid: string, teamId: 
   return { removed: true };
 }
 
+/** A team player as the organiser sees it. `asked`: a profile was asked to agree and has not (yet); the same whether or not the number had a profile. */
+const playerOut = (p: PRow) => ({ id: p.id, name: p.user_id && isChild(p.user_id) ? shortName(p.name) : p.name, hasProfile: !!p.user_id, asked: !!p.invited_via && !p.user_id });
+const ASKED_NOTE = 'If this player has a Daji profile, they are asked to agree before it is linked. Until then they play as a guest under the name you gave.';
+
 /**
- * A player on a team: a profile found by mobile number, a shared network profile by id, a child by the player code their guardian gives
- * (only with the guardian's consent to a match record), or a guest (a name only; a guest earns no record). One profile plays for one team.
+ * A player on a team. Consent and identity (review of PR #202):
+ *  - a guest: a name only. A guest earns no record.
+ *  - by mobile number: the organiser types the name; if the number belongs to a player's profile, that player is asked in their own
+ *    profile and the row is linked only when they say yes. The answer is the same whether or not the number has a profile, so the
+ *    organiser cannot use it to find out who has an account. The player's sharing choice does not matter: they agree themselves.
+ *  - a network profile picked from the player search (shared with the network by the player's own choice): asked the same way.
+ *  - a child, by the player code their parent or guardian gives, with the guardian's consent to a match record: linked at once (the
+ *    guardian's code and consent are the agreement), and stored by first name and initial only.
+ * One profile plays for one team in a tournament.
  */
 export function addNetPlayer(u: UserRow, ownerId: string, tid: string, teamId: string, body: unknown) {
   organiser(u, ownerId, tid);
@@ -546,29 +595,64 @@ export function addNetPlayer(u: UserRow, ownerId: string, tid: string, teamId: s
   const profileId = v.str('playerId', { max: 60 });
   v.done();
   if ([phone, code, profileId].filter(Boolean).length > 1) throw bad('phone', 'Use one of: mobile number, player code or network profile');
-  let userId: string | null = null, shown = name ?? null;
+  let userId: string | null = null, invited: string | null = null, via: 'phone' | 'profile' | null = null, shown = name ?? null;
   if (phone) {
-    const p = one<{ id: string; name: string }>("SELECT id, name FROM users WHERE phone = ? AND role = 'customer' AND active = 1 ORDER BY (password_hash IS NOT NULL) DESC, created_at LIMIT 1", normalizePhone(phone));
-    if (!p) throw notFound('No player profile has that mobile number. Add them as a guest with a name instead.');
-    userId = p.id; shown = shown ?? p.name;
+    if (!shown) throw bad('name', 'Give the player\'s name as it should appear on the team');
+    via = 'phone';
+    // looked up quietly: what happens next never depends on whether a profile was found
+    const p = one<{ id: string }>("SELECT id FROM users WHERE phone = ? AND role = 'customer' AND active = 1 ORDER BY (password_hash IS NOT NULL) DESC, created_at LIMIT 1", normalizePhone(phone));
+    invited = p && !isChild(p.id) ? p.id : null;
   } else if (code) {
     const c = childForTeam(code);
-    userId = c.id; shown = shown ?? c.name;
+    userId = c.id; shown = shortName(shown ?? c.name);
   } else if (profileId) {
     const p = one<{ id: string; name: string }>("SELECT u.id, u.name FROM users u JOIN player_sharing s ON s.user_id = u.id WHERE u.id = ? AND u.role = 'customer' AND u.active = 1 AND s.visibility IN ('network','public')", profileId);
     if (!p || isChild(p.id)) throw notFound('Player not found');
-    userId = p.id; shown = shown ?? p.name;
+    invited = p.id; via = 'profile'; shown = shown ?? p.name;
   }
   if (!shown) throw bad('name', 'Give the player\'s name');
   if (playersOf(teamId).length >= MAX_PLAYERS) throw conflict('TOO_MANY', `At most ${MAX_PLAYERS} players in a team`);
   if (one('SELECT 1 FROM net_team_players WHERE team_id = ? AND name_key = ? AND removed_at IS NULL', teamId, nameKey(shown))) throw conflict('DUPLICATE', 'A player with this name is already in the team');
   if (userId && one('SELECT 1 FROM net_team_players WHERE tournament_id = ? AND user_id = ? AND removed_at IS NULL', tid, userId)) throw conflict('ALREADY_IN_TEAM', 'This player is already in a team in this tournament');
+  if (via === 'profile' && one('SELECT 1 FROM net_team_players WHERE tournament_id = ? AND (user_id = ? OR invited_user_id = ?) AND removed_at IS NULL', tid, invited, invited)) throw conflict('ALREADY_IN_TEAM', 'This player is already in a team in this tournament');
+  // by phone, someone already in (or asked for) another team of this tournament is not asked twice; the organiser sees the same answer
+  if (via === 'phone' && invited && one('SELECT 1 FROM net_team_players WHERE tournament_id = ? AND (user_id = ? OR invited_user_id = ?) AND removed_at IS NULL', tid, invited, invited)) invited = null;
   const id = newId('ntp');
   tx(() => {
-    run('INSERT INTO net_team_players(id, team_id, tournament_id, name, name_key, user_id, added_by, created_at) VALUES(?,?,?,?,?,?,?,?)', id, teamId, tid, shown!, nameKey(shown!), userId, u.id, now());
-    audit(actorOf(u), 'network.player_add', 'net_tournament', tid, { team: teamId, player: id, profile: !!userId, child: !!code }, ownerId);
+    run('INSERT INTO net_team_players(id, team_id, tournament_id, name, name_key, user_id, invited_user_id, invited_via, added_by, created_at) VALUES(?,?,?,?,?,?,?,?,?,?)', id, teamId, tid, shown!, nameKey(shown!), userId, invited, via, u.id, now());
+    // the audit says how the player was added, never whether a number had a profile
+    audit(actorOf(u), 'network.player_add', 'net_tournament', tid, { team: teamId, player: id, via: via ?? (code ? 'child_code' : 'guest') }, ownerId);
   });
-  return { id, name: userId && isChild(userId) ? shortName(shown) : shown, hasProfile: !!userId };
+  return { ...playerOut(one<PRow>('SELECT * FROM net_team_players WHERE id = ?', id)!), ...(via ? { note: ASKED_NOTE } : {}) };
+}
+
+const OPEN_INVITES = `SELECT p.*, t.name tournament, t.start_date, t.end_date, t.organiser_id, m.name team FROM net_team_players p JOIN net_tournaments t ON t.id = p.tournament_id JOIN net_teams m ON m.id = p.team_id
+  WHERE p.invited_user_id = ? AND p.user_id IS NULL AND p.invite_answer IS NULL AND p.removed_at IS NULL AND m.removed_at IS NULL AND t.status IN ('draft','published')`;
+type InviteRow = PRow & { tournament: string; start_date: string; end_date: string; organiser_id: string; team: string; created_at: number };
+
+/** The signed-in player's open requests to play for a network tournament team under their profile. */
+export function myTeamInvitations(u: UserRow) {
+  if (u.role !== 'customer') throw forbidden('This is for players');
+  return {
+    items: many<InviteRow>(`${OPEN_INVITES} ORDER BY p.created_at`, u.id).map((p) => ({ id: p.id, tournament: p.tournament, team: p.team, organiser: businessName(p.organiser_id), nameOnTeam: p.name, from: p.start_date, to: p.end_date, askedAt: p.created_at })),
+    note: 'If you agree, the matches you play for this team go on your cricket record. If you say no, the organiser is not told; you may still be listed under that name as a guest, with nothing on your record.',
+  };
+}
+
+/** The player agrees (the row is linked to their profile) or says no (it stays a guest; the organiser sees no difference). */
+export function answerTeamInvitation(u: UserRow, id: string, body: unknown) {
+  if (u.role !== 'customer') throw forbidden('This is for players');
+  const v = new Validator(body ?? {});
+  const accept = v.bool('accept', true);
+  v.done();
+  const p = one<InviteRow>(`${OPEN_INVITES} AND p.id = ?`, u.id, id);
+  if (!p) throw notFound('Invitation not found');
+  if (accept && one('SELECT 1 FROM net_team_players WHERE tournament_id = ? AND user_id = ? AND removed_at IS NULL', p.tournament_id, u.id)) throw conflict('ALREADY_IN_TEAM', 'You already play for another team in this tournament');
+  tx(() => {
+    run('UPDATE net_team_players SET user_id = ?, invite_answer = ?, invite_answered_at = ? WHERE id = ?', accept ? u.id : null, accept ? 'accepted' : 'declined', now(), p.id);
+    audit(actorOf(u), accept ? 'network.player_agree' : 'network.player_decline', 'net_tournament', p.tournament_id, { player: p.id });
+  });
+  return myTeamInvitations(u);
 }
 
 export function removeNetPlayer(u: UserRow, ownerId: string, tid: string, teamId: string, playerId: string) {
@@ -615,7 +699,7 @@ export function proposeFixtures(u: UserRow, ownerId: string, tid: string, body: 
     const at = istMidnight(d) + minutesOf(x)! * MIN;
     if (at <= now()) continue;
     checked++;
-    if (!slotProblem(g.ground_id, at, t.match_minutes)) slots.push({ groundId: g.ground_id, ownerId: g.owner_id, at, gname: groundName(g.ground_id) ?? '' });
+    if (!slotProblem(g.ground_id, at, t.match_minutes, { tournamentId: t.id, replacing: true })) slots.push({ groundId: g.ground_id, ownerId: g.owner_id, at, gname: groundName(g.ground_id) ?? '' });
   }
   slots.sort((p, q) => p.at - q.at || p.gname.localeCompare(q.gname));
   const left = [...matches], placed: { a: string; b: string; round: number; at: number; groundId: string; ownerId: string }[] = [];
@@ -676,7 +760,7 @@ export function moveFixture(u: UserRow, ownerId: string, tid: string, fid: strin
   const g = one<GRow>("SELECT * FROM net_grounds WHERE tournament_id = ? AND ground_id = ? AND status = 'accepted'", tid, groundId!);
   if (!g) throw bad('groundId', 'That ground has not accepted this tournament');
   if (t.status === 'published' && !reason) throw bad('reason', 'Say why the match moves (everyone can see the change)');
-  const problem = slotProblem(g.ground_id, at, t.match_minutes, f.id);
+  const problem = slotProblem(g.ground_id, at, t.match_minutes, { tournamentId: t.id, fixtureId: f.id });
   if (problem) throw conflict('SLOT_TAKEN', problem);
   if (teamBusy(t, [f.team_a_id, f.team_b_id], at, f.id)) throw conflict('TEAM_BUSY', 'One of the teams has another match at that time');
   tx(() => {
@@ -704,7 +788,7 @@ export function confirmSlot(u: UserRow, ownerId: string, tid: string, fid: strin
   if (at <= now()) throw conflict('TIME_PASSED', 'That time has already passed. Ask the organiser for a new time.');
   if (f.match_id && moving && g.owner_id !== f.owner_id && one('SELECT 1 FROM match_balls WHERE match_id = ?', f.match_id)) throw conflict('SCORING_STARTED', 'Scoring has started at the other ground');
   tx(() => {
-    const problem = slotProblem(g.id, at, t.match_minutes, f.id);
+    const problem = slotProblem(g.id, at, t.match_minutes, { tournamentId: t.id, fixtureId: f.id });
     if (problem) throw conflict('SLOT_TAKEN', problem);
     if (moving) releaseHold(f);
     holdTime(t, { ...f, ground_id: g.id }, g.id, at);
@@ -861,8 +945,8 @@ export function openScoring(u: UserRow, ownerId: string, tid: string, fid: strin
     const m = createMatch(actorOf(u), ownerId, { title: `${t.name}: ${a.name} v ${b.name}`.slice(0, 100), teamA: a.name.slice(0, 50), teamB: b.name.slice(0, 50), overs: t.overs, groundId: f.ground_id ?? undefined, scheduledFor: f.starts_at ?? undefined });
     const used = new Set<string>();
     for (const [side, team] of [['a', a], ['b', b]] as const) for (const p of playersOf(team.id)) {
-      let shown = p.name;
-      if (used.has(nameKey(shown))) shown = `${p.name} (${team.name})`.slice(0, 60);
+      let shown = p.user_id && isChild(p.user_id) ? shortName(p.name) : p.name;
+      if (used.has(nameKey(shown))) shown = `${shown} (${team.name})`.slice(0, 60);
       used.add(nameKey(shown));
       const link = p.user_id && (!isChild(p.user_id) || consentGiven(p.user_id, 'play_record')) ? p.user_id : null;
       run('INSERT INTO match_players(id, match_id, owner_id, side, name, name_key, user_id, linked_via, linked_by, linked_at, added_by, created_at) VALUES(?,?,?,?,?,?,?,NULL,?,?,?,?)',
