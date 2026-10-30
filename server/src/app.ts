@@ -30,6 +30,7 @@ import { deskViewRoutes } from './routes/deskviews.ts';
 import { remindersRoutes } from './routes/reminders.ts';
 import { sheetsRoutes } from './routes/sheets.ts';
 import { areaRoutes } from './routes/areas.ts';
+import { cashRoutes } from './routes/cash.ts';
 
 export function buildRouter(): Router {
   const r = new Router();
@@ -62,6 +63,7 @@ export function buildRouter(): Router {
   deskViewRoutes(r);
   sheetsRoutes(r);
   areaRoutes(r);
+  cashRoutes(r);
   return r;
 }
 

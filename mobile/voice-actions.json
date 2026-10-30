@@ -44,6 +44,13 @@
       "screen": "tasks"
     },
     {
+      "id": "spend",
+      "title": "Enter a cash spend",
+      "phrase": "Enter a cash spend in APP",
+      "personal": "Tell NAME I spent cash",
+      "screen": "cash"
+    },
+    {
       "id": "ask",
       "title": "Ask a question",
       "phrase": "Ask APP a question",

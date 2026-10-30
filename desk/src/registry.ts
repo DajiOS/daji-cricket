@@ -8,6 +8,7 @@ const Documents = lazy(() => import('./pages/Documents'));
 const Bookings = lazy(() => import('./pages/Bookings'));
 const Promos = lazy(() => import('./pages/Promos'));
 const Tasks = lazy(() => import('./pages/Tasks'));
+const Cash = lazy(() => import('./pages/Cash'));
 const Matches = lazy(() => import('./pages/Matches'));
 const Contacts = lazy(() => import('./pages/Contacts'));
 const Cards = lazy(() => import('./pages/Cards'));
@@ -78,7 +79,7 @@ export interface NavGroup { section: string; group: string; items: NavItem[] }
 
 /** First match wins, so longer paths come before shorter ones. A page receives the rest of the path in `sub` (for example /bills/bil_123 gives sub "bil_123"). */
 export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
-  { path: '/bookings', page: Bookings }, { path: '/promos', page: Promos }, { path: '/tasks', page: Tasks }, { path: '/matches', page: Matches },
+  { path: '/bookings', page: Bookings }, { path: '/promos', page: Promos }, { path: '/tasks', page: Tasks }, { path: '/cash', page: Cash }, { path: '/matches', page: Matches },
   { path: '/cards', page: Cards }, { path: '/contacts', page: Contacts }, { path: '/academy', page: Academy },
   { path: '/accounting', page: Accounting }, { path: '/transactions', page: Transactions },
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
@@ -170,6 +171,7 @@ export const NAV: NavGroup[] = [
     { to: '/tasks', href: '/work/tasks', label: 'Tasks', icon: 'tasks', perm: 'manage_tasks' },
     { to: '/approvals', href: '/work/approvals', label: 'Approvals', icon: 'check', check: (me) => can(me, 'manage_accounting') || can(me, 'manage_bookings'), count: 'approvals' },
     { to: '/bookings/review', href: '/work/exceptions', label: 'Exceptions', icon: 'bell', perm: 'manage_bookings' },
+    { to: '/cash', label: 'Cash', icon: 'payments', check: (me) => me.role !== 'staff' || can(me, 'manage_tasks') },
     { to: '/calendar', href: '/work/calendar', label: 'Work calendar', icon: 'calendar' },
     { to: '/documents', label: 'Documents', icon: 'book', check: (me) => me.role !== 'staff' || can(me, 'manage_accounting') },
   ] },

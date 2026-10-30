@@ -46,7 +46,7 @@ CREATE INDEX ix_approval_requests_owner ON approval_requests(owner_id, status, k
 CREATE INDEX ix_approval_requests_entity ON approval_requests(kind, entity_id);
 `);
 
-export const APPROVAL_KINDS = ['bill', 'payroll', 'refund', 'discount', 'waiver', 'expense'] as const;
+export const APPROVAL_KINDS = ['bill', 'payroll', 'refund', 'discount', 'waiver', 'expense', 'cash'] as const;
 export type ApprovalKind = typeof APPROVAL_KINDS[number];
 
 /** What each kind is called, the right that looks after it, the audit entity its trail is written against, and what
@@ -57,6 +57,7 @@ export const KIND_INFO: Record<ApprovalKind, { name: string; one: string; perm: 
   refund: { name: 'Refunds', one: 'refund', perm: 'record_payments', role: 'general_manager', area: 'The general manager', can: 'act as general manager', entity: 'refund', selfNo: 'You started this refund, so someone else has to approve it', none: 'Goes straight to the super admin to authorise, with no sign-off at the ground.' },
   discount: { name: 'Discounts', one: 'discount', perm: 'manage_bookings', role: 'general_manager', area: 'The general manager', can: 'act as general manager', entity: 'money_ask', selfNo: 'You asked for this discount, so someone else has to approve it', none: 'Given as soon as it is asked for, with no sign-off.' },
   waiver: { name: 'Fee waivers', one: 'fee waiver', perm: 'manage_academy', area: 'Anyone who runs the academy', can: 'run the academy', entity: 'money_ask', selfNo: 'You asked for this waiver, so someone else has to approve it', none: 'Given as soon as it is asked for, with no sign-off.' },
+  cash: { name: 'Cash spends', one: 'cash spend', perm: 'manage_accounting', area: 'Anyone who can manage the books', can: 'manage the books', entity: 'cash_entry', selfNo: 'You spent this cash, so someone else has to approve it', none: 'Confirmed as soon as it is entered, with no sign-off.' },
   expense: { name: 'Expenses', one: 'expense', perm: 'manage_accounting', area: 'Anyone who can manage the books', can: 'manage the books', entity: 'money_ask', selfNo: 'You entered this expense, so someone else has to approve it', none: 'Recorded in the books as soon as it is entered, with no sign-off.' },
 };
 
@@ -67,11 +68,13 @@ interface Snap extends FlowStep { signedBy: string | null; signedAt: number | nu
 
 /** Out of the box: a bill needs one sign-off from someone else who manages the books; a refund needs the owner or the general
  * manager before the super admin authorises it; a discount or fee waiver of ₹1,000 or more needs the owner; an expense of
- * ₹5,000 or more needs a second person; a pay run needs no extra sign-off. */
+ * ₹5,000 or more needs a second person; a cash spend from money someone holds needs the owner, whatever the amount (Sunny: everything
+ * needs his approval from ₹0); a pay run needs no extra sign-off. */
 export function defaultFlow(kind: ApprovalKind): Flow {
   if (kind === 'bill') return { steps: [{ id: 'approve', label: 'Approve the bill', who: { type: 'anyone' }, overPaise: null }], notSelf: true, distinct: false, sendBack: 'start' };
   if (kind === 'discount' || kind === 'waiver') return { steps: [{ id: 'owner', label: 'Owner sign-off', who: { type: 'owner' }, overPaise: 1000_00 }], notSelf: false, distinct: false, sendBack: 'start' };
   if (kind === 'refund') return { steps: [{ id: 'approve', label: 'Owner or GM approves', who: { type: 'anyone' }, overPaise: null }], notSelf: false, distinct: false, sendBack: 'start' };
+  if (kind === 'cash') return { steps: [{ id: 'owner', label: 'Owner sign-off', who: { type: 'owner' }, overPaise: null }], notSelf: true, distinct: false, sendBack: 'start' };
   if (kind === 'expense') return { steps: [{ id: 'second', label: 'Second person checks', who: { type: 'anyone' }, overPaise: 5000_00 }], notSelf: true, distinct: false, sendBack: 'start' };
   return { steps: [], notSelf: false, distinct: false, sendBack: 'start' };
 }

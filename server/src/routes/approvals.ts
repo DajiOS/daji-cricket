@@ -9,6 +9,7 @@ import { assertPending, builderData, listOpen, looksAfterAny, needNote, optNote,
 import { approveBill, rejectBill } from '../accounting/bills.ts';
 import { finaliseApproved } from '../accounting/payroll.ts';
 import { signRefund, sendBackRefund } from '../payments.ts';
+import { signCash, sendBackCash } from '../cashbook.ts';
 import { askDiscount, askWaiver, listAsks, sendBackAsk, signAsk, withdrawAsk } from '../money-asks.ts';
 
 const A = { auth: ['owner', 'staff', 'super_admin'] as ('owner' | 'staff' | 'super_admin')[] };
@@ -38,6 +39,7 @@ export function approvalsRoutes(r: Router): void {
     const note = optNote(c.json());
     if (req.kind === 'bill') approveBill(t.owner, t.actor, req.entity_id, { note: note ?? undefined });
     else if (req.kind === 'refund') signRefund(t.owner, t.actor, req, note);
+    else if (req.kind === 'cash') signCash(t.owner, t.actor, req, note);
     else if (req.kind !== 'payroll') signAsk(t.owner, t.actor, req, note);
     else tx(() => {
       const s = signStep(req, t.actor, note);
@@ -54,6 +56,7 @@ export function approvalsRoutes(r: Router): void {
     const note = needNote(c.json());
     if (req.kind === 'bill') rejectBill(t.owner, t.actor, req.entity_id, { reason: note });
     else if (req.kind === 'refund') sendBackRefund(t.owner, t.actor, req, note);
+    else if (req.kind === 'cash') sendBackCash(t.owner, t.actor, req, note);
     else if (req.kind !== 'payroll') sendBackAsk(t.owner, t.actor, req, note);
     else tx(() => { if (sendBack(req, t.actor, note).toStart) audit(t.actor, 'payroll.sendback', 'payroll_runs', req.entity_id, { month: req.entity_id, reason: note }, t.owner); });
     return ok(requestOut(requestOr404(t.owner, req.id), t.user));

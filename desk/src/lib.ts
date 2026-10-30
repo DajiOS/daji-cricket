@@ -40,7 +40,7 @@ export const setIsSuper = (v: boolean) => { isSuper = v; };
 let portfolioBiz: string | null = null;
 export const setPortfolioBusiness = (id: string | null) => { portfolioBiz = id; };
 const bizHeader = (): Record<string, string> => (portfolioBiz ? { 'x-daji-business': portfolioBiz } : {});
-const OWNER_SCOPED = ['/api/legal/staff-terms/report', '/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras', '/api/docs'];
+const OWNER_SCOPED = ['/api/legal/staff-terms/report', '/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras', '/api/docs', '/api/cash'];
 
 export interface ApiOptions { method?: string; body?: unknown; headers?: Record<string, string>; raw?: BodyInit }
 
@@ -72,6 +72,18 @@ export const post = <T = any>(path: string, body: unknown = {}) => api<T>(path, 
 export const put = <T = any>(path: string, body: unknown = {}) => api<T>(path, { method: 'PUT', body });
 export const patch = <T = any>(path: string, body: unknown = {}) => api<T>(path, { method: 'PATCH', body });
 export const del = <T = any>(path: string) => api<T>(path, { method: 'DELETE' });
+/** Shrinks a phone photo (often 4–10 MB) to a sharp 1800px JPEG so it uploads fast and stays under the upload limits (business cards, cash receipts). */
+export async function shrinkPhoto(file: File): Promise<Blob> {
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+    cv.getContext('2d')!.drawImage(bmp, 0, 0, cv.width, cv.height);
+    const b = await new Promise<Blob | null>((r) => cv.toBlob(r, 'image/jpeg', 0.88));
+    return b ?? file;
+  } catch { return file; }
+}
+
 /** Sends a file as the whole request body (receipts, bank statements). */
 export const sendFile = <T = any>(path: string, file: Blob, headers?: Record<string, string>) => api<T>(path, { method: 'POST', raw: file, headers });
 
