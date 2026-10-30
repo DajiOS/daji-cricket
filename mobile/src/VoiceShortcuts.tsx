@@ -41,7 +41,8 @@ export function VoiceShortcuts({ user }: { user: User }) {
         {on && <>
           <Text style={[s.text, { marginTop: 8, marginBottom: 4, fontWeight: '700' }]}>Works with no setup</Text>
           <Text style={[s.muted, { marginBottom: 6 }]}>{Platform.OS === 'ios' ? `Apple lets these phrases use the app's own name, ${APP_NAME}. Say "Hey Siri", then:` : `Long-press the ${APP_NAME} icon for these, or ask the phone's assistant to open them:`}</Text>
-          {VOICE_ACTIONS.map((a) => <Text key={a.id} style={[s.muted, { marginBottom: 2 }]}>• "{Platform.OS === 'ios' ? builtinPhrase(a) : a.title}"</Text>)}
+          {VOICE_ACTIONS.filter((a) => !a.awaitsStoreBuild).map((a) => <Text key={a.id} style={[s.muted, { marginBottom: 2 }]}>• "{Platform.OS === 'ios' ? builtinPhrase(a) : a.title}"</Text>)}
+          {VOICE_ACTIONS.some((a) => a.awaitsStoreBuild) && <Text style={[s.muted, { marginTop: 4 }]}>Coming with the next app version from the store: {VOICE_ACTIONS.filter((a) => a.awaitsStoreBuild).map((a) => `"${a.title}"`).join(', ')}.{siri ? ' You can already add it to Siri below.' : ''}</Text>}
           {siri && <>
             <Text style={[s.text, { marginTop: 14, marginBottom: 4, fontWeight: '700' }]}>Your own phrases, with {name}</Text>
             <Text style={[s.muted, { marginBottom: 8 }]}>Tap one to record it with Siri. You can say it your own way, and change or delete it here or in the Shortcuts app.</Text>

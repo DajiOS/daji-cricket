@@ -27,7 +27,11 @@ export interface VoiceAction {
   personal: string;
   /** The question the assistant is asked; or the screen it opens. */
   question?: string;
-  screen?: 'tasks' | 'book' | 'live' | 'ask' | 'auctions' | 'fantasy' | 'cash';
+  screen?: 'tasks' | 'book' | 'live' | 'ask' | 'auctions' | 'fantasy' | 'cash' | 'construction';
+  /** Added after the last store build. Its built-in phrase and Android shortcut are compiled into the app (withDajiVoice.js), so they
+   *  only work after the next store build; an over-the-air update brings the screen and Add to Siri, not the built-in phrase. Remove
+   *  this once a store build with the action is out. */
+  awaitsStoreBuild?: boolean;
 }
 
 const STAFF: VoiceAction[] = ACTIONS.staff as VoiceAction[];

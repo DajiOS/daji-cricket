@@ -42,6 +42,7 @@ const Blocks = lazy(() => import('./pages/Blocks'));
 const Waitlist = lazy(() => import('./pages/Waitlist'));
 const Guppi = lazy(() => import('./pages/Guppi'));
 const BookingsReport = lazy(() => import('./pages/BookingsReport'));
+const Construction = lazy(() => import('./pages/Construction'));
 
 export interface NavItem { to: string; href?: string; label: string; icon: string; perm?: string; ownerOnly?: boolean; superOnly?: boolean; count?: 'approvals'; check?: (me: Me) => boolean }
 /** Who may see a menu entry: the same rules the server applies to the page behind it. */
@@ -89,10 +90,11 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
   { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub }, { path: '/grounds', page: Spots },
   { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/waitlist', page: Waitlist }, { path: '/guppi', page: Guppi }, { path: '/booking-report', page: BookingsReport }, { path: '/documents', page: Documents },
+  { path: '/construction', page: Construction },
 ];
 export const HOME = Dashboard;
 
-/** The menu, in the ten sections of the Daji Admin correction register (Construction is a separate package, so nine show here).
+/** The menu, in the ten sections of the Daji Admin correction register (all ten show here; Construction is built in, on the same project record as Work › Tasks).
  *  Each item has the address the register gives it (`href`, shown in the address bar) and the desk page that serves it (`to`, see routes.ts).
  *  An item without `href` keeps its older address. Every page stays reachable. */
 export const SECTIONS: { key: string; title: string; icon: string }[] = [
@@ -101,6 +103,7 @@ export const SECTIONS: { key: string; title: string; icon: string }[] = [
   { key: 'customers', title: 'Customers', icon: 'users' },
   { key: 'academy', title: 'Academy', icon: 'grad' },
   { key: 'finance', title: 'Revenue & Accounting', icon: 'accounts' },
+  { key: 'construction', title: 'Construction', icon: 'warehouse' },
   { key: 'work', title: 'Work', icon: 'tasks' },
   { key: 'reports', title: 'Reports', icon: 'pie' },
   { key: 'guppi', get title() { return aiName(); }, icon: 'ai' },
@@ -168,6 +171,11 @@ export const NAV: NavGroup[] = [
     { to: '/bills', label: 'Bills', icon: 'billing', ...acct },
     { to: '/bills/vendors', label: 'Vendors', icon: 'warehouse', ...acct },
     { to: '/pipeline', label: 'Where things are', icon: 'list', check: (me) => seesMoney(me) || can(me, 'manage_bookings') },
+  ] },
+
+  // the same rule as the server (construction.ts seesConstruction): the owner, or staff who run jobs, keep the books or see reports
+  { section: 'construction', group: 'Construction', items: [
+    { to: '/construction', label: 'Projects', icon: 'warehouse', check: (me) => me.role !== 'staff' || can(me, 'manage_tasks') || can(me, 'manage_accounting') || can(me, 'view_reports') },
   ] },
 
   { section: 'work', group: 'Work', items: [
