@@ -6,6 +6,7 @@ import { audit } from './audit.ts';
 import { userRow, type UserRow } from './auth.ts';
 import { Validator } from './input.ts';
 import { istDate } from './time.ts';
+import { areaFilter, canSeeArea, checkAreaId } from './areas.ts';
 import { STAGES, type Stage, completeTask, reopenTask, getTask, visibleTask, toOut, manages, type TaskOut } from './tasks.ts';
 
 // The task board: columns (To do, In progress, Review, Done), drag-and-drop ordering, comments, projects and milestones.
@@ -57,7 +58,8 @@ export function addComment(u: UserRow, taskId: string, body: unknown): CommentOu
 // ---- projects and milestones
 
 export interface MilestoneOut { id: string; title: string; dueDate: string | null; done: boolean; overdue: boolean; tasks: number; tasksDone: number }
-export interface ProjectOut { id: string; name: string; details: string | null; status: 'active' | 'archived'; tasks: number; tasksDone: number; milestones: MilestoneOut[] }
+export interface ProjectOut { id: string; name: string; details: string | null; status: 'active' | 'archived'; areaId: string | null; areaName: string | null; tasks: number; tasksDone: number; milestones: MilestoneOut[] }
+type ProjectRow = { id: string; owner_id: string; name: string; details: string | null; status: 'active' | 'archived'; area_id: string | null };
 
 function milestonesOf(projectId: string): MilestoneOut[] {
   const today = istDate(now());
@@ -68,41 +70,49 @@ function milestonesOf(projectId: string): MilestoneOut[] {
        FROM milestones m WHERE m.project_id = ? ORDER BY COALESCE(m.due_date, '9999-12-31'), m.created_at`, projectId)
     .map((m) => ({ id: m.id, title: m.title, dueDate: m.due_date, done: m.done_at !== null, overdue: m.done_at === null && !!m.due_date && m.due_date < today, tasks: m.n, tasksDone: m.d }));
 }
-function projectOut(p: { id: string; name: string; details: string | null; status: 'active' | 'archived' }): ProjectOut {
+function projectOut(p: ProjectRow): ProjectOut {
   const c = one<{ n: number; d: number }>("SELECT COUNT(*) n, COALESCE(SUM(status = 'done'), 0) d FROM tasks WHERE project_id = ? AND status != 'cancelled'", p.id)!;
-  return { ...p, tasks: c.n, tasksDone: c.d, milestones: milestonesOf(p.id) };
+  const areaName = p.area_id ? one<{ name: string }>('SELECT name FROM areas WHERE id = ?', p.area_id)?.name ?? null : null;
+  return { id: p.id, name: p.name, details: p.details, status: p.status, areaId: p.area_id, areaName, tasks: c.n, tasksDone: c.d, milestones: milestonesOf(p.id) };
 }
-function myProject(u: UserRow, id: string) {
-  const p = one<{ id: string; owner_id: string; name: string; details: string | null; status: 'active' | 'archived' }>('SELECT * FROM projects WHERE id = ?', id);
-  if (!p || (u.role !== 'super_admin' && p.owner_id !== ownerOf(u))) throw notFound('Project not found');
+/** A project this person may see: their business's, and in a branch they may see (areas.ts). Anything else is 404. */
+function myProject(u: UserRow, id: string): ProjectRow {
+  const p = one<ProjectRow>('SELECT * FROM projects WHERE id = ?', id);
+  if (!p || (u.role !== 'super_admin' && (p.owner_id !== ownerOf(u) || !canSeeArea(u, p.owner_id, p.area_id)))) throw notFound('Project not found');
   return p;
 }
 const needManage = (u: UserRow) => { if (!manages(u)) throw forbidden('This needs the "manage_tasks" permission'); };
 
 export function listProjects(u: UserRow, ownerId: string | null): { items: ProjectOut[] } {
   const owner = ownerId ?? (u.role === 'super_admin' ? null : ownerOf(u));
-  const rows = many<{ id: string; name: string; details: string | null; status: 'active' | 'archived' }>(`SELECT id, name, details, status FROM projects ${owner ? 'WHERE owner_id = ?' : ''} ORDER BY status, created_at DESC`, ...(owner ? [owner] : []));
+  const f = owner ? areaFilter(u, owner, 'area_id') : { sql: '1 = 1', params: [] };
+  const rows = many<ProjectRow>(`SELECT * FROM projects WHERE ${owner ? 'owner_id = ? AND ' : ''}${f.sql} ORDER BY status, created_at DESC`, ...(owner ? [owner] : []), ...f.params);
   return { items: rows.map(projectOut) };
 }
 export function createProject(u: UserRow, ownerId: string, body: unknown): ProjectOut {
   needManage(u);
   const v = new Validator(body);
   const name = v.str('name', { required: true, min: 2, max: 80 }), details = v.str('details', { max: 500 });
+  const areaId = v.src.areaId === null || v.src.areaId === '' ? null : v.str('areaId', { max: 60 });
   v.done();
+  checkAreaId(u, ownerId, areaId);
   const id = newId('prj');
-  run('INSERT INTO projects(id, owner_id, name, details, created_at, created_by) VALUES (?,?,?,?,?,?)', id, ownerId, name!, details ?? null, now(), u.id);
-  audit({ id: u.id, role: u.role }, 'project.create', 'project', id, { name }, ownerId);
-  return projectOut({ id, name: name!, details: details ?? null, status: 'active' });
+  run('INSERT INTO projects(id, owner_id, name, details, area_id, created_at, created_by) VALUES (?,?,?,?,?,?,?)', id, ownerId, name!, details ?? null, areaId ?? null, now(), u.id);
+  audit({ id: u.id, role: u.role }, 'project.create', 'project', id, { name, areaId: areaId ?? null }, ownerId);
+  return projectOut(one<ProjectRow>('SELECT * FROM projects WHERE id = ?', id)!);
 }
 export function updateProject(u: UserRow, id: string, body: unknown): ProjectOut {
   needManage(u);
   const p = myProject(u, id);
   const v = new Validator(body);
   const name = v.str('name', { min: 2, max: 80 }), details = v.str('details', { max: 500 }), status = v.oneOf('status', ['active', 'archived'] as const);
+  const areaId = v.src.areaId === null || v.src.areaId === '' ? null : v.str('areaId', { max: 60 });
   v.done();
-  run('UPDATE projects SET name = ?, details = ?, status = ? WHERE id = ?', name ?? p.name, details ?? p.details, status ?? p.status, id);
-  audit({ id: u.id, role: u.role }, 'project.update', 'project', id, { name, status }, p.owner_id);
-  return projectOut({ id, name: name ?? p.name, details: details ?? p.details, status: status ?? p.status });
+  if (v.src.areaId !== undefined) checkAreaId(u, p.owner_id, areaId);
+  const area = v.src.areaId === undefined ? p.area_id : areaId ?? null;
+  run('UPDATE projects SET name = ?, details = ?, status = ?, area_id = ? WHERE id = ?', name ?? p.name, details ?? p.details, status ?? p.status, area, id);
+  audit({ id: u.id, role: u.role }, 'project.update', 'project', id, { name, status, ...(v.src.areaId !== undefined ? { areaId: area } : {}) }, p.owner_id);
+  return projectOut(one<ProjectRow>('SELECT * FROM projects WHERE id = ?', id)!);
 }
 export function addMilestone(u: UserRow, projectId: string, body: unknown): MilestoneOut {
   needManage(u);

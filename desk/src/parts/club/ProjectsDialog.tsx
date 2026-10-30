@@ -1,34 +1,39 @@
 // Projects group tasks; milestones show how far a project has got.
 import { useState } from 'react';
 import { Modal, useToast, DateInput } from '../../ui';
-import { fmtDate, patch, post } from '../../lib';
+import { fmtDate, patch, post, useApi } from '../../lib';
 import { errMsg } from './common';
 import type { Project } from './taskTypes';
 
 export default function ProjectsDialog({ projects, onClose, onChanged }: { projects: Project[]; onClose: () => void; onChanged: () => void }) {
-  const toast = useToast(); const [name, setName] = useState('');
+  const toast = useToast(); const [name, setName] = useState(''); const [area, setArea] = useState('');
+  // the branches of this business this person may see (areas.ts); none set up means the picker stays hidden
+  const [areas] = useApi<{ items: { id: string; name: string }[] }>('/api/areas');
+  const branches = areas?.items ?? [];
   const run = async (fn: () => Promise<unknown>) => { try { await fn(); onChanged(); } catch (e) { toast(errMsg(e)); } };
   return (
     <Modal title="Projects and milestones" onClose={onClose} wide>
       <div className="stack">
         {!projects.length && <p className="hint">No projects yet. A project groups tasks, and its milestones show how far it has got.</p>}
-        {projects.map((p) => <ProjectBox key={p.id} p={p} run={run} />)}
+        {projects.map((p) => <ProjectBox key={p.id} p={p} run={run} branches={branches} />)}
         <div className="row" style={{ flexWrap: 'nowrap' }}>
           <input className="inp" maxLength={80} placeholder="New project, e.g. Floodlight upgrade" value={name} onChange={(e) => setName(e.target.value)} />
-          <button className="btn primary sm" onClick={() => run(async () => { await post('/api/projects', { name: name.trim() }); setName(''); })}>Add project</button>
+          {!!branches.length && <select className="inp" style={{ maxWidth: 180 }} aria-label="Branch" value={area} onChange={(e) => setArea(e.target.value)}><option value="">No branch</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
+          <button className="btn primary sm" onClick={() => run(async () => { await post('/api/projects', { name: name.trim(), ...(area ? { areaId: area } : {}) }); setName(''); })}>Add project</button>
         </div>
       </div>
     </Modal>
   );
 }
 
-function ProjectBox({ p, run }: { p: Project; run: (fn: () => Promise<unknown>) => void }) {
+function ProjectBox({ p, run, branches }: { p: Project; run: (fn: () => Promise<unknown>) => void; branches: { id: string; name: string }[] }) {
   const [title, setTitle] = useState(''); const [due, setDue] = useState('');
   const pct = p.tasks ? Math.round((p.tasksDone / p.tasks) * 100) : 0;
   return (
     <div className="card card-pad stack">
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div><b>{p.name}</b><div className="muted small">{p.tasksDone} of {p.tasks} tasks done{p.status === 'archived' ? ' · archived' : ''}</div></div>
+        <div><b>{p.name}</b><div className="muted small">{p.areaName ? `${p.areaName} · ` : ''}{p.tasksDone} of {p.tasks} tasks done{p.status === 'archived' ? ' · archived' : ''}</div></div>
+        {!!branches.length && <select className="inp" style={{ maxWidth: 160 }} aria-label={`Branch of ${p.name}`} value={p.areaId ?? ''} onChange={(e) => run(() => patch(`/api/projects/${encodeURIComponent(p.id)}`, { areaId: e.target.value || null }))}><option value="">No branch</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
         <button className="btn ghost sm" onClick={() => run(() => patch(`/api/projects/${encodeURIComponent(p.id)}`, { status: p.status === 'active' ? 'archived' : 'active' }))}>{p.status === 'active' ? 'Archive' : 'Restore'}</button>
       </div>
       <div className="meter" role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><span style={{ width: pct + '%' }} /></div>

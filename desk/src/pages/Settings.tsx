@@ -8,6 +8,7 @@ import Festivals from '../parts/admin/Festivals';
 import { Connections } from '../parts/admin/Platform';
 import GoLive from '../parts/admin/GoLive';
 import AiName from '../parts/admin/AiName';
+import Branches from '../parts/admin/Branches';
 import SharedSheet from '../parts/admin/SharedSheet';
 import WaitlistSettings from '../parts/admin/Waitlist';
 import CheckInSettings from '../parts/admin/CheckIn';
@@ -18,7 +19,7 @@ import { can, useApi } from '../lib';
 
 // The ground's own settings. People, Services and Backups are the software owner's, so they live on the Platform page only; their old
 // addresses here open them there (routes.ts, MERGED). Connections stays here for everyone (Settings, Connections: CLAUDE.md).
-const TABS: [string, string][] = [['business', 'Your business'], ['prices', 'Prices and timings'], ['booking', 'Booking window'], ['waitlist', 'Waitlist'], ['checkin', 'Check-in'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']];
+const TABS: [string, string][] = [['business', 'Your business'], ['branches', 'Branches and access'], ['prices', 'Prices and timings'], ['booking', 'Booking window'], ['waitlist', 'Waitlist'], ['checkin', 'Check-in'], ['payments', 'Payments'], ['website', 'Website'], ['festivals', 'Festivals'], ['ai', 'Platform AI'], ['connections', 'Connections'], ['golive', 'Go-live check']];
 /** Server status, the Lightsail SSH button and the AI coding console: the main website's owner (and the software owner), never staff
  *  and never another business, since the one server runs every business. */
 const SERVER_TAB: [string, string] = ['server', 'Server'];
@@ -26,7 +27,7 @@ const SERVER_TAB: [string, string] = ['server', 'Server'];
 // The main website's settings (booking window, payments, website look, festivals, the assistant's name, connections, go-live) run
 // the main site, so another customer business sees only its own business, prices and Connections (the server refuses the rest:
 // requireMainBusiness). Its Connections shows only its own shared spreadsheet, never the server's services.
-const OWN = ['business', 'prices', 'connections'];
+const OWN = ['business', 'branches', 'prices', 'connections'];
 
 export default function Settings({ sub }: { sub: string }) {
   const { me, ownerId } = useSession();
@@ -40,6 +41,7 @@ export default function Settings({ sub }: { sub: string }) {
     <div className="stack">
       <PageHead eyebrow="Settings" title={tabs.find(([k]) => k === tab)?.[1] ?? 'Settings'} />
       {tab === 'business' && <BrandSettings />}
+      {tab === 'branches' && <Branches />}
       {tab === 'prices' && <Prices />}
       {tab === 'booking' && <Booking />}
       {tab === 'waitlist' && <WaitlistSettings />}

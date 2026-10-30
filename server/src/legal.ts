@@ -94,30 +94,34 @@ export function currentTerms(u?: { id: string; role: string; owner_id?: string |
   return { docKey: termsKey(ownerId), version: STAFF_TERMS_VERSION, title: STAFF_TERMS_TITLE, body, sha256: sha256(body) };
 }
 
-export function acceptanceOf(userId: string): { version: number; sha256: string; acceptedAt: number; ip: string | null } | null {
-  const u = one<{ id: string; role: string; owner_id: string | null }>('SELECT id, role, owner_id FROM users WHERE id = ?', userId);
+/** Whether this person accepted the current terms of the business they are working in. Pass the signed-in user, not an id, when they
+ *  may have switched to another business they are on the team of (areas.ts): its terms are the ones that count there. */
+export function acceptanceOf(who: string | { id: string; role: string; owner_id?: string | null }): { version: number; sha256: string; acceptedAt: number; ip: string | null } | null {
+  const u = typeof who === 'string' ? one<{ id: string; role: string; owner_id: string | null }>('SELECT id, role, owner_id FROM users WHERE id = ?', who) : who;
+  const userId = typeof who === 'string' ? who : who.id;
   const key = termsKey(u ? ownerOfUser(u) : null);
   const r = one<{ version: number; sha256: string; accepted_at: number; ip: string | null }>('SELECT version, sha256, accepted_at, ip FROM legal_acceptances WHERE user_id = ? AND doc_key = ? AND version = ?', userId, key, STAFF_TERMS_VERSION);
   return r ? { version: r.version, sha256: r.sha256, acceptedAt: r.accepted_at, ip: r.ip } : null;
 }
 
-export const needsTerms = (u: UserRow): boolean => u.role === 'staff' && !acceptanceOf(u.id);
+export const needsTerms = (u: UserRow): boolean => u.role === 'staff' && !acceptanceOf(u);
 
 /** The person confirms by sending back the hash of the wording they were shown. A stale or altered copy is refused. */
 export function acceptTerms(u: UserRow, input: { version: number; sha256: string }, ip: string, userAgent: string | undefined) {
   const cur = currentTerms(u);
   if (input.version !== cur.version || input.sha256 !== cur.sha256) throw new HttpError(409, 'TERMS_OUT_OF_DATE', 'The terms were updated. Reload and read the latest version before accepting.');
-  if (!acceptanceOf(u.id)) {
+  if (!acceptanceOf(u)) {
     run('INSERT INTO legal_acceptances(id, user_id, doc_key, version, sha256, accepted_at, ip, user_agent) VALUES(?,?,?,?,?,?,?,?)', newId('acc'), u.id, cur.docKey, cur.version, cur.sha256, now(), ip, (userAgent ?? '').slice(0, 300));
     audit({ id: u.id, role: u.role }, 'legal.accept', 'legal_document', `${cur.docKey}:${cur.version}`, { sha256: cur.sha256, ip });
   }
-  return acceptanceOf(u.id)!;
+  return acceptanceOf(u)!;
 }
 
-/** For the owner: every team member, and whether, when and from where they accepted the current terms. */
+/** For the owner: every team member (employed here or added from another business), and whether, when and from where they accepted the current terms. */
 export function acceptanceReport(ownerId: string) {
   return many<{ id: string; name: string; version: number | null; sha256: string | null; accepted_at: number | null; ip: string | null }>(
     `SELECT u.id, u.name, a.version, a.sha256, a.accepted_at, a.ip FROM users u LEFT JOIN legal_acceptances a ON a.user_id = u.id AND a.doc_key = ? AND a.version = ?
-     WHERE u.role = 'staff' AND u.owner_id = ? ORDER BY u.name COLLATE NOCASE`, termsKey(ownerId), STAFF_TERMS_VERSION, ownerId)
+     WHERE u.role = 'staff' AND (u.owner_id = ? OR u.id IN (SELECT user_id FROM team_memberships WHERE owner_id = ? AND removed_at IS NULL))
+     ORDER BY u.name COLLATE NOCASE`, termsKey(ownerId), STAFF_TERMS_VERSION, ownerId, ownerId)
     .map((r) => ({ userId: r.id, name: r.name, version: r.version, sha256: r.sha256, acceptedAt: r.accepted_at, ip: r.ip }));
 }

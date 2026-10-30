@@ -7,6 +7,7 @@ import { authenticate, type UserRow } from './auth.ts';
 import { refuseIfReadOnly } from './readOnly.ts';
 import { tenantOfHost } from './businesses.ts';
 import { switchTo } from './portfolio.ts';
+import { staffSwitchTo } from './areas.ts';
 import { acting } from './audit.ts';
 import { HttpError, forbidden } from './errors.ts';
 import { now } from './clock.ts';
@@ -272,8 +273,12 @@ export function createApp(cfg: Config, router: Router): Server {
       // so every scope check keeps the two businesses apart; their own account, sign-in and profile (/api/me, /api/auth) stay theirs.
       const realUser = user;
       const want = req.headers['x-daji-business'];
-      if (user && typeof want === 'string' && want && want !== user.id && !/^\/api\/(me|auth)(\/|$)/.test(url.pathname)) user = switchTo(user, want);
-      acting.enterWith(user && realUser && user !== realUser ? { realId: realUser.id, ownerId: user.id } : undefined);
+      // A team member added to another business's team (areas.ts) switches the same way, and is answered as that business's team member.
+      if (user && typeof want === 'string' && want && !/^\/api\/(me|auth)(\/|$)/.test(url.pathname)) {
+        if (user.role === 'staff') { if (want !== user.owner_id) user = staffSwitchTo(user, want); }
+        else if (want !== user.id) user = switchTo(user, want);
+      }
+      acting.enterWith(user && realUser && user.id !== realUser.id ? { realId: realUser.id, ownerId: user.id } : undefined);
       const a = route.opts.auth;
       if (a) {
         if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Please sign in');

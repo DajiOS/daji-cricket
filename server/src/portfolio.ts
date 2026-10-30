@@ -3,6 +3,7 @@ import { now } from './clock.ts';
 import { HttpError, notFound } from './errors.ts';
 import { audit, type Actor } from './audit.ts';
 import { userRow, type UserRow } from './auth.ts';
+import { Validator } from './input.ts';
 import { addBusiness, businessName, mainSiteBusinessId, type Business } from './businesses.ts';
 
 // A portfolio: one business owner's sign-in opens more than one business. The platform admin puts a business in an owner's
@@ -23,16 +24,41 @@ CREATE TABLE business_portfolio (
 CREATE INDEX ix_business_portfolio_owner ON business_portfolio(owner_id);
 `);
 
-export interface PortfolioItem { id: string; businessName: string; own: boolean }
+// Whether a business in the portfolio is the owner's own ("mine": it counts in their combined view across their areas) or one
+// they only support (Antroli, a friend's ground: never in their combined view). Anything added before this is "support".
+registerSchema('business-portfolio-relation-1', `ALTER TABLE business_portfolio ADD COLUMN relation TEXT NOT NULL DEFAULT 'support' CHECK (relation IN ('mine','support'));`);
+export const RELATIONS = ['mine', 'support'] as const;
+export type Relation = typeof RELATIONS[number];
+
+export interface PortfolioItem { id: string; businessName: string; own: boolean; relation: Relation }
 
 const activeOwner = (id: string): UserRow | undefined => { const o = userRow(id); return o && o.role === 'owner' && o.active ? o : undefined; };
 
 /** The businesses this owner's sign-in opens: their own first, then the ones put in their portfolio. */
 export function portfolioOf(u: UserRow): PortfolioItem[] {
   if (u.role !== 'owner') return [];
-  const rows = many<{ owner_id: string }>('SELECT owner_id FROM business_portfolio WHERE user_id = ? AND removed_at IS NULL ORDER BY added_at, rowid', u.id);
-  return [{ id: u.id, businessName: businessName(u.id), own: true },
-    ...rows.filter((r) => r.owner_id !== u.id && activeOwner(r.owner_id)).map((r) => ({ id: r.owner_id, businessName: businessName(r.owner_id), own: false }))];
+  const rows = many<{ owner_id: string; relation: Relation }>('SELECT owner_id, relation FROM business_portfolio WHERE user_id = ? AND removed_at IS NULL ORDER BY added_at, rowid', u.id);
+  return [{ id: u.id, businessName: businessName(u.id), own: true, relation: 'mine' as Relation },
+    ...rows.filter((r) => r.owner_id !== u.id && activeOwner(r.owner_id)).map((r) => ({ id: r.owner_id, businessName: businessName(r.owner_id), own: false, relation: r.relation }))];
+}
+
+/** The owner says whether a business in their portfolio is their own or one they support. Only their own portfolio. */
+export function setRelation(u: UserRow, ownerId: string, src: unknown): PortfolioItem[] {
+  if (u.role !== 'owner') throw new HttpError(403, 'FORBIDDEN', 'Only a business owner has a portfolio.');
+  const v = new Validator(src);
+  const relation = v.oneOf('relation', RELATIONS, true);
+  v.done();
+  const c = run('UPDATE business_portfolio SET relation = ? WHERE user_id = ? AND owner_id = ? AND removed_at IS NULL', relation!, u.id, ownerId);
+  if (c.changes === 0) throw notFound('That business is not in your portfolio');
+  audit({ id: u.id, role: u.role }, 'portfolio.relation', 'business', ownerId, { relation }, ownerId);
+  return portfolioOf(u);
+}
+
+/** A business this signed-in owner holds: their own, or one in their portfolio now. */
+export function holdsBusiness(u: UserRow, ownerId: string): boolean {
+  if (u.role !== 'owner') return false;
+  if (u.id === ownerId) return true;
+  return !!one('SELECT 1 FROM business_portfolio WHERE user_id = ? AND owner_id = ? AND removed_at IS NULL', u.id, ownerId) && !!activeOwner(ownerId);
 }
 
 /**
