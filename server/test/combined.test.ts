@@ -134,6 +134,15 @@ test('cash given back is shown as given back, never as a negative hand-out, when
   // both are counted in their own dates: last year's view has the hand-out and no return
   const old = (await view(w.sunny, 'from=2025-01-01&to=2025-01-31')).body.businesses.find((x: any) => x.id === w.spId);
   assert.deepEqual([old.cash.handedOutPaise, old.cash.returnedPaise], [10_000_00, 0]);
+  // Ask AI says the same: the return as given back, no hand-out, never a negative figure
+  const a = await h.call<any>('POST', '/api/staff/ask', { token: w.sunny, body: { question: 'How are all my businesses doing this month?' } });
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal(a.body.intent, 'combined');
+  const d = a.body.details.find((x: any) => x.label === "Sunny's Portfolio").text;
+  assert.match(d, /₹2,000 given back/);
+  assert.doesNotMatch(d, /handed to wallets|-₹|₹-/);
+  const o = await h.call<any>('POST', '/api/staff/ask', { token: w.sunny, body: { question: 'How are all my businesses doing from 1 Jan 2025 to 31 Jan 2025?' } });
+  assert.match(o.body.details.find((x: any) => x.label === "Sunny's Portfolio").text, /₹10,000 handed to wallets/);
 });
 
 test('filters by business, branch, project, person and dates; the books say "not split" rather than showing a whole business under a branch', async () => {

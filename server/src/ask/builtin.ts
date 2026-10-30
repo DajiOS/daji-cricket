@@ -693,6 +693,13 @@ function cashAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partia
  * The owner's combined view (combined.ts): the businesses they marked "Mine", side by side. The period is the one asked about,
  * this month when none is given. A business that could not be read is said to be not available, never ₹0.
  */
+/** Cash for one business: spends, then hand-outs and returns each as itself (a return may be for an advance from before the period). */
+function cashText(c: { spentSignedPaise: number; spentWaitingPaise: number; handedOutPaise: number; returnedPaise: number }): string {
+  const spent = c.spentSignedPaise || c.spentWaitingPaise ? `cash spent ${R(c.spentSignedPaise)} signed${c.spentWaitingPaise ? ` and ${R(c.spentWaitingPaise)} waiting` : ''}` : 'no cash spends';
+  const moved = [c.handedOutPaise ? `${R(c.handedOutPaise)} handed to wallets` : '', c.returnedPaise ? `${R(c.returnedPaise)} given back` : ''].filter(Boolean);
+  return moved.length ? `${spent}; ${moved.join(', ')} (money moving, not spending)` : spent;
+}
+
 function combinedAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
   const today = istDate(now());
   const parsed = parseRange(question, today, 'past');
@@ -704,7 +711,7 @@ function combinedAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answer: 
   const details = c.businesses!.map((b) => ({
     label: b.name,
     text: [typeof b.books === 'string' ? 'Books: not available just now' : `Revenue ${R(b.books.revenuePaise)}, expenses ${R(b.books.expensesPaise)}, ${b.books.netProfitPaise >= 0 ? 'profit' : 'loss'} ${R(Math.abs(b.books.netProfitPaise))}`,
-      typeof b.cash === 'string' ? 'cash: not available' : b.cash.spentSignedPaise || b.cash.spentWaitingPaise || b.cash.handedOutPaise ? `cash spent ${R(b.cash.spentSignedPaise)} signed${b.cash.spentWaitingPaise ? ` and ${R(b.cash.spentWaitingPaise)} waiting` : ''}` : 'no cash spends',
+      typeof b.cash === 'string' ? 'cash: not available' : cashText(b.cash),
       typeof b.jobs === 'string' ? 'jobs: not available' : `${count(b.jobs.open, 'open job')}${b.jobs.overdue ? `, ${b.jobs.overdue} overdue` : ''}`,
     ].join('; ') + '.',
   }));
