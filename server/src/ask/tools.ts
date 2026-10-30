@@ -25,6 +25,7 @@ import { areaFilter, listAreas } from '../areas.ts';
 import { listWallets } from '../cashbook.ts';
 import { inboxForAsk } from '../wainbox.ts';
 import { siteReport as siteDay } from '../taskwork.ts';
+import { networkFacts } from '../netTournaments.ts';
 import type { Config } from '../config.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
@@ -511,4 +512,14 @@ export function server(ctx: Ctx) {
  */
 export function whatsapp(ctx: Ctx) {
   return inboxForAsk(ctx.cfg, ctx.user, ctx.ownerId);
+}
+
+/**
+ * The cricket network (network.ts, netTournaments.ts): whether this business is in it, the network tournaments it organises or hosts, invitations
+ * and match times waiting for it, results waiting for its verification, the settlement lines it is a party to (never another business's), and
+ * profile claims waiting for its staff. The same people as the Tournaments page. Tournament and ground names only: no players or contact details.
+ */
+export function network(ctx: Ctx) {
+  need(ctx, 'tournaments');
+  return withText(networkFacts(ctx.user, ctx.ownerId));
 }

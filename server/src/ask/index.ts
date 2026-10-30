@@ -8,6 +8,7 @@ import { askClaude, AiError } from './claude.ts';
 import { niceRange } from './dates.ts';
 import * as T from './tools.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
+import { isUiLanguageQuestion, uiLanguageAnswer } from '../uiLanguage.ts';
 import { isReadOnlyQuestion, readOnlyAnswer } from '../readOnly.ts';
 import { isDocQuestion, searchDocs, searchWords, seesDocs, waitingCount, type SearchHit } from '../docs.ts';
 
@@ -79,6 +80,11 @@ export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuesti
     audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: 'assistant_name' }, ownerId);
     return { question, answer: aiNameAnswer(user.id), details: [], understood: 'A question about the assistant itself', period: null, intent: 'help', source: 'builtin', verified: true, open: null, notes: [], suggestions: [] };
   }
+  // "What language is my app in?": this person's Profile › Screen language. Answered here, never by Claude.
+  if (isUiLanguageQuestion(question)) {
+    audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: 'screen_language' }, ownerId);
+    return { question, answer: uiLanguageAnswer(user.id), details: [], understood: 'A question about the language of your screens', period: null, intent: 'help', source: 'builtin', verified: true, open: null, notes: [], suggestions: [] };
+  }
   // "Am I view only?", "Who on the team is read only?": answered from the Team page's Read only switch, never by Claude.
   if (isReadOnlyQuestion(question)) {
     audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: 'read_only' }, ownerId);
@@ -125,7 +131,7 @@ export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuesti
 function describeTool(tool: string, i: Record<string, unknown>): string {
   const names: Record<string, string> = {
     get_profit_and_loss: 'Profit and loss', get_money_received: 'Money received', get_account_balances: 'Account balances', get_balance_sheet: 'Balance sheet', get_bookings_summary: 'Bookings',
-    get_upcoming_sessions: 'Upcoming sessions', get_money_owed: 'Money owed', get_utilisation: 'Utilisation', get_account_credit: 'Account credit', get_refunds: 'Refunds', get_customer_counts: 'Customer counts', get_jobs: 'Jobs', get_branches: 'Branches', get_cash: 'Supervisor cash', get_whatsapp: 'WhatsApp inbox', get_site_report: 'Daily site report', get_approvals_waiting: 'Approvals waiting', get_approval_rules: 'Approval rules', why_cant_i_sign: 'Approval you asked about', get_approvals_decided: 'Approvals decided', get_team_attendance: 'Team attendance', get_gst: 'GST', get_compliance: 'Compliance register', get_waitlist: 'Waitlist', get_check_ins: 'Check-ins', get_shared_sheet: 'Shared spreadsheet', get_player_records: 'Player records', get_fantasy: 'Fantasy cricket', list_grounds: 'Grounds',
+    get_upcoming_sessions: 'Upcoming sessions', get_money_owed: 'Money owed', get_utilisation: 'Utilisation', get_account_credit: 'Account credit', get_refunds: 'Refunds', get_customer_counts: 'Customer counts', get_jobs: 'Jobs', get_branches: 'Branches', get_cash: 'Supervisor cash', get_whatsapp: 'WhatsApp inbox', get_site_report: 'Daily site report', get_cricket_network: 'Cricket network', get_approvals_waiting: 'Approvals waiting', get_approval_rules: 'Approval rules', why_cant_i_sign: 'Approval you asked about', get_approvals_decided: 'Approvals decided', get_team_attendance: 'Team attendance', get_gst: 'GST', get_compliance: 'Compliance register', get_waitlist: 'Waitlist', get_check_ins: 'Check-ins', get_shared_sheet: 'Shared spreadsheet', get_player_records: 'Player records', get_fantasy: 'Fantasy cricket', list_grounds: 'Grounds',
   };
   const from = typeof i.from === 'string' ? i.from : null, to = typeof i.to === 'string' ? i.to : null;
   return `${names[tool] ?? tool}${from && to ? ` ${niceRange(from, to)}` : typeof i.as_of === 'string' ? ` as at ${i.as_of}` : ''}`;

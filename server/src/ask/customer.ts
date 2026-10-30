@@ -13,12 +13,14 @@ import { niceDay, parseRange } from './dates.ts';
 import { parseBooking } from '../guppiLang.ts';
 import { say } from '../guppiText.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
+import { isUiLanguageQuestion, uiLanguageAnswer } from '../uiLanguage.ts';
 import { customerAuctionFacts, editableHosted, rulesWordsOf } from '../auction.ts';
 import { draftRuleChange, rulesInWords } from '../auctionRules.ts';
 import { myWaitlist, tierFor } from '../waitlist.ts';
 import { myCricket } from '../playerStats.ts';
 import { listForPlayer, myFantasy } from '../fantasy.ts';
 import { mainSiteBusinessId } from '../businesses.ts';
+import { myChildren, mySharing } from '../network.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -56,6 +58,7 @@ const RULES: [string, RegExp][] = [
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?)\b/],
   ['fantasy', /\bfantasy\b|\bdream ?11\b|ફેન્ટસી|फैंटसी|फैंटेसी/],
   ['auction', /\bauctions?\b|\bsquads?\b|\bpurse\b|\bbid(s|ding)?\b|(was|am|have) i (been )?(picked|sold|bought|selected)|which team (picked|bought|got|has) me|who (picked|bought) me|base price/],
+  ['network', /who can see my (cricket )?(profile|record|stats)|(my|profile) sharing|sharing (choice|setting)s?|cricket network|\bmy (child|children|son|daughter|kids?)s? (cricket )?(profile|sharing|consent)|\bconsent\b/],
   ['games', /how many games|games (have i|i have|i've) played|games? played|my tier|which tier|what tier|check.?in|kitne (match|game)|કેટલી મેચ|कितने मैच/],
   ['cricket', /\b(career|cricket|my) (stats|statistics|record)\b|\bmy stats\b|\bbatting\b|\bbowling\b|\baverage\b|strike rate|\beconomy\b|how many (runs|wickets|catches|sixes|fours)|\bmy (runs|wickets|catches|highest|best)\b|highest score|best (score|figures)|centur(y|ies)|fift(y|ies)|\bducks?\b|stumpings?|કેટલા રન|કેટલી વિકેટ|कितने रन|कितने विकेट/],
   ['waitlist', /wait.?list|waiting list|on the list|my (place|turn|request)|વેઇટિંગ|વેટિંગ|वेटिंग|प्रतीक्षा/],
@@ -124,7 +127,9 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
   if (asked.flags.payAct || asked.flags.waiver) return out(say(asked.language, asked.flags.waiver ? 'waiver' : 'payAct'), { intent: 'payment_boundary', open: 'bookings' });
 
   if (isNameQuestion(question)) return out(aiNameAnswer(user.id), { intent: 'assistant_name' });
+  if (isUiLanguageQuestion(question)) return out(uiLanguageAnswer(user.id), { intent: 'screen_language' });
   if (intent === 'auction') return auctionAnswer(user, question, today, out);
+  if (intent === 'network') return networkAnswer(user, out);
 
   switch (intent) {
     case 'next': {
@@ -306,4 +311,17 @@ function auctionAnswer(user: UserRow, question: string, today: string, out: (ans
       : join.length ? `${join.length} ${join.length === 1 ? 'auction is' : 'auctions are'} open for players to sign up: ${join.slice(0, 3).map((a) => a.name).join(', ')}.`
         : 'There is no auction open for sign-up right now. You can host one from the Auctions page.';
   return out(`${answer}${join.length && f.picks.length ? ` ${join.length} more ${join.length === 1 ? 'is' : 'are'} open to join.` : ''} Points are not money: nothing is paid for a player.`, { details: details.slice(0, 8), open: 'auction', ...(f.picks[0] ? { auctionId: f.picks[0].auction_id } : join[0] ? { auctionId: join[0].id } : {}) });
+}
+
+/** Who can see the player's cricket profile, what is shared, and (for a parent or guardian) each child's consent. Read only: choices are changed in the profile. */
+function networkAnswer(user: UserRow, out: (answer: string, extra?: Partial<CustomerAnswer>) => CustomerAnswer): CustomerAnswer {
+  const s = mySharing(user);
+  const who = s.choices.find((c) => c.value === s.visibility)!;
+  const kids = myChildren(user);
+  const details = [
+    { label: 'Shared', text: s.sharedFields.join('; ') },
+    { label: 'Never shared', text: s.neverShared.join('; ') },
+    ...kids.items.map((k) => ({ label: k.name, text: `Match record: ${k.consent.playRecord.given ? 'agreed' : 'not agreed'}. Sharing with grounds in the network: ${k.consent.networkShare.given ? 'agreed' : 'not agreed'}. Seen by: ${k.visibility === 'network' ? 'grounds in the network' : 'only you'}.` })),
+  ];
+  return out(`Your cricket profile is set to "${who.label}": ${who.text} You can change this in your profile.${kids.items.length ? ` You look after ${kids.items.length === 1 ? 'one child' : `${kids.items.length} children`}.` : ''}`, { details, intent: 'network' });
 }

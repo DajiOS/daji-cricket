@@ -77,6 +77,10 @@ export interface User {
   aiNameOwn?: string | null;
   /** Set when the name in use was put on the reserved list after it was saved: it keeps working for a grace period, and this says until when. */
   aiNameNotice?: string | null;
+  /** The language of this person's screens (Profile › Screen language): 'en', 'gu' or 'hi'. English until they pick one. Words only. */
+  language?: 'en' | 'gu' | 'hi';
+  /** false until the person saves a language themselves. A client then keeps the language picked before sign-in and saves it to the profile. */
+  languageChosen?: boolean;
 }
 
 export interface AuthResult {
