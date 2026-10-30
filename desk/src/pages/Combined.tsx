@@ -93,7 +93,7 @@ export default function Combined() {
         </Panel>
 
         {t && (
-          <Panel title={`Together (${t.currency})`} note={`${v.businesses.length} businesses, ${fmtDay(v.filters.from)} to ${fmtDay(v.filters.to)}.${t.leftOut.length ? ` Not available just now, so left out: ${t.leftOut.join('; ')}.` : ''}`}>
+          <Panel title={`Together (${t.currency})`} note={`${v.businesses.length === 1 ? "1 business" : `${v.businesses.length} businesses`}, ${fmtDay(v.filters.from)} to ${fmtDay(v.filters.to)}.${t.leftOut.length ? ` Not available just now, so left out: ${t.leftOut.join('; ')}.` : ''}`}>
             <div className="grid g4">
               <Stat label="Revenue in the books" value={partValue(t.books, (x) => inr(x.revenuePaise))} foot={t.booksNote ?? 'Each business\'s own books, added up'} />
               <Stat label="Expenses in the books" value={partValue(t.books, (x) => inr(x.expensesPaise))} foot={t.books.value ? `${t.books.value.netProfitPaise >= 0 ? 'Profit' : 'Loss'} ${inr(Math.abs(t.books.value.netProfitPaise))}` : '–'} />
