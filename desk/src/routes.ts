@@ -70,7 +70,7 @@ export const REGISTER: RegisterRoute[] = [
   R(48, 'Construction', 'Construction Projects', '/construction', '/construction', 'MATCHES', 'Built inside Daji Admin on the same project record as Work › Tasks. The separate construction package was never deployed and is retired.'),
   R(49, 'Construction', 'Project: Plan', '/construction/:id/plan', '/construction/:id/plan', 'MATCHES'),
   R(50, 'Construction', 'Project: Commercial', '/construction/:id/commercial', '/construction/:id/commercial', 'MATCHES'),
-  R(51, 'Construction', 'Project: Site', '/construction/:id/site', '/construction/:id/site', 'PARTIAL', 'Jobs, milestones, defects, goods received and subcontractors are here. The daily site report with photos comes from Work › Tasks and joins this tab when that work is released.'),
+  R(51, 'Construction', 'Project: Site', '/construction/:id/site', '/construction/:id/site', 'MATCHES', 'Jobs, the daily site report (the same report as Work › Tasks, with proof photo counts), defects, goods received and subcontractors.'),
   R(52, 'Construction', 'Project: Plans & Documents', '/construction/:id/documents', '/construction/:id/documents', 'MATCHES'),
   R(53, 'Construction', 'Project: Finance', '/construction/:id/finance', '/construction/:id/finance', 'MATCHES'),
   R(54, 'Work', 'Tasks', '/work/tasks', '/tasks', 'MATCHES'),
