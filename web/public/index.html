@@ -2,6 +2,7 @@
 <html lang="en" data-theme="ivory">
 <head>
 <script src="session.js"></script>
+<script src="i18n.js"></script>
 <script src="zoom.js"></script>
 <script src="anatomy.js" defer></script>
 <script src="splash-early.js"></script>
@@ -27,13 +28,14 @@
   <nav>
     <a class="brand" href="#top" data-home aria-label="Daji Cricket Ground"><img class="wm-nav" src="assets/logo.svg" alt="Daji Cricket Ground"><span class="brand-tag" data-tagline></span></a>
     <div class="links" id="links">
-      <a href="#grounds" data-jump="grounds">Grounds</a>
-      <a href="#gallery" data-jump="gallery">Gallery</a>
-      <a href="#live" data-jump="live" id="nav-live" hidden>Live scores</a>
+      <a href="#grounds" data-jump="grounds" data-i18n="web.grounds">Grounds</a>
+      <a href="#gallery" data-jump="gallery" data-i18n="web.gallery">Gallery</a>
+      <a href="#live" data-jump="live" id="nav-live" hidden data-i18n="web.liveScores">Live scores</a>
       <a href="#academy">MP13 Academy</a>
-      <a href="#auctions" id="nav-auctions" hidden>Auctions</a>
-      <a href="#visit" data-jump="visit">Contact</a>
-      <a href="#book" data-jump="book" data-reserve>Reserve</a>
+      <a href="#auctions" id="nav-auctions" hidden data-i18n="web.auctions">Auctions</a>
+      <a href="#visit" data-jump="visit" data-i18n="web.contact">Contact</a>
+      <a href="#book" data-jump="book" data-reserve data-i18n="web.reserve">Reserve</a>
+      <label class="lang-pick"><select id="lang-pick" data-i18n-aria="common.language" aria-label="Language"><option value="en">English</option><option value="gu" lang="gu">ગુજરાતી</option><option value="hi" lang="hi">हिन्दी</option></select></label>
       <a href="#" data-instagram target="_blank" rel="noopener" hidden>Instagram</a>
       <span id="authlinks" class="who"></span>
       <span id="profile-slot" class="profile-slot"></span>
@@ -49,22 +51,22 @@
       <h1 class="display"><span class="ln"><span>Floodlit ground.</span></span> <span class="ln"><span>Reserved for you.</span></span></h1>
       <div class="hero-sub">
       <p class="lead">Choose your time, from early morning to late night. Pay the advance online and the wicket is held in your name.</p>
-      <div class="cta"><a class="btn primary" href="#book" data-jump="book">Reserve a slot</a><button class="btn outline" type="button" data-enquiry>Send an enquiry</button></div>
+      <div class="cta"><a class="btn primary" href="#book" data-jump="book" data-i18n="web.reserveSlot">Reserve a slot</a><button class="btn outline" type="button" data-enquiry data-i18n="web.enquiry">Send an enquiry</button></div>
       <div class="facts" id="facts"></div>
-      <ol class="howto"><li><b>1</b>Pick a day</li><li><b>2</b>Choose ball and match</li><li><b>3</b>Pay the advance</li><li><b>✓</b>Slot is yours</li></ol>
+      <ol class="howto"><li><b>1</b><span data-i18n="web.how1">Pick a day</span></li><li><b>2</b><span data-i18n="web.how2">Choose ball and match</span></li><li><b>3</b><span data-i18n="web.how3">Pay the advance</span></li><li><b>✓</b><span data-i18n="web.how4">Slot is yours</span></li></ol>
       </div>
     </div>
 
     <aside class="panel" id="book" aria-label="Booking">
-      <ol class="fx-steps" aria-label="Step 1 of 4"><li class="on"><b>1</b>Select</li><li><b>2</b>Review</li><li><b>3</b>Pay</li><li><b>4</b>Confirm</li></ol>
+      <ol class="fx-steps" aria-label="Step 1 of 4"><li class="on"><b>1</b><span data-i18n="web.stepSelect">Select</span></li><li><b>2</b><span data-i18n="web.stepReview">Review</span></li><li><b>3</b><span data-i18n="web.stepPay">Pay</span></li><li><b>4</b><span data-i18n="web.stepConfirm">Confirm</span></li></ol>
       <div class="pcol pc-head">
-      <div class="eyebrow">Reserve</div>
+      <div class="eyebrow" data-i18n="web.reserve">Reserve</div>
       <h3 id="p-name">Loading…</h3>
       <div class="sub" id="p-sub"></div>
       <div class="tabs" id="p-tabs"></div>
       </div>
       <div class="pcol pc-day">
-      <div class="step"><i>1</i>Pick a day</div>
+      <div class="step"><i>1</i><span data-i18n="web.how1">Pick a day</span></div>
       <div class="datebar">
         <label class="datepick"><input type="date" data-native id="p-date" aria-label="Pick any date, up to a year ahead"></label>
         <div class="dayscroll" id="p-days"></div>
@@ -76,7 +78,7 @@
       <div class="step" id="p-step3"><i>2</i>Pick your time</div>
       <div id="p-hint" class="hint"></div>
       <div class="slots" id="p-slots"></div>
-      <div class="legend"><span><i class="a"></i>Available</span><span><i class="s"></i>Selected</span><span><i class="h"></i>Held</span><span><i class="b"></i>Booked</span></div>
+      <div class="legend"><span><i class="a"></i><span data-i18n="web.legendAvailable">Available</span></span><span><i class="s"></i><span data-i18n="web.legendSelected">Selected</span></span><span><i class="h"></i><span data-i18n="web.legendHeld">Held</span></span><span><i class="b"></i><span data-i18n="web.legendBooked">Booked</span></span></div>
       </div>
       <div class="pcol pc-go">
       <div class="sum" id="p-sum"></div>
@@ -134,7 +136,7 @@
   </div>
 </div></section>
 
-<a class="resbar" href="#book" data-jump="book">Reserve a slot</a>
+<a class="resbar" href="#book" data-jump="book" data-i18n="web.reserveSlot">Reserve a slot</a>
 <div class="wrap"><section class="signoff" style="border:0"><div class="wmbox"><img src="assets/logo.svg" alt="" style="width:100%;height:auto;display:block"><div class="tagline" id="tagline"></div></div></section>
 <footer><span id="foot-l"></span><span><a href="https://apps.apple.com/app/id6826630876" target="_blank" rel="noopener" style="margin-right:18px">Get the iPhone app</a><a href="https://play.google.com/store/apps/details?id=com.dajicricket.app" target="_blank" rel="noopener" style="margin-right:18px">Get the Android app</a><a href="#" data-instagram target="_blank" rel="noopener" hidden style="margin-right:18px">Instagram</a><a href="#terms" data-terms style="margin-right:18px">Terms and conditions</a><a href="legal.html" style="margin-right:18px">Legal notices</a><a href="privacy.html" style="margin-right:18px">Privacy</a><a href="#platform" style="margin-right:18px">For ground owners</a><span id="foot-r"></span></span></footer></div>
 </div>

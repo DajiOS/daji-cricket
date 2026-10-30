@@ -3,7 +3,11 @@ export interface User { id: string; role: 'customer' | 'owner' | 'staff' | 'supe
   /** The assistant's name as this person sees it (their pick, else the business default), their own pick, and a notice when it was reserved later. A label only. */
   aiName?: string; aiNameOwn?: string | null; aiNameNotice?: string | null;
   /** A team member the owner marked "Read only": every screen opens, but the server refuses changes (READ_ONLY). */
-  readOnly?: boolean }
+  readOnly?: boolean;
+  /** The language of this person's screens (Profile › Screen language). Words only. */
+  language?: 'en' | 'gu' | 'hi';
+  /** false until the person saves one: the language picked before sign-in is then kept and saved. */
+  languageChosen?: boolean }
 export type Ball = 'leather' | 'tennis' | 'practice';
 export interface Ground { id: string; name: string; city: string; address?: string; pricePaise: number; weekendPricePaise: number | null; amenities?: string[]; directionsUrl?: string | null; maxSlots?: number; closedDays?: number[]; rates?: { id: string; label: string; ball: Ball; mode: 'fixed' | 'hourly' }[]; ratesNote?: string | null; slotMinutes?: number }
 /** One line of the price list for a day: a fixed session, or an hourly price with its own hours. */

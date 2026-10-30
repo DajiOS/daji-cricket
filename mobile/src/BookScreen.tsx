@@ -6,18 +6,20 @@ import { Btn, Chip, Field, GuppiMark, Icon, type IconName, KV, Loading, MonthBar
 import { useGroundPhoto } from './photo';
 import { C, inr, tint } from './theme';
 import { GuppiBookScreen } from './GuppiBookScreen';
+import { useT } from './lang';
 
 const istToday = (): string => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 const addDays = (d: string, n: number): string => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DOW_LONG = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
-const BALLS: Record<Ball, string> = { leather: 'Leather ball', tennis: 'Tennis ball', practice: 'Practice nets' };
+const balls_ = (t: ReturnType<typeof useT>): Record<Ball, string> => ({ leather: t('book.ball.leather'), tennis: t('book.ball.tennis'), practice: t('book.ball.practice') });
+const repeatNames = (t: ReturnType<typeof useT>): Record<RepeatFrequency, string> => ({ daily: t('book.repeat.daily'), weekly: t('book.repeat.weekly'), monthly: t('book.repeat.monthly'), yearly: t('book.repeat.yearly') });
 const REPEATS: Record<RepeatFrequency, { word: string; def: number; max: number }> = { daily: { word: 'every day', def: 5, max: 60 }, weekly: { word: 'every week', def: 4, max: 52 }, monthly: { word: 'every month', def: 3, max: 12 }, yearly: { word: 'every year', def: 2, max: 3 } };
 const hm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
 
 /** The opening band: the ground's own photo (uploaded in the desk), or plain green when there is none. */
 function Hero() {
-  const pic = useGroundPhoto();
+  const pic = useGroundPhoto(); const t = useT();
   return (
     <View style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: '#123D24', padding: 20, paddingTop: 64, marginBottom: 4 }}>
       {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
@@ -25,14 +27,15 @@ function Hero() {
       <View style={{ zIndex: 1 }}>
         <Text style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, fontWeight: '700', marginBottom: 6 }}>Daji Cricket Ground · Surat</Text>
         <Text style={{ color: '#FFFFFF', fontSize: 34, lineHeight: 38, fontWeight: '800', letterSpacing: -0.8 }}>Play.{'\n'}Practice.{'\n'}<Text style={{ color: C.onBg }}>Grow.</Text></Text>
-        <Text style={{ color: 'rgba(255,255,255,.88)', fontSize: 14, lineHeight: 20, marginTop: 8 }}>Floodlit ground and practice nets. Pick a free slot, pay a small advance and the time is yours.</Text>
+        <Text style={{ color: 'rgba(255,255,255,.88)', fontSize: 14, lineHeight: 20, marginTop: 8 }}>{t('book.hero')}</Text>
       </View>
     </View>
   );
 }
 /** One time or session to pick: its time and price on the left and whether it is free on the right; the chosen one is outlined in gold. */
 function SlotTile({ title, line, price, on, disabled, onPress }: { title: string; line?: string; price: string; on: boolean; disabled: boolean; wide?: boolean; onPress: () => void }) {
-  const pill = on ? ['Selected', C.goldDark] : disabled ? ['Unavailable', C.danger] : ['Available', C.ok];
+  const t = useT();
+  const pill = on ? [t('book.selected'), C.goldDark] : disabled ? [t('book.unavailable'), C.danger] : [t('book.available'), C.ok];
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected: on, disabled }} disabled={disabled} onPress={onPress}
       style={{ flexBasis: '100%', flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: on ? 2 : 1, borderColor: on ? C.strong : C.line, backgroundColor: on ? tint(C.strong, 0.12) : C.panel, paddingVertical: on ? 11 : 12, paddingHorizontal: on ? 13 : 14, opacity: disabled ? 0.6 : 1 }}>
@@ -49,13 +52,13 @@ const Label = ({ children }: { children: React.ReactNode }) => <Text style={{ co
 const AMENITY_ICON: [RegExp, IconName][] = [[/flood|light/i, 'bulb-outline'], [/turf|wicket|pitch/i, 'grid-outline'], [/pavilion|seat|stand/i, 'home-outline'], [/park/i, 'car-outline'], [/wash|toilet|change/i, 'water-outline'], [/net/i, 'baseball-outline']];
 /** A ground as a photo card: its picture, name and place, a few amenities, and a pill when it is the one chosen. */
 function GroundCard({ g, on, onPress }: { g: Ground; on: boolean; onPress: () => void }) {
-  const pic = useGroundPhoto();
+  const pic = useGroundPhoto(); const t = useT();
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: C.panel, borderWidth: 2, borderColor: on ? C.strong : 'transparent', marginBottom: 12 }}>
       <View style={{ height: 120, backgroundColor: '#1B4A2E' }}>
         {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
         <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: on ? C.strong : 'rgba(255,255,255,0.92)', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}>
-          <Text style={{ color: on ? C.onStrong : '#1C7A3E', fontSize: 11, fontWeight: '800' }}>{on ? 'Selected' : 'Available'}</Text>
+          <Text style={{ color: on ? C.onStrong : '#1C7A3E', fontSize: 11, fontWeight: '800' }}>{on ? t('book.selected') : t('book.available')}</Text>
         </View>
       </View>
       <View style={{ padding: 12 }}>
@@ -106,6 +109,7 @@ function DayPicker({ open, value, onPick }: { open: string[]; value: string; onP
 }
 
 export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse) => void; onNeedSignIn?: () => void }) {
+  const t = useT(); const BALLS = balls_(t); const REPEAT_NAME = repeatNames(t);
   const [cfg, setCfg] = useState<AppConfig | null>(null);
   const [grounds, setGrounds] = useState<Ground[]>([]);
   const [gid, setGid] = useState(''); const [date, setDate] = useState(istToday());
@@ -248,7 +252,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   if (!cfg) return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]}>
       <Hero />
-      {err ? (<><Text style={s.err}>{err}</Text><Btn label="Try again" onPress={() => void loadGrounds()} style={{ marginTop: 16 }} /></>) : (<><Loading /><Text style={[s.note, { textAlign: 'center' }]}>Loading today's slots…</Text></>)}
+      {err ? (<><Text style={s.err}>{err}</Text><Btn label={t('common.tryAgain')} onPress={() => void loadGrounds()} style={{ marginTop: 16 }} /></>) : (<><Loading /><Text style={[s.note, { textAlign: 'center' }]}>{t('book.loadingSlots')}</Text></>)}
     </ScrollView>
   );
   if (guppi && cfg.guppiBookingEnabled) return <View style={s.screen}><GuppiBookScreen onHold={onHold} onBack={() => setGuppi(false)} signedIn={!onNeedSignIn} onNeedSignIn={onNeedSignIn} /></View>;
@@ -260,21 +264,21 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       {!!cfg.guppiBookingEnabled && (
         <Pressable accessibilityRole="button" onPress={() => setGuppi(true)} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 4 }]}>
           <GuppiMark />
-          <View style={{ flex: 1 }}><Text style={[s.text, { fontWeight: '700' }]}>Book with DCG</Text><Text style={s.muted}>Just say it · ગુજરાતી · हिन्दी · English</Text></View>
+          <View style={{ flex: 1 }}><Text style={[s.text, { fontWeight: '700' }]}>Book with DCG</Text><Text style={s.muted}>{t('book.withAssistant')}</Text></View>
           <Icon name="chevron-forward" size={18} color={C.muted} />
         </Pressable>
       )}
-      <Label>Choose a ground</Label>
+      <Label>{t('book.chooseGround')}</Label>
       {grounds.map((g) => <GroundCard key={g.id} g={g} on={g.id === gid} onPress={() => setGid(g.id)} />)}
-      <Label>Day</Label>
+      <Label>{t('book.day')}</Label>
       <DayPicker open={days} value={date} onPick={setDate} />
       {weekly.size > 0 && <Text style={[s.note, { marginTop: -6, marginBottom: 6 }]}>{ground?.name ?? 'The ground'} is closed on {[...weekly].sort().map((n) => DOW_LONG[n]).join(' and ')}.</Text>}
 
-      {av === null ? (err ? <Btn kind="outline" label="Try again" onPress={() => void loadSlots()} /> : <Loading />) : av.closed ? <Text style={s.note}>The ground is closed on this day. Please pick another day.</Text> : hasRates ? (<>
-        <Label>Play with</Label>
+      {av === null ? (err ? <Btn kind="outline" label={t('common.tryAgain')} onPress={() => void loadSlots()} /> : <Loading />) : av.closed ? <Text style={s.note}>{t('book.closedDay')}</Text> : hasRates ? (<>
+        <Label>{t('book.playWith')}</Label>
         <Segmented items={balls.map((b) => [b, BALLS[b]] as [Ball, string])} value={ball as Ball} onChange={(b) => { setBall(b); setWin(null); setHr(null); }} />
-        {!ball ? <Text style={s.note}>Choose the ball you want to play with.</Text> : !opts.length ? <Text style={s.note}>Nothing is on sale for this ball on this day. Pick another day, or call us.</Text> : (<>
-          {fixed.length > 0 && <Label>Sessions</Label>}
+        {!ball ? <Text style={s.note}>{t('book.chooseBall')}</Text> : !opts.length ? <Text style={s.note}>{t('book.nothingForBall')}</Text> : (<>
+          {fixed.length > 0 && <Label>{t('book.sessions')}</Label>}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {fixed.map((o) => <SlotTile key={o.ruleId} wide title={o.label} line={`${o.time} – ${o.endTime}`} price={o.state === 'available' ? `${price(o.pricePaise)}${o.proRated ? ' · part session' : ''}` : o.state} on={win === o.ruleId} disabled={o.state !== 'available'} onPress={() => { setWin(o.ruleId); setHr(null); }} />)}
           </View>
@@ -289,47 +293,47 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
         </>)}
         {!!ground?.ratesNote && <Text style={[s.note, { marginTop: 10 }]}>{ground.ratesNote}</Text>}
       </>) : (<>
-        <Label>Time</Label>
-        <Text style={[s.note, { marginBottom: 10 }]}>Choose up to {maxSlots} slots in a row.</Text>
+        <Label>{t('book.time')}</Label>
+        <Text style={[s.note, { marginBottom: 10 }]}>{t('book.upTo', { n: maxSlots })}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {av.slots.map((sl) => <SlotTile key={sl.start} title={sl.time} price={sl.state === 'available' ? price(sl.pricePaise) : sl.state} on={pick.includes(sl.start)} disabled={sl.state !== 'available'} onPress={() => toggleSlot(sl)} />)}
-          {!av.slots.length && <Text style={s.note}>No slots on this day.</Text>}
+          {!av.slots.length && <Text style={s.note}>{t('book.noSlots')}</Text>}
         </View>
       </>)}
 
       {!!body && !enq && (<>
-        <Label>Repeat this booking</Label>
+        <Label>{t('book.repeat')}</Label>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          <Chip label="Does not repeat" on={!rep} onPress={() => setRep(null)} />
-          {(Object.keys(REPEATS) as RepeatFrequency[]).map((f) => <Chip key={f} label={f[0]!.toUpperCase() + f.slice(1)} on={rep?.f === f} onPress={() => setRep({ f, n: REPEATS[f].def })} />)}
+          <Chip label={t('book.noRepeat')} on={!rep} onPress={() => setRep(null)} />
+          {(Object.keys(REPEATS) as RepeatFrequency[]).map((f) => <Chip key={f} label={REPEAT_NAME[f]} on={rep?.f === f} onPress={() => setRep({ f, n: REPEATS[f].def })} />)}
         </View>
         {rep && (<>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Chip label="−" onPress={() => setRep({ ...rep, n: Math.max(2, rep.n - 1) })} />
-            <Text style={[s.text, { color: C.head, marginRight: 8, marginBottom: 8 }]}>{rep.n} times in all</Text>
+            <Text style={[s.text, { color: C.head, marginRight: 8, marginBottom: 8 }]}>{t('book.timesInAll', { n: rep.n })}</Text>
             <Chip label="+" onPress={() => setRep({ ...rep, n: Math.min(REPEATS[rep.f].max, rep.n + 1) })} />
           </View>
           <Text style={s.note}>Repeats {REPEATS[rep.f].word}. You pay for the first date now; the other {rep.n - 1} are reserved for you and their balance is paid at the ground{cfg?.autoDebitEnabled ? ' (or by auto-debit)' : ''}. Closed or taken dates are left out.</Text>
         </>)}
       </>)}
-      {!enq && <View style={{ marginTop: 14 }}><Field label="Promo code" value={promo} onChangeText={setPromo} autoCapitalize="characters" placeholder="Have a code?" /></View>}
-      {credit > 0 && !enq && <Chip label={`${useCredit ? '✓ ' : ''}Use my ${inr(credit)} account credit`} on={useCredit} onPress={() => setUseCredit(!useCredit)} />}
+      {!enq && <View style={{ marginTop: 14 }}><Field label={t('book.promo')} value={promo} onChangeText={setPromo} autoCapitalize="characters" placeholder={t('book.promoHint')} /></View>}
+      {credit > 0 && !enq && <Chip label={`${useCredit ? '✓ ' : ''}${t('book.useCredit', { amount: inr(credit) })}`} on={useCredit} onPress={() => setUseCredit(!useCredit)} />}
       {!!err && <Text style={s.err}>{err}</Text>}
       {!!sent && <Text style={[s.note, { marginTop: 10 }]}>{sent}</Text>}
       {!!body && enq && <View style={s.card}><KV k={chosenText} v="On enquiry" /><Text style={s.note}>Prices are given on enquiry. Send this slot to the ground and they will reply with the price. Nothing is charged now.</Text></View>}
       {!!body && !enq && (
         <View style={s.card}>
           {quote ? (<>
-            <KV k="Price" v={inr(quote.fullPricePaise)} />
+            <KV k={t('book.price')} v={inr(quote.fullPricePaise)} />
             {quote.discountPaise > 0 && <KV k={`Promo ${quote.promoCode}`} v={`− ${inr(quote.discountPaise)}`} />}
-            <KV k={quote.payNow === 'full' ? `Full payment (starts within ${quote.fullPaymentWithinHours} hours)` : quote.advancePercent != null ? `Advance (${quote.advancePercent}%)` : 'Advance'} v={inr(quote.payNowPaise)} />
-            {quote.creditUsedPaise > 0 && <KV k="Account credit used" v={`− ${inr(quote.creditUsedPaise)}`} />}
-            <KV k="Due now" v={inr(quote.dueNowPaise)} bold />
-          </>) : quoteErr ? <Text style={s.err}>We could not work out the price just now: {quoteErr}</Text> : <Text style={s.muted}>Working out the price…</Text>}
+            <KV k={quote.payNow === 'full' ? t('book.fullPayment', { hours: quote.fullPaymentWithinHours }) : quote.advancePercent != null ? t('book.advancePct', { pct: quote.advancePercent }) : t('book.advance')} v={inr(quote.payNowPaise)} />
+            {quote.creditUsedPaise > 0 && <KV k={t('book.creditUsed')} v={`− ${inr(quote.creditUsedPaise)}`} />}
+            <KV k={t('book.dueNow')} v={inr(quote.dueNowPaise)} bold />
+          </>) : quoteErr ? <Text style={s.err}>We could not work out the price just now: {quoteErr}</Text> : <Text style={s.muted}>{t('book.working')}</Text>}
         </View>
       )}
-      <Btn label={body ? (enq ? 'Send enquiry for this slot' : `Hold · ${chosenText}${quote ? ` · ${inr(quote.fullPricePaise)}` : ''}`) : hasRates ? 'Choose ball and session' : 'Choose your slots'} onPress={hold} disabled={!body} busy={busy} style={{ marginTop: 16 }} />
-      {!!cfg && <Text style={[s.note, { textAlign: 'center' }]}>Free cancellation more than {cfg.freeCancelHours} hours before the start.</Text>}
+      <Btn label={body ? (enq ? 'Send enquiry for this slot' : `${t('book.hold')} · ${chosenText}${quote ? ` · ${inr(quote.fullPricePaise)}` : ''}`) : hasRates ? t('book.chooseBallSession') : t('book.chooseSlots')} onPress={hold} disabled={!body} busy={busy} style={{ marginTop: 16 }} />
+      {!!cfg && <Text style={[s.note, { textAlign: 'center' }]}>{t('book.freeCancel', { hours: cfg.freeCancelHours })}</Text>}
     </ScrollView>
   );
 }
