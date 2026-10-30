@@ -352,3 +352,36 @@ test('Ask AI: inbox and sign-off questions are not mistaken for the site report'
     assert.notEqual(a.body.intent, 'site_report', q);
   }
 });
+
+test('links: malformed and look-alike addresses, and what the desk and phone are given to open', async () => {
+  const id = await makeTask();
+  for (const url of ['https//no-colon.example.com', 'not a link at all', 'https://', 'HTTPS://exa mple.com/x', 'vbscript:msgbox(1)', 'file:///etc/passwd']) {
+    assert.equal((await h.post(`/api/tasks/${id}/links`, { url }, owner)).status, 400, url);
+  }
+  // a look-alike international name is stored in its plain (punycode) form, and a given name never hides the real site
+  const look = await h.post(`/api/tasks/${id}/links`, { url: 'https://dаji.in/quote', name: 'daji.in quote' }, owner);
+  assert.equal(look.status, 201, JSON.stringify(look.body));
+  const ref = look.body.references.find((r: any) => r.kind === 'link');
+  assert.equal(new URL(ref.url).hostname, 'xn--dji-6cd.in');
+  assert.ok(ref.url.startsWith('https://'));
+  // the server never fetches a link, so a redirect is the browser's business: the stored address is exactly the one given
+  const redir = await h.post(`/api/tasks/${id}/links`, { url: 'https://example.com/redirect?to=http://evil.example' }, owner);
+  assert.equal(redir.body.references.at(-1).url, 'https://example.com/redirect?to=http://evil.example');
+});
+
+test('references never touch the books, and a helper taken off the job loses its files at once', async () => {
+  const id = await makeTask();
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [helperId] }, owner);
+  const money = () => many<{ n: number }>("SELECT (SELECT COUNT(*) FROM acct_journals) + (SELECT COUNT(*) FROM acct_transactions) + (SELECT COUNT(*) FROM acct_bills) + (SELECT COUNT(*) FROM payments) n")[0]!.n;
+  const before = money();
+  const pdf = await raw(helper, `/api/tasks/${id}/references?name=quote.pdf`, PDF);
+  assert.equal(pdf.status, 201, JSON.stringify(pdf.body));
+  await h.post(`/api/tasks/${id}/links`, { url: 'https://shop.example.com/felt', name: 'Felt price' }, helper);
+  assert.equal(money(), before, 'a quote as a reference creates no money record');
+  const refId = pdf.body.references[0].id;
+  assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: helper })).status, 200);
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [] }, owner);
+  assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: helper })).status, 404, 'file closed to the removed helper');
+  assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: owner2 })).status, 404, 'and to another business');
+  assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: owner })).status, 200);
+});

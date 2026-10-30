@@ -11,6 +11,8 @@ import { C } from './theme';
 
 const when = (ms: number): string => new Date(ms).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 type Msg = (m: string) => void;
+/** The real site a link goes to, shown beside any name given to it so a look-alike name cannot hide where it leads. */
+const linkHost = (r: TaskRef): string => { const m = /^https:\/\/([^/?#]+)/.exec(r.url); return m ? m[1]! : ''; };
 
 /** References: pictures from the gallery or WhatsApp, quotes and links. They explain a job and never count as proof. */
 function Refs({ t, mayHide, onChanged, setErr, setNote }: { t: Task; mayHide: (r: TaskRef) => boolean; onChanged: () => void; setErr: Msg; setNote: Msg }) {
@@ -39,8 +41,8 @@ function Refs({ t, mayHide, onChanged, setErr, setNote }: { t: Task; mayHide: (r
       {refs.map((r) => (
         <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
           {r.kind === 'file' && r.mime?.startsWith('image/') ? <Image source={authImage(r.url)} style={{ width: 48, height: 48, borderRadius: 6, backgroundColor: C.line, marginRight: 8 }} /> : null}
-          <Pressable style={{ flex: 1 }} accessibilityRole={r.kind === 'link' ? 'link' : 'text'} onPress={() => { if (r.kind === 'link') Linking.openURL(r.url).catch(() => setErr('This phone cannot open that link.')); }}>
-            <Text style={[s.text, r.kind === 'link' ? { color: C.gold } : null]} numberOfLines={1}>{r.name}</Text>
+          <Pressable style={{ flex: 1 }} accessibilityRole={r.kind === 'link' ? 'link' : 'text'} onPress={() => { if (r.kind === 'link' && r.url.startsWith('https://')) Linking.openURL(r.url).catch(() => setErr('This phone cannot open that link.')); }}>
+            <Text style={[s.text, r.kind === 'link' ? { color: C.gold } : null]} numberOfLines={1}>{r.name}{r.kind === 'link' && linkHost(r) !== r.name ? ` · ${linkHost(r)}` : ''}</Text>
             <Text style={[s.muted, { fontSize: 11 }]}>{r.kind === 'file' && r.mime === 'application/pdf' ? 'PDF, open it on the desk · ' : ''}{r.addedByName ?? ''} {when(r.addedAt)}</Text>
           </Pressable>
           {live && mayHide(r) && <Btn kind="link" label="Take off" onPress={() => hide(r)} />}

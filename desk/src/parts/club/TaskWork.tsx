@@ -78,6 +78,9 @@ function RefThumb({ r }: { r: TaskRef }) {
 }
 
 /** References: pictures from the gallery or WhatsApp, quotes, PDFs and links. They explain the job; only camera photos prove it. */
+/** The real site a link goes to, shown beside any name given to it so a look-alike name cannot hide where it leads. */
+const linkHost = (r: TaskRef): string => { try { return new URL(r.url).hostname; } catch { return ''; } };
+
 export function References({ t, manager, meId, onChanged, setErr }: { t: Task; manager: boolean; meId: string; onChanged: () => void; setErr: SetErr }) {
   const toast = useToast(); const pick = useRef<HTMLInputElement>(null);
   const [link, setLink] = useState(''); const [showLink, setShowLink] = useState(false);
@@ -90,7 +93,7 @@ export function References({ t, manager, meId, onChanged, setErr }: { t: Task; m
     try { await post(`/api/tasks/${tid(t)}/links`, { url: link.trim() }); setLink(''); setShowLink(false); toast('Link added.'); onChanged(); } catch (e) { setErr(errMsg(e)); }
   };
   const openRef = async (r: TaskRef) => {
-    if (r.kind === 'link') { window.open(r.url, '_blank', 'noopener,noreferrer'); return; }
+    if (r.kind === 'link') { if (r.url.startsWith('https://')) window.open(r.url, '_blank', 'noopener,noreferrer'); return; }
     // a PDF is saved rather than opened: the site's policy blocks the browser's PDF viewer inside a page made from it
     try {
       if (r.mime === 'application/pdf') { await download(r.url, r.name); return; }
@@ -109,7 +112,7 @@ export function References({ t, manager, meId, onChanged, setErr }: { t: Task; m
         <div className="trefs">
           {t.references.map((r) => (
             <div key={r.id} className="tref">
-              <button type="button" className="tref-open" onClick={() => openRef(r)} title={`Added ${fmtDateTime(r.addedAt)}${r.addedByName ? ' by ' + r.addedByName : ''}`}><RefThumb r={r} /><span>{r.name}</span></button>
+              <button type="button" className="tref-open" onClick={() => openRef(r)} title={`Added ${fmtDateTime(r.addedAt)}${r.addedByName ? ' by ' + r.addedByName : ''}`}><RefThumb r={r} /><span>{r.name}</span>{r.kind === 'link' && linkHost(r) !== r.name && <span className="muted small">{linkHost(r)}</span>}</button>
               {r.note && <span className="muted small">{r.note}</span>}
               {live && (manager || r.addedById === meId) && <button type="button" className="btn ghost sm" onClick={() => hide(r)}>Take off</button>}
             </div>
