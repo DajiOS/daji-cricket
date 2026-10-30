@@ -758,7 +758,7 @@ function whatsappAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Pa
   if (!w.enabled) return base('whatsapp', `WhatsApp messages coming in are switched off, so nothing sent to the business number is kept.${w.waitingForReview ? ` ${count(w.waitingForReview, 'message')} from before still wait${w.waitingForReview === 1 ? 's' : ''} for review.` : ''}`, { notes });
   if (w.connected === false) notes.push('The WhatsApp connection is not fully set up (Settings › Connections), so new messages may not arrive.');
   const details = w.newestWaiting.map((m) => ({ label: `${m.from}${m.onTeam ? '' : ' (not on the team)'}`, text: `${m.kind === 'text' ? '' : `${m.kind}: `}${m.words ? `“${m.words}”` : '(no words)'}${m.suggestion ? ` Suggestion: ${m.suggestion}` : ''}` }));
-  const extra = [w.filesFailed ? `${count(w.filesFailed, 'file')} could not be fetched or failed the virus check` : null, w.sendsFailed ? `${count(w.sendsFailed, 'reply', 'replies')} failed to send` : null].filter(Boolean);
+  const extra = [w.filesFailed ? `${count(w.filesFailed, 'file')} could not be fetched or failed the virus check` : null, w.sendsFailed ? `${count(w.sendsFailed, 'reply', 'replies')} failed to send` : null, w.sendsUnknown ? `${count(w.sendsUnknown, 'reply', 'replies')} not confirmed by WhatsApp (check before sending again)` : null].filter(Boolean);
   return base('whatsapp', `${count(w.waitingForReview, 'WhatsApp message')} wait${w.waitingForReview === 1 ? 's' : ''} for review, and ${count(w.filed, 'message')} ${w.filed === 1 ? 'is' : 'are'} filed against jobs, projects or cash spends.${extra.length ? ` ${extra.join('; ')}.` : ''}`, { details, notes });
 }
 
