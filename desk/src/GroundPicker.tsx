@@ -83,7 +83,7 @@ export function GroundPicker() {
       <button className="gpick-btn" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="true">{name}<Icon name="chevron" size={13} /></button>
       {open && (
         <div className="gpick-menu" role="menu">
-          {(s.me.role === 'super_admin' || s.me.role === 'owner') && s.owners.length > 1 && <>
+          {(s.me.role === 'super_admin' || s.me.role === 'owner' || s.me.role === 'staff') && s.owners.length > 1 && <>
             <div className="nav-group">Business</div>
             {s.owners.map((o) => <button key={o.id} role="menuitemradio" aria-checked={o.id === s.ownerId} className={`gpick-row${o.id === s.ownerId ? ' on' : ''}`} onClick={() => { setOpen(false); s.setOwner(o.id); }}><b>{o.businessName || o.name}</b></button>)}
           </>}

@@ -21,6 +21,7 @@ import { checkInsOn } from '../players.ts';
 import { leaders } from '../playerStats.ts';
 import { fantasyOverview } from '../fantasy.ts';
 import { serverConsole, serverStatus } from '../serverConsole.ts';
+import { areaFilter, listAreas } from '../areas.ts';
 import type { Config } from '../config.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
@@ -273,8 +274,11 @@ export function jobs(ctx: Ctx, a: Range) {
   need(ctx, 'tasks');
   checkRange(a);
   const today = todayIst();
-  const n = (sql: string, ...p: (string | number)[]) => one<{ n: number }>(sql, ctx.ownerId, ...p)!.n;
-  const overdue = many<{ title: string; due_date: string }>("SELECT title, due_date FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ? ORDER BY due_date LIMIT 10", ctx.ownerId, today);
+  // jobs in a project of a branch the asker may not see (areas.ts) are left out of every figure, as on the task board
+  const f = areaFilter(ctx.user, ctx.ownerId, 'area_id');
+  const seen = `AND (project_id IS NULL OR project_id IN (SELECT id FROM projects WHERE ${f.sql}))`;
+  const n = (sql: string, ...p: (string | number)[]) => one<{ n: number }>(`${sql} ${seen}`, ctx.ownerId, ...p, ...f.params)!.n;
+  const overdue = many<{ title: string; due_date: string }>(`SELECT title, due_date FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ? ${seen} ORDER BY due_date LIMIT 10`, ctx.ownerId, today, ...f.params);
   return {
     today,
     open: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open'"),
@@ -283,6 +287,24 @@ export function jobs(ctx: Ctx, a: Range) {
     doneInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'done' AND completed_at >= ? AND completed_at < ?", istMidnight(a.from), istMidnight(addDays(a.to, 1))),
     overdueJobs: overdue.map((t) => ({ title: t.title, due: t.due_date })),
   };
+}
+
+/**
+ * The branches of this business the asker may see (areas.ts), each with its projects and their open and overdue jobs. A restricted
+ * branch the asker was not given is not mentioned at all. Names of branches and projects only; no people, no money.
+ */
+export function branches(ctx: Ctx) {
+  need(ctx, 'tasks');
+  const today = todayIst();
+  const projects = (areaId: string | null) => many<{ id: string; name: string; status: string }>(
+    `SELECT id, name, status FROM projects WHERE owner_id = ? AND ${areaId ? 'area_id = ?' : 'area_id IS NULL'} ORDER BY status, name`, ctx.ownerId, ...(areaId ? [areaId] : []))
+    .map((p) => ({
+      name: p.name, archived: p.status === 'archived',
+      openJobs: one<{ n: number }>("SELECT COUNT(*) n FROM tasks WHERE project_id = ? AND status = 'open'", p.id)!.n,
+      overdueJobs: one<{ n: number }>("SELECT COUNT(*) n FROM tasks WHERE project_id = ? AND status = 'open' AND due_date < ?", p.id, today)!.n,
+    }));
+  const list = listAreas(ctx.user, ctx.ownerId).items;
+  return { today, branches: list.map((a) => ({ name: a.name, restricted: a.restricted, projects: projects(a.id) })), notInABranch: projects(null) };
 }
 
 /** The team's attendance sheet for a period: days present, half days, absences and leave, as totals. No names. */

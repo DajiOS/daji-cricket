@@ -29,6 +29,7 @@ import { complianceRoutes } from './routes/compliance.ts';
 import { deskViewRoutes } from './routes/deskviews.ts';
 import { remindersRoutes } from './routes/reminders.ts';
 import { sheetsRoutes } from './routes/sheets.ts';
+import { areaRoutes } from './routes/areas.ts';
 
 export function buildRouter(): Router {
   const r = new Router();
@@ -60,6 +61,7 @@ export function buildRouter(): Router {
   complianceRoutes(r);
   deskViewRoutes(r);
   sheetsRoutes(r);
+  areaRoutes(r);
   return r;
 }
 

@@ -31,7 +31,7 @@ export function complianceRoutes(r: Router): void {
   // ---- team terms: read, accept, and the owner's evidence report
   r.get('/api/legal/staff-terms', (c) => {
     const u = U(c), t = currentTerms(u);
-    return ok({ ...t, required: u.role === 'staff', accepted: acceptanceOf(u.id) });
+    return ok({ ...t, required: u.role === 'staff', accepted: acceptanceOf(u) });
   }, { auth: 'user' });
   r.post('/api/legal/staff-terms/accept', (c) => {
     const u = U(c);

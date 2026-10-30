@@ -186,7 +186,7 @@ export function App() {
     setUnauthorizedHandler(signInPage);
     if (!getToken()) { signInPage(); return; }
     api<{ user: Me }>('/api/me').then(async (r) => {
-      const u = r.user;
+      let u = r.user;
       if (u.role === 'customer') { location.replace('./'); return; }
       setAiName(u.aiName);
       setIsSuper(u.role === 'super_admin');
@@ -204,6 +204,17 @@ export function App() {
         const keep = getViewOwner();
         const pick = list.find((o) => o.id === keep)?.id ?? u.id;
         setViewOwner(pick); setPortfolioBusiness(pick === u.id ? null : pick); setOwnerId(pick);
+      } else if (u.role === 'staff') {
+        // a team member can be on more than one business's team (areas.ts): their employer first, then the others, each with the
+        // permissions they have there; the menus follow the business they are working in
+        const bs = await api<{ items: { id: string; businessName: string; own: boolean; permissions: string[] }[] }>('/api/me/businesses').then((x) => x.items).catch(() => []);
+        const list = bs.length ? bs.map((b) => ({ id: b.id, name: u.name, businessName: b.businessName })) : [{ id: u.ownerId ?? u.id, name: u.name, businessName: u.businessName }];
+        setOwners(list);
+        const keep = getViewOwner();
+        const pick = list.find((o) => o.id === keep)?.id ?? (u.ownerId ?? u.id);
+        const here = bs.find((b) => b.id === pick);
+        setViewOwner(pick); setPortfolioBusiness(pick === u.ownerId ? null : pick); setOwnerId(pick);
+        if (here) u = { ...u, permissions: here.permissions };
       } else { setOwnerId(u.ownerId ?? u.id); setOwners([{ id: u.ownerId ?? u.id, name: u.name, businessName: u.businessName }]); }
       if (u.role === 'staff') {
         const t = await api<Terms & { accepted: unknown }>('/api/legal/staff-terms').catch(() => null);
@@ -215,7 +226,8 @@ export function App() {
   if (me === undefined) return <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}><Crest size={72} /></div>;
   if (!me) return null;
   if (terms) return <TermsGate terms={terms} onDone={() => setTerms(null)} onSignOut={() => { const t = getToken(); fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + '/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + (t ?? '') } }).catch(() => {}).finally(() => { setToken(null); location.href = './'; }); }} />;
-  const setOwner = (id: string) => { setViewOwner(id); if (me.role === 'owner') setPortfolioBusiness(id === me.id ? null : id); setOwnerId(id); };
+  // a team member's menus and permissions differ per business, so switching reloads the desk for them
+  const setOwner = (id: string) => { setViewOwner(id); if (me.role === 'owner') setPortfolioBusiness(id === me.id ? null : id); if (me.role === 'staff') { location.reload(); return; } setOwnerId(id); };
   // the key makes every page reload its data when a super admin switches business
   return (
     <ToastHost>

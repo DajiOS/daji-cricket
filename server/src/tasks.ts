@@ -11,6 +11,7 @@ import { hasPermission, userRow, type UserRow } from './auth.ts';
 import { readExif } from './exif.ts';
 import { MIN, addDays, istDate } from './time.ts';
 import { Validator } from './input.ts';
+import { areaFilter, canSeeArea, worksIn } from './areas.ts';
 
 // Jobs the owner hands to staff, closed with proof: photos taken with the camera right then.
 // A proof photo has to be a JPEG straight from a camera. The shot time inside the file (EXIF) must be within the last 5 minutes
@@ -87,6 +88,9 @@ CREATE TABLE task_comments (
 CREATE INDEX ix_task_comments_task ON task_comments(task_id, created_at);
 `);
 
+// A project sits in one branch (area) of its business, or in none (areas.ts). Who may not see the branch does not see the project or its jobs.
+registerSchema('projects-area-1', `ALTER TABLE projects ADD COLUMN area_id TEXT REFERENCES areas(id);`);
+
 // Repeating jobs and checklists (from the starter kit's task board). Closing a repeating job adds the next one to To do,
 // due one day, week or month later. A checklist is a short list of steps the team ticks off on the card.
 registerSchema('tasks-4', `
@@ -153,6 +157,8 @@ export function visibleTask(u: UserRow, id: string): TaskRow {
   const owner = u.role === 'owner' ? u.id : u.owner_id;
   if (t.owner_id !== owner) throw notFound('Task not found');
   if (u.role === 'staff' && !manages(u) && t.assigned_to !== null && t.assigned_to !== u.id) throw notFound('Task not found');
+  // a job in a project of a branch this person may not see (areas.ts) is not there for them
+  if (t.project_id && !canSeeArea(u, owner!, one<{ area_id: string | null }>('SELECT area_id FROM projects WHERE id = ?', t.project_id)?.area_id)) throw notFound('Task not found');
   return t;
 }
 
@@ -175,7 +181,7 @@ export function parseTask(body: unknown, forUpdate = false): { title?: string; d
 function checkAssignee(ownerId: string, id: string | null | undefined): void {
   if (!id) return;
   const s = userRow(id);
-  if (!s || s.role !== 'staff' || s.owner_id !== ownerId || !s.active) throw new HttpError(400, 'VALIDATION_FAILED', 'Pick one of your own active team members', { fields: [{ field: 'assignedTo', message: 'Not on your team' }] });
+  if (!s || !worksIn(s.id, ownerId)) throw new HttpError(400, 'VALIDATION_FAILED', 'Pick one of your own active team members', { fields: [{ field: 'assignedTo', message: 'Not on your team' }] });
 }
 
 /** A project and milestone have to belong to the same owner, and the milestone to the project. */
@@ -228,6 +234,7 @@ export function listTasks(u: UserRow, ownerId: string | null, status?: string, p
   if (ownerId) { where.push('owner_id = ?'); p.push(ownerId); }
   if (u.role === 'staff' && !manages(u)) { where.push('(assigned_to IS NULL OR assigned_to = ?)'); p.push(u.id); }
   if (projectId) { where.push('project_id = ?'); p.push(projectId); }
+  if (ownerId) { const f = areaFilter(u, ownerId, 'area_id'); if (f.params.length || f.sql !== '1 = 1') { where.push(`(project_id IS NULL OR project_id IN (SELECT id FROM projects WHERE ${f.sql}))`); p.push(...f.params); } }
   if (status === 'open' || status === 'done' || status === 'cancelled') { where.push('status = ?'); p.push(status); }
   const rows = many<TaskRow>(`SELECT * FROM tasks ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, position, COALESCE(due_date, '9999-12-31'), created_at DESC LIMIT 500`, ...p);
   return { items: rows.map(toOut) };
