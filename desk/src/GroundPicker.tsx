@@ -87,6 +87,7 @@ export function GroundPicker() {
             <div className="nav-group">Business</div>
             {s.owners.map((o) => <button key={o.id} role="menuitemradio" aria-checked={o.id === s.ownerId} className={`gpick-row${o.id === s.ownerId ? ' on' : ''}`} onClick={() => { setOpen(false); s.setOwner(o.id); }}><b>{o.businessName || o.name}</b></button>)}
           </>}
+          {s.me.role === 'owner' && s.owners.length > 1 && <button role="menuitem" className="gpick-row" onClick={() => { setOpen(false); go('/combined'); }}><Icon name="pie" size={15} /><b>All my businesses (combined view)</b></button>}
           {canAdd && <button role="menuitem" className="gpick-row" onClick={() => { setOpen(false); setAddingBiz(true); }}><Icon name="plus" size={15} /><b>Add a business</b></button>}
           <div className="nav-group">Grounds</div>
           {!grounds ? <p className="small muted gpick-row">Loading…</p> : grounds.map((g) => {

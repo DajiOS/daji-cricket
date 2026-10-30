@@ -9,6 +9,7 @@ const Bookings = lazy(() => import('./pages/Bookings'));
 const Promos = lazy(() => import('./pages/Promos'));
 const Tasks = lazy(() => import('./pages/Tasks'));
 const Cash = lazy(() => import('./pages/Cash'));
+const Combined = lazy(() => import('./pages/Combined'));
 const Matches = lazy(() => import('./pages/Matches'));
 const Contacts = lazy(() => import('./pages/Contacts'));
 const Cards = lazy(() => import('./pages/Cards'));
@@ -79,7 +80,7 @@ export interface NavGroup { section: string; group: string; items: NavItem[] }
 
 /** First match wins, so longer paths come before shorter ones. A page receives the rest of the path in `sub` (for example /bills/bil_123 gives sub "bil_123"). */
 export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
-  { path: '/bookings', page: Bookings }, { path: '/promos', page: Promos }, { path: '/tasks', page: Tasks }, { path: '/cash', page: Cash }, { path: '/matches', page: Matches },
+  { path: '/bookings', page: Bookings }, { path: '/promos', page: Promos }, { path: '/tasks', page: Tasks }, { path: '/cash', page: Cash }, { path: '/combined', page: Combined }, { path: '/matches', page: Matches },
   { path: '/cards', page: Cards }, { path: '/contacts', page: Contacts }, { path: '/academy', page: Academy },
   { path: '/accounting', page: Accounting }, { path: '/transactions', page: Transactions },
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
@@ -178,6 +179,8 @@ export const NAV: NavGroup[] = [
 
   { section: 'reports', group: 'Reports', items: [
     { to: '/health', href: '/reports/operations', label: 'Operations', icon: 'pulse' },
+    // the owner's read-only view across the businesses they marked "Mine" (combined.ts); only an owner's own sign-in has one
+    { to: '/combined', label: 'All my businesses', icon: 'pie', check: (me) => me.role === 'owner' },
     { to: '/booking-report', href: '/reports/bookings', label: 'Bookings', icon: 'pie', check: (me) => (can(me, 'view_reports') && can(me, 'view_revenue')) || seesMoney(me) || can(me, 'manage_bookings') },
     { to: '/accounting/reports', href: '/reports/finance', label: 'Finance', icon: 'accounts', ...books },
   ] },
