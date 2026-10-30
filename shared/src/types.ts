@@ -591,6 +591,8 @@ export interface GlobalSettings {
   waitlistTiers: WaitlistTier[];
   /** The customer business the main web address shows (an owner's id); empty shows every business. Platform admin only. */
   mainSiteBusinessId: string;
+  /** WhatsApp messages coming in to the business number (the review inbox). Off until the owner turns it on. */
+  whatsappInboundEnabled: boolean;
 }
 
 /** A waitlist tier: a name and the games played in the last 12 months it takes to earn it. */

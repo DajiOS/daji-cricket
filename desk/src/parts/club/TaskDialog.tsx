@@ -1,18 +1,17 @@
-// One task card: edit it, move it, add camera photos and talk about it.
+// One task card: edit it, move it, add camera photos (proof) and references (not proof), pick helpers, accept and sign off, and talk about it.
 import { useEffect, useRef, useState } from 'react';
 import { Field, Modal, useToast, DateInput } from '../../ui';
-import { fmtDateTime, getToken, patch, post, sendFile, useApi } from '../../lib';
+import { fetchBlob, fmtDateTime, patch, post, sendFile, useApi } from '../../lib';
 import { Select, errMsg } from './common';
 import { COLS, PRI, REPEAT, type Project, type Task, type TaskPhoto } from './taskTypes';
+import { HistoryList, References, WorkPanel } from './TaskWork';
 
 /** A task photo needs the sign-in header, so it is fetched and shown from a blob. */
 function Photo({ p }: { p: TaskPhoto }) {
   const [src, setSrc] = useState<string | null>(/^data:/.test(p.url) ? p.url : null);
   useEffect(() => {
     if (src) return; let live = true; let url = '';
-    const t = getToken();
-    fetch(((window as any).DAJI_API || '').replace(/\/$/, '') + p.url, { headers: t ? { authorization: 'Bearer ' + t } : {} })
-      .then((r) => (r.ok ? r.blob() : null)).then((b) => { if (b && live) { url = URL.createObjectURL(b); setSrc(url); } }).catch(() => {});
+    fetchBlob(p.url).then((b) => { if (live) { url = URL.createObjectURL(b); setSrc(url); } }).catch(() => {});
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
   }, [p.url]);
   return src ? <img className="tphoto" src={src} alt="Task photo" loading="lazy" title={`Taken ${fmtDateTime(p.takenAt)}${p.uploadedByName ? ' by ' + p.uploadedByName : ''}${p.note ? ' · ' + p.note : ''}`} /> : <div className="tphoto none" />;
@@ -20,8 +19,8 @@ function Photo({ p }: { p: TaskPhoto }) {
 
 interface Comment { id?: string; authorName: string; at: number; body: string; mine?: boolean }
 
-export default function TaskDialog({ task, projects, team, manager, defaultProject, onClose, onChanged }: {
-  task: Task | null; projects: Project[]; team: { id: string; name: string }[]; manager: boolean; defaultProject: string; onClose: () => void; onChanged: () => void;
+export default function TaskDialog({ task, projects, team, manager, meId, defaultProject, onClose, onChanged }: {
+  task: Task | null; projects: Project[]; team: { id: string; name: string }[]; manager: boolean; meId: string; defaultProject: string; onClose: () => void; onChanged: () => void;
 }) {
   const toast = useToast(); const t = task; const isNew = !t; const editable = manager && (isNew || t!.status === 'open');
   const [f, setF] = useState({ title: t?.title || '', details: t?.details || '', who: t?.assignedTo || '', pri: t?.priority || 'medium', due: t?.dueDate || '', need: String(t ? t.photosRequired : 1), proj: t ? t.projectId || '' : defaultProject, mile: t?.milestoneId || '', rep: t?.repeat || '', list: (t?.checklist ?? []).map((c) => c.text).join('\n') });
@@ -51,6 +50,7 @@ export default function TaskDialog({ task, projects, team, manager, defaultProje
         <Field label="Milestone"><Select disabled={!editable} value={f.mile} onChange={(v) => setF((x) => ({ ...x, mile: v }))} options={[['', 'No milestone'], ...(proj?.milestones ?? []).map((m) => [m.id, m.title + (m.done ? ' (done)' : '')] as [string, string])]} /></Field>
       </div>
       {err && <div className="err" role="alert" style={{ marginTop: 12 }}>{err}</div>}
+      {t && <WorkPanel t={t} team={team} manager={manager} meId={meId} onChanged={onChanged} setErr={setErr} />}
       {t && <Extras t={t} onMove={move} onChanged={onChanged} setErr={setErr} />}
     </Modal>
   );
@@ -76,11 +76,12 @@ function Extras({ t, onMove, onChanged, setErr }: { t: Task; onMove: (s: string)
       <div className="eyebrow" style={{ marginBottom: 8 }}>Move to</div>
       <Select value={t.stage} onChange={onMove} label="Move to" options={COLS.map(([k, l]) => [k, l] as [string, string])} />
       {t.checklist.length > 0 && <Checklist t={t} onChanged={onChanged} setErr={setErr} />}
-      <div className="eyebrow" style={{ margin: '18px 0 8px' }}>Photos ({t.photos.length} of {t.photosRequired})</div>
+      <div className="eyebrow" style={{ margin: '18px 0 8px' }}>Proof photos ({t.photos.length} of {t.photosRequired})</div>
       {t.photos.length ? <div className="tphotos">{t.photos.map((p, i) => <Photo key={p.url + i} p={p} />)}</div>
         : <p className="hint">{need ? 'Taken with the phone camera, within the last 5 minutes. Gallery pictures and screenshots are turned away.' : 'No photos needed.'}</p>}
       {t.status === 'open' && <><input ref={pick} type="file" accept="image/jpeg" capture="environment" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} /><button className="btn sm" style={{ marginTop: 8 }} onClick={() => pick.current?.click()}>Take photo</button></>}
       {t.status === 'done' && <p className="hint">Done {fmtDateTime(t.completedAt)}{t.completedByName ? ' by ' + t.completedByName : ''}</p>}
+      <References t={t} onChanged={onChanged} setErr={setErr} />
       <div className="eyebrow" style={{ margin: '18px 0 8px' }}>Comments</div>
       <div className="kcomments">
         {cm && !cm.items.length && <p className="hint">No comments yet.</p>}
@@ -90,6 +91,7 @@ function Extras({ t, onMove, onChanged, setErr }: { t: Task; onMove: (s: string)
         <input className="inp" maxLength={1000} placeholder="Write a comment…" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } }} />
         <button className="btn sm" onClick={send}>Send</button>
       </div>
+      <HistoryList taskId={t.id} stamp={JSON.stringify([t.stage, t.status, t.photos.length, t.references.length, t.helpers.length, t.nextAction, t.signedOffAt, t.acknowledgedAt, t.commentCount])} />
     </>
   );
 }

@@ -53,8 +53,8 @@ export function opsCalendar(u: UserRow, owner: string, monthIn: string | null): 
   // the same jobs the task list shows this person
   kinds.push('task');
   for (const t of many<{ title: string; due_date: string; status: string }>(
-    `SELECT title, due_date, status FROM tasks WHERE owner_id = ? AND status <> 'cancelled' AND due_date BETWEEN ? AND ? ${u.role === 'staff' && !manages(u) ? 'AND (assigned_to IS NULL OR assigned_to = ?)' : ''}`,
-    owner, from, to, ...(u.role === 'staff' && !manages(u) ? [u.id] : [])))
+    `SELECT title, due_date, status FROM tasks WHERE owner_id = ? AND status <> 'cancelled' AND (intake_state IS NULL OR intake_state <> 'new') AND due_date BETWEEN ? AND ? ${u.role === 'staff' && !manages(u) ? 'AND (assigned_to IS NULL OR assigned_to = ? OR id IN (SELECT task_id FROM task_helpers WHERE user_id = ? AND removed_at IS NULL))' : ''}`,
+    owner, from, to, ...(u.role === 'staff' && !manages(u) ? [u.id, u.id] : [])))
     items.push({ date: t.due_date, kind: 'task', title: t.title, href: '/tasks', done: t.status === 'done' });
   if (readsBooks(u)) {
     kinds.push('bill', 'close');
@@ -349,7 +349,7 @@ export function groundHealth(u: UserRow, owner: string): { score: number | null;
   }
   {
     // jobs: the same ones the task list shows this person
-    const late = n(`SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ? ${u.role === 'staff' && !manages(u) ? 'AND (assigned_to IS NULL OR assigned_to = ?)' : ''}`, owner, today, ...(u.role === 'staff' && !manages(u) ? [u.id] : []));
+    const late = n(`SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ? ${u.role === 'staff' && !manages(u) ? 'AND (assigned_to IS NULL OR assigned_to = ? OR id IN (SELECT task_id FROM task_helpers WHERE user_id = ? AND removed_at IS NULL))' : ''}`, owner, today, ...(u.role === 'staff' && !manages(u) ? [u.id, u.id] : []));
     parts.push({ key: 'jobs', title: 'Jobs', score: clamp(100 - late * 15), line: late ? `${late} job${late === 1 ? ' is' : 's are'} late` : 'No job is late', rule: 'Each late job takes 15 points.', href: '/tasks' });
   }
   if (hasPermission(u, 'manage_academy')) {

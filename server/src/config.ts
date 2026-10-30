@@ -56,7 +56,9 @@ export interface Config {
   sweepIntervalSeconds: number;
   /** Ask AI. The built-in answerer needs nothing; a Claude key adds free-form questions. */
   /** WhatsApp Business Cloud API (Meta), used to send sign-in codes. Set WHATSAPP_TOKEN and WHATSAPP_PHONE_ID to switch it on. */
-  whatsapp: { token: string; phoneId: string; otpTemplate: string; alertTemplate: string; waitlistTemplate: string; lang: string; apiUrl: string };
+  whatsapp: { token: string; phoneId: string; otpTemplate: string; alertTemplate: string; waitlistTemplate: string; lang: string; apiUrl: string;
+    /** Messages coming in (wainbox.ts): the Meta app secret that signs each webhook delivery, and the verify token Meta sends when the webhook is added. */
+    appSecret: string; verifyToken: string };
   /** MSG91 text-message sign-in codes: the back-up when WhatsApp is not set up or fails. Needs a DLT-approved OTP template in MSG91. */
   msg91: { authKey: string; templateId: string; apiUrl: string };
   /** Optional face check at check-in through Amazon Rekognition (faceMatch.ts). Off until the key id and secret are set. `endpoint` is for tests. */
@@ -203,6 +205,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       waitlistTemplate: env.WHATSAPP_WAITLIST_TEMPLATE || '',
       lang: env.WHATSAPP_LANG || 'en',
       apiUrl: (env.WHATSAPP_API_URL || 'https://graph.facebook.com/v21.0').replace(/\/+$/, ''),
+      appSecret: env.WHATSAPP_APP_SECRET || '',
+      verifyToken: env.WHATSAPP_VERIFY_TOKEN || '',
     },
     faceMatch: { region: env.REKOGNITION_REGION || 'ap-south-1', keyId: env.REKOGNITION_KEY_ID || '', secret: env.REKOGNITION_SECRET || '', collection: env.REKOGNITION_COLLECTION || 'daji-players', endpoint: env.REKOGNITION_ENDPOINT || '' },
     msg91: {

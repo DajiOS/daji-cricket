@@ -23,6 +23,7 @@ export function moveTask(u: UserRow, id: string, body: unknown): TaskOut {
   const t = visibleTask(u, id);
   if (u.role === 'customer') throw forbidden('Only the team can move tasks');
   if (t.status === 'cancelled') throw new HttpError(409, 'TASK_CLOSED', 'A cancelled task cannot be moved');
+  if (t.intake_state === 'new') throw new HttpError(409, 'IN_INBOX', 'Take the request in from the inbox first');
   if (stage === 'done' && t.status !== 'done') completeTask(u, id);
   else if (stage !== 'done' && t.status === 'done') { reopenTask(u, id); }
   tx(() => {

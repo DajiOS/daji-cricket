@@ -13,17 +13,20 @@ interface Books { revenuePaise: number; expensesPaise: number; netProfitPaise: n
 interface Biz {
   id: string; name: string; own: boolean; status: 'ok' | 'unavailable';
   books: Avail<Books>;
-  cash: Avail<{ handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>;
+  cash: Avail<{ handedOutPaise: number; returnedPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>;
   tasks: Avail<{ open: number; overdue: number; doneInRange: number }>;
   approvalsWaiting: Avail<{ count: number }>;
 }
 interface Row { businessId: string; businessName: string; areaId: string | null; areaName: string | null; restricted: boolean; spentConfirmedPaise: number; spentWaitingPaise: number; openTasks: number; overdueTasks: number }
 interface Line { kind: 'spend' | 'task'; id: string; businessName: string; areaName: string | null; projectName: string | null; personName: string | null; date: string | null; title: string; amountPaise: number | null; status: string }
 interface Part<T> { value: T | null; leftOut: string[]; partial: boolean; notSplit: boolean }
-interface Total { currency: string; books: Part<Books>; cash: Part<{ handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>; tasks: Part<{ open: number; overdue: number; done: number }>; leftOut: string[]; booksNote: string | null }
+interface Total { currency: string; books: Part<Books>; cash: Part<{ handedOutPaise: number; returnedPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>; tasks: Part<{ open: number; overdue: number; done: number }>; leftOut: string[]; booksNote: string | null }
 interface View_ { label: string; filters: { from: string; to: string }; options: { businesses: { id: string; name: string }[]; supported: number; areas: { id: string; name: string; businessId: string }[] }; businesses: Biz[]; byArea: Row[]; lines: Line[]; linesCut: boolean; totals: Total[]; notes: string[] }
 
 const NA = 'Not available';
+/** Cash handed to wallets and cash given back, each as itself: a return may be for an advance from before these dates. */
+const moves = (c: { handedOutPaise: number; returnedPaise: number }) =>
+  [c.handedOutPaise ? `${inr(c.handedOutPaise)} handed to wallets` : '', c.returnedPaise ? `${inr(c.returnedPaise)} given back` : ''].filter(Boolean).join(', ') + ' in these dates';
 /** A part of the total: its figure, "Not split" or "Not available" (never ₹0), and "partial" when some business is left out. */
 const partValue = <T,>(p: Part<T>, f: (x: T) => string) => (p.notSplit ? 'Not split' : p.value === null ? NA : f(p.value) + (p.partial ? ' (partial)' : ''));
 const partFoot = <T,>(p: Part<T>, ok: string | undefined) => (p.partial ? `Leaves out ${p.leftOut.join(', ')}` : p.value === null && !p.notSplit ? 'Could not be read just now' : ok);
@@ -42,6 +45,8 @@ export function CombinedScreen() {
   const [business, setBusiness] = useState('');
   const [area, setArea] = useState('');
   const [v, setV] = useState<View_ | null>(null);
+  // the business and branch choices from the last good answer: they stay on screen while a new selection loads or after it fails
+  const [opts, setOpts] = useState<View_['options'] | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState(PAGE);
@@ -54,7 +59,7 @@ export function CombinedScreen() {
     setV(null); setErr('');
     const p = periodOf(period);
     const q = new URLSearchParams({ ...p, ...(business ? { business } : {}), ...(area ? { area } : {}) }).toString();
-    try { const r = await api<View_>(`/api/me/combined?${q}`); if (mine === seq.current) setV(r); }
+    try { const r = await api<View_>(`/api/me/combined?${q}`); if (mine === seq.current) { setV(r); setOpts(r.options); } }
     catch (e: any) { if (mine === seq.current) setErr(e instanceof ApiError && e.status === 403 ? 'This view is for the business owner.' : `Could not load these figures: ${e.message}`); }
     finally { if (mine === seq.current) setBusy(false); }
   }, [period, business, area]);
@@ -67,17 +72,23 @@ export function CombinedScreen() {
       <Text style={s.eyebrow}>Owner</Text><Text style={s.h1}>All my businesses</Text>
       <Text style={[s.muted, { marginBottom: 12 }]}>A combined view of the businesses you marked as yours. Each keeps its own books; nothing can be changed here.</Text>
       <Segmented items={[['month', 'This month'], ['last', 'Last month'], ['year', 'This year']]} value={period} onChange={setPeriod} />
-      {v && v.options.businesses.length > 1 && (
+      {opts && opts.businesses.length > 1 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 8 }}>
           <Chip label="All" on={!business} onPress={() => { setBusiness(''); setArea(''); }} />
-          {v.options.businesses.map((b) => <Chip key={b.id} label={b.name} on={business === b.id} onPress={() => { setBusiness(b.id); setArea(''); }} />)}
+          {opts.businesses.map((b) => <Chip key={b.id} label={b.name} on={business === b.id} onPress={() => { setBusiness(b.id); setArea(''); }} />)}
         </View>)}
-      {v && business && v.options.areas.some((a) => a.businessId === business) && (
+      {opts && business && opts.areas.some((a) => a.businessId === business) && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
           <Chip label="All branches" on={!area} onPress={() => setArea('')} />
-          {v.options.areas.filter((a) => a.businessId === business).map((a) => <Chip key={a.id} label={a.name} on={area === a.id} onPress={() => setArea(a.id)} />)}
+          {opts.areas.filter((a) => a.businessId === business).map((a) => <Chip key={a.id} label={a.name} on={area === a.id} onPress={() => setArea(a.id)} />)}
         </View>)}
-      {!!err && <Text style={s.err}>{err}</Text>}
+      {!!err && <>
+        <Text style={s.err}>{err}</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginVertical: 8 }}>
+          <Btn kind="outline" label="Try again" onPress={load} />
+          {(!!business || !!area || period !== 'month') && <Btn kind="outline" label="Back to all businesses" onPress={() => { setBusiness(''); setArea(''); setPeriod('month'); }} />}
+        </View>
+      </>}
       {!v ? (err ? null : <Loading />) : <>
         {t && <>
           <Section>Together, {niceDate(v.filters.from)} to {niceDate(v.filters.to)}</Section>
@@ -88,7 +99,7 @@ export function CombinedScreen() {
             <Stat label="Open jobs" value={partValue(t.tasks, (x) => String(x.open))} foot={partFoot(t.tasks, t.tasks.value ? `${t.tasks.value.overdue} late` : undefined)} tone={t.tasks.value?.overdue ? 'danger' : undefined} />
           </Stats>
           {t.leftOut.length > 0 && <Text style={s.err}>Not available just now, so left out: {t.leftOut.join('; ')}.</Text>}
-          {!narrowed && !!t.cash.value?.handedOutPaise && <Text style={s.muted}>{inr(t.cash.value.handedOutPaise)} handed to wallets: your own money moving, not spending.</Text>}
+          {!narrowed && !!t.cash.value && (!!t.cash.value.handedOutPaise || !!t.cash.value.returnedPaise) && <Text style={s.muted}>{moves(t.cash.value)}{t.cash.partial ? ' (partial)' : ''}: your own money moving, not spending.</Text>}
         </>}
         {v.businesses.map((b) => (
           <View key={b.id} style={s.card}>

@@ -13,14 +13,14 @@ interface Wallet { holderId: string; holderName: string | null; givenPaise: numb
 interface Biz {
   id: string; name: string; own: boolean; currency: string; status: 'ok' | 'unavailable';
   books: Avail<Books>;
-  cash: Avail<{ handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number; spends: number; wallets: Wallet[] | null }>;
+  cash: Avail<{ handedOutPaise: number; returnedPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number; spends: number; wallets: Wallet[] | null }>;
   tasks: Avail<{ open: number; overdue: number; doneInRange: number }>;
   approvalsWaiting: Avail<{ count: number }>;
 }
 interface Row { businessId: string; businessName: string; areaId: string | null; areaName: string | null; restricted: boolean; projectId: string | null; projectName: string | null; spentConfirmedPaise: number; spentWaitingPaise: number; openTasks: number; overdueTasks: number; doneTasks: number }
 interface Line { kind: 'spend' | 'task'; id: string; businessId: string; businessName: string; areaName: string | null; projectName: string | null; personName: string | null; date: string | null; title: string; amountPaise: number | null; status: string; open: { businessId: string; page: 'cash' | 'tasks'; id: string } }
 interface Part<T> { value: T | null; included: string[]; leftOut: string[]; partial: boolean; notSplit: boolean }
-interface Total { currency: string; books: Part<Books>; cash: Part<{ handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>; tasks: Part<{ open: number; overdue: number; done: number }>; leftOut: string[]; booksNote: string | null }
+interface Total { currency: string; books: Part<Books>; cash: Part<{ handedOutPaise: number; returnedPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>; tasks: Part<{ open: number; overdue: number; done: number }>; leftOut: string[]; booksNote: string | null }
 /** A part of the total: its figure, "Not split" or "Not available" (never ₹0), and "partial" when some business is left out. */
 const partValue = <T,>(p: Part<T>, f: (x: T) => string) => (p.notSplit ? 'Not split' : p.value === null ? NA : f(p.value) + (p.partial ? ' (partial)' : ''));
 const partFoot = <T,>(p: Part<T>, ok: string) => (p.partial ? `Leaves out ${p.leftOut.join(', ')}, not available just now` : p.value === null && !p.notSplit ? `Could not be read for ${p.leftOut.join(', ')}` : ok);
@@ -32,6 +32,9 @@ interface View {
 }
 
 const NA = 'Not available';
+/** Cash handed to wallets and cash given back, each as itself: a return may be for an advance from before these dates. */
+const moves = (c: { handedOutPaise: number; returnedPaise: number }) =>
+  [c.handedOutPaise ? `${inr(c.handedOutPaise)} handed to wallets` : '', c.returnedPaise ? `${inr(c.returnedPaise)} given back` : ''].filter(Boolean).join(', ') + ' in these dates';
 const money = <T,>(a: Avail<T>, f: (x: T) => string) => (a.status === 'ok' ? f(a as T) : a.status === 'not_split' ? 'Not split' : NA);
 const monthStart = () => todayISO().slice(0, 8) + '01';
 
@@ -53,7 +56,9 @@ export default function Combined() {
 
   // a team member who follows a link here: the view is the business owner's, there is nothing to retry
   if (status === 403) return <><Head /><div className="state" role="status"><b>This view is for the business owner.</b> <span className="small">It shows all of the owner's businesses together. Your own work is under Work.</span></div></>;
-  if (err) return <><Head /><ErrorBox msg={err} /><button className="btn" onClick={reload}>Try again</button></>;
+  // a failed load has no choices to show: offer the default view as well as a retry, so the owner is never stuck on one selection
+  const plain = !f.business && !f.area && !f.project && !f.person && f.from === monthStart() && f.to === todayISO();
+  if (err) return <><Head /><ErrorBox msg={err} /><div className="row"><button className="btn" onClick={reload}>Try again</button>{!plain && <button className="btn" onClick={() => setF({ business: '', area: '', project: '', person: '', from: monthStart(), to: todayISO() })}>Back to all my businesses</button>}</div></>;
   // while a new filter loads, the figures on screen are for the old one: show loading rather than the wrong selection's numbers
   const forNow = !!v && (v.filters.areaId ?? '') === f.area && (v.filters.projectId ?? '') === f.project && (v.filters.personId ?? '') === f.person
     && v.filters.from === f.from && v.filters.to === f.to && (!f.business || v.filters.businessId === f.business) && (!!f.business || !!f.area || !!f.project || !v.filters.businessId);
@@ -100,7 +105,7 @@ export default function Combined() {
               <Stat label="Cash spent" value={partValue(t.cash, (x) => inr(x.spentConfirmedPaise))} foot={partFoot(t.cash, `${t.cash.value?.spentWaitingPaise ? `${inr(t.cash.value.spentWaitingPaise)} waiting for sign-off. ` : ''}Not in the books yet, so not added to them`)} />
               <Stat label="Open jobs" value={partValue(t.tasks, (x) => String(x.open))} foot={partFoot(t.tasks, t.tasks.value ? `${t.tasks.value.overdue} late · ${t.tasks.value.done} done in these dates` : '–')} />
             </div>
-            {!narrowed && !!t.cash.value?.handedOutPaise && <p className="hint">{inr(t.cash.value.handedOutPaise)} of cash was handed to wallets in these dates{t.cash.partial ? ' (partial)' : ''}. That is your own money moving, shown once, not spending.</p>}
+            {!narrowed && !!t.cash.value && (!!t.cash.value.handedOutPaise || !!t.cash.value.returnedPaise) && <p className="hint">{moves(t.cash.value)}{t.cash.partial ? ' (partial)' : ''}. That is your own money moving, shown once, not spending.</p>}
           </Panel>
         )}
 

@@ -40,7 +40,7 @@ export const setIsSuper = (v: boolean) => { isSuper = v; };
 let portfolioBiz: string | null = null;
 export const setPortfolioBusiness = (id: string | null) => { portfolioBiz = id; };
 const bizHeader = (): Record<string, string> => (portfolioBiz ? { 'x-daji-business': portfolioBiz } : {});
-const OWNER_SCOPED = ['/api/legal/staff-terms/report', '/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras', '/api/docs', '/api/cash'];
+const OWNER_SCOPED = ['/api/legal/staff-terms/report', '/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras', '/api/docs', '/api/cash', '/api/site-reports', '/api/whatsapp'];
 
 export interface ApiOptions { method?: string; body?: unknown; headers?: Record<string, string>; raw?: BodyInit }
 
@@ -96,12 +96,18 @@ export async function fetchBytes(path: string): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
+/** A private file (a task photo or reference) as a blob, with the sign-in and the business being worked in. */
+export async function fetchBlob(path: string): Promise<Blob> {
+  if (isSuper && viewOwner && OWNER_SCOPED.some((p) => path.startsWith(p)) && !/[?&]ownerId=/.test(path)) path += (path.includes('?') ? '&' : '?') + 'ownerId=' + encodeURIComponent(viewOwner);
+  const t = getToken();
+  const res = await fetch(API + path, { headers: { ...bizHeader(), ...(t ? { authorization: 'Bearer ' + t } : {}) } });
+  if (!res.ok) throw new ApiError(res.status, 'DOWNLOAD', 'Could not load that file.');
+  return res.blob();
+}
+
 /** Downloads a file the server makes. The token travels in a header, so the file is fetched first and then saved. */
 export async function download(path: string, filename: string): Promise<void> {
-  const t = getToken();
-  const res = await fetch(API + path, { headers: t ? { authorization: 'Bearer ' + t } : {} });
-  if (!res.ok) throw new ApiError(res.status, 'DOWNLOAD', 'Could not download that file.');
-  const url = URL.createObjectURL(await res.blob());
+  const url = URL.createObjectURL(await fetchBlob(path));
   const a = document.createElement('a'); a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }

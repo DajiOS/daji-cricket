@@ -5,6 +5,7 @@ import { takeProofPhoto } from './camera';
 import type { Task, TaskRepeat, TeamMember, User } from './types';
 import { Badge, Btn, Chip, DateField, Field, Loading, s } from './ui';
 import { C, niceDate } from './theme';
+import { Requests, SiteNote, TaskExtras } from './TaskWork';
 
 const REPEATS: [TaskRepeat | '', string][] = [['', 'Once'], ['daily', 'Every day'], ['weekly', 'Every week'], ['monthly', 'Every month']];
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
@@ -16,20 +17,21 @@ const when = (ms: number): string => new Date(ms).toLocaleString('en-IN', { time
 /** `draftTitle` comes from a voice shortcut ("create a task"): the form starts filled in, and nothing is saved until Add is pressed. */
 export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: string }) {
   const manager = user.role !== 'staff' || (user.permissions ?? []).includes('manage_tasks');
-  const [filter, setFilter] = useState<'open' | 'done' | 'cancelled'>('open');
+  const [filter, setFilter] = useState<'open' | 'done' | 'cancelled' | 'requests' | 'report'>('open');
   const [items, setItems] = useState<Task[] | null>(null); const [team, setTeam] = useState<TeamMember[]>([]);
   const [err, setErr] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false); const [working, setWorking] = useState('');
   const [title, setTitle] = useState(draftTitle ?? ''); const [details, setDetails] = useState(''); const [need, setNeed] = useState('1'); const [who, setWho] = useState('');
   const [due, setDue] = useState(''); const [repeat, setRepeat] = useState<TaskRepeat | ''>(''); const [prio, setPrio] = useState<(typeof PRIORITIES)[number]>('medium'); const [steps, setSteps] = useState(''); const [q, setQ] = useState('');
 
   const load = useCallback(async () => {
+    if (filter === 'requests' || filter === 'report') { setItems([]); return; }
     setBusy(true);
     try { setItems((await api<{ items: Task[] }>(`/api/tasks?status=${filter}`)).items); setErr(''); } catch (e: any) { setErr(e.message); setItems([]); } finally { setBusy(false); }
   }, [filter]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { if (manager) api<{ items: TeamMember[] }>('/api/staff/team').then((r) => setTeam(r.items.filter((m) => m.active !== false))).catch(() => {}); }, [manager]);
+  useEffect(() => { if (manager) api<{ items: TeamMember[] }>('/api/tasks/people').then((r) => setTeam(r.items)).catch(() => {}); }, [manager]);
 
-  const act = async (id: string, what: 'complete' | 'cancel' | 'reopen') => {
+  const act = async (id: string, what: 'complete' | 'cancel') => {
     setErr(''); setNote('');
     try {
       const done = await api<Task>(`/api/tasks/${id}/${what}`, { method: 'POST', body: {} });
@@ -84,13 +86,14 @@ export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: str
           <Btn label="Add task" onPress={add} disabled={title.trim().length < 3} />
         </View>
       )}
-      <View style={{ flexDirection: 'row', marginVertical: 10 }}>{(['open', 'done', 'cancelled'] as const).map((f) => <Chip key={f} label={f === 'open' ? 'Open' : f === 'done' ? 'Done' : 'Cancelled'} on={filter === f} onPress={() => setFilter(f)} />)}</View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 10 }}>{(['open', 'done', 'cancelled', 'requests', 'report'] as const).map((f) => <Chip key={f} label={{ open: 'Open', done: 'Done', cancelled: 'Cancelled', requests: 'Requests', report: 'Site report' }[f]} on={filter === f} onPress={() => setFilter(f)} />)}</View>
+      {filter === 'requests' ? <Requests manager={manager} team={team} /> : filter === 'report' ? <SiteNote /> : (<>
       <Field label="Search" value={q} onChangeText={setQ} placeholder="Title, details, step or person" />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       {shown === null ? <Loading /> : !shown.length ? <Text style={s.note}>{q.trim() ? 'No task matches the search.' : filter === 'open' ? 'Nothing to do right now.' : 'Nothing here yet.'}</Text> : shown.map((t) => {
         const missing = Math.max(0, t.photosRequired - t.photos.length);
         const list = t.checklist ?? []; const ticked = list.filter((c) => c.done).length;
-        const canTick = t.status === 'open' && (manager || !t.assignedTo || t.assignedTo === user.id);
+        const canTick = t.status === 'open' && (manager || !t.assignedTo || t.assignedTo === user.id || (t.helpers ?? []).some((x) => x.id === user.id));
         return (
           <View key={t.id} style={s.card}>
             <Text style={s.h2}>{t.title}</Text>
@@ -112,6 +115,7 @@ export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: str
                 ))}
               </View>
             )}
+            {t.photos.length > 0 && <Text style={[s.muted, { fontSize: 12, fontWeight: '600', marginTop: 6 }]}>Proof photos</Text>}
             {t.photos.length > 0 && <ScrollView horizontal style={{ marginVertical: 8 }}>{t.photos.map((p) => <View key={p.id} style={{ marginRight: 8 }}><Image source={authImage(p.url)} style={{ width: 92, height: 92, borderRadius: 8, backgroundColor: C.line }} /><Text style={[s.muted, { fontSize: 10, marginTop: 2 }]}>{when(p.takenAt)}</Text></View>)}</ScrollView>}
             {t.status === 'done' && <Text style={s.muted}>Done {t.completedAt ? when(t.completedAt) : ''}{t.completedByName ? ` by ${t.completedByName}` : ''}</Text>}
             {t.status === 'open' && (<>
@@ -120,10 +124,11 @@ export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: str
               {missing > 0 && <Text style={s.muted}>Take {missing} more photo{missing === 1 ? '' : 's'} to finish.</Text>}
               {manager && <Btn kind="ghost" label="Cancel task" onPress={() => act(t.id, 'cancel')} />}
             </>)}
-            {manager && t.status !== 'open' && <Btn kind="ghost" label="Reopen" onPress={() => act(t.id, 'reopen')} />}
+            <TaskExtras t={t} user={user} manager={manager} team={team} onChanged={load} setErr={setErr} setNote={setNote} />
           </View>
         );
       })}
+      </>)}
     </ScrollView>
   );
 }

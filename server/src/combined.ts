@@ -37,7 +37,7 @@ type Avail<T> = ({ status: 'ok' } & T) | { status: 'not_split'; why: string } | 
 
 export interface Books { revenuePaise: number; expensesPaise: number; netProfitPaise: number }
 export interface Wallet { holderId: string; holderName: string | null; givenPaise: number; expectedPaise: number; confirmedPaise: number; waiting: number; spentWaitingPaise: number }
-export interface Cash { handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number; spends: number; wallets: Wallet[] | null }
+export interface Cash { handedOutPaise: number; returnedPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number; spends: number; wallets: Wallet[] | null }
 export interface Tasks { open: number; overdue: number; doneInRange: number }
 
 export interface BusinessBlock {
@@ -73,7 +73,7 @@ export interface Part<T> { value: T | null; included: string[]; leftOut: string[
 export interface Total {
   currency: string;
   books: Part<Books>;
-  cash: Part<{ handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>;
+  cash: Part<{ handedOutPaise: number; returnedPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>;
   tasks: Part<{ open: number; overdue: number; done: number }>;
   /** Every business with some part not read, and what that part was, in words ("Sunny's Portfolio: books"). */
   leftOut: string[];
@@ -138,10 +138,11 @@ export const readers = {
       `SELECT COALESCE(SUM(CASE WHEN status = 'confirmed' THEN amount_paise END), 0) conf, COALESCE(SUM(CASE WHEN status = 'waiting' THEN amount_paise END), 0) wait, COUNT(*) n
          FROM cash_entries WHERE owner_id = ? AND kind = 'expense' AND status IN ('confirmed','waiting') AND hidden_at IS NULL AND on_date BETWEEN ? AND ? AND ${sc.sql}${who}`,
       s.ownerId, s.f.from, s.f.to, ...sc.params, ...wp)!;
-    // cash handed out is the owner's own money moving into a wallet: shown once, as a movement, never as spending
-    const moved = narrowed ? 0 : one<{ v: number }>(
-      `SELECT COALESCE(SUM(CASE WHEN kind = 'advance' THEN amount_paise ELSE -amount_paise END), 0) v
-         FROM cash_entries WHERE owner_id = ? AND kind IN ('advance','return') AND hidden_at IS NULL AND on_date BETWEEN ? AND ?${who}`, s.ownerId, s.f.from, s.f.to, ...wp)!.v;
+    // cash handed out is the owner's own money moving into a wallet: shown once, as a movement, never as spending. Hand-outs and
+    // returns are kept apart: a return in these dates may be for an advance from earlier dates, so a net figure could go below zero.
+    const moved = narrowed ? { adv: 0, ret: 0 } : one<{ adv: number; ret: number }>(
+      `SELECT COALESCE(SUM(CASE WHEN kind = 'advance' THEN amount_paise END), 0) adv, COALESCE(SUM(CASE WHEN kind = 'return' THEN amount_paise END), 0) ret
+         FROM cash_entries WHERE owner_id = ? AND kind IN ('advance','return') AND hidden_at IS NULL AND on_date BETWEEN ? AND ?${who}`, s.ownerId, s.f.from, s.f.to, ...wp)!;
     // what each holder should have in hand now; a wallet is not kept per branch, so it is left out when narrowed to one
     let wallets: Wallet[] | null = null;
     if (!narrowed) {
@@ -150,7 +151,7 @@ export const readers = {
       wallets = ids.map((id) => balanceOf(s.ownerId, id)).map((b) => ({ holderId: b.holderId, holderName: b.holderName, givenPaise: b.givenPaise, expectedPaise: b.expectedPaise, confirmedPaise: b.confirmedPaise, waiting: b.waiting, spentWaitingPaise: b.spentWaitingPaise }))
         .sort((a, b) => (a.holderName ?? '').localeCompare(b.holderName ?? ''));
     }
-    return { handedOutPaise: moved, spentConfirmedPaise: spent.conf, spentWaitingPaise: spent.wait, spends: spent.n, wallets };
+    return { handedOutPaise: moved.adv, returnedPaise: moved.ret, spentConfirmedPaise: spent.conf, spentWaitingPaise: spent.wait, spends: spent.n, wallets };
   },
   tasks(s: Scope): Tasks {
     const today = istDate(now());
@@ -329,8 +330,8 @@ export function combinedView(real: UserRow | null | undefined, query: Record<str
     const books = part<Books>(bs, (b) => b.books, () => ({ revenuePaise: 0, expensesPaise: 0, netProfitPaise: 0 }), (a, b) => {
       const x = b.books as Books; a.revenuePaise += x.revenuePaise; a.expensesPaise += x.expensesPaise; a.netProfitPaise += x.netProfitPaise;
     }, narrowed);
-    const cash = part(bs, (b) => b.cash, () => ({ handedOutPaise: 0, spentConfirmedPaise: 0, spentWaitingPaise: 0 }), (a, b) => {
-      const x = b.cash as Cash; a.handedOutPaise += x.handedOutPaise; a.spentConfirmedPaise += x.spentConfirmedPaise; a.spentWaitingPaise += x.spentWaitingPaise;
+    const cash = part(bs, (b) => b.cash, () => ({ handedOutPaise: 0, returnedPaise: 0, spentConfirmedPaise: 0, spentWaitingPaise: 0 }), (a, b) => {
+      const x = b.cash as Cash; a.handedOutPaise += x.handedOutPaise; a.returnedPaise += x.returnedPaise; a.spentConfirmedPaise += x.spentConfirmedPaise; a.spentWaitingPaise += x.spentWaitingPaise;
     });
     const tasks = part(bs, (b) => b.tasks, () => ({ open: 0, overdue: 0, done: 0 }), (a, b) => {
       const x = b.tasks as Tasks; a.open += x.open; a.overdue += x.overdue; a.done += x.doneInRange;

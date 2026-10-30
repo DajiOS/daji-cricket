@@ -5,7 +5,7 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { startHarness, type Harness } from './helpers.ts';
-import { many } from '../src/db.ts';
+import { many, run } from '../src/db.ts';
 import { readers, limits } from '../src/combined.ts';
 import { profitAndLoss } from '../src/accounting/statements.ts';
 
@@ -82,7 +82,7 @@ test('Sunny sees his "Mine" businesses side by side; a business he only supports
   const sp = v.businesses.find((b: any) => b.id === w.spId);
   assert.equal(sp.status, 'ok');
   // ₹10,000 handed out is a movement, shown once; spending is only the ₹1,500 signed and the ₹400 waiting
-  assert.deepEqual([sp.cash.handedOutPaise, sp.cash.spentConfirmedPaise, sp.cash.spentWaitingPaise], [10_000_00, 1_500_00, 400_00]);
+  assert.deepEqual([sp.cash.handedOutPaise, sp.cash.returnedPaise, sp.cash.spentConfirmedPaise, sp.cash.spentWaitingPaise], [10_000_00, 0, 1_500_00, 400_00]);
   assert.equal(sp.cash.wallets[0].expectedPaise, 10_000_00 - 1_500_00 - 400_00);
   assert.equal(sp.approvalsWaiting.count, 1);
   // the books are each business's own, read with the same function as its Reports tab
@@ -118,6 +118,22 @@ test('Sunny sees his "Mine" businesses side by side; a business he only supports
   assert.deepEqual(many('SELECT COUNT(*) n FROM cash_entries')[0], before);
   const a = many<{ actor_id: string }>("SELECT actor_id FROM audit_log WHERE action = 'combined.view'");
   assert.ok(a.length >= 1 && a.every((x) => x.actor_id === w.groundId), JSON.stringify(a));
+});
+
+test('cash given back is shown as given back, never as a negative hand-out, when the advance was before these dates', async () => {
+  await someActivity();
+  const sp = inBiz(w.spId);
+  const r = await sp('POST', '/api/cash/returns', w.sunny, { holderId: w.supId, amountPaise: 2_000_00, description: 'Change brought back' });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  // the ₹10,000 advance was handed out last year; only the ₹2,000 return falls in this month
+  run("UPDATE cash_entries SET on_date = '2025-01-15' WHERE owner_id = ? AND kind = 'advance'", w.spId);
+  const v = (await view(w.sunny)).body;
+  const b = v.businesses.find((x: any) => x.id === w.spId);
+  assert.deepEqual([b.cash.handedOutPaise, b.cash.returnedPaise], [0, 2_000_00]);
+  assert.deepEqual([v.totals[0].cash.value.handedOutPaise, v.totals[0].cash.value.returnedPaise], [0, 2_000_00]);
+  // both are counted in their own dates: last year's view has the hand-out and no return
+  const old = (await view(w.sunny, 'from=2025-01-01&to=2025-01-31')).body.businesses.find((x: any) => x.id === w.spId);
+  assert.deepEqual([old.cash.handedOutPaise, old.cash.returnedPaise], [10_000_00, 0]);
 });
 
 test('filters by business, branch, project, person and dates; the books say "not split" rather than showing a whole business under a branch', async () => {

@@ -32,6 +32,7 @@ import { sheetsRoutes } from './routes/sheets.ts';
 import { areaRoutes } from './routes/areas.ts';
 import { cashRoutes } from './routes/cash.ts';
 import { combinedRoutes } from './routes/combined.ts';
+import { waInboxRoutes } from './routes/wainbox.ts';
 
 export function buildRouter(): Router {
   const r = new Router();
@@ -66,6 +67,7 @@ export function buildRouter(): Router {
   areaRoutes(r);
   cashRoutes(r);
   combinedRoutes(r);
+  waInboxRoutes(r);
   return r;
 }
 

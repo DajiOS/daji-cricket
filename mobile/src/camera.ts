@@ -30,3 +30,13 @@ export async function takeCardPhoto(): Promise<{ uri: string } | null> {
   if (r.canceled || !r.assets[0]) return null;
   return { uri: r.assets[0].uri };
 }
+
+/**
+ * A reference picture for a job: from the gallery (a WhatsApp picture, a drawing, a screenshot of a quote). It is never proof, so
+ * the gallery is fine here. The system photo picker needs no photo permission. Re-saved as a JPEG at a size well under the limit.
+ */
+export async function pickReferencePhoto(): Promise<{ uri: string; name: string } | null> {
+  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.7 });
+  if (r.canceled || !r.assets[0]) return null;
+  return { uri: r.assets[0].uri, name: r.assets[0].fileName ?? 'reference.jpg' };
+}
