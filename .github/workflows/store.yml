@@ -1,5 +1,5 @@
 # Store release for the phone apps, run by hand from the Actions tab. Builds the chosen app(s) for the App Store and Google Play on EAS
-# and sends each finished build to TestFlight and the Play internal testing track (eas.json, submit profiles).
+# and sends each finished build to TestFlight and straight to the Play production track, released (eas.json, submit profiles).
 # The builds run on EAS without waiting, so this run going green does not mean the store took them: check the submission on expo.dev,
 # or send the finished build again with build_id, which waits for the store's answer.
 # Needs the EXPO_TOKEN repository secret, and the Apple and Google credentials saved in expo.dev (docs/APP_REVIEW.md, section 4).
