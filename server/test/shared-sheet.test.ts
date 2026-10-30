@@ -442,3 +442,34 @@ test('a sheet can cover chosen grounds only: a second ground\'s sheet never carr
   const owner1 = one<any>('SELECT * FROM users WHERE email = ?', 'owner1@daji.test');
   assert.deepEqual((runTool({ ownerId: owner1.id, user: owner1 }, 'get_shared_sheet', {}) as any).grounds, ['Cricket Ground', 'Practice Nets']);
 });
+
+test('a business added from Platform, Businesses keeps its own sheet: its own card, its own grounds only, and its own review list', async () => {
+  const admin = await h.login('admin');
+  const add = await h.post('/api/admin/businesses', { businessName: 'Second Test Ground', ownerName: 'Second Owner', phone: '9000033333', email: 'second-owner@example.test' }, admin);
+  assert.equal(add.status, 201, JSON.stringify(add.body));
+  assert.equal((await h.post(`/api/admin/users/${add.body.id}/password`, { password: 'Second-Ground-2026!' }, admin)).status, 200);
+  const two = (await h.post('/api/auth/login', { email: 'second-owner@example.test', password: 'Second-Ground-2026!' })).body.token;
+  const g = await h.post('/api/staff/grounds', { name: 'Second Main Turf', city: 'Surat', pricePaise: 150000, openTime: '07:00', closeTime: '22:00', slotMinutes: 60, maxSlots: 4 }, two);
+  assert.equal(g.status, 201, JSON.stringify(g.body));
+  const o1 = await h.login('owner1');
+
+  // its own card works and lists only its own ground
+  const card = await h.get('/api/desk/sheets', two);
+  assert.equal(card.status, 200, JSON.stringify(card.body));
+  assert.deepEqual(card.body.grounds.map((x: any) => x.name), ['Second Main Turf']);
+  assert.equal((await h.put('/api/desk/sheets', { pushTabs: ['bookings', 'slots'], pullRequests: true }, two)).status, 200);
+  const slots = (await download(two)).find((s) => s.name === 'Daji Open slots')!;
+  assert.ok(slots.rows.length > 1);
+  assert.ok(slots.rows.slice(1).every((r) => r[1] === 'Second Main Turf'), 'only its own ground');
+  assert.equal(JSON.stringify(await download(o1)).includes('Second Main Turf'), false, 'the main business never sees it either');
+
+  // requests it reads land in its own list; a row naming the main business's ground is refused, and the main business cannot touch them
+  const r = await upload(csv([HEAD, [dayFromNow(4), '08:00', '1', 'Second Main Turf', 'Asha Rao', '9123400000', '10', ''], [dayFromNow(4), '08:00', '1', 'Cricket Ground', 'Asha Rao', '9123400000', '10', '']]), two);
+  assert.deepEqual(r.body.counts, { read: 2, new: 1, invalid: 1, alreadySeen: 0, tooMany: 0 });
+  const items = (await h.get('/api/desk/sheets/inbox', two)).body.items;
+  const ok = items.find((i: any) => i.status === 'waiting');
+  assert.equal(ok.ground, 'Second Main Turf');
+  assert.equal((await h.get('/api/desk/sheets/inbox', o1)).body.items.length, 0);
+  assert.equal((await h.post(`/api/desk/sheets/inbox/${ok.id}/accept`, {}, o1)).status, 404);
+  assert.equal((await h.post(`/api/desk/sheets/inbox/${ok.id}/accept`, {}, two)).status, 200);
+});

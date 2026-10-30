@@ -24,8 +24,9 @@ const TABS: [string, string][] = [['business', 'Your business'], ['prices', 'Pri
 const SERVER_TAB: [string, string] = ['server', 'Server'];
 
 // The main website's settings (booking window, payments, website look, festivals, the assistant's name, connections, go-live) run
-// the main site, so another customer business sees only its own business and prices (the server refuses the rest: requireMainBusiness).
-const OWN = ['business', 'prices'];
+// the main site, so another customer business sees only its own business, prices and Connections (the server refuses the rest:
+// requireMainBusiness). Its Connections shows only its own shared spreadsheet, never the server's services.
+const OWN = ['business', 'prices', 'connections'];
 
 export default function Settings({ sub }: { sub: string }) {
   const { me, ownerId } = useSession();
@@ -47,17 +48,17 @@ export default function Settings({ sub }: { sub: string }) {
       {tab === 'website' && <Website />}
       {tab === 'festivals' && <Festivals />}
       {tab === 'ai' && <AiName />}
-      {tab === 'connections' && <ConnectionsTab />}
+      {tab === 'connections' && <ConnectionsTab main={me.role === 'super_admin' || !!brand?.mainSettings} />}
       {tab === 'golive' && <GoLive />}
       {tab === 'server' && <ServerSettings />}
     </div>
   );
 }
 
-/** The business's own shared spreadsheet first (it needs a business picked), then the platform's services. */
-function ConnectionsTab() {
+/** The business's own shared spreadsheet first (it needs a business picked), then the platform's services (the main business only). */
+function ConnectionsTab({ main }: { main: boolean }) {
   const { me, ownerId } = useSession();
-  return <div className="stack">{can(me, 'manage_bookings') && (me.role !== 'super_admin' || ownerId) && <SharedSheet />}<Connections /></div>;
+  return <div className="stack">{can(me, 'manage_bookings') && (me.role !== 'super_admin' || ownerId) && <SharedSheet />}{main && <Connections />}</div>;
 }
 
 const ABOUT: Record<string, string> = {
@@ -70,7 +71,7 @@ const ABOUT: Record<string, string> = {
   website: 'The website design pack and how it looks.',
   festivals: 'Festival looks and offers that switch on by themselves on the day.',
   ai: 'The name everyone sees the assistant called, voice shortcuts, and the reserved names no one may use.',
-  connections: 'The shared spreadsheet for this business, the services the server is connected to, and what each one still needs.',
+  connections: 'The shared spreadsheet for this business and, for the main business, the services the server is connected to.',
   golive: 'Everything to tick off before the ground opens for real bookings.',
   server: 'Is the server healthy, the Connect using SSH button for Amazon Lightsail, and the AI coding console.',
 };
