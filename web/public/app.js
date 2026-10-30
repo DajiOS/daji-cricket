@@ -237,7 +237,7 @@ function paintPics() {
 }
 /** The four booking steps (Select, Review, Pay, Confirm) shown along the top of the booking card and the payment windows in Cricket green. */
 function stepsEl(n) {
-  return h('ol', { class: 'fx-steps', 'aria-label': `Step ${n} of 4` }, ['Select', 'Review', 'Pay', 'Confirm'].map((x, i) => h('li', { class: i + 1 < n ? 'done' : i + 1 === n ? 'on' : null }, h('b', {}, i + 1 < n ? '✓' : String(i + 1)), x)));
+  return h('ol', { class: 'fx-steps', 'aria-label': T('web.stepOf', { n }) }, [T('web.stepSelect'), T('web.stepReview'), T('web.stepPay'), T('web.stepConfirm')].map((x, i) => h('li', { class: i + 1 < n ? 'done' : i + 1 === n ? 'on' : null }, h('b', {}, i + 1 < n ? '✓' : String(i + 1)), x)));
 }
 /** What the 3D opening film needs to know about the look on screen: its colours, day or night, its scene and any festival. */
 window.dajiIntroLook = function introLook() {
@@ -481,6 +481,8 @@ function h(tag, attrs, ...kids) {
   return e;
 }
 const clear = (el) => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
+// the screen language (i18n.js, made from shared/src/i18n.ts): English, Gujarati or Hindi. Words only; prices and rules come from the server.
+const T = (k, v) => window.DajiI18n.t(k, v);
 
 const inr = (p) => { const r = p / 100; return '₹' + r.toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(r) ? 0 : 2, maximumFractionDigits: 2 }); };
 const IST = 330 * 60000;
@@ -509,7 +511,9 @@ const BALL_SHORT = { combo: 'Red & White combo ball', leather: 'Leather ball', r
 const money = (paise) => inr(paise);
 /** Prices are given on enquiry (Settings): slots show no price, and a picked slot is sent to the ground as a pricing enquiry. */
 const onEnquiry = () => !!(state.config && state.config.pricesOnEnquiry);
-const slotPrice = (p) => (onEnquiry() ? 'Available' : inr(p));
+const slotPrice = (p) => (onEnquiry() ? T('book.available') : inr(p));
+// a slot that cannot be picked: what it is, in the screen language
+const slotState = (st) => ({ held: T('web.legendHeld'), booked: T('web.legendBooked'), blocked: T('web.slotClosed'), past: T('web.slotPast') }[st] || st);
 /** The cheapest hourly price (or, with none, the cheapest session) for the "From" line. */
 function fromPrice(g) {
   const hourly = (g.rates || []).filter((r) => r.mode === 'hourly');
@@ -938,7 +942,26 @@ async function finishAuth(a, after) {
   route();
 }
 
+// A signed-in person's screen language is on their profile, so it is the same here and in the phone app. Before sign-in it is this browser's pick.
+function syncLang() {
+  const u = state.user;
+  if (u && u.language && u.language !== window.DajiI18n.lang) window.DajiI18n.set(u.language);
+  const sel = $('#lang-pick'); if (sel) sel.value = window.DajiI18n.lang;
+}
+function wireLang() {
+  const sel = $('#lang-pick'); if (!sel) return;
+  sel.value = window.DajiI18n.lang;
+  sel.addEventListener('change', async () => {
+    const l = sel.value; window.DajiI18n.set(l);
+    if (!state.user) return;
+    try { state.user = (await api('/api/me', { method: 'PATCH', body: { language: l } })).user; } catch (e) { toast(e.message, true); }
+  });
+  // the words the page wrote itself are written again in the new language
+  window.DajiI18n.onChange(() => { sel.value = window.DajiI18n.lang; if (state.ground && state.config) renderPanel(); });
+}
+
 function renderAuth() {
+  syncLang();
   // each nav bar gets its own fresh elements, because the buttons carry click handlers
   for (const el of $$('#authlinks')) { clear(el); el.append(...buildAuthItems()); }
   for (const el of $$('#profile-slot')) clear(el); // the profile button now takes the place of the Sign in button
@@ -1261,13 +1284,13 @@ function renderPanel() {
   }
   const pick = $('#p-date'); pick.min = t; pick.max = maxD; pick.value = state.date || t;
   const on = $('.day.on', days); if (on) days.scrollLeft = Math.max(0, on.offsetLeft - days.offsetLeft - 8);
-  $('#p-note').textContent = `Free cancellation more than ${state.config.freeCancelHours} hours before the start.` + (state.config.bookingsOpenFrom && state.config.bookingsOpenFrom > todayIst() ? ` Online bookings open on ${niceDate(state.config.bookingsOpenFrom)}.` : '') + (state.config.bookingsCloseFrom ? ` Bookings are closed from ${niceDate(state.config.bookingsCloseFrom)} for now.` : '');
+  $('#p-note').textContent = T('book.freeCancel', { hours: state.config.freeCancelHours }) + (state.config.bookingsOpenFrom && state.config.bookingsOpenFrom > todayIst() ? ` Online bookings open on ${niceDate(state.config.bookingsOpenFrom)}.` : '') + (state.config.bookingsCloseFrom ? ` Bookings are closed from ${niceDate(state.config.bookingsCloseFrom)} for now.` : '');
   loadSlots();
 }
 
 async function loadSlots() {
   const g = state.ground, date = state.date, hint = $('#p-hint'), grid = clear($('#p-slots'));
-  hint.className = 'hint'; hint.textContent = 'Checking availability…';
+  hint.className = 'hint'; hint.textContent = T('web.checking');
   let a;
   try { a = await api(`/api/grounds/${encodeURIComponent(g.id)}/availability?date=${date}`); }
   catch (e) { hint.className = 'hint err'; hint.textContent = e.message; renderSummary(); return; }
@@ -1275,17 +1298,17 @@ async function loadSlots() {
   state.slots = a.slots; state.avail = a;
   const hasR = !!a.rates, hasF = !hasR && !!(g.formats && g.formats.length);
   $('#p-step2').hidden = !(hasF || hasR); $('#p-step3 i').textContent = hasF || hasR ? '3' : '2';
-  $('#p-step2').lastChild.textContent = hasR ? 'Choose the ball' : 'Choose the ball and match length';
-  $('#p-step3').lastChild.textContent = hasR ? 'Pick your session' : 'Pick your time';
+  $('#p-step2').lastChild.textContent = hasR ? T('web.chooseBall') : T('web.chooseBallLength');
+  $('#p-step3').lastChild.textContent = hasR ? T('web.pickSession') : T('web.pickTime');
   fillCallNote(hasR);
   if (hasR) { renderRates(); return; }
   if (hasF) { renderFormats(); return; }
   clear($('#p-formats')).hidden = true;
-  hint.textContent = a.slots.length ? `Choose up to ${g.maxSlots} slots in a row. ${niceDate(date)}.${a.slots.some((x) => x.time < a.slots[0].time) ? ' Times after midnight belong to this evening.' : ''}` : (a.closed ? 'The ground is closed on this day. Please pick another day.' : 'The ground is closed on this day.');
+  hint.textContent = a.slots.length ? `${T('book.upTo', { n: g.maxSlots })} ${niceDate(date)}.${a.slots.some((x) => x.time < a.slots[0].time) ? ` ${T('web.afterMidnight')}` : ''}` : (a.closed ? T('book.closedDay') : T('web.closedShort'));
   a.slots.forEach((s, i) => {
     const sel = state.sel.includes(i);
     const cls = sel ? 'sel' : s.state === 'available' ? 'av' : s.state;
-    const label = s.state === 'available' || sel ? slotPrice(s.pricePaise) : { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' }[s.state] || s.state;
+    const label = s.state === 'available' || sel ? slotPrice(s.pricePaise) : slotState(s.state);
     grid.append(h('button', { class: 'slot ' + cls, type: 'button', disabled: s.state !== 'available' && !sel, 'aria-pressed': sel ? 'true' : 'false', onclick: () => clickSlot(i) }, s.time, h('small', {}, label)));
   });
   renderSummary();
@@ -1320,7 +1343,7 @@ function renderFormats() {
   wins.forEach((w) => {
     const on = state.win === w.time, ok = w.state === 'available';
     grid.append(h('button', { class: 'slot wide ' + (on ? 'sel' : ok ? 'av' : w.state), type: 'button', disabled: !ok, 'aria-pressed': on ? 'true' : 'false', onclick: () => { state.win = w.time; renderFormats(); } },
-      `${w.time} – ${w.endTime}`, h('small', {}, ok ? slotPrice(w.pricePaise) : { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' }[w.state] || w.state)));
+      `${w.time} – ${w.endTime}`, h('small', {}, ok ? slotPrice(w.pricePaise) : slotState(w.state))));
   });
   renderSummary();
 }
@@ -1334,24 +1357,23 @@ function renderRates() {
   box.append(h('div', { class: 'fmtrow' }, h('span', { class: 'lbl' }, 'Choose ball & session'), h('div', { class: 'chips2' }, balls.map((b) => h('button', { type: 'button', class: 'chip2 ball-' + b + (b === state.ball ? ' on' : ''), onclick: () => { state.ball = b; state.win = null; state.hr = null; renderRates(); } }, BALL_NAMES[b])))));
   hint.className = 'hint';
   if (a.closed) { hint.textContent = 'The ground is closed on this day. Please pick another day.'; renderSummary(); return; }
-  if (!state.ball) { hint.textContent = 'Choose the ball you want to play with.'; renderSummary(); return; }
+  if (!state.ball) { hint.textContent = T('book.chooseBall'); renderSummary(); return; }
   const opts = a.rates.filter((o) => o.ball === state.ball);
   if (!opts.length) { hint.textContent = 'Nothing is on sale for this ball on this day. Pick another day, or call us for a custom booking.'; renderSummary(); return; }
-  const STATE = { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' };
   hint.textContent = `${BALL_NAMES[state.ball]} · ${niceDate(state.date)}. Pick a session, or choose hours.`;
   const fixed = opts.filter((o) => o.mode === 'fixed');
-  if (fixed.length) grid.append(h('div', { class: 'grp' }, 'Sessions'));
+  if (fixed.length) grid.append(h('div', { class: 'grp' }, T('book.sessions')));
   for (const o of fixed) {
     const on = state.win === o.ruleId, ok = o.state === 'available';
     grid.append(h('button', { class: 'slot wide ' + (on ? 'sel' : ok ? 'av' : o.state), type: 'button', disabled: !ok, 'aria-pressed': on ? 'true' : 'false', onclick: () => { state.win = o.ruleId; state.hr = null; renderRates(); } },
-      h('span', { class: 'sname' }, o.label), o.proRated ? h('span', { class: 'prn' }, `Part-session · ${o.hoursLeft} hour${o.hoursLeft === 1 ? '' : 's'} left${onEnquiry() ? '' : ` (full ${inr(o.fullPricePaise)})`}`) : null, `${niceHour(o.time)} – ${niceHour(o.endTime)}${o.bundleDays > 1 ? ` + ${o.bundleDays - 1} more day${o.bundleDays > 2 ? 's' : ''}` : ''}`, h('small', {}, ok || on ? slotPrice(o.pricePaise) : STATE[o.state] || o.state)));
+      h('span', { class: 'sname' }, o.label), o.proRated ? h('span', { class: 'prn' }, `Part-session · ${o.hoursLeft} hour${o.hoursLeft === 1 ? '' : 's'} left${onEnquiry() ? '' : ` (full ${inr(o.fullPricePaise)})`}`) : null, `${niceHour(o.time)} – ${niceHour(o.endTime)}${o.bundleDays > 1 ? ` + ${o.bundleDays - 1} more day${o.bundleDays > 2 ? 's' : ''}` : ''}`, h('small', {}, ok || on ? slotPrice(o.pricePaise) : slotState(o.state))));
   }
   for (const o of opts.filter((x) => x.mode === 'hourly')) {
     grid.append(h('div', { class: 'grp' }, `${o.label}${onEnquiry() ? '' : ` · ${inr(o.pricePaise)} per hour`} · up to ${g.maxSlots} hours in a row`));
     const sel = state.hr && state.hr.ruleId === o.ruleId ? state.hr.idx : [];
     o.slots.forEach((sl, i) => {
       const on = sel.includes(i), ok = sl.state === 'available';
-      grid.append(h('button', { class: 'slot ' + (on ? 'sel' : ok ? 'av' : sl.state), type: 'button', disabled: !ok && !on, 'aria-pressed': on ? 'true' : 'false', onclick: () => clickHour(o, i) }, hourSpan(sl.time), h('small', {}, ok || on ? slotPrice(sl.pricePaise) : STATE[sl.state] || sl.state)));
+      grid.append(h('button', { class: 'slot ' + (on ? 'sel' : ok ? 'av' : sl.state), type: 'button', disabled: !ok && !on, 'aria-pressed': on ? 'true' : 'false', onclick: () => clickHour(o, i) }, hourSpan(sl.time), h('small', {}, ok || on ? slotPrice(sl.pricePaise) : slotState(sl.state))));
     });
   }
   renderSummary();
@@ -1390,7 +1412,7 @@ function clickSlot(i) {
     el.className = 'slot ' + (on ? 'sel' : s.state === 'available' ? 'av' : s.state);
     el.setAttribute('aria-pressed', on ? 'true' : 'false');
     el.disabled = s.state !== 'available' && !on;
-    $('small', el).textContent = s.state === 'available' || on ? slotPrice(s.pricePaise) : { held: 'Held', booked: 'Booked', blocked: 'Closed', past: 'Past' }[s.state] || s.state;
+    $('small', el).textContent = s.state === 'available' || on ? slotPrice(s.pricePaise) : slotState(s.state);
   });
   renderSummary();
 }
@@ -1440,7 +1462,7 @@ function renderSummary() {
   $('#p-promo-row').hidden = !s; if (!s) $('#p-promo-msg').textContent = '';
   $('#p-repeat-row').hidden = !s; if (!s) { $('#p-repeat').value = ''; $('#p-repeat-n').hidden = true; }
   const holdMin = state.config.razorpayEnabled ? state.config.holdMinutesOnline : state.config.holdMinutesUpi;
-  if (!s) { btn.disabled = true; btn.textContent = state.ground && state.ground.rates && state.ground.rates.length ? 'Choose ball and session' : state.ground && state.ground.formats && state.ground.formats.length ? 'Choose ball, match and time' : 'Choose your slots'; renderCreditRow(); return; }
+  if (!s) { btn.disabled = true; btn.textContent = state.ground && state.ground.rates && state.ground.rates.length ? T('book.chooseBallSession') : state.ground && state.ground.formats && state.ground.formats.length ? T('web.chooseBallMatchTime') : T('book.chooseSlots'); renderCreditRow(); return; }
   if (onEnquiry()) {
     // no price to show or pay: the picked slot goes to the ground, which replies with the price
     $('#p-promo-row').hidden = true; $('#p-repeat-row').hidden = true;
@@ -3253,6 +3275,7 @@ window.addEventListener('hashchange', route);
 // ------------------------------------------------------------------ start
 
 async function start() {
+  wireLang();
   try {
     const [config, gs] = await Promise.all([api('/api/config'), api('/api/grounds')]);
     state.config = config; state.grounds = gs.items;

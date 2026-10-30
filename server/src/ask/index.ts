@@ -8,6 +8,7 @@ import { askClaude, AiError } from './claude.ts';
 import { niceRange } from './dates.ts';
 import * as T from './tools.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
+import { isUiLanguageQuestion, uiLanguageAnswer } from '../uiLanguage.ts';
 import { isReadOnlyQuestion, readOnlyAnswer } from '../readOnly.ts';
 import { isDocQuestion, searchDocs, searchWords, seesDocs, waitingCount, type SearchHit } from '../docs.ts';
 
@@ -78,6 +79,11 @@ export async function ask(cfg: Config, user: UserRow, ownerId: string, rawQuesti
   if (isNameQuestion(question)) {
     audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: 'assistant_name' }, ownerId);
     return { question, answer: aiNameAnswer(user.id), details: [], understood: 'A question about the assistant itself', period: null, intent: 'help', source: 'builtin', verified: true, open: null, notes: [], suggestions: [] };
+  }
+  // "What language is my app in?": this person's Profile › Screen language. Answered here, never by Claude.
+  if (isUiLanguageQuestion(question)) {
+    audit(actor, 'ask.question', 'ask', null, { question: question.slice(0, 200), ...via, source: 'builtin', intent: 'screen_language' }, ownerId);
+    return { question, answer: uiLanguageAnswer(user.id), details: [], understood: 'A question about the language of your screens', period: null, intent: 'help', source: 'builtin', verified: true, open: null, notes: [], suggestions: [] };
   }
   // "Am I view only?", "Who on the team is read only?": answered from the Team page's Read only switch, never by Claude.
   if (isReadOnlyQuestion(question)) {

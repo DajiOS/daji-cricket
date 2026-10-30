@@ -13,6 +13,7 @@ import { niceDay, parseRange } from './dates.ts';
 import { parseBooking } from '../guppiLang.ts';
 import { say } from '../guppiText.ts';
 import { aiNameAnswer, isNameQuestion } from '../aiNames.ts';
+import { isUiLanguageQuestion, uiLanguageAnswer } from '../uiLanguage.ts';
 import { customerAuctionFacts, editableHosted, rulesWordsOf } from '../auction.ts';
 import { draftRuleChange, rulesInWords } from '../auctionRules.ts';
 import { myWaitlist, tierFor } from '../waitlist.ts';
@@ -124,6 +125,7 @@ export function askCustomer(user: UserRow, rawQuestion: unknown, via: 'typed' | 
   if (asked.flags.payAct || asked.flags.waiver) return out(say(asked.language, asked.flags.waiver ? 'waiver' : 'payAct'), { intent: 'payment_boundary', open: 'bookings' });
 
   if (isNameQuestion(question)) return out(aiNameAnswer(user.id), { intent: 'assistant_name' });
+  if (isUiLanguageQuestion(question)) return out(uiLanguageAnswer(user.id), { intent: 'screen_language' });
   if (intent === 'auction') return auctionAnswer(user, question, today, out);
 
   switch (intent) {

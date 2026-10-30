@@ -8,10 +8,11 @@ import { useAppearance } from './photo';
 import { C, formatPhone } from './theme';
 import { biometricName, lockOn, setLockOn, unlock } from './lock';
 import { VoiceShortcuts } from './VoiceShortcuts';
+import { UI_LANGUAGES, UI_LANGUAGE_NAMES, translator, useLang, type T, type UiLang } from './lang';
 
-const ROLE: Record<string, string> = { customer: 'Customer', staff: 'Team member', owner: 'Owner', super_admin: 'Super admin' };
-type Page = null | 'edit' | 'voice' | 'password' | 'delete';
-const PAGES: Record<Exclude<Page, null>, string> = { edit: 'Edit profile', voice: 'Voice Shortcuts', password: 'Password', delete: 'Delete my account' };
+const roles = (t: T): Record<string, string> => ({ customer: t('role.customer'), staff: t('role.staff'), owner: t('role.owner'), super_admin: t('role.super_admin') });
+type Page = null | 'edit' | 'language' | 'voice' | 'password' | 'delete';
+const pages = (t: T): Record<Exclude<Page, null>, string> => ({ edit: t('profile.edit'), language: t('profile.language'), voice: t('profile.voice'), password: t('profile.password'), delete: t('profile.delete') });
 
 /** A person's own details as a settings list: their card, then Edit profile, Appearance, Voice Shortcuts, unlock, Password and Sign out, each opening its own page. */
 export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser: (u: User) => void; onSignOut: () => void }) {
@@ -21,6 +22,7 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const [delPw, setDelPw] = useState(''); const [delWord, setDelWord] = useState('');
   const [err, setErr] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
   const [page, setPage] = useState<Page>(null); const look = useAppearance();
+  const { t, lang } = useLang(); const ROLE = roles(t); const PAGES = pages(t);
   const owner = user.role === 'owner';
   const [bio, setBio] = useState<string | null>(null); const [bioOn, setBioOn] = useState(false);
   const [aiName, setAiName] = useState(user.aiNameOwn ?? ''); const [aiWarn, setAiWarn] = useState('');
@@ -34,27 +36,33 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const saveAi = async () => {
     setErr(''); setNote('');
     if (aiWarn) { setErr(aiWarn); return; }
-    try { const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { aiName: aiName.trim() || null } }); onUser(r.user); setNote(`The assistant is now called ${r.user.aiName ?? aiName.trim()} for you.`); }
+    try { const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { aiName: aiName.trim() || null } }); onUser(r.user); setNote(t('profile.aiSaved', { ai: r.user.aiName ?? aiName.trim() })); }
     catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
   };
   useEffect(() => { void biometricName().then(setBio); void lockOn().then(setBioOn); }, []);
+  // saved to the profile, so the same language follows this person to every phone and the website; the app switches when the server says so
+  const pickLang = async (l: UiLang) => {
+    setErr(''); setNote('');
+    try { const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { language: l } }); onUser(r.user); setNote(translator(l)('profile.languageSaved')); }
+    catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
+  };
 
   const save = async () => {
     setErr(''); setNote(''); setBusy(true);
     try {
       const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { firstName: splitName(name).first, lastName: splitName(name).last, email: email.trim() || undefined, ...(phone.trim() ? { countryCode: cc.trim(), phone: phone.trim() } : {}), ...(owner ? { businessName: biz.trim(), upiId: upi.trim() } : {}) } });
-      onUser(r.user); setNote('Profile saved.');
+      onUser(r.user); setNote(t('profile.saved'));
     } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); } finally { setBusy(false); }
   };
   const pic = async () => {
     setErr(''); setNote('');
-    try { const p = await pickProfilePhoto(); if (!p) return; const r = await upload<{ user: User }>('/api/me/avatar', p.uri); onUser(r.user); setNote('Picture updated.'); } catch (e: any) { setErr(e.message); }
+    try { const p = await pickProfilePhoto(); if (!p) return; const r = await upload<{ user: User }>('/api/me/avatar', p.uri); onUser(r.user); setNote(t('profile.picUpdated')); } catch (e: any) { setErr(e.message); }
   };
   const dropPic = async () => { try { await api('/api/me/avatar', { method: 'DELETE' }); onUser({ ...user, avatarUrl: null }); } catch (e: any) { setErr(e.message); } };
   const pw = async () => {
     setErr(''); setNote('');
     const first = user.hasPassword === false; // made with a phone code or at the desk: no current password to give
-    try { const r = await api<{ token: string; user: User }>('/api/me/password', { method: 'POST', body: { ...(first ? {} : { currentPassword: cur }), newPassword: nw } }); setCur(''); setNw(''); await setToken(r.token); onUser(r.user); setNote(first ? 'Password set. You can now sign in with your email or mobile number.' : 'Password changed.'); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
+    try { const r = await api<{ token: string; user: User }>('/api/me/password', { method: 'POST', body: { ...(first ? {} : { currentPassword: cur }), newPassword: nw } }); setCur(''); setNw(''); await setToken(r.token); onUser(r.user); setNote(first ? t('profile.pwSet') : t('profile.pwChanged')); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
   };
 
   // turning it on asks for the face or finger once, so nobody switches it on for a phone that cannot unlock it
@@ -72,10 +80,10 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
 
   const go = (p: Page) => { setErr(''); setNote(''); setPage(p); };
   const msgs = <>{!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok, marginBottom: 8 }]}>{note}</Text>}</>;
-  const lockName = bio === 'Face ID' || bio === 'Touch ID' ? bio : 'Fingerprint or face';
+  const lockName = bio === 'Face ID' || bio === 'Touch ID' ? bio : t('profile.fingerOrFace');
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} keyboardShouldPersistTaps="handled">
-      {page ? <BackBar title={PAGES[page]} onBack={() => go(null)} /> : <><Text style={s.eyebrow}>{ROLE[user.role] ?? user.role}</Text><Text style={s.h1}>Profile & settings</Text></>}
+      {page ? <BackBar title={PAGES[page]} onBack={() => go(null)} /> : <><Text style={s.eyebrow}>{ROLE[user.role] ?? user.role}</Text><Text style={s.h1}>{t('profile.title')}</Text></>}
       {!page && (<>
         <View style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 14 }]}>
           <Avatar name={user.name} url={user.avatarUrl} size={60} />
@@ -87,52 +95,60 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
         </View>
         {msgs}
         <ListCard>
-          <ListRow icon="person-outline" title="Edit profile" sub="Picture, name, email and mobile" onPress={() => go('edit')} />
-          <ListRow icon="contrast-outline" title="Appearance" sub={look.mode === 'dark' ? 'Dark' : 'Light'} onPress={look.flip} right={<Text style={{ color: C.gold, fontWeight: '700' }}>{look.mode === 'dark' ? 'Use light' : 'Use dark'}</Text>} />
-          <ListRow icon="mic-outline" title="Voice Shortcuts" sub={`Siri and Android, and the assistant's name (${user.aiName || 'Ask AI'})`} onPress={() => go('voice')} />
-          {!!bio && <ListRow icon="finger-print-outline" title={`${lockName} unlock`} sub={bioOn ? 'On' : 'Off'} onPress={flipBio} right={<Text style={{ color: C.gold, fontWeight: '700' }}>{bioOn ? 'Turn off' : 'Turn on'}</Text>} />}
-          <ListRow icon="lock-closed-outline" title="Password" sub={user.hasPassword === false ? 'Set a password' : 'Change your password'} onPress={() => go('password')} last={user.role !== 'customer'} />
-          {user.role === 'customer' && <ListRow icon="trash-outline" title="Delete my account" onPress={() => go('delete')} last />}
+          <ListRow icon="person-outline" title={t('profile.edit')} sub={t('profile.editSub')} onPress={() => go('edit')} />
+          <ListRow icon="language-outline" title={t('profile.language')} sub={UI_LANGUAGE_NAMES[lang]} onPress={() => go('language')} />
+          <ListRow icon="contrast-outline" title={t('profile.appearance')} sub={look.mode === 'dark' ? t('profile.dark') : t('profile.light')} onPress={look.flip} right={<Text style={{ color: C.gold, fontWeight: '700' }}>{look.mode === 'dark' ? t('profile.useLight') : t('profile.useDark')}</Text>} />
+          <ListRow icon="mic-outline" title={t('profile.voice')} sub={t('profile.voiceSub', { ai: user.aiName || 'Ask AI' })} onPress={() => go('voice')} />
+          {!!bio && <ListRow icon="finger-print-outline" title={t('profile.unlock', { lock: lockName })} sub={bioOn ? t('common.on') : t('common.off')} onPress={flipBio} right={<Text style={{ color: C.gold, fontWeight: '700' }}>{bioOn ? t('common.turnOff') : t('common.turnOn')}</Text>} />}
+          <ListRow icon="lock-closed-outline" title={t('profile.password')} sub={user.hasPassword === false ? t('profile.setPassword') : t('profile.changePassword')} onPress={() => go('password')} last={user.role !== 'customer'} />
+          {user.role === 'customer' && <ListRow icon="trash-outline" title={t('profile.delete')} onPress={() => go('delete')} last />}
         </ListCard>
-        <ListCard><ListRow icon="log-out-outline" title="Sign out" tone="danger" onPress={onSignOut} right={<View />} last /></ListCard>
+        <ListCard><ListRow icon="log-out-outline" title={t('profile.signOut')} tone="danger" onPress={onSignOut} right={<View />} last /></ListCard>
       </>)}
       {page === 'edit' && (<>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
           <Avatar name={user.name} url={user.avatarUrl} size={72} />
           <View style={{ marginLeft: 16, flex: 1 }}>
-            <Btn kind="outline" label="Choose a picture" onPress={pic} style={{ marginBottom: 6 }} />
-            {!!user.avatarUrl && <Btn kind="ghost" label="Remove picture" onPress={dropPic} style={{ marginBottom: 0 }} />}
+            <Btn kind="outline" label={t('profile.choosePic')} onPress={pic} style={{ marginBottom: 6 }} />
+            {!!user.avatarUrl && <Btn kind="ghost" label={t('profile.removePic')} onPress={dropPic} style={{ marginBottom: 0 }} />}
           </View>
         </View>
         {msgs}
         <NameFields value={name} onChange={setName} />
-        <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
+        <Field label={t('profile.email')} value={email} onChangeText={setEmail} keyboardType="email-address" />
         <PhoneField code={cc} number={phone} onCode={setCc} onNumber={setPhone} />
         {owner && <><Field label="Business name" value={biz} onChangeText={setBiz} autoCapitalize="words" /><Field label="UPI ID for payments" value={upi} onChangeText={setUpi} /></>}
-        <Btn label="Save profile" onPress={save} busy={busy} />
+        <Btn label={t('profile.save')} onPress={save} busy={busy} />
+      </>)}
+      {page === 'language' && (<>
+        {msgs}
+        <ListCard>
+          {UI_LANGUAGES.map((l, i) => <ListRow key={l} icon={lang === l ? 'checkmark-circle' : 'ellipse-outline'} title={UI_LANGUAGE_NAMES[l]} onPress={() => void pickLang(l)} right={<View />} last={i === UI_LANGUAGES.length - 1} />)}
+        </ListCard>
+        <Text style={[s.muted, { marginBottom: 10 }]}>{t('profile.languageNote')}</Text>
       </>)}
       {page === 'voice' && (<>
         {msgs}
-        <Field label="AI assistant name" value={aiName} onChangeText={setAiName} placeholder="Ask AI" autoCapitalize="words" />
+        <Field label={t('profile.aiField')} value={aiName} onChangeText={setAiName} placeholder="Ask AI" autoCapitalize="words" />
         {!!aiWarn && <Text style={s.err}>{aiWarn}</Text>}
         {!!user.aiNameNotice && <Text style={[s.muted, { color: C.gold, marginBottom: 6 }]}>{user.aiNameNotice}</Text>}
-        <Text style={[s.muted, { marginBottom: 10 }]}>Any name you like, shown exactly as you type it, on your screens only. Leave it empty for the business default. It changes only the name, not what the assistant can see or do.</Text>
-        <Btn kind="outline" label="Save assistant name" onPress={saveAi} disabled={aiName.trim() === (user.aiNameOwn ?? '')} />
+        <Text style={[s.muted, { marginBottom: 10 }]}>{t('profile.aiNote')}</Text>
+        <Btn kind="outline" label={t('profile.aiSave')} onPress={saveAi} disabled={aiName.trim() === (user.aiNameOwn ?? '')} />
         <VoiceShortcuts user={user} />
       </>)}
       {page === 'password' && (<>
         {msgs}
-        {user.hasPassword === false ? <Text style={[s.muted, { marginBottom: 10 }]}>Set a password to sign in with your email or mobile number.</Text>
-          : <Field label="Current password" value={cur} onChangeText={setCur} secureTextEntry />}
-        <Field label="New password" value={nw} onChangeText={setNw} secureTextEntry />
-        <Btn label={user.hasPassword === false ? 'Set password' : 'Change password'} onPress={pw} disabled={(user.hasPassword !== false && !cur) || !nw} />
+        {user.hasPassword === false ? <Text style={[s.muted, { marginBottom: 10 }]}>{t('profile.setPwNote')}</Text>
+          : <Field label={t('profile.currentPw')} value={cur} onChangeText={setCur} secureTextEntry />}
+        <Field label={t('profile.newPw')} value={nw} onChangeText={setNw} secureTextEntry />
+        <Btn label={user.hasPassword === false ? t('profile.setPwBtn') : t('profile.changePwBtn')} onPress={pw} disabled={(user.hasPassword !== false && !cur) || !nw} />
       </>)}
       {page === 'delete' && user.role === 'customer' && (<>
         {msgs}
-        <Text style={[s.muted, { marginBottom: 12 }]}>This removes your name, email, mobile number, picture and sign-in. Past bookings stay in the ground's records without your details. It cannot be undone. Cancel upcoming bookings first.</Text>
-        <Field label="Password (if you have one)" value={delPw} onChangeText={setDelPw} secureTextEntry />
-        <Field label="Type DELETE to confirm" value={delWord} onChangeText={setDelWord} autoCapitalize="characters" />
-        <Btn kind="outline" label="Delete my account for good" onPress={del} disabled={delWord.trim() !== 'DELETE'} />
+        <Text style={[s.muted, { marginBottom: 12 }]}>{t('profile.deleteNote')}</Text>
+        <Field label={t('profile.deletePw')} value={delPw} onChangeText={setDelPw} secureTextEntry />
+        <Field label={t('profile.deleteType')} value={delWord} onChangeText={setDelWord} autoCapitalize="characters" />
+        <Btn kind="outline" label={t('profile.deleteBtn')} onPress={del} disabled={delWord.trim() !== 'DELETE'} />
       </>)}
     </ScrollView>
   );
