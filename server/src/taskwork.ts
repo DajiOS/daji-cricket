@@ -53,6 +53,21 @@ CREATE UNIQUE INDEX ux_site_reports ON site_reports(owner_id, COALESCE(project_i
 CREATE INDEX ix_site_reports_day ON site_reports(owner_id, on_date);
 `);
 
+// A site note can be corrected; the text it had before each correction is kept here, never overwritten.
+registerSchema('site-report-edits-1', `
+CREATE TABLE site_report_edits (
+  id TEXT PRIMARY KEY,
+  report_id TEXT NOT NULL REFERENCES site_reports(id),
+  workers INTEGER,
+  body TEXT NOT NULL,
+  issues TEXT,
+  was_updated_at INTEGER NOT NULL,
+  edited_by TEXT NOT NULL,
+  edited_at INTEGER NOT NULL
+);
+CREATE INDEX ix_site_report_edits ON site_report_edits(report_id, edited_at);
+`);
+
 export const MAX_REF_BYTES = 10 * 1024 * 1024;
 export const MAX_REFS_PER_TASK = 30;
 const REF_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'application/pdf']);
@@ -95,7 +110,7 @@ export function addRefFile(dataDir: string, u: UserRow, taskId: string, buf: Buf
   return toOut(getTask(taskId));
 }
 
-/** A reference link (a quote online, a product page, a shared drive). Only web addresses. */
+/** A reference link (a quote online, a product page, a shared drive). Only https addresses, with no user name or password in them. */
 export function addRefLink(u: UserRow, taskId: string, body: unknown): TaskOut {
   const t = visibleTask(u, taskId);
   mayWork(u, t);
@@ -108,7 +123,7 @@ export function addRefLink(u: UserRow, taskId: string, body: unknown): TaskOut {
   v.done();
   let parsed: URL;
   try { parsed = new URL(url); } catch { parsed = null as unknown as URL; }
-  if (!parsed || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || parsed.username || parsed.password) {
+  if (!parsed || parsed.protocol !== 'https:' || parsed.username || parsed.password) {
     throw new HttpError(400, 'VALIDATION_FAILED', 'Use a web address starting with https://', { fields: [{ field: 'url', message: 'Use a web address starting with https://' }] });
   }
   const id = newId('trf');
@@ -166,7 +181,7 @@ export function taskHistory(u: UserRow, taskId: string): { items: { at: number; 
 
 // ---- daily site report
 
-export interface SiteNoteOut { id: string; authorId: string; authorName: string | null; workers: number | null; body: string; issues: string | null; updatedAt: number; mine: boolean }
+export interface SiteNoteOut { id: string; authorId: string; authorName: string | null; workers: number | null; body: string; issues: string | null; updatedAt: number; mine: boolean; corrections: number }
 export interface SiteReportOut {
   date: string; projectId: string | null; projectName: string | null;
   notes: SiteNoteOut[];
@@ -209,7 +224,7 @@ export function siteReport(u: UserRow, ownerId: string, dateIn: string | null, p
     ownerId, date, ...(proj ? [proj.id] : []), ...(mine ? [u.id] : []));
   return {
     date, projectId: proj?.id ?? null, projectName: proj?.name ?? null,
-    notes: notes.map((n) => ({ id: n.id, authorId: n.author_id, authorName: name(n.author_id), workers: n.workers, body: n.body, issues: n.issues, updatedAt: n.updated_at, mine: n.author_id === u.id })),
+    notes: notes.map((n) => ({ id: n.id, authorId: n.author_id, authorName: name(n.author_id), workers: n.workers, body: n.body, issues: n.issues, updatedAt: n.updated_at, mine: n.author_id === u.id, corrections: one<{ c: number }>('SELECT COUNT(*) c FROM site_report_edits WHERE report_id = ?', n.id)!.c })),
     done: done.map((t) => ({ id: t.id, title: t.title, byName: name(t.completed_by), proofPhotos: photos(t.id), signedOff: !!t.signoff_at })),
     started: q("status = 'open' AND id IN (SELECT entity_id FROM audit_log WHERE entity = 'task' AND action IN ('task.ack', 'task.move') AND at >= ? AND at < ?)", from, to).map((t) => ({ id: t.id, title: t.title })),
     raised: mine ? [] : q("intake_by IS NOT NULL AND created_at >= ? AND created_at < ?", from, to).map((t) => ({ id: t.id, title: t.title, byName: name(t.intake_by) })),
@@ -232,9 +247,14 @@ export function saveSiteNote(u: UserRow, ownerId: string, body: unknown): SiteRe
   if (date > istDate(now())) throw new HttpError(400, 'VALIDATION_FAILED', 'A site report cannot be for a day still to come', { fields: [{ field: 'date', message: 'Pick today or an earlier day' }] });
   if (date < addDays(istDate(now()), -7)) throw new HttpError(400, 'VALIDATION_FAILED', 'A site report can be written up to 7 days late', { fields: [{ field: 'date', message: 'Pick a day in the last week' }] });
   siteProject(u, ownerId, projectId);
-  const was = one<{ id: string }>(`SELECT id FROM site_reports WHERE owner_id = ? AND on_date = ? AND author_id = ? AND ${projectId ? 'project_id = ?' : 'project_id IS NULL'}`, ownerId, date, u.id, ...(projectId ? [projectId] : []));
+  const was = one<{ id: string; workers: number | null; body: string; issues: string | null; updated_at: number }>(`SELECT id, workers, body, issues, updated_at FROM site_reports WHERE owner_id = ? AND on_date = ? AND author_id = ? AND ${projectId ? 'project_id = ?' : 'project_id IS NULL'}`, ownerId, date, u.id, ...(projectId ? [projectId] : []));
   const at = now();
-  if (was) run('UPDATE site_reports SET workers = ?, body = ?, issues = ?, updated_at = ? WHERE id = ?', workers, text, issues, at, was.id);
+  if (was) {
+    if (was.workers === workers && was.body === text && was.issues === issues) return siteReport(u, ownerId, date, projectId);
+    // a correction: the earlier text is kept
+    run('INSERT INTO site_report_edits(id, report_id, workers, body, issues, was_updated_at, edited_by, edited_at) VALUES (?,?,?,?,?,?,?,?)', newId('sre'), was.id, was.workers, was.body, was.issues, was.updated_at, u.id, at);
+    run('UPDATE site_reports SET workers = ?, body = ?, issues = ?, updated_at = ? WHERE id = ?', workers, text, issues, at, was.id);
+  }
   else run('INSERT INTO site_reports(id, owner_id, project_id, on_date, author_id, workers, body, issues, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)', newId('srp'), ownerId, projectId, date, u.id, workers, text, issues, at, at);
   audit(actorOf(u), was ? 'site_report.update' : 'site_report.create', 'site_report', was?.id ?? null, { date, projectId, workers }, ownerId);
   return siteReport(u, ownerId, date, projectId);

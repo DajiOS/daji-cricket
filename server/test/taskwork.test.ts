@@ -89,11 +89,11 @@ test('a reference picture from the gallery is kept, but it is not proof: the job
   assert.equal((await h.call('GET', link.body.references[0].url, { token: owner2 })).status, 404);
 });
 
-test('references: only pictures and PDFs, web links only, and taking one off hides it without deleting', async () => {
+test('references: only pictures and PDFs, https links only, and taking one off hides it without deleting', async () => {
   const id = await makeTask();
   const exe = await raw(owner, `/api/tasks/${id}/references`, Buffer.from('MZ not a picture'));
   assert.equal(exe.status, 415);
-  for (const url of ['javascript:alert(1)', 'ftp://files.example.com/x', 'https://user:pw@example.com/']) {
+  for (const url of ['javascript:alert(1)', 'ftp://files.example.com/x', 'https://user:pw@example.com/', 'http://example.com/plain', 'data:text/html,hi']) {
     const r = await h.post(`/api/tasks/${id}/links`, { url }, owner);
     assert.equal(r.status, 400, url);
   }
@@ -202,6 +202,10 @@ test('the daily site report: jobs from the board for that day, a note per person
   // writing again the same day changes the same note
   const again = await h.post('/api/site-reports', { projectId: site, workers: 5, body: 'Walls primed and sanded' }, staff);
   assert.equal(again.body.notes.length, 1); assert.equal(again.body.notes[0].workers, 5);
+  // the correction keeps the earlier text
+  assert.equal(again.body.notes[0].corrections, 1);
+  const kept = many<{ body: string; workers: number; issues: string | null }>('SELECT body, workers, issues FROM site_report_edits');
+  assert.deepEqual(kept.map((k) => ({ ...k })), [{ body: 'Walls primed', workers: 4, issues: 'Paint short by 2 tins' }]);
   const rep = (await h.get(`/api/site-reports?projectId=${site}`, owner)).body;
   assert.equal(rep.projectName, 'Office fit-out');
   assert.deepEqual(rep.done.map((d: any) => [d.title, d.proofPhotos]), [['Make the poker table', 1]]);
@@ -227,4 +231,54 @@ test('the desk may show private pictures it fetched with the sign-in (blob: imag
   assert.match(csp, /img-src 'self' data: blob: https:/);
   assert.match(csp, /script-src 'self' https:\/\/checkout\.razorpay\.com;/);
   assert.match(csp, /object-src 'none'/);
+});
+
+test('request lifecycle: raised, taken in, worked, closed, signed off, reopened; who can see it at each stage; one record throughout', async () => {
+  const r = await h.post('/api/tasks/requests', { title: 'Fix the scoreboard bulb', clientKey: 'life-1' }, staff);
+  const id = r.body.id;
+  // before take-in: the raiser and the owner; not the helper (an unrelated team member), not another business
+  assert.equal((await h.get(`/api/tasks/${id}`, staff)).status, 200);
+  assert.equal((await h.get(`/api/tasks/${id}`, owner)).status, 200);
+  assert.equal((await h.get(`/api/tasks/${id}`, helper)).status, 404);
+  assert.equal((await h.get(`/api/tasks/${id}`, owner2)).status, 404);
+  // taken in for the helper: the same record (same id), now on the board
+  const taken = await h.post(`/api/tasks/${id}/decide`, { accept: true, assignedTo: helperId, photosRequired: 1 }, owner);
+  assert.equal(taken.body.id, id);
+  assert.equal((await h.post(`/api/tasks/${id}/decide`, { accept: true }, owner)).status, 409, 'a second take-in is refused');
+  assert.equal(many<{ n: number }>("SELECT COUNT(*) n FROM tasks WHERE title = 'Fix the scoreboard bulb'")[0]!.n, 1, 'no duplicate work record');
+  assert.equal((await h.get(`/api/tasks/${id}`, helper)).status, 200, 'the accountable person sees it');
+  // the raiser, who is neither the accountable person nor a helper, no longer sees it once it is someone else's job
+  assert.equal((await h.get(`/api/tasks/${id}`, staff)).status, 404, 'IMPLEMENTED BEHAVIOUR: raiser loses access after conversion (for Sunny to decide)');
+  assert.equal((await h.get(`/api/tasks/${id}`, owner2)).status, 404);
+  await raw(helper, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'life'));
+  assert.equal((await h.post(`/api/tasks/${id}/complete`, {}, helper)).status, 200);
+  assert.equal((await h.post(`/api/tasks/${id}/signoff`, {}, owner)).status, 200);
+  const re = await h.post(`/api/tasks/${id}/reopen`, { reason: 'Bulb flickers again' }, owner);
+  assert.equal(re.body.status, 'open'); assert.equal(re.body.photos.length, 1);
+  const says = (await h.get(`/api/tasks/${id}/history`, owner)).body.items.map((x: any) => x.what);
+  for (const w of ['Raised it as a request', 'Took the request in', 'Added a proof photo', 'Marked it done', 'Signed off the work', 'Reopened it: Bulb flickers again']) assert.ok(says.some((s: string) => s.startsWith(w)), w);
+  // a declined request keeps its history and reason
+  const d = await h.post('/api/tasks/requests', { title: 'Gold paint for the pavilion' }, staff);
+  await h.post(`/api/tasks/${d.body.id}/decide`, { accept: false, note: 'Not this season' }, owner);
+  assert.ok((await h.get(`/api/tasks/${d.body.id}/history`, owner)).body.items.some((x: any) => x.what === 'Turned the request down: Not this season'));
+});
+
+test('helper authority map (implemented behaviour, recorded for Sunny\'s decision)', async () => {
+  const id = await makeTask({ checklist: ['Sand', 'Varnish'] });
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [helperId] }, owner);
+  const can = async (r: Promise<any>) => (await r).status < 300;
+  const map = {
+    view: await can(h.get(`/api/tasks/${id}`, helper)),
+    comment: await can(h.post(`/api/tasks/${id}/comments`, { body: 'On it' }, helper)),
+    reference: await can(raw(helper, `/api/tasks/${id}/references`, PNG)),
+    proof: await can(raw(helper, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'map'))),
+    tick: await can(h.post(`/api/tasks/${id}/checklist`, { index: 0, done: true }, helper)),
+    nextAction: await can(h.post(`/api/tasks/${id}/next`, { text: 'Buy varnish' }, helper)),
+    accept: await can(h.post(`/api/tasks/${id}/accept`, {}, helper)),
+    assignOther: await can(h.patch(`/api/tasks/${id}`, { assignedTo: helperId }, helper)),
+    changeHelpers: await can(h.post(`/api/tasks/${id}/helpers`, { userIds: [] }, helper)),
+    complete: await can(h.post(`/api/tasks/${id}/complete`, {}, helper)),
+  };
+  const after = { signOff: await can(h.post(`/api/tasks/${id}/signoff`, {}, helper)), reopen: await can(h.post(`/api/tasks/${id}/reopen`, { reason: 'x' }, helper)) };
+  assert.deepEqual({ ...map, ...after }, { view: true, comment: true, reference: true, proof: true, tick: true, nextAction: true, accept: false, assignOther: false, changeHelpers: false, complete: true, signOff: false, reopen: false });
 });

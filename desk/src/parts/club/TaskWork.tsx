@@ -2,7 +2,7 @@
 // the job's history, the requests inbox, raising a request, and the daily site report.
 import { useEffect, useRef, useState } from 'react';
 import { Field, Modal, useToast, DateInput } from '../../ui';
-import { fetchBlob, fmtDateTime, post, sendFile, todayISO as today, useApi } from '../../lib';
+import { download, fetchBlob, fmtDateTime, post, sendFile, todayISO as today, useApi } from '../../lib';
 import { Select, errMsg } from './common';
 import type { Project, Task, TaskRef } from './taskTypes';
 
@@ -91,7 +91,11 @@ export function References({ t, onChanged, setErr }: { t: Task; onChanged: () =>
   };
   const openRef = async (r: TaskRef) => {
     if (r.kind === 'link') { window.open(r.url, '_blank', 'noopener,noreferrer'); return; }
-    try { const b = await fetchBlob(r.url); const u = URL.createObjectURL(b); window.open(u, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(u), 60_000); } catch (e) { toast(errMsg(e)); }
+    // a PDF is saved rather than opened: the site's policy blocks the browser's PDF viewer inside a page made from it
+    try {
+      if (r.mime === 'application/pdf') { await download(r.url, r.name); return; }
+      const b = await fetchBlob(r.url); const u = URL.createObjectURL(b); window.open(u, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(u), 60_000);
+    } catch (e) { toast(errMsg(e)); }
   };
   const hide = async (r: TaskRef) => {
     try { await post(`/api/tasks/refs/${encodeURIComponent(r.id)}/hide`, {}); toast('Reference taken off. It stays on record.'); onChanged(); } catch (e) { setErr(errMsg(e)); toast(errMsg(e)); }
