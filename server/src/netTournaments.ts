@@ -402,6 +402,8 @@ export function netTournamentDetail(u: UserRow, ownerId: string, tid: string) {
     networkGrounds: role === 'organiser' ? many<{ id: string; name: string; city: string; owner_id: string }>("SELECT g.id, g.name, g.city, g.owner_id FROM grounds g JOIN network_members m ON m.owner_id = g.owner_id AND m.left_at IS NULL WHERE g.active = 1 ORDER BY g.name")
       .map((g) => ({ id: g.id, name: g.name, city: g.city, business: businessName(g.owner_id) })) : [],
     myGrounds: ownGrounds,
+    // the businesses a settlement line can name: the organiser and each invited or accepted ground's business
+    businessOwners: [...new Set([t.organiser_id, ...groundsOf(tid).filter((g) => g.status === 'accepted' || g.status === 'invited').map((g) => g.owner_id)])].map((id) => ({ ownerId: id, name: businessName(id) })),
     scorers: many<{ id: string; name: string }>("SELECT id, name FROM users WHERE ((role = 'staff' AND owner_id = ?) OR id = ?) AND active = 1 ORDER BY name", ownerId, ownerId)
       .filter((p) => { const x = one<UserRow>('SELECT * FROM users WHERE id = ?', p.id)!; return hasPermission(x, 'manage_matches'); }),
   };
