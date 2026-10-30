@@ -498,7 +498,13 @@ export function combined(ctx: Ctx, a: Partial<Range> = {}) {
       approvalsWaiting: b.approvalsWaiting.status === 'ok' ? b.approvalsWaiting.count : 'not available',
     })),
     branches: v.byArea.map((r) => ({ business: r.businessName, branch: r.areaName ?? 'Not in a branch', spentSignedPaise: r.spentConfirmedPaise, spentWaitingPaise: r.spentWaitingPaise, openJobs: r.openTasks, overdueJobs: r.overdueTasks })),
-    totals: v.totals.map((t) => ({ currency: t.currency, businesses: t.businesses, leftOut: t.leftOut, books: t.books, booksNote: t.booksNote, handedOutPaise: t.handedOutPaise, spentSignedPaise: t.spentConfirmedPaise, spentWaitingPaise: t.spentWaitingPaise, openJobs: t.openTasks, overdueJobs: t.overdueTasks })),
+    // each part of the total says what it leaves out; a part nothing could be read for is "not available", never zero
+    totals: v.totals.map((t) => ({
+      currency: t.currency, leftOut: t.leftOut, booksNote: t.booksNote,
+      books: t.books.notSplit ? 'not split by branch' : t.books.value ?? 'not available', booksPartial: t.books.partial,
+      cash: t.cash.value ? { handedOutPaise: t.cash.value.handedOutPaise, spentSignedPaise: t.cash.value.spentConfirmedPaise, spentWaitingPaise: t.cash.value.spentWaitingPaise } : 'not available', cashPartial: t.cash.partial,
+      jobs: t.tasks.value ? { open: t.tasks.value.open, overdue: t.tasks.value.overdue } : 'not available', jobsPartial: t.tasks.partial,
+    })),
     notes: v.notes,
   };
 }

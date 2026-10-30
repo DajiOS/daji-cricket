@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { api, ApiError } from './api';
-import { Badge, Chip, KV, Loading, Section, Segmented, Stat, Stats, s, todayIST } from './ui';
+import { Badge, Btn, Chip, KV, Loading, Section, Segmented, Stat, Stats, s, todayIST } from './ui';
 import { C, inr, niceDate } from './theme';
 
 // All my businesses (server/src/combined.ts): the businesses the owner marked "Mine", side by side, with their branches. It only
@@ -19,10 +19,15 @@ interface Biz {
 }
 interface Row { businessId: string; businessName: string; areaId: string | null; areaName: string | null; restricted: boolean; spentConfirmedPaise: number; spentWaitingPaise: number; openTasks: number; overdueTasks: number }
 interface Line { kind: 'spend' | 'task'; id: string; businessName: string; areaName: string | null; projectName: string | null; personName: string | null; date: string | null; title: string; amountPaise: number | null; status: string }
-interface Total { currency: string; businesses: number; leftOut: string[]; books: Books | null; booksNote: string | null; handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number; openTasks: number; overdueTasks: number }
-interface View_ { label: string; filters: { from: string; to: string }; options: { businesses: { id: string; name: string }[]; supported: number; areas: { id: string; name: string; businessId: string }[] }; businesses: Biz[]; byArea: Row[]; lines: Line[]; totals: Total[]; notes: string[] }
+interface Part<T> { value: T | null; leftOut: string[]; partial: boolean; notSplit: boolean }
+interface Total { currency: string; books: Part<Books>; cash: Part<{ handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>; tasks: Part<{ open: number; overdue: number; done: number }>; leftOut: string[]; booksNote: string | null }
+interface View_ { label: string; filters: { from: string; to: string }; options: { businesses: { id: string; name: string }[]; supported: number; areas: { id: string; name: string; businessId: string }[] }; businesses: Biz[]; byArea: Row[]; lines: Line[]; linesCut: boolean; totals: Total[]; notes: string[] }
 
 const NA = 'Not available';
+/** A part of the total: its figure, "Not split" or "Not available" (never ₹0), and "partial" when some business is left out. */
+const partValue = <T,>(p: Part<T>, f: (x: T) => string) => (p.notSplit ? 'Not split' : p.value === null ? NA : f(p.value) + (p.partial ? ' (partial)' : ''));
+const partFoot = <T,>(p: Part<T>, ok: string | undefined) => (p.partial ? `Leaves out ${p.leftOut.join(', ')}` : p.value === null && !p.notSplit ? 'Could not be read just now' : ok);
+const PAGE = 50;
 const show = <T,>(a: Avail<T>, f: (x: T) => string) => (a.status === 'ok' ? f(a as T) : a.status === 'not_split' ? 'Not split' : NA);
 const periodOf = (p: 'month' | 'last' | 'year'): { from: string; to: string } => {
   const t = todayIST();
@@ -39,13 +44,19 @@ export function CombinedScreen() {
   const [v, setV] = useState<View_ | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [shown, setShown] = useState(PAGE);
+  // each request has a number; an answer to an older one (the owner tapped another filter meanwhile) is thrown away
+  const seq = useRef(0);
   const load = useCallback(async () => {
-    setBusy(true);
+    const mine = ++seq.current;
+    setBusy(true); setShown(PAGE);
+    // the figures on screen belong to the old selection: clear them, so a slow or failed load never shows them under the new one
+    setV(null); setErr('');
     const p = periodOf(period);
     const q = new URLSearchParams({ ...p, ...(business ? { business } : {}), ...(area ? { area } : {}) }).toString();
-    try { setV(await api<View_>(`/api/me/combined?${q}`)); setErr(''); }
-    catch (e: any) { setErr(e instanceof ApiError && e.status === 403 ? 'This view is for the business owner.' : e.message); }
-    finally { setBusy(false); }
+    try { const r = await api<View_>(`/api/me/combined?${q}`); if (mine === seq.current) setV(r); }
+    catch (e: any) { if (mine === seq.current) setErr(e instanceof ApiError && e.status === 403 ? 'This view is for the business owner.' : `Could not load these figures: ${e.message}`); }
+    finally { if (mine === seq.current) setBusy(false); }
   }, [period, business, area]);
   useEffect(() => { void load(); }, [load]);
 
@@ -71,13 +82,13 @@ export function CombinedScreen() {
         {t && <>
           <Section>Together, {niceDate(v.filters.from)} to {niceDate(v.filters.to)}</Section>
           <Stats>
-            <Stat label="Revenue in the books" value={t.books ? inr(t.books.revenuePaise) : narrowed ? 'Not split' : NA} foot={t.booksNote ?? undefined} />
-            <Stat label="Expenses in the books" value={t.books ? inr(t.books.expensesPaise) : narrowed ? 'Not split' : NA} />
-            <Stat label="Cash spent" value={inr(t.spentConfirmedPaise)} foot={t.spentWaitingPaise ? `${inr(t.spentWaitingPaise)} waiting` : 'Not in the books yet'} />
-            <Stat label="Open jobs" value={String(t.openTasks)} foot={`${t.overdueTasks} late`} tone={t.overdueTasks ? 'danger' : undefined} />
+            <Stat label="Revenue in the books" value={partValue(t.books, (x) => inr(x.revenuePaise))} foot={t.booksNote ?? undefined} />
+            <Stat label="Expenses in the books" value={partValue(t.books, (x) => inr(x.expensesPaise))} />
+            <Stat label="Cash spent" value={partValue(t.cash, (x) => inr(x.spentConfirmedPaise))} foot={partFoot(t.cash, t.cash.value?.spentWaitingPaise ? `${inr(t.cash.value.spentWaitingPaise)} waiting` : 'Not in the books yet')} />
+            <Stat label="Open jobs" value={partValue(t.tasks, (x) => String(x.open))} foot={partFoot(t.tasks, t.tasks.value ? `${t.tasks.value.overdue} late` : undefined)} tone={t.tasks.value?.overdue ? 'danger' : undefined} />
           </Stats>
-          {t.leftOut.length > 0 && <Text style={s.err}>Not available just now, so left out: {t.leftOut.join(', ')}.</Text>}
-          {!narrowed && t.handedOutPaise !== 0 && <Text style={s.muted}>{inr(t.handedOutPaise)} handed to wallets: your own money moving, not spending.</Text>}
+          {t.leftOut.length > 0 && <Text style={s.err}>Not available just now, so left out: {t.leftOut.join('; ')}.</Text>}
+          {!narrowed && !!t.cash.value?.handedOutPaise && <Text style={s.muted}>{inr(t.cash.value.handedOutPaise)} handed to wallets: your own money moving, not spending.</Text>}
         </>}
         {v.businesses.map((b) => (
           <View key={b.id} style={s.card}>
@@ -95,12 +106,14 @@ export function CombinedScreen() {
             <Text style={s.muted}>{r.businessName} · spent {inr(r.spentConfirmedPaise)}{r.spentWaitingPaise ? ` + ${inr(r.spentWaitingPaise)} waiting` : ''} · {r.openTasks} open{r.overdueTasks ? `, ${r.overdueTasks} late` : ''}</Text>
           </View>))}
         {v.lines.length > 0 && <Section>Lines</Section>}
-        {v.lines.slice(0, 50).map((l) => (
+        {v.lines.length > 0 && <Text style={s.muted}>Showing {Math.min(shown, v.lines.length)} of {v.lines.length}{v.linesCut ? ' (the list from the server is cut short too: narrow the dates or filters to see the rest)' : ''}.</Text>}
+        {v.lines.slice(0, shown).map((l) => (
           <View key={`${l.kind}:${l.id}`} style={s.card}>
             <View style={s.row}><Text style={[s.text, { fontWeight: '700', flex: 1 }]}>{l.title}</Text>{l.amountPaise !== null && <Text style={s.text}>{inr(l.amountPaise)}</Text>}</View>
             <Text style={s.muted}>{l.kind === 'spend' ? 'Cash spend' : 'Open job'} · {[l.businessName, l.areaName, l.projectName].filter(Boolean).join(' · ')}{l.personName ? ` · ${l.personName}` : ''}{l.date ? ` · ${niceDate(l.date)}` : ''}</Text>
             {l.status === 'waiting' && <View style={{ marginTop: 6 }}><Badge tone="warn" label="Waiting for sign-off" /></View>}
           </View>))}
+        {v.lines.length > shown && <Btn kind="outline" label={`Show ${Math.min(PAGE, v.lines.length - shown)} more`} onPress={() => setShown((n) => n + PAGE)} />}
         {v.notes.map((n) => <Text key={n} style={[s.muted, { marginTop: 6 }]}>{n}</Text>)}
       </>}
     </ScrollView>

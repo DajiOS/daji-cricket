@@ -19,12 +19,16 @@ interface Biz {
 }
 interface Row { businessId: string; businessName: string; areaId: string | null; areaName: string | null; restricted: boolean; projectId: string | null; projectName: string | null; spentConfirmedPaise: number; spentWaitingPaise: number; openTasks: number; overdueTasks: number; doneTasks: number }
 interface Line { kind: 'spend' | 'task'; id: string; businessId: string; businessName: string; areaName: string | null; projectName: string | null; personName: string | null; date: string | null; title: string; amountPaise: number | null; status: string; open: { businessId: string; page: 'cash' | 'tasks'; id: string } }
-interface Total { currency: string; businesses: number; leftOut: string[]; books: Books | null; booksNote: string | null; handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number; openTasks: number; overdueTasks: number; doneTasks: number }
+interface Part<T> { value: T | null; included: string[]; leftOut: string[]; partial: boolean; notSplit: boolean }
+interface Total { currency: string; books: Part<Books>; cash: Part<{ handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>; tasks: Part<{ open: number; overdue: number; done: number }>; leftOut: string[]; booksNote: string | null }
+/** A part of the total: its figure, "Not split" or "Not available" (never ₹0), and "partial" when some business is left out. */
+const partValue = <T,>(p: Part<T>, f: (x: T) => string) => (p.notSplit ? 'Not split' : p.value === null ? NA : f(p.value) + (p.partial ? ' (partial)' : ''));
+const partFoot = <T,>(p: Part<T>, ok: string) => (p.partial ? `Leaves out ${p.leftOut.join(', ')}, not available just now` : p.value === null && !p.notSplit ? `Could not be read for ${p.leftOut.join(', ')}` : ok);
 interface View {
   label: string; asOf: string;
   filters: { businessId: string | null; areaId: string | null; projectId: string | null; personId: string | null; from: string; to: string };
   options: { businesses: { id: string; name: string; own: boolean }[]; supported: number; areas: { id: string; name: string; businessId: string; restricted: boolean; archived: boolean }[]; projects: { id: string; name: string; businessId: string; areaId: string | null }[]; people: { id: string; name: string; businessIds: string[] }[] };
-  businesses: Biz[]; byArea: Row[]; byProject: Row[]; lines: Line[]; totals: Total[]; notes: string[];
+  businesses: Biz[]; byArea: Row[]; byProject: Row[]; lines: Line[]; linesCut: boolean; totals: Total[]; notes: string[];
 }
 
 const NA = 'Not available';
@@ -50,7 +54,10 @@ export default function Combined() {
   // a team member who follows a link here: the view is the business owner's, there is nothing to retry
   if (status === 403) return <><Head /><div className="state" role="status"><b>This view is for the business owner.</b> <span className="small">It shows all of the owner's businesses together. Your own work is under Work.</span></div></>;
   if (err) return <><Head /><ErrorBox msg={err} /><button className="btn" onClick={reload}>Try again</button></>;
-  if (!v) return <><Head /><Loading /></>;
+  // while a new filter loads, the figures on screen are for the old one: show loading rather than the wrong selection's numbers
+  const forNow = !!v && (v.filters.areaId ?? '') === f.area && (v.filters.projectId ?? '') === f.project && (v.filters.personId ?? '') === f.person
+    && v.filters.from === f.from && v.filters.to === f.to && (!f.business || v.filters.businessId === f.business) && (!!f.business || !!f.area || !!f.project || !v.filters.businessId);
+  if (!v || !forNow) return <><Head /><Loading /></>;
   const t = v.totals[0];
   const areas = v.options.areas.filter((a) => !f.business || a.businessId === f.business);
   const projects = v.options.projects.filter((p) => (!f.business || p.businessId === f.business) && (!f.area || p.areaId === f.area));
@@ -86,14 +93,14 @@ export default function Combined() {
         </Panel>
 
         {t && (
-          <Panel title={`Together (${t.currency})`} note={`${t.businesses} of ${v.businesses.length} businesses, ${fmtDay(v.filters.from)} to ${fmtDay(v.filters.to)}.${t.leftOut.length ? ` Not available, so left out: ${t.leftOut.join(', ')}.` : ''}`}>
+          <Panel title={`Together (${t.currency})`} note={`${v.businesses.length} businesses, ${fmtDay(v.filters.from)} to ${fmtDay(v.filters.to)}.${t.leftOut.length ? ` Not available just now, so left out: ${t.leftOut.join('; ')}.` : ''}`}>
             <div className="grid g4">
-              <Stat label="Revenue in the books" value={t.books ? inr(t.books.revenuePaise) : narrowed ? 'Not split' : NA} foot={t.booksNote ?? 'Each business\'s own books, added up'} />
-              <Stat label="Expenses in the books" value={t.books ? inr(t.books.expensesPaise) : narrowed ? 'Not split' : NA} foot={t.books ? `${t.books.netProfitPaise >= 0 ? 'Profit' : 'Loss'} ${inr(Math.abs(t.books.netProfitPaise))}` : '–'} />
-              <Stat label="Cash spent" value={inr(t.spentConfirmedPaise)} foot={`${t.spentWaitingPaise ? `${inr(t.spentWaitingPaise)} waiting for sign-off. ` : ''}Not in the books yet, so not added to them`} />
-              <Stat label="Open jobs" value={String(t.openTasks)} foot={`${t.overdueTasks} late · ${t.doneTasks} done in these dates`} />
+              <Stat label="Revenue in the books" value={partValue(t.books, (x) => inr(x.revenuePaise))} foot={t.booksNote ?? 'Each business\'s own books, added up'} />
+              <Stat label="Expenses in the books" value={partValue(t.books, (x) => inr(x.expensesPaise))} foot={t.books.value ? `${t.books.value.netProfitPaise >= 0 ? 'Profit' : 'Loss'} ${inr(Math.abs(t.books.value.netProfitPaise))}` : '–'} />
+              <Stat label="Cash spent" value={partValue(t.cash, (x) => inr(x.spentConfirmedPaise))} foot={partFoot(t.cash, `${t.cash.value?.spentWaitingPaise ? `${inr(t.cash.value.spentWaitingPaise)} waiting for sign-off. ` : ''}Not in the books yet, so not added to them`)} />
+              <Stat label="Open jobs" value={partValue(t.tasks, (x) => String(x.open))} foot={partFoot(t.tasks, t.tasks.value ? `${t.tasks.value.overdue} late · ${t.tasks.value.done} done in these dates` : '–')} />
             </div>
-            {!narrowed && t.handedOutPaise !== 0 && <p className="hint">{inr(t.handedOutPaise)} of cash was handed to wallets in these dates. That is your own money moving, shown once, not spending.</p>}
+            {!narrowed && !!t.cash.value?.handedOutPaise && <p className="hint">{inr(t.cash.value.handedOutPaise)} of cash was handed to wallets in these dates{t.cash.partial ? ' (partial)' : ''}. That is your own money moving, shown once, not spending.</p>}
           </Panel>
         )}
 
@@ -120,6 +127,7 @@ export default function Combined() {
         <Panel title="Where it went" actions={<Tabs value={tab} onChange={setTab} items={[['branches', 'By branch'], ['projects', 'By project'], ['lines', 'Lines']]} label="Breakdown" />}>
           {tab === 'branches' && <Table rows={v.byArea} rowKey={(r) => `${r.businessId}:${r.areaId ?? '-'}`} cols={rowCols(false)} empty="No branches in these businesses yet." />}
           {tab === 'projects' && <Table rows={v.byProject} rowKey={(r) => r.projectId ?? ''} cols={rowCols(true)} empty="No projects here." />}
+          {tab === 'lines' && v.linesCut && <p className="hint" role="status">This list is cut short: it shows the latest {v.lines.length} lines. Narrow the dates or filters to see the rest.</p>}
           {tab === 'lines' && <Table rows={v.lines} rowKey={(l) => `${l.kind}:${l.id}`} onRow={(l) => open(l.open)} empty="Nothing in these dates." cols={[
             { head: 'Date', cell: (l) => (l.date ? fmtDay(l.date) : '–') },
             { head: 'What', cell: (l) => <span><Chip tone={l.kind === 'spend' ? 'info' : 'mute'}>{l.kind === 'spend' ? 'Cash spend' : 'Open job'}</Chip> <b>{l.title}</b></span> },

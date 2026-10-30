@@ -28,7 +28,8 @@ import { addDays, istDate, istMidnight, isValidDate } from './time.ts';
 
 export const CURRENCY = 'INR'; // every Daji business keeps its books in rupees today; the totals are still kept per currency
 const MAX_DAYS = 3 * 366;
-const MAX_LINES = 200;
+/** Lines of each kind shown for each business; kept in an object so a test can lower it. */
+export const limits = { lines: 200 };
 
 export interface CombinedFilters { businessId: string | null; areaId: string | null; projectId: string | null; personId: string | null; from: string; to: string }
 
@@ -61,12 +62,22 @@ export interface Line {
   open: { businessId: string; page: 'cash' | 'tasks'; id: string; holderId?: string };
 }
 
+/**
+ * One part of the total (the books, the cash or the jobs). Each part says which businesses it covers and which it leaves out
+ * because that part of them could not be read: a part with no business read is null ("not available"), never zero, and a part
+ * that leaves some out is marked partial. A part kept for the whole business only (the books, narrowed to a branch) is null with
+ * `notSplit`.
+ */
+export interface Part<T> { value: T | null; included: string[]; leftOut: string[]; partial: boolean; notSplit: boolean }
+
 export interface Total {
   currency: string;
-  /** Businesses whose figures are in this total, and the ones left out because they could not be read. */
-  businesses: number; leftOut: string[];
-  books: Books | null; booksNote: string | null;
-  handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number; openTasks: number; overdueTasks: number; doneTasks: number;
+  books: Part<Books>;
+  cash: Part<{ handedOutPaise: number; spentConfirmedPaise: number; spentWaitingPaise: number }>;
+  tasks: Part<{ open: number; overdue: number; done: number }>;
+  /** Every business with some part not read, and what that part was, in words ("Sunny's Portfolio: books"). */
+  leftOut: string[];
+  booksNote: string | null;
 }
 
 export interface Combined {
@@ -83,6 +94,8 @@ export interface Combined {
   byArea: Row[];
   byProject: Row[];
   lines: Line[];
+  /** True when some list was cut at `limits.lines`: the lines are not everything in these dates. */
+  linesCut: boolean;
   totals: Total[];
   notes: string[];
 }
@@ -274,6 +287,9 @@ export function combinedView(real: UserRow | null | undefined, query: Record<str
 
   // ---- the lines themselves, each with its labels and a link to the original record
   const lines: Line[] = [];
+  // each list asks for one more row than it shows, so a cut list is known and said, never passed off as everything
+  let truncated = false;
+  const seen = <T,>(rows: T[]): T[] => { if (rows.length > limits.lines) truncated = true; return rows; };
   const names = new Map<string, string | null>();
   const nm = (id: string | null) => { if (!id) return null; if (!names.has(id)) names.set(id, userRow(id)?.name ?? null); return names.get(id)!; };
   const areaName = (id: string | null) => (id ? areas.find((a) => a.id === id)?.name ?? null : null);
@@ -281,43 +297,52 @@ export function combinedView(real: UserRow | null | undefined, query: Record<str
   for (const bid of readable) {
     const s: Scope = { ownerId: bid, f };
     const sc = scopeSql(s, 'area_id', 'project_id');
-    for (const e of many<{ id: string; holder_id: string; amount_paise: number; on_date: string; description: string; area_id: string | null; project_id: string | null; status: string }>(
+    for (const e of seen(many<{ id: string; holder_id: string; amount_paise: number; on_date: string; description: string; area_id: string | null; project_id: string | null; status: string }>(
       `SELECT id, holder_id, amount_paise, on_date, description, area_id, project_id, status FROM cash_entries
         WHERE owner_id = ? AND kind = 'expense' AND status IN ('confirmed','waiting') AND hidden_at IS NULL AND on_date BETWEEN ? AND ? AND ${sc.sql}${f.personId ? ' AND holder_id = ?' : ''}
-        ORDER BY on_date DESC, created_at DESC LIMIT ?`, bid, f.from, f.to, ...sc.params, ...(f.personId ? [f.personId] : []), MAX_LINES)) {
+        ORDER BY on_date DESC, created_at DESC LIMIT ?`, bid, f.from, f.to, ...sc.params, ...(f.personId ? [f.personId] : []), limits.lines + 1)).slice(0, limits.lines)) {
       const p = proj(e.project_id);
       lines.push({ kind: 'spend', id: e.id, businessId: bid, businessName: nameOfBiz(bid), areaName: areaName(e.area_id ?? p?.area_id ?? null), projectName: p?.name ?? null,
         personName: nm(e.holder_id), date: e.on_date, title: e.description, amountPaise: e.amount_paise, status: e.status, open: { businessId: bid, page: 'cash', id: e.id, holderId: e.holder_id } });
     }
     const tc = scopeSql(s, null, 'project_id');
-    for (const t of many<{ id: string; title: string; assigned_to: string | null; due_date: string | null; project_id: string | null }>(
+    for (const t of seen(many<{ id: string; title: string; assigned_to: string | null; due_date: string | null; project_id: string | null }>(
       `SELECT id, title, assigned_to, due_date, project_id FROM tasks WHERE owner_id = ? AND status = 'open' AND ${tc.sql}${f.personId ? ' AND assigned_to = ?' : ''}${notRequest()}
-        ORDER BY due_date IS NULL, due_date, created_at LIMIT ?`, bid, ...tc.params, ...(f.personId ? [f.personId] : []), MAX_LINES)) {
+        ORDER BY due_date IS NULL, due_date, created_at LIMIT ?`, bid, ...tc.params, ...(f.personId ? [f.personId] : []), limits.lines + 1)).slice(0, limits.lines)) {
       const p = proj(t.project_id);
       lines.push({ kind: 'task', id: t.id, businessId: bid, businessName: nameOfBiz(bid), areaName: areaName(p?.area_id ?? null), projectName: p?.name ?? null,
         personName: nm(t.assigned_to), date: t.due_date, title: t.title, amountPaise: null, status: 'open', open: { businessId: bid, page: 'tasks', id: t.id } });
     }
   }
 
-  // ---- totals: per currency, from the businesses that could be read; the ones left out are named
+  // ---- totals: per currency, each part from the businesses whose part could be read; what is left out is named per part
   const totals: Total[] = [];
+  const part = <T,>(bs: BusinessBlock[], pick: (b: BusinessBlock) => Avail<unknown>, zero: () => T, add: (acc: T, b: BusinessBlock) => void, notSplit = false): Part<T> => {
+    if (notSplit) return { value: null, included: [], leftOut: [], partial: false, notSplit: true };
+    const ok = bs.filter((b) => pick(b).status === 'ok'), bad = bs.filter((b) => pick(b).status === 'unavailable');
+    let value: T | null = null;
+    if (ok.length) { value = zero(); for (const b of ok) add(value, b); }
+    return { value, included: ok.map((b) => b.name), leftOut: bad.map((b) => b.name), partial: ok.length > 0 && bad.length > 0, notSplit: false };
+  };
   for (const cur of [...new Set(businesses.map((b) => b.currency))]) {
     const bs = businesses.filter((b) => b.currency === cur);
-    const t: Total = { currency: cur, businesses: 0, leftOut: [], books: null, booksNote: null, handedOutPaise: 0, spentConfirmedPaise: 0, spentWaitingPaise: 0, openTasks: 0, overdueTasks: 0, doneTasks: 0 };
-    const bookOk = bs.filter((b) => b.books.status === 'ok');
-    if (narrowed) t.booksNote = 'The books are kept per business, not per branch, project or person.';
-    else if (bookOk.length) {
-      t.books = { revenuePaise: 0, expensesPaise: 0, netProfitPaise: 0 };
-      for (const b of bookOk) { const x = b.books as Books; t.books.revenuePaise += x.revenuePaise; t.books.expensesPaise += x.expensesPaise; t.books.netProfitPaise += x.netProfitPaise; }
-    }
-    for (const b of bs) {
-      if (b.status !== 'ok') { t.leftOut.push(b.name); }
-      if (b.cash.status === 'ok') { t.handedOutPaise += b.cash.handedOutPaise; t.spentConfirmedPaise += b.cash.spentConfirmedPaise; t.spentWaitingPaise += b.cash.spentWaitingPaise; }
-      if (b.tasks.status === 'ok') { t.openTasks += b.tasks.open; t.overdueTasks += b.tasks.overdue; t.doneTasks += b.tasks.doneInRange; }
-      if (b.status === 'ok') t.businesses++;
-    }
-    if (!narrowed && t.leftOut.length && t.books) t.booksNote = `Leaves out ${t.leftOut.join(', ')}, which could not be read.`;
-    totals.push(t);
+    const books = part<Books>(bs, (b) => b.books, () => ({ revenuePaise: 0, expensesPaise: 0, netProfitPaise: 0 }), (a, b) => {
+      const x = b.books as Books; a.revenuePaise += x.revenuePaise; a.expensesPaise += x.expensesPaise; a.netProfitPaise += x.netProfitPaise;
+    }, narrowed);
+    const cash = part(bs, (b) => b.cash, () => ({ handedOutPaise: 0, spentConfirmedPaise: 0, spentWaitingPaise: 0 }), (a, b) => {
+      const x = b.cash as Cash; a.handedOutPaise += x.handedOutPaise; a.spentConfirmedPaise += x.spentConfirmedPaise; a.spentWaitingPaise += x.spentWaitingPaise;
+    });
+    const tasks = part(bs, (b) => b.tasks, () => ({ open: 0, overdue: 0, done: 0 }), (a, b) => {
+      const x = b.tasks as Tasks; a.open += x.open; a.overdue += x.overdue; a.done += x.doneInRange;
+    });
+    const leftOut = bs.flatMap((b) => {
+      const parts = ([['books', b.books], ['cash', b.cash], ['jobs', b.tasks], ['approvals', b.approvalsWaiting]] as const).filter(([, a]) => a.status === 'unavailable').map(([w]) => w);
+      return parts.length ? [`${b.name}: ${parts.join(', ')}`] : [];
+    });
+    const booksNote = narrowed ? 'The books are kept per business, not per branch, project or person.'
+      : books.value === null && books.leftOut.length ? `Not available: the books of ${books.leftOut.join(', ')} could not be read.`
+      : books.partial ? `Partial: leaves out the books of ${books.leftOut.join(', ')}, which could not be read.` : null;
+    totals.push({ currency: cur, books, cash, tasks, leftOut, booksNote });
   }
 
   const supported = portfolio.length - mine.length;
@@ -326,7 +351,8 @@ export function combinedView(real: UserRow | null | undefined, query: Record<str
     'Cash handed to a wallet is a movement of your own money, shown once. Only spends from the wallet count as spending.',
     'Cash spends are not posted to the books yet, so they are shown next to the books and not added to them.',
     ...(supported ? [`${supported === 1 ? 'One business you support is' : `${supported} businesses you support are`} not included. Mark a business "Mine" in Settings › Branches and access to include it.`] : []),
-    ...(lines.length >= MAX_LINES ? [`Showing the latest ${MAX_LINES} lines of each kind for each business.`] : []),
+    ...(businesses.some((b) => !readable.includes(b.id)) ? [`The branches, projects and lines leave out ${businesses.filter((b) => !readable.includes(b.id)).map((b) => b.name).join(', ')}, whose cash or jobs could not be read just now.`] : []),
+    ...(truncated ? [`Lines are cut at the latest ${limits.lines} of each kind for each business. Narrow the dates or filters to see the rest.`] : []),
   ];
 
   audit({ id: u.id, role: u.role }, 'combined.view', 'portfolio', u.id, { business: f.businessId, area: f.areaId, project: f.projectId, person: f.personId, from: f.from, to: f.to }, u.id);
@@ -339,7 +365,7 @@ export function combinedView(real: UserRow | null | undefined, query: Record<str
       projects: projects.filter((p) => p.status !== 'archived').map((p) => ({ id: p.id, name: p.name, businessId: p.owner_id, areaId: p.area_id })),
       people: [...people.values()],
     },
-    businesses, byArea, byProject, lines, totals, notes,
+    businesses, byArea, byProject, lines, linesCut: truncated, totals, notes,
   };
 }
 

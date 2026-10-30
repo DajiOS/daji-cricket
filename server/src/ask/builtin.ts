@@ -706,7 +706,7 @@ function combinedAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answer: 
   }));
   const t = c.totals![0];
   const n = c.businesses!.length;
-  const head = `${count(n, 'business', 'businesses')} you marked as yours, ${c.from} to ${c.to}` + (t?.books ? `: revenue ${R(t.books.revenuePaise)}, expenses ${R(t.books.expensesPaise)} across them.` : '.');
-  const notes = [...(t?.leftOut.length ? [`Not available just now, so left out of the total: ${t.leftOut.join(', ')}.`] : []), ...c.notes!.slice(0, 3)];
+  const head = `${count(n, 'business', 'businesses')} you marked as yours, ${c.from} to ${c.to}` + (t && typeof t.books === 'object' ? `: revenue ${R(t.books.revenuePaise)}, expenses ${R(t.books.expensesPaise)}${t.booksPartial ? ' (partial)' : ''} across them.` : '.');
+  const notes = [...(t?.leftOut.length ? [`Not available just now, so left out of the total: ${t.leftOut.join('; ')}.`] : []), ...c.notes!.slice(0, 3)];
   return base('combined', head, { details, notes, period: { from: c.from!, to: c.to!, label: `${c.from} to ${c.to}` } });
 }

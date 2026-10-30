@@ -6,7 +6,7 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { startHarness, type Harness } from './helpers.ts';
 import { many } from '../src/db.ts';
-import { readers } from '../src/combined.ts';
+import { readers, limits } from '../src/combined.ts';
 import { profitAndLoss } from '../src/accounting/statements.ts';
 
 let h: Harness;
@@ -19,10 +19,10 @@ let w: W;
 const inBiz = (biz: string) => <T = any>(method: string, path: string, token: string, body?: unknown) => h.call<T>(method, path, { token, body, headers: { 'x-daji-business': biz } });
 const view = (token: string, q = '') => h.call<any>('GET', `/api/me/combined${q ? `?${q}` : ''}`, { token });
 
-const realBooks = readers.books;
+const realBooks = readers.books, realCash = readers.cash, realTasks = readers.tasks;
 beforeEach(async () => {
   h.reset();
-  readers.books = realBooks;
+  readers.books = realBooks; readers.cash = realCash; readers.tasks = realTasks; limits.lines = 200;
   const sunny = await h.login('owner1');
   const me = (await h.call<any>('GET', '/api/me/portfolio', { token: sunny })).body.items;
   const b = await h.post('/api/me/portfolio', { businessName: "Sunny's Portfolio", ownerName: 'Sunny Patel', phone: '9876500011', email: 'portfolio@daji.test' }, sunny);
@@ -92,11 +92,12 @@ test('Sunny sees his "Mine" businesses side by side; a business he only supports
   }
   const t = v.totals[0];
   assert.equal(t.currency, 'INR');
-  assert.equal(t.businesses, 2);
   assert.deepEqual(t.leftOut, []);
-  assert.equal(t.books.revenuePaise, v.businesses.reduce((n: number, b: any) => n + b.books.revenuePaise, 0));
-  assert.deepEqual([t.handedOutPaise, t.spentConfirmedPaise, t.spentWaitingPaise], [10_000_00, 1_500_00, 400_00]);
-  assert.deepEqual([t.openTasks, t.overdueTasks, t.doneTasks], [2, 1, 1]);
+  for (const k of ['books', 'cash', 'tasks']) { assert.equal(t[k].included.length, 2); assert.equal(t[k].partial, false); }
+  assert.equal(t.books.value.revenuePaise, v.businesses.reduce((n: number, b: any) => n + b.books.revenuePaise, 0));
+  assert.deepEqual([t.cash.value.handedOutPaise, t.cash.value.spentConfirmedPaise, t.cash.value.spentWaitingPaise], [10_000_00, 1_500_00, 400_00]);
+  assert.deepEqual([t.tasks.value.open, t.tasks.value.overdue, t.tasks.value.done], [2, 1, 1]);
+  assert.equal(v.linesCut, false);
 
   // by branch: House holds the project's spend (through its project), Office the waiting one, Personal its job (Sunny sees it)
   const row = (name: string) => v.byArea.find((a: any) => a.businessId === w.spId && a.areaName === name);
@@ -129,7 +130,8 @@ test('filters by business, branch, project, person and dates; the books say "not
   assert.equal(v.filters.businessId, w.spId, 'a branch fixes its business');
   assert.equal(v.businesses[0].books.status, 'not_split');
   assert.equal(v.businesses[0].approvalsWaiting.status, 'not_split');
-  assert.equal(v.totals[0].books, null);
+  assert.equal(v.totals[0].books.value, null);
+  assert.equal(v.totals[0].books.notSplit, true);
   assert.match(v.totals[0].booksNote, /per business/);
   assert.deepEqual([v.businesses[0].cash.spentConfirmedPaise, v.businesses[0].cash.spentWaitingPaise, v.businesses[0].cash.handedOutPaise], [1_500_00, 0, 0]);
   assert.equal(v.businesses[0].cash.wallets, null, 'a wallet is not kept per branch');
@@ -143,12 +145,12 @@ test('filters by business, branch, project, person and dates; the books say "not
   v = (await view(w.sunny, `person=${w.supId}`)).body;
   assert.deepEqual(v.businesses.map((b: any) => b.id).sort(), [w.groundId, w.spId].sort(), 'he works in both');
   assert.ok(v.lines.filter((l: any) => l.kind === 'task').every((l: any) => l.personName === 'Ramesh Supervisor'));
-  assert.equal(v.totals[0].openTasks, 1);
+  assert.equal(v.totals[0].tasks.value.open, 1);
 
   // dates: a period before anything happened has no spends, and still shows the jobs open today
   v = (await view(w.sunny, 'from=2019-01-01&to=2019-01-31')).body;
-  assert.equal(v.totals[0].spentConfirmedPaise, 0);
-  assert.equal(v.totals[0].openTasks, 2);
+  assert.equal(v.totals[0].cash.value.spentConfirmedPaise, 0);
+  assert.equal(v.totals[0].tasks.value.open, 2);
 
   // bad input
   assert.equal((await view(w.sunny, 'from=2026-13-01')).status, 400);
@@ -192,20 +194,56 @@ test('a business that cannot be read says "not available", never ₹0, and the t
   assert.equal(sp.status, 'unavailable');
   assert.equal(sp.books.status, 'unavailable');
   assert.equal(sp.books.revenuePaise, undefined, 'no figure, not zero');
-  assert.deepEqual(v.totals[0].leftOut, ["Sunny's Portfolio"]);
-  assert.match(v.totals[0].booksNote, /Leaves out Sunny's Portfolio/);
+  // the total says exactly what is left out: only the books of Sunny's Portfolio; its cash and jobs are still counted
+  const t = v.totals[0];
+  assert.deepEqual(t.leftOut, ["Sunny's Portfolio: books"]);
+  assert.match(t.booksNote, /Partial: leaves out the books of Sunny's Portfolio/);
   const g = v.businesses.find((b: any) => b.id === w.groundId);
-  assert.equal(v.totals[0].books.revenuePaise, g.books.revenuePaise);
-  assert.equal(v.totals[0].businesses, 1);
-  // the cash and jobs of the business could still be read, and are still shown
+  assert.equal(t.books.value.revenuePaise, g.books.revenuePaise);
+  assert.deepEqual([t.books.included, t.books.leftOut, t.books.partial], [['Daji Cricket Ground'], ["Sunny's Portfolio"], true]);
   assert.equal(sp.cash.status, 'ok');
+  assert.deepEqual([t.cash.included.length, t.cash.partial, t.cash.value.spentConfirmedPaise], [2, false, 1_500_00]);
+});
+
+test('when no business can be read for a part, the total is "not available", never ₹0 or 0 jobs', async () => {
+  await someActivity();
+  readers.cash = () => { throw new Error('cash unreadable'); };
+  readers.tasks = () => { throw new Error('jobs unreadable'); };
+  readers.books = () => { throw new Error('books unreadable'); };
+  const v = (await view(w.sunny)).body;
+  const t = v.totals[0];
+  for (const k of ['books', 'cash', 'tasks']) {
+    assert.equal(t[k].value, null, `${k} is not available, not zero`);
+    assert.equal(t[k].included.length, 0);
+    assert.equal(t[k].leftOut.length, 2);
+  }
+  assert.match(t.booksNote, /^Not available/);
+  assert.deepEqual(t.leftOut, ['Daji Cricket Ground: books, cash, jobs', "Sunny's Portfolio: books, cash, jobs"]);
+  // with nothing readable there are no branch rows or lines, and the notes say why rather than showing an empty list as if nothing happened
+  assert.deepEqual([v.byArea, v.lines], [[], []]);
+  assert.ok(v.notes.some((n: string) => /leave out Daji Cricket Ground, Sunny's Portfolio/.test(n)), JSON.stringify(v.notes));
+  // a part read for one business only is marked partial
+  readers.cash = (s) => { if (s.ownerId === w.spId) throw new Error('cash unreadable'); return realCash(s); };
+  const p = (await view(w.sunny)).body.totals[0];
+  assert.deepEqual([p.cash.partial, p.cash.included, p.cash.leftOut], [true, ['Daji Cricket Ground'], ["Sunny's Portfolio"]]);
+});
+
+test('a list cut at its limit says so', async () => {
+  await someActivity();
+  limits.lines = 1;
+  const v = (await view(w.sunny, `business=${w.spId}`)).body;
+  assert.equal(v.linesCut, true);
+  assert.equal(v.lines.filter((l: any) => l.kind === 'spend').length, 1);
+  assert.ok(v.notes.some((n: string) => /cut at the latest 1/.test(n)));
+  limits.lines = 200;
+  assert.equal((await view(w.sunny, `business=${w.spId}`)).body.linesCut, false);
 });
 
 test('an owner with no other businesses sees just their own; empty is empty, not missing', async () => {
   const v = (await view(w.other)).body;
   assert.equal(v.businesses.length, 1);
   assert.equal(v.businesses[0].status, 'ok');
-  assert.deepEqual([v.totals[0].spentConfirmedPaise, v.totals[0].openTasks], [0, 0]);
+  assert.deepEqual([v.totals[0].cash.value.spentConfirmedPaise, v.totals[0].tasks.value.open], [0, 0]);
   assert.deepEqual(v.lines, []);
 });
 
@@ -224,7 +262,7 @@ test('Ask AI answers about all my businesses for the owner, wherever he is worki
   readers.books = (ownerId, f) => { if (ownerId === w.spId) throw new Error('books unreadable'); return realBooks(ownerId, f); };
   const na = await ask(w.sunny, 'Show the combined view across my businesses');
   assert.ok(na.body.details.some((d: any) => d.label === "Sunny's Portfolio" && /not available/.test(d.text)), JSON.stringify(na.body.details));
-  assert.ok(na.body.notes.some((n: string) => /left out of the total: Sunny's Portfolio/.test(n)));
+  assert.ok(na.body.notes.some((n: string) => /left out of the total: Sunny's Portfolio: books/.test(n)));
   readers.books = realBooks;
   // the supervisor, in either business, is told it is the owner's view and hears nothing about the other business
   for (const biz of [undefined, w.spId]) {
