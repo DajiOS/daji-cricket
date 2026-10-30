@@ -541,13 +541,17 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const todayIst = () => ist(Date.now()).toISOString().slice(0, 10);
 const addDays = (date, n) => new Date(Date.parse(date + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
-const parts = (date) => { const d = new Date(date + 'T00:00:00Z'); return { dow: DOW[d.getUTCDay()], day: d.getUTCDate(), mon: MON[d.getUTCMonth()] }; };
+// customer dates use the screen language's short day and month names; the desk's own MON / DOW stay English
+const monNames = () => T('date.months').split(' '), dowNames = () => T('date.days').split(' ');
+const parts = (date) => { const d = new Date(date + 'T00:00:00Z'); return { dow: dowNames()[d.getUTCDay()], day: d.getUTCDate(), mon: monNames()[d.getUTCMonth()] }; };
 /** The first day a customer can book: today, or the opening day when bookings have not opened yet. */
 const firstDay = () => { const t = todayIst(), o = state && state.config && state.config.bookingsOpenFrom; return o && o > t ? o : t; };
 /** The last day a customer can book: a year ahead, or the day before bookings close. */
 const lastDay = () => { const mx = addDays(todayIst(), (state.config && state.config.maxDaysAhead) || 365), c = state.config && state.config.bookingsCloseFrom; return c && addDays(c, -1) < mx ? addDays(c, -1) : mx; };
 const niceDate = (date) => { const p = parts(date); return `${p.dow} ${p.day} ${p.mon}` + (date.slice(0, 4) !== todayIst().slice(0, 4) ? ` ${date.slice(0, 4)}` : ''); };
-const niceDateTime = (ms) => { const d = ist(ms); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}, ${hhmm(ms)}`; };
+/** The same date in English, for text the ground's team reads (an enquiry), whatever the customer's screen language. */
+const niceDateEn = (date) => { const d = new Date(date + 'T00:00:00Z'); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}` + (date.slice(0, 4) !== todayIst().slice(0, 4) ? ` ${date.slice(0, 4)}` : ''); };
+const niceDateTime = (ms) => { const d = ist(ms); return `${dowNames()[d.getUTCDay()]} ${d.getUTCDate()} ${monNames()[d.getUTCMonth()]}, ${hhmm(ms)}`; };
 
 let toastTimer = 0;
 function toast(msg, bad = false) {
@@ -584,6 +588,17 @@ const serverTrouble = (status) => status === 429 ? 'Too many tries in a short ti
   : status >= 500 ? 'Something went wrong on our side and nothing was saved. Please try again in a minute.' : `Something went wrong (${status}). Please try again.`;
 
 const OWNER_SCOPED = ['/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask'];
+// Server messages by error code. English pages keep the server's sentence, which can say more (a time, a number of hours); in Gujarati or
+// Hindi a known code gets its line from the shared list, and anything else is shown as the server wrote it.
+const ERR_WORDS = {
+  SLOT_TAKEN: 'err.SLOT_TAKEN', SLOT_IN_PAST: 'err.SLOT_IN_PAST', CLOSED_DAY: 'err.CLOSED_DAY', DATE_CLOSED: 'err.DATE_CLOSED', BOOKINGS_CLOSED: 'err.BOOKINGS_CLOSED',
+  NOT_OPEN_YET: 'err.NOT_OPEN_YET', GROUND_INACTIVE: 'err.GROUND_INACTIVE', TOO_MANY_HOLDS: 'err.TOO_MANY_HOLDS', OPTION_EXPIRED: 'err.OPTION_EXPIRED',
+  OPTION_PRICE_CHANGED: 'err.OPTION_PRICE_CHANGED', PAYMENTS_UNAVAILABLE: 'err.PAYMENTS_UNAVAILABLE', PAYMENT_IN_FLIGHT: 'err.PAYMENT_IN_FLIGHT',
+  UTR_ALREADY_USED: 'err.UTR_ALREADY_USED', NOTHING_DUE: 'err.NOTHING_DUE', FEATURE_DISABLED: 'err.FEATURE_DISABLED', RESCHEDULE_NOT_CONFIGURED: 'err.RESCHEDULE_NOT_CONFIGURED',
+  ALREADY_STARTED: 'err.ALREADY_STARTED', SERIES_NOT_MOVABLE: 'err.SERIES_NOT_MOVABLE', NOT_SELF_SERVICE: 'err.NOT_SELF_SERVICE', RESCHEDULE_TOO_LATE: 'err.RESCHEDULE_TOO_LATE',
+  RESCHEDULE_LIMIT: 'err.RESCHEDULE_LIMIT', NETWORK: 'err.NETWORK',
+};
+const serverWords = (code, message) => (window.DajiI18n && window.DajiI18n.lang !== 'en' && ERR_WORDS[code] ? T(ERR_WORDS[code]) : message);
 async function api(path, opts = {}) {
   if (state.user && state.user.role === 'super_admin' && state.viewOwner && OWNER_SCOPED.some((p) => path.startsWith(p)) && !/[?&]ownerId=/.test(path)) path += (path.includes('?') ? '&' : '?') + 'ownerId=' + encodeURIComponent(state.viewOwner);
   const headers = { ...(opts.headers || {}) };
@@ -592,14 +607,14 @@ async function api(path, opts = {}) {
   if (opts.body !== undefined) { headers['content-type'] = 'application/json'; body = JSON.stringify(opts.body); }
   let res;
   try { res = await fetch(API + path, { method: opts.method || 'GET', headers, body }); }
-  catch { throw new ApiError(0, 'NETWORK', 'We could not reach the server. Check your internet connection and try again.'); }
+  catch { throw new ApiError(0, 'NETWORK', serverWords('NETWORK', 'We could not reach the server. Check your internet connection and try again.')); }
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
   if (!res.ok) {
     const e = (data && data.error) || {};
     if (res.status === 401 && state.token && !opts.keepToken) signOut(true);
-    throw new ApiError(res.status, e.code || 'ERROR', e.message || serverTrouble(res.status), e.details);
+    throw new ApiError(res.status, e.code || 'ERROR', serverWords(e.code, e.message || serverTrouble(res.status)), e.details);
   }
   return data;
 }
@@ -613,7 +628,7 @@ async function apiFile(path, file, opts = {}) {
   if (state.token) headers.authorization = 'Bearer ' + state.token;
   let res;
   try { res = await fetch(API + path, { method: opts.method || 'POST', headers, body: file }); }
-  catch { throw new ApiError(0, 'NETWORK', 'We could not reach the server. Check your internet connection and try again.'); }
+  catch { throw new ApiError(0, 'NETWORK', serverWords('NETWORK', 'We could not reach the server. Check your internet connection and try again.')); }
   const text = await res.text(); let data = null; try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
   if (!res.ok) { const e = (data && data.error) || {}; throw new ApiError(res.status, e.code || 'ERROR', e.message || serverTrouble(res.status), e.details); }
   return data;
@@ -1514,7 +1529,7 @@ async function refreshQuote(s, totalEl, box) {
     q.discountPaise ? h('div', { class: 'row' }, h('span', {}, `Promo ${q.promoCode}`), h('b', {}, '− ' + inr(q.discountPaise))) : null,
     h('div', { class: 'row' }, h('span', {}, label), h('b', { id: 'p-sum-paynow' }, inr(q.payNowPaise))),
     q.creditUsedPaise ? h('div', { class: 'row' }, h('span', {}, 'Account credit used'), h('b', {}, '− ' + inr(q.creditUsedPaise))) : null,
-    h('div', { class: 'row total' }, h('span', {}, 'Due now'), h('b', { id: 'p-sum-due' }, inr(q.dueNowPaise)))].filter(Boolean));
+    h('div', { class: 'row total' }, h('span', {}, T('pay.dueNow')), h('b', { id: 'p-sum-due' }, inr(q.dueNowPaise)))].filter(Boolean));
 }
 
 const REPEATS = { daily: { word: 'every day', def: 5, max: 60 }, weekly: { word: 'every week', def: 4, max: 52 }, monthly: { word: 'every month', def: 3, max: 12 }, yearly: { word: 'every year', def: 2, max: 3 } };
@@ -1589,10 +1604,10 @@ function stopHoldTimer() { clearInterval(holdTimer); holdTimer = 0; }
 
 function bookingRows(b, extra = []) {
   return h('div', { class: 'kv' },
-    h('div', { class: 'row' }, h('span', {}, 'Reference'), h('b', { class: 'mono' }, b.ref)),
-    h('div', { class: 'row' }, h('span', {}, 'Ground'), h('b', {}, b.groundName)),
-    h('div', { class: 'row' }, h('span', {}, 'When'), h('b', {}, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}`)),
-    h('div', { class: 'row' }, h('span', {}, 'Total'), h('b', {}, inr(b.totalPaise))),
+    h('div', { class: 'row' }, h('span', {}, T('pay.ref')), h('b', { class: 'mono' }, b.ref)),
+    h('div', { class: 'row' }, h('span', {}, T('me.ground')), h('b', {}, b.groundName)),
+    h('div', { class: 'row' }, h('span', {}, T('pay.when')), h('b', {}, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}`)),
+    h('div', { class: 'row' }, h('span', {}, T('pay.total')), h('b', {}, inr(b.totalPaise))),
     ...extra);
 }
 
@@ -1606,36 +1621,37 @@ function openPay(res) {
   const tick = () => {
     const left = Math.max(0, b.holdExpiresAt - Date.now());
     timer.textContent = `${pad(Math.floor(left / 60000))}:${pad(Math.floor(left / 1000) % 60)}`;
-    if (left <= 0) { stopHoldTimer(); clear(actions); status.className = 'hint err'; status.textContent = 'This hold has run out and the slots were released. Please choose them again.'; loadSlots(); }
+    if (left <= 0) { stopHoldTimer(); clear(actions); status.className = 'hint err'; status.textContent = T('pay.expired'); loadSlots(); }
   };
   const extra = [];
-  if (res.creditAppliedPaise) extra.push(h('div', { class: 'row' }, h('span', {}, 'Paid from account credit'), h('b', {}, inr(res.creditAppliedPaise))));
-  extra.push(h('div', { class: 'row' }, h('span', {}, 'Due now'), h('b', { style: 'color:var(--gold-bright);font-size:20px' }, inr(p.amountPaise))));
-  const content = [stepsEl(3), h('div', { class: 'eyebrow' }, 'Slots held'), h('h3', {}, 'Complete your payment'),
-    h('p', { class: 'hint' }, 'Your slots are held for ', timer, '. They are released if payment does not arrive in time.'),
+  if (res.creditAppliedPaise) extra.push(h('div', { class: 'row' }, h('span', {}, T('pay.creditUsed')), h('b', {}, inr(res.creditAppliedPaise))));
+  extra.push(h('div', { class: 'row' }, h('span', {}, T('pay.dueNow')), h('b', { style: 'color:var(--gold-bright);font-size:20px' }, inr(p.amountPaise))));
+  const [heldA, heldB] = T('pay.heldFor').split('{time}');
+  const content = [stepsEl(3), h('div', { class: 'eyebrow' }, T('pay.heldEyebrow')), h('h3', {}, T('pay.title')),
+    h('p', { class: 'hint' }, heldA, timer, heldB ?? ''),
     bookingRows(b, extra), actions, status];
 
   if (p.mode === 'razorpay' && p.razorpay.demo) {
     actions.append(
-      h('button', { class: 'btn primary block', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'success') }, `Pay ${inr(p.amountPaise)} with the demo card`),
-      h('button', { class: 'btn ghost', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'failure') }, 'Pretend the card is declined'));
-    status.textContent = 'Demo payment: no real money moves. It is signed the same way Razorpay signs a real one.';
+      h('button', { class: 'btn primary block', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'success') }, T('pay.demoCard', { amount: inr(p.amountPaise) })),
+      h('button', { class: 'btn ghost', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'failure') }, T('pay.demoDecline')));
+    status.textContent = T('pay.demoNote');
   } else if (p.mode === 'razorpay') {
-    actions.append(h('button', { class: 'btn primary block', type: 'button', onclick: (e) => payRazorpay(p, b, e.currentTarget, status) }, `Pay ${inr(p.amountPaise)}`));
+    actions.append(h('button', { class: 'btn primary block', type: 'button', onclick: (e) => payRazorpay(p, b, e.currentTarget, status) }, T('pay.payAmount', { amount: inr(p.amountPaise) })));
   } else if (p.mode === 'upi') {
-    const utr = h('input', { type: 'text', inputmode: 'numeric', maxlength: '30', placeholder: '12-digit UPI reference (UTR)', autocomplete: 'off' });
+    const utr = h('input', { type: 'text', inputmode: 'numeric', maxlength: '30', placeholder: T('pay.utrPlaceholder'), autocomplete: 'off' });
     actions.append(
       h('div', { class: 'kv', style: 'margin:0' },
-        h('div', { class: 'row' }, h('span', {}, 'Pay to UPI ID'), h('b', { class: 'mono' }, p.upi.upiId)),
-        h('div', { class: 'row' }, h('span', {}, 'Name'), h('b', {}, p.upi.payee)),
-        h('div', { class: 'row' }, h('span', {}, 'Amount'), h('b', {}, inr(p.amountPaise)))),
-      h('a', { class: 'btn outline block', href: p.upi.uri }, 'Open my UPI app'),
-      field('After paying, enter the UPI reference', utr),
+        h('div', { class: 'row' }, h('span', {}, T('pay.upiId')), h('b', { class: 'mono' }, p.upi.upiId)),
+        h('div', { class: 'row' }, h('span', {}, T('pay.name')), h('b', {}, p.upi.payee)),
+        h('div', { class: 'row' }, h('span', {}, T('pay.amount')), h('b', {}, inr(p.amountPaise)))),
+      h('a', { class: 'btn outline block', href: p.upi.uri }, T('pay.openUpi')),
+      field(T('pay.utr'), utr),
       h('button', { class: 'btn primary block', type: 'button', onclick: async (e) => {
-        const btn = e.currentTarget; btn.disabled = true; status.className = 'hint'; status.textContent = 'Sending…';
-        try { const r = await api(`/api/bookings/${encodeURIComponent(b.id)}/upi-reference`, { method: 'POST', body: { utr: utr.value.trim() } }); stopHoldTimer(); clear(actions); status.className = 'hint'; status.textContent = `Thank you. Staff will check this against the bank and confirm. Your slots stay held until ${hhmm(p.upi.deadline)}. We will message you.`; toast('UPI reference sent.'); void r; }
+        const btn = e.currentTarget; btn.disabled = true; status.className = 'hint'; status.textContent = T('common.sending');
+        try { const r = await api(`/api/bookings/${encodeURIComponent(b.id)}/upi-reference`, { method: 'POST', body: { utr: utr.value.trim() } }); stopHoldTimer(); clear(actions); status.className = 'hint'; status.textContent = T('pay.utrSent', { time: hhmm(p.upi.deadline) }); toast(T('pay.utrToast')); void r; }
         catch (err) { status.className = 'hint err'; status.textContent = err.message; btn.disabled = false; }
-      } }, 'I have paid'));
+      } }, T('pay.paid')));
   }
   openModal(content, { onClose: close });
   tick(); stopHoldTimer(); holdTimer = setInterval(tick, 1000);
@@ -1717,7 +1733,7 @@ function openGuppi() {
 }
 
 async function payDemo(p, b, btn, status, outcome, done) {
-  btn.disabled = true; status.className = 'hint'; status.textContent = outcome === 'success' ? 'Paying…' : 'Trying the card…';
+  btn.disabled = true; status.className = 'hint'; status.textContent = outcome === 'success' ? T('pay.paying') : T('pay.trying');
   try {
     const r = await api('/api/gateway/demo/pay', { method: 'POST', body: { orderId: p.razorpay.orderId, outcome } });
     const v = await api('/api/payments/razorpay/verify', { method: 'POST', body: { orderId: r.orderId, paymentId: r.paymentId, signature: r.signature } });
@@ -1728,7 +1744,7 @@ async function payDemo(p, b, btn, status, outcome, done) {
 
 /** Real Razorpay Checkout. Not exercised here: it needs live or test keys and the public webhook. */
 function payRazorpay(p, b, btn, status, done) {
-  btn.disabled = true; status.className = 'hint'; status.textContent = 'Opening the payment window…';
+  btn.disabled = true; status.className = 'hint'; status.textContent = T('pay.opening');
   const open = () => {
     const u = state.user || {};
     const rz = new window.Razorpay({
@@ -1746,7 +1762,7 @@ function payRazorpay(p, b, btn, status, done) {
   };
   if (window.Razorpay) return open();
   const s = document.createElement('script'); s.src = 'https://checkout.razorpay.com/v1/checkout.js'; s.onload = open;
-  s.onerror = () => { status.className = 'hint err'; status.textContent = 'Could not load the payment window. Check your connection and try again.'; btn.disabled = false; };
+  s.onerror = () => { status.className = 'hint err'; status.textContent = T('pay.loadFail'); btn.disabled = false; };
   document.head.append(s);
 }
 
@@ -1755,19 +1771,19 @@ function showConfirmed(b) {
   const g = state.grounds.find((x) => x.id === b.groundId) || state.ground;
   const c = state.config.contact;
   if (b.status !== 'confirmed') {
-    openModal([h('div', { class: 'eyebrow' }, 'Payment received'), h('h3', {}, 'Almost there'), h('p', { class: 'hint' }, 'We have your payment and are confirming the booking.'), bookingRows(b)]);
+    openModal([h('div', { class: 'eyebrow' }, T('pay.received')), h('h3', {}, T('pay.almost')), h('p', { class: 'hint' }, T('pay.confirming')), bookingRows(b)]);
     return;
   }
   openModal([
-    stepsEl(4), h('div', { class: 'eyebrow' }, 'Confirmed'), h('h3', {}, "You're booked"),
+    stepsEl(4), h('div', { class: 'eyebrow' }, T('pay.confirmed')), h('h3', {}, T('pay.booked')),
     bookingRows(b, [
-      h('div', { class: 'row' }, h('span', {}, 'Paid'), h('b', {}, inr(b.paidPaise))),
-      b.balancePaise > 0 ? h('div', { class: 'row' }, h('span', {}, 'Balance at the ground'), h('b', {}, inr(b.balancePaise))) : null]),
-    h('p', { class: 'hint' }, `Free cancellation more than ${state.config.freeCancelHours} hours before the start. Questions? Call ${c.name} on ${formatPhone(c.phone)}.`),
+      h('div', { class: 'row' }, h('span', {}, T('pay.paidRow')), h('b', {}, inr(b.paidPaise))),
+      b.balancePaise > 0 ? h('div', { class: 'row' }, h('span', {}, T('pay.balance')), h('b', {}, inr(b.balancePaise))) : null]),
+    h('p', { class: 'hint' }, `${T('book.freeCancel', { hours: state.config.freeCancelHours })} ${T('pay.call', { name: c.name, phone: formatPhone(c.phone) })}`),
     h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:18px' },
-      g && g.directionsUrl ? h('a', { class: 'btn primary', href: g.directionsUrl, target: '_blank', rel: 'noopener' }, 'Get directions') : null,
-      h('button', { class: 'btn outline', type: 'button', onclick: () => { closeModal(); location.hash = '#bookings'; } }, 'My bookings'),
-      h('button', { class: 'btn ghost', type: 'button', onclick: () => closeModal() }, 'Close'))]);
+      g && g.directionsUrl ? h('a', { class: 'btn primary', href: g.directionsUrl, target: '_blank', rel: 'noopener' }, T('pay.directions')) : null,
+      h('button', { class: 'btn outline', type: 'button', onclick: () => { closeModal(); location.hash = '#bookings'; } }, T('me.title')),
+      h('button', { class: 'btn ghost', type: 'button', onclick: () => closeModal() }, T('common.close')))]);
   loadSlots();
 }
 
@@ -1829,7 +1845,7 @@ const STATUS = {
 // their prices (POST /api/availability/options), what a move would do (POST .../reschedule-preview), the move itself (POST .../reschedule), the amount still owed online after a
 // dearer move (booking.moveDifferenceDuePaise, POST .../pay-difference) and the security deposit (GET .../security-deposit). There is no cut-off, price or refund calculation here.
 
-const DEPOSIT_KINDS = { collect: 'Collected', deduct: 'Kept by the ground', refund: 'Returned to you', reverse: 'Deduction reversed' };
+const DEPOSIT_KINDS = () => ({ collect: T('deposit.collect'), deduct: T('deposit.deduct'), refund: T('deposit.refund'), reverse: T('deposit.reverse') });
 
 async function payDifference(b, btn) {
   if (btn) btn.disabled = true;
@@ -1843,32 +1859,32 @@ function openDifferencePay(res) {
   const b = res.booking, p = res.payment;
   const status = h('div', { class: 'hint', id: 'diff-status', style: 'margin:8px 0 0' });
   const actions = h('div', { class: 'diff-actions', style: 'display:grid;gap:10px;margin-top:6px' });
-  const done = () => { closeModal(); toast('Payment received. Thank you.'); };
+  const done = () => { closeModal(); toast(T('me.paidNote')); };
   if (p.mode === 'razorpay' && p.razorpay.demo) {
     actions.append(
-      h('button', { class: 'btn primary block', id: 'diff-pay', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'success', done) }, `Pay ${inr(p.amountPaise)} with the demo card`),
-      h('button', { class: 'btn ghost', id: 'diff-decline', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'failure', done) }, 'Pretend the card is declined'));
-    status.textContent = 'Demo payment: no real money moves. It is signed the same way Razorpay signs a real one.';
+      h('button', { class: 'btn primary block', id: 'diff-pay', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'success', done) }, T('pay.demoCard', { amount: inr(p.amountPaise) })),
+      h('button', { class: 'btn ghost', id: 'diff-decline', type: 'button', onclick: (e) => payDemo(p, b, e.currentTarget, status, 'failure', done) }, T('pay.demoDecline')));
+    status.textContent = T('pay.demoNote');
   } else if (p.mode === 'razorpay') {
-    actions.append(h('button', { class: 'btn primary block', id: 'diff-pay', type: 'button', onclick: (e) => payRazorpay(p, b, e.currentTarget, status, done) }, `Pay ${inr(p.amountPaise)}`));
+    actions.append(h('button', { class: 'btn primary block', id: 'diff-pay', type: 'button', onclick: (e) => payRazorpay(p, b, e.currentTarget, status, done) }, T('pay.payAmount', { amount: inr(p.amountPaise) })));
   } else if (p.mode === 'upi') {
-    const utr = h('input', { type: 'text', inputmode: 'numeric', maxlength: '30', placeholder: '12-digit UPI reference (UTR)', autocomplete: 'off', id: 'diff-utr' });
+    const utr = h('input', { type: 'text', inputmode: 'numeric', maxlength: '30', placeholder: T('pay.utrPlaceholder'), autocomplete: 'off', id: 'diff-utr' });
     actions.append(
       h('div', { class: 'kv', style: 'margin:0' },
-        h('div', { class: 'row' }, h('span', {}, 'Pay to UPI ID'), h('b', { class: 'mono' }, p.upi.upiId)),
-        h('div', { class: 'row' }, h('span', {}, 'Name'), h('b', {}, p.upi.payee)),
-        h('div', { class: 'row' }, h('span', {}, 'Amount'), h('b', {}, inr(p.amountPaise)))),
-      h('a', { class: 'btn outline block', href: p.upi.uri }, 'Open my UPI app'),
-      field('After paying, enter the UPI reference', utr),
+        h('div', { class: 'row' }, h('span', {}, T('pay.upiId')), h('b', { class: 'mono' }, p.upi.upiId)),
+        h('div', { class: 'row' }, h('span', {}, T('pay.name')), h('b', {}, p.upi.payee)),
+        h('div', { class: 'row' }, h('span', {}, T('pay.amount')), h('b', {}, inr(p.amountPaise)))),
+      h('a', { class: 'btn outline block', href: p.upi.uri }, T('pay.openUpi')),
+      field(T('pay.utr'), utr),
       h('button', { class: 'btn primary block', id: 'diff-sent', type: 'button', onclick: async (e) => {
-        const btn = e.currentTarget; btn.disabled = true; status.className = 'hint'; status.textContent = 'Sending…';
-        try { await api(`/api/bookings/${encodeURIComponent(b.id)}/upi-reference`, { method: 'POST', body: { utr: utr.value.trim() } }); clear(actions); status.className = 'hint'; status.textContent = 'Thank you. The ground will check this against the bank and confirm. It stays on your booking as still to pay until then.'; }
+        const btn = e.currentTarget; btn.disabled = true; status.className = 'hint'; status.textContent = T('common.sending');
+        try { await api(`/api/bookings/${encodeURIComponent(b.id)}/upi-reference`, { method: 'POST', body: { utr: utr.value.trim() } }); clear(actions); status.className = 'hint'; status.textContent = T('pay.diffUtrSent'); }
         catch (err) { status.className = 'hint err'; status.textContent = err.message; btn.disabled = false; }
-      } }, 'I have paid'));
-  } else status.textContent = 'Nothing to pay online.';
-  openModal([h('div', { class: 'eyebrow' }, 'Moved booking'), h('h3', {}, 'Pay the difference'),
-    h('p', { class: 'hint' }, 'Your new time costs more. This is only the difference. What you paid before stays on the booking. The rest of the balance is paid at the ground as usual.'),
-    bookingRows(b, [h('div', { class: 'row' }, h('span', {}, 'Difference to pay now'), h('b', { id: 'diff-amount', style: 'color:var(--gold-bright);font-size:20px' }, inr(res.differencePaise)))]), actions, status],
+      } }, T('pay.paid')));
+  } else status.textContent = T('pay.nothingOnline');
+  openModal([h('div', { class: 'eyebrow' }, T('pay.movedEyebrow')), h('h3', {}, T('pay.diffTitle')),
+    h('p', { class: 'hint' }, T('pay.diffNote')),
+    bookingRows(b, [h('div', { class: 'row' }, h('span', {}, T('pay.diffNow')), h('b', { id: 'diff-amount', style: 'color:var(--gold-bright);font-size:20px' }, inr(res.differencePaise)))]), actions, status],
     { onClose: () => { loadBookings(); } });
 }
 
@@ -1876,19 +1892,19 @@ async function openDepositView(b) {
   let d;
   try { d = (await api(`/api/bookings/${encodeURIComponent(b.id)}/security-deposit`)).deposit; } catch (e) { return toast(e.message, true); }
   const rows = d.entries.map((e) => h('div', { class: 'row', 'data-kind': e.kind },
-    h('span', {}, `${DEPOSIT_KINDS[e.kind] || e.kind} · ${niceDateTime(e.createdAt)}` + (e.reason ? ` · ${e.reason}` : '')), h('b', {}, inr(e.amountPaise))));
-  openModal([h('div', { class: 'eyebrow' }, 'Booking ' + b.ref), h('h3', {}, 'Security deposit'),
-    h('p', { class: 'hint', id: 'dep-explain' }, 'Your booking advance is part of the price of the booking. A security deposit is a separate amount the ground may hold against damage. It is returned to you, less anything kept with a reason you can see here.'),
+    h('span', {}, `${DEPOSIT_KINDS()[e.kind] || e.kind} · ${niceDateTime(e.createdAt)}` + (e.reason ? ` · ${e.reason}` : '')), h('b', {}, inr(e.amountPaise))));
+  openModal([h('div', { class: 'eyebrow' }, T('common.booking', { ref: b.ref })), h('h3', {}, T('me.deposit')),
+    h('p', { class: 'hint', id: 'dep-explain' }, T('deposit.note')),
     h('div', { class: 'kv', id: 'dep-booking' },
-      h('div', { class: 'row' }, h('span', {}, 'Booking advance (part of the price)'), h('b', {}, inr(b.advancePaise))),
-      h('div', { class: 'row' }, h('span', {}, 'Paid towards the booking so far'), h('b', {}, inr(b.paidPaise)))),
-    d.collectedPaise === 0 && !d.entries.length ? h('p', { class: 'hint', id: 'dep-none' }, 'No security deposit has been taken for this booking.') : h('div', { class: 'kv', id: 'dep-held' },
-      h('div', { class: 'row' }, h('span', {}, 'Security deposit held now'), h('b', { id: 'dep-held-amount' }, inr(d.heldPaise))),
-      h('div', { class: 'row' }, h('span', {}, 'Collected'), h('b', {}, inr(d.collectedPaise))),
-      d.deductedPaise ? h('div', { class: 'row' }, h('span', {}, 'Kept by the ground'), h('b', {}, inr(d.keptPaise))) : null,
-      d.refundedPaise ? h('div', { class: 'row' }, h('span', {}, 'Returned to you'), h('b', {}, inr(d.refundedPaise))) : null),
+      h('div', { class: 'row' }, h('span', {}, T('deposit.advance')), h('b', {}, inr(b.advancePaise))),
+      h('div', { class: 'row' }, h('span', {}, T('deposit.paidSoFar')), h('b', {}, inr(b.paidPaise)))),
+    d.collectedPaise === 0 && !d.entries.length ? h('p', { class: 'hint', id: 'dep-none' }, T('deposit.none')) : h('div', { class: 'kv', id: 'dep-held' },
+      h('div', { class: 'row' }, h('span', {}, T('deposit.held')), h('b', { id: 'dep-held-amount' }, inr(d.heldPaise))),
+      h('div', { class: 'row' }, h('span', {}, T('deposit.collect')), h('b', {}, inr(d.collectedPaise))),
+      d.deductedPaise ? h('div', { class: 'row' }, h('span', {}, T('deposit.deduct')), h('b', {}, inr(d.keptPaise))) : null,
+      d.refundedPaise ? h('div', { class: 'row' }, h('span', {}, T('deposit.refund')), h('b', {}, inr(d.refundedPaise))) : null),
     rows.length ? h('div', { class: 'kv', id: 'dep-history' }, ...rows) : null,
-    h('p', { class: 'hint' }, 'Only the ground can change the security deposit. You can view it here.')]);
+    h('p', { class: 'hint' }, T('deposit.onlyGround'))]);
 }
 
 /** Prices on enquiry: the customer asks the ground to move a booking (an enquiry naming it and the time wanted); staff move it from the desk. */
@@ -1897,21 +1913,21 @@ function askToMove(b, body) {
   const time = h('input', { type: 'time', id: 'mv-time', value: hhmm(b.startAt), step: '3600', required: true });
   const msg = h('textarea', { id: 'mv-msg', rows: 3 }, '');
   const err = h('div', { class: 'hint err', id: 'mv-err', 'aria-live': 'assertive' });
-  const send = h('button', { class: 'btn primary', id: 'mv-send', type: 'button' }, 'Ask the ground to move it');
+  const send = h('button', { class: 'btn primary', id: 'mv-send', type: 'button' }, T('move.askGround'));
   const key = 'mv-' + b.id.slice(-20) + '-' + Date.now().toString(36); // one key per open form: a retry after a lost answer files the request once
   send.addEventListener('click', async () => {
     err.textContent = '';
-    if (!date.value || !time.value) { err.textContent = 'Pick the day and time you would like instead.'; return; }
+    if (!date.value || !time.value) { err.textContent = T('move.pickWhen'); return; }
     const extra = msg.value.trim();
-    busyBtn(send, true, 'Sending…');
+    busyBtn(send, true, T('common.sending'));
     try {
       await api('/api/enquiries', { method: 'POST', headers: { 'idempotency-key': key }, body: { groundId: b.groundId, moveBookingId: b.id, preferredDate: date.value, preferredTime: time.value.slice(0, 5), preferredSlots: b.slotCount || undefined,
-        message: `Please move booking ${b.ref} to ${niceDate(date.value)} at ${time.value.slice(0, 5)}.${extra ? ' ' + extra : ''}` } });
-      busyBtn(send, false); closeModal(); toast('Sent. The ground will move your booking and let you know.');
+        message: `Please move booking ${b.ref} to ${niceDateEn(date.value)} at ${time.value.slice(0, 5)}.${extra ? ' ' + extra : ''}` } }); // for the ground's team, so always in English
+      busyBtn(send, false); closeModal(); toast(T('move.asked'));
     } catch (e) { busyBtn(send, false); err.textContent = e.message; }
   });
-  body.append(h('p', { class: 'hint', id: 'mv-note' }, 'Prices are given on enquiry, so the ground moves bookings for you. Tell them when you would like to play instead.'),
-    h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field('New date', date), field('New start', time)), field('Anything else (optional)', msg), err, send);
+  body.append(h('p', { class: 'hint', id: 'mv-note' }, T('move.enquiryNote')),
+    h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px' }, field(T('move.newDate'), date), field(T('move.newStart'), time)), field(T('move.anythingElse'), msg), err, send);
 }
 /** Change a booking's time: eligibility from the server, options from the server, a preview of the effect, then the move. */
 async function openReschedule(b) {
@@ -1919,12 +1935,12 @@ async function openReschedule(b) {
   try { st = (await api(`/api/bookings/${encodeURIComponent(b.id)}/reschedule`)).status; } catch (e) { return toast(e.message, true); }
   const body = h('div', { id: 'rs-body' });
   const facts = [
-    h('div', { class: 'row' }, h('span', {}, 'Now'), h('b', {}, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}`)),
-    !st.askToMove && st.maxMoves != null ? h('div', { class: 'row' }, h('span', {}, 'Moves left'), h('b', { id: 'rs-left' }, `${st.movesLeft} of ${st.maxMoves}`)) : null,
-    !st.askToMove && st.cutoffHours != null ? h('div', { class: 'row' }, h('span', {}, 'Allowed until'), h('b', {}, `${st.cutoffHours} hours before the start`)) : null];
-  openModal([h('div', { class: 'eyebrow' }, 'Booking ' + b.ref), h('h3', {}, st.askToMove ? 'Ask to move' : 'Change the time'), h('div', { class: 'kv' }, ...facts), body], { wide: true });
+    h('div', { class: 'row' }, h('span', {}, T('move.now')), h('b', {}, `${niceDate(b.date)}, ${hhmm(b.startAt)} – ${hhmm(b.endAt)}`)),
+    !st.askToMove && st.maxMoves != null ? h('div', { class: 'row' }, h('span', {}, T('move.movesLeft')), h('b', { id: 'rs-left' }, T('move.movesOf', { left: st.movesLeft, max: st.maxMoves }))) : null,
+    !st.askToMove && st.cutoffHours != null ? h('div', { class: 'row' }, h('span', {}, T('move.allowedUntil')), h('b', {}, T('move.hoursBefore', { n: st.cutoffHours }))) : null];
+  openModal([h('div', { class: 'eyebrow' }, T('common.booking', { ref: b.ref })), h('h3', {}, st.askToMove ? T('me.askMove') : T('me.changeTime')), h('div', { class: 'kv' }, ...facts), body], { wide: true });
   if (st.askToMove) { askToMove(b, body); return; }
-  if (!st.allowed) { body.append(h('p', { class: 'hint err', id: 'rs-blocked', 'data-code': st.code }, st.message || 'This booking cannot be changed online.')); return; }
+  if (!st.allowed) { body.append(h('p', { class: 'hint err', id: 'rs-blocked', 'data-code': st.code }, serverWords(st.code, st.message) || T('move.cannot'))); return; }
   const date = h('input', { type: 'date', id: 'rs-date', value: b.date, min: todayIst() });
   const time = h('input', { type: 'time', id: 'rs-time', value: hhmm(b.startAt), step: '3600' });
   const err = h('div', { class: 'hint err', id: 'rs-err' }), list = h('div', { id: 'rs-options', style: 'display:grid;gap:8px;margin-top:10px' }), review = h('div', { id: 'rs-review' });
@@ -1933,8 +1949,10 @@ async function openReschedule(b) {
     try {
       const r = await api('/api/availability/options', { method: 'POST', body: { ...st.optionsRequest, date: date.value, startTime: time.value } });
       const offers = [r.exact, ...r.alternatives].filter(Boolean);
-      if (!offers.length) { err.textContent = r.reason || 'Nothing is free then. Try another day or time.'; return; }
-      if (!r.exact) list.append(h('p', { class: 'hint' }, (r.reason || 'That time is not free.') + ' Nearest times that are:'));
+      // the server's reason is English; other languages get the plain line
+      const en = window.DajiI18n.lang === 'en';
+      if (!offers.length) { err.textContent = (en && r.reason) || T('move.nothingFree'); return; }
+      if (!r.exact) list.append(h('p', { class: 'hint' }, en && r.reason ? `${r.reason} Nearest times that are:` : T('move.nearest')));
       for (const o of offers) list.append(h('button', { class: 'btn outline', type: 'button', 'data-option-id': o.optionId, onclick: () => preview(o) },
         `${niceDate(o.date)}, ${o.startTime} – ${o.endTime}${o.label ? ' · ' + o.label : ''} · ${inr(o.totalPaise)}`));
     } catch (e) { err.textContent = e.message; }
@@ -1943,42 +1961,42 @@ async function openReschedule(b) {
     clear(review); err.textContent = '';
     try {
       const pv = (await api(`/api/bookings/${encodeURIComponent(b.id)}/reschedule-preview`, { method: 'POST', body: { optionId: o.optionId } })).preview;
-      const verdict = pv.direction === 'dearer' ? `This time costs ${inr(pv.differencePaise)} more. You can pay that difference online right after you confirm.`
-        : pv.direction === 'cheaper' ? (pv.settlement ? (pv.settlement.treatment === 'credit' ? `This time costs less. ${inr(pv.settlement.paiseSettled)} that you already paid comes back as account credit.` : `This time costs less. A refund request for ${inr(pv.settlement.paiseSettled)} that you already paid goes to the ground for approval.`) : 'This time costs less. You have not paid more than the new price, so nothing needs returning.')
-        : 'This time costs the same.';
-      const confirm = h('button', { class: 'btn primary block', id: 'rs-confirm', type: 'button' }, 'Confirm the move');
+      const verdict = pv.direction === 'dearer' ? T('move.dearer', { amount: inr(pv.differencePaise) })
+        : pv.direction === 'cheaper' ? (pv.settlement ? (pv.settlement.treatment === 'credit' ? T('move.cheaperCredit', { amount: inr(pv.settlement.paiseSettled) }) : T('move.cheaperRefund', { amount: inr(pv.settlement.paiseSettled) })) : T('move.cheaperNone'))
+        : T('move.same');
+      const confirm = h('button', { class: 'btn primary block', id: 'rs-confirm', type: 'button' }, T('move.confirm'));
       confirm.addEventListener('click', async () => {
         confirm.disabled = true; err.textContent = '';
         try { done(await api(`/api/bookings/${encodeURIComponent(b.id)}/reschedule`, { method: 'POST', body: { optionId: o.optionId }, headers: { 'idempotency-key': 'rs-' + b.id + '-' + o.optionId.slice(-24) } })); }
         catch (e) { err.textContent = e.message; confirm.disabled = false; }
       });
       review.append(h('div', { class: 'kv', id: 'rs-summary' },
-        h('div', { class: 'row' }, h('span', {}, 'From'), h('b', {}, `${niceDateTime(pv.fromStartAt)} · ${inr(pv.fromTotalPaise)}`)),
-        h('div', { class: 'row' }, h('span', {}, 'To'), h('b', {}, `${niceDateTime(pv.toStartAt)} · ${inr(pv.toTotalPaise)}`)),
-        h('div', { class: 'row' }, h('span', {}, 'Left to pay on this booking after the move'), h('b', {}, inr(pv.balanceAfterPaise))),
-        pv.movesLeftAfter != null ? h('div', { class: 'row' }, h('span', {}, 'Moves left after this one'), h('b', {}, String(pv.movesLeftAfter))) : null),
+        h('div', { class: 'row' }, h('span', {}, T('move.from')), h('b', {}, `${niceDateTime(pv.fromStartAt)} · ${inr(pv.fromTotalPaise)}`)),
+        h('div', { class: 'row' }, h('span', {}, T('move.to')), h('b', {}, `${niceDateTime(pv.toStartAt)} · ${inr(pv.toTotalPaise)}`)),
+        h('div', { class: 'row' }, h('span', {}, T('move.leftToPay')), h('b', {}, inr(pv.balanceAfterPaise))),
+        pv.movesLeftAfter != null ? h('div', { class: 'row' }, h('span', {}, T('move.movesAfter')), h('b', {}, String(pv.movesLeftAfter))) : null),
         h('p', { class: 'hint', id: 'rs-verdict', 'data-direction': pv.direction }, verdict), confirm);
     } catch (e) { err.textContent = e.message; }
   };
   const done = (r) => {
     clear(body); clear(review);
     const owed = r.booking.moveDifferenceDuePaise || 0;
-    body.append(h('p', { id: 'rs-done', class: 'hint' }, `Moved to ${niceDateTime(r.toStartAt)}.`),
-      r.settlement ? h('p', { class: 'hint', id: 'rs-settled' }, r.settlement.treatment === 'credit' ? `${inr(r.settlement.creditPaise)} was added to your account credit.` : `A refund request for ${inr(r.settlement.refundRequestedPaise)} was sent to the ground.`) : null,
-      owed > 0 ? h('button', { class: 'btn primary block', id: 'rs-pay', type: 'button', onclick: () => { closeModal(); payDifference(r.booking); } }, `Pay the ${inr(owed)} difference online`) : null,
-      h('button', { class: 'btn ghost', type: 'button', onclick: () => closeModal() }, 'Close'));
+    body.append(h('p', { id: 'rs-done', class: 'hint' }, T('move.movedTo', { when: niceDateTime(r.toStartAt) })),
+      r.settlement ? h('p', { class: 'hint', id: 'rs-settled' }, r.settlement.treatment === 'credit' ? T('move.credited', { amount: inr(r.settlement.creditPaise) }) : T('move.refundSent', { amount: inr(r.settlement.refundRequestedPaise) })) : null,
+      owed > 0 ? h('button', { class: 'btn primary block', id: 'rs-pay', type: 'button', onclick: () => { closeModal(); payDifference(r.booking); } }, T('move.payDiff', { amount: inr(owed) })) : null,
+      h('button', { class: 'btn ghost', type: 'button', onclick: () => closeModal() }, T('common.close')));
     loadBookings();
   };
-  body.append(field('New date', date), field('Preferred start time', time), h('button', { class: 'btn primary block', id: 'rs-find', type: 'button', onclick: show }, 'Show times'), err, list, review);
+  body.append(field(T('move.newDate'), date), field(T('move.preferredStart'), time), h('button', { class: 'btn primary block', id: 'rs-find', type: 'button', onclick: show }, T('move.showTimes')), err, list, review);
 }
 
 /** The buttons a booking card offers, from what the server says about this booking. */
 function manageButtons(b) {
   const cfg = state.config || {}, out = [];
   const upcoming = b.status === 'confirmed' && b.startAt > Date.now();
-  if (b.moveDifferenceDuePaise > 0) out.push(h('button', { class: 'btn primary sm pay-diff', type: 'button', onclick: (e) => payDifference(b, e.currentTarget) }, `Pay ${inr(b.moveDifferenceDuePaise)} online`));
-  if ((cfg.customerRescheduleEnabled || cfg.pricesOnEnquiry) && upcoming && !b.seriesId) out.push(h('button', { class: 'btn outline sm change-time', type: 'button', onclick: () => openReschedule(b) }, cfg.pricesOnEnquiry ? 'Ask to move' : 'Change time'));
-  if (cfg.securityDepositEnabled && ['confirmed', 'completed', 'no_show'].includes(b.status)) out.push(h('button', { class: 'btn ghost sm view-deposit', type: 'button', onclick: () => openDepositView(b) }, 'Security deposit'));
+  if (b.moveDifferenceDuePaise > 0) out.push(h('button', { class: 'btn primary sm pay-diff', type: 'button', onclick: (e) => payDifference(b, e.currentTarget) }, T('me.payOnline', { amount: inr(b.moveDifferenceDuePaise) })));
+  if ((cfg.customerRescheduleEnabled || cfg.pricesOnEnquiry) && upcoming && !b.seriesId) out.push(h('button', { class: 'btn outline sm change-time', type: 'button', onclick: () => openReschedule(b) }, cfg.pricesOnEnquiry ? T('me.askMove') : T('me.changeTime')));
+  if (cfg.securityDepositEnabled && ['confirmed', 'completed', 'no_show'].includes(b.status)) out.push(h('button', { class: 'btn ghost sm view-deposit', type: 'button', onclick: () => openDepositView(b) }, T('me.deposit')));
   if (b.status === 'confirmed' && b.endAt > Date.now() && !b.block) out.push(h('button', { class: 'btn ghost sm team-list', type: 'button', onclick: () => openTeamList(b.id, b.ref) }, 'Team list'));
   return out;
 }

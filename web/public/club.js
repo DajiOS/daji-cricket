@@ -5,6 +5,7 @@
 const D = window.DAJI;
 if (!D) return;
 const { h, clear, $, api, toast, openModal, closeModal, niceDate, todayIst, state, formatPhone } = D;
+const T = (k, v) => window.DajiI18n.t(k, v); // the public live scores follow the screen language (shared/src/i18n.ts)
 
 const btn = (label, fn, cls = 'outline sm') => h('button', { class: 'btn ' + cls, type: 'button', onclick: fn }, label);
 const fail = (e) => toast((e && e.message) || 'Something went wrong', true);
@@ -270,13 +271,13 @@ function scoreboard(sc, staff) {
   const wrap = h('div', { class: 'scoreboard' });
   for (const i of sc.innings) {
     wrap.append(h('div', { class: 'inn' },
-      h('div', { class: 'sc-head' }, h('b', {}, i.team), h('span', { class: 'big' }, `${i.runs}/${i.wickets}`), h('span', { class: 'sub' }, `${i.overs} overs` + (i.runRate !== null ? `  ·  RR ${i.runRate}` : '') + (i.target ? `  ·  Target ${i.target}` : ''))),
+      h('div', { class: 'sc-head' }, h('b', {}, i.team), h('span', { class: 'big' }, `${i.runs}/${i.wickets}`), h('span', { class: 'sub' }, T('live.overs', { n: i.overs }) + (i.runRate !== null ? `  ·  RR ${i.runRate}` : '') + (i.target ? `  ·  ${T('live.target')} ${i.target}` : ''))),
       i.recent.length ? h('div', { class: 'balls' }, i.recent.map((b) => h('i', { class: /^W/.test(b) ? 'w' : /^[46]$/.test(b) ? 'f' : null }, b))) : null,
-      tbl(['Batter', 'R', 'B', '4s', '6s'], i.batting.map((b) => [h('span', {}, b.name, b.out ? h('small', { class: 'sub' }, '  ' + b.out) : h('small', { class: 'sub' }, '  not out')), b.runs, b.balls, b.fours, b.sixes]), [1, 2, 3, 4], 'No balls yet.'),
-      i.bowling.length ? tbl(['Bowler', 'O', 'R', 'W', 'Econ'], i.bowling.map((b) => [b.name, b.overs, b.runs, b.wickets, b.economy ?? '']), [1, 2, 3, 4]) : null,
-      h('p', { class: 'hint' }, `Extras ${i.extras.total} (wides ${i.extras.wides}, no balls ${i.extras.noBalls}, byes ${i.extras.byes}, leg byes ${i.extras.legByes})`)));
+      tbl([T('live.batter'), 'R', 'B', '4s', '6s'], i.batting.map((b) => [h('span', {}, b.name, b.out ? h('small', { class: 'sub' }, '  ' + b.out) : h('small', { class: 'sub' }, '  ' + T('live.notOut'))), b.runs, b.balls, b.fours, b.sixes]), [1, 2, 3, 4], T('live.noBalls')),
+      i.bowling.length ? tbl([T('live.bowler'), 'O', 'R', 'W', 'Econ'], i.bowling.map((b) => [b.name, b.overs, b.runs, b.wickets, b.economy ?? '']), [1, 2, 3, 4]) : null,
+      h('p', { class: 'hint' }, T('live.extras', { total: i.extras.total, wides: i.extras.wides, noBalls: i.extras.noBalls, byes: i.extras.byes, legByes: i.extras.legByes }))));
   }
-  if (!sc.innings.length) wrap.append(h('div', { class: 'empty' }, 'The match has not started.'));
+  if (!sc.innings.length) wrap.append(h('div', { class: 'empty' }, T('live.notStarted')));
   return staff ? section('Scorecard', wrap) : wrap;
 }
 
@@ -290,20 +291,20 @@ async function fillLive() {
     sec.hidden = false; const nav = $('#nav-live'); if (nav) nav.hidden = false;
     const list = clear($('#live-list'));
     for (const m of r.items.slice(0, 6)) list.append(h('button', { class: 'livecard', type: 'button', onclick: () => openLive(m.id) },
-      h('span', { class: 'chip ' + (m.status === 'live' ? 'bad' : '') }, m.status === 'live' ? '● Live' : 'Final'), h('b', {}, `${m.teamA} v ${m.teamB}`), h('span', { class: 'sub' }, m.title), h('span', { class: 'sum' }, m.summary || 'Not started'), m.result ? h('span', { class: 'res' }, m.result) : null));
+      h('span', { class: 'chip ' + (m.status === 'live' ? 'bad' : '') }, m.status === 'live' ? '● ' + T('live.live') : T('live.final')), h('b', {}, `${m.teamA} v ${m.teamB}`), h('span', { class: 'sub' }, m.title), h('span', { class: 'sum' }, m.summary || T('live.notStartedShort')), m.result ? h('span', { class: 'res' }, m.result) : null));
   } catch { /* the live section simply stays hidden */ }
 }
 async function openLive(id) {
   let timer = 0;
-  const body = h('div', { class: 'live-body' }, h('div', { class: 'skeleton' }, 'Loading…'));
+  const body = h('div', { class: 'live-body' }, h('div', { class: 'skeleton' }, T('common.loading')));
   openModal([body], { wide: true, onClose: () => clearInterval(timer) });
   const paint = async () => {
     try {
       const sc = await api('/api/matches/' + id);
       const m = sc.match;
-      const yt = m.youtubeId ? h('a', { class: 'btn outline sm', href: 'https://www.youtube.com/watch?v=' + m.youtubeId, target: '_blank', rel: 'noopener', style: 'margin:6px 0 22px' }, 'Watch on YouTube') : null;
-      const video = m.youtubeId ? (window.DAJI_PREVIEW ? yt : h('div', {}, h('div', { class: 'video' }, h('iframe', { src: m.embedUrl, title: 'Match video', allow: 'accelerometer; encrypted-media; gyroscope; picture-in-picture', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin', loading: 'lazy' })), yt)) : null;
-      clear(body).append(h('div', { class: 'eyebrow' }, m.status === 'live' ? '● Live' : 'Match'), h('h3', { class: 'big' }, `${m.teamA} v ${m.teamB}`), h('p', { class: 'hint' }, m.title + (m.result ? `. ${m.result}` : '')), video, scoreboard(sc, false));
+      const yt = m.youtubeId ? h('a', { class: 'btn outline sm', href: 'https://www.youtube.com/watch?v=' + m.youtubeId, target: '_blank', rel: 'noopener', style: 'margin:6px 0 22px' }, T('live.youtube')) : null;
+      const video = m.youtubeId ? (window.DAJI_PREVIEW ? yt : h('div', {}, h('div', { class: 'video' }, h('iframe', { src: m.embedUrl, title: T('live.video'), allow: 'accelerometer; encrypted-media; gyroscope; picture-in-picture', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin', loading: 'lazy' })), yt)) : null;
+      clear(body).append(...[h('div', { class: 'eyebrow' }, m.status === 'live' ? '● ' + T('live.live') : T('live.match')), h('h3', { class: 'big' }, `${m.teamA} v ${m.teamB}`), h('p', { class: 'hint' }, m.title + (m.result ? `. ${m.result}` : '')), video, scoreboard(sc, false)].filter(Boolean)); // no video: nothing, not the word null
       if (m.status !== 'live') clearInterval(timer);
     } catch (e) { clear(body).append(h('div', { class: 'empty' }, e.message)); clearInterval(timer); }
   };
@@ -405,4 +406,6 @@ D.registerDeskTab({ id: 'matches', label: 'Matches', perm: 'manage_matches', ren
 platformPage();
 // the live section loads once the page has started
 setTimeout(fillLive, 0);
+// the match cards are written by this script, so they are written again in a new screen language
+if (window.DajiI18n) window.DajiI18n.onChange(() => { const sec = $('#live'); if (sec && !sec.hidden) fillLive(); });
 })();
