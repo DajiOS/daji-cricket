@@ -51,7 +51,7 @@ function BranchList({ items, onChanged }: { items: Area[]; onChanged: () => void
         <div className="row" style={{ flexWrap: 'wrap' }}>
           <input className="inp" maxLength={60} placeholder="New branch, e.g. Office" aria-label="New branch name" value={name} onChange={(e) => setName(e.target.value)} />
           <label className="check"><input type="checkbox" checked={restricted} onChange={(e) => setRestricted(e.target.checked)} /> Restricted</label>
-          <button className="btn primary sm" disabled={name.trim().length < 2} onClick={() => run(async () => { await post('/api/areas', { name: name.trim(), restricted }); setName(''); setRestricted(false); }, 'Branch added')}>Add branch</button>
+          <button className="btn primary sm" onClick={() => name.trim().length < 2 ? toast('Type a branch name of at least 2 letters') : run(async () => { await post('/api/areas', { name: name.trim(), restricted }); setName(''); setRestricted(false); }, 'Branch added')}>Add branch</button>
         </div>
       </div>
     </Panel>
@@ -86,10 +86,11 @@ function AccessDialog({ person, areas, onClose }: { person: { id: string; name: 
   const chosen = pick ?? cur?.areaIds ?? [];
   const isAll = all ?? cur?.all ?? true;
   async function save() {
+    if (!cur) { toast('Still loading this person\'s branches, try again in a moment'); return; }
     try { await put(`/api/staff/team/${encodeURIComponent(person.id)}/areas`, isAll ? { all: true } : { areaIds: chosen }); toast('Saved'); onClose(); } catch (e) { toast(errText(e)); }
   }
   return (
-    <Modal title={`Branches for ${person.name}`} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!cur} onClick={save}>Save</button></>}>
+    <Modal title={`Branches for ${person.name}`} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" onClick={save}>Save</button></>}>
       {err ? <ErrorBox msg={err} /> : !cur ? <Loading h={100} /> : (
         <div className="stack">
           <label className="check"><input type="radio" checked={isAll} onChange={() => setAll(true)} /> Every branch that is not restricted</label>
