@@ -21,6 +21,7 @@ import { myCricket } from '../playerStats.ts';
 import { listForPlayer, myFantasy } from '../fantasy.ts';
 import { mainSiteBusinessId } from '../businesses.ts';
 import { myChildren, mySharing } from '../network.ts';
+import { myTeamInvitations } from '../netTournaments.ts';
 
 // Ask AI for customers. It answers from the signed-in customer's own bookings and credit, and from the public details
 // of the grounds (prices, hours, free slots, directions, the cancellation rules). It never reads anyone else's data
@@ -58,7 +59,7 @@ const RULES: [string, RegExp][] = [
   ['help', /\b(help|what can you|what (can|do|should) i ask|examples?)\b/],
   ['fantasy', /\bfantasy\b|\bdream ?11\b|ફેન્ટસી|फैंटसी|फैंटेसी/],
   ['auction', /\bauctions?\b|\bsquads?\b|\bpurse\b|\bbid(s|ding)?\b|(was|am|have) i (been )?(picked|sold|bought|selected)|which team (picked|bought|got|has) me|who (picked|bought) me|base price/],
-  ['network', /who can see my (cricket )?(profile|record|stats)|(my|profile) sharing|sharing (choice|setting)s?|cricket network|\bmy (child|children|son|daughter|kids?)s? (cricket )?(profile|sharing|consent)|\bconsent\b/],
+  ['network', /who can see my (cricket )?(profile|record|stats)|(my|profile) sharing|sharing (choice|setting)s?|cricket network|\bmy (child|children|son|daughter|kids?)s? (cricket )?(profile|sharing|consent)|\bconsent\b|\b(tournament )?team (request|invitation|invite)s?\b/],
   ['games', /how many games|games (have i|i have|i've) played|games? played|my tier|which tier|what tier|check.?in|kitne (match|game)|કેટલી મેચ|कितने मैच/],
   ['cricket', /\b(career|cricket|my) (stats|statistics|record)\b|\bmy stats\b|\bbatting\b|\bbowling\b|\baverage\b|strike rate|\beconomy\b|how many (runs|wickets|catches|sixes|fours)|\bmy (runs|wickets|catches|highest|best)\b|highest score|best (score|figures)|centur(y|ies)|fift(y|ies)|\bducks?\b|stumpings?|કેટલા રન|કેટલી વિકેટ|कितने रन|कितने विकेट/],
   ['waitlist', /wait.?list|waiting list|on the list|my (place|turn|request)|વેઇટિંગ|વેટિંગ|वेटिंग|प्रतीक्षा/],
@@ -318,10 +319,12 @@ function networkAnswer(user: UserRow, out: (answer: string, extra?: Partial<Cust
   const s = mySharing(user);
   const who = s.choices.find((c) => c.value === s.visibility)!;
   const kids = myChildren(user);
+  const invites = myTeamInvitations(user);
   const details = [
     { label: 'Shared', text: s.sharedFields.join('; ') },
     { label: 'Never shared', text: s.neverShared.join('; ') },
     ...kids.items.map((k) => ({ label: k.name, text: `Match record: ${k.consent.playRecord.given ? 'agreed' : 'not agreed'}. Sharing with grounds in the network: ${k.consent.networkShare.given ? 'agreed' : 'not agreed'}. Seen by: ${k.visibility === 'network' ? 'grounds in the network' : 'only you'}.` })),
+    ...invites.items.map((i) => ({ label: `Team request: ${i.tournament}`, text: `${i.organiser} asked to put your profile on ${i.team} as "${i.nameOnTeam}" (${i.from} to ${i.to}). Nothing goes on your record unless you agree in your profile.` })),
   ];
-  return out(`Your cricket profile is set to "${who.label}": ${who.text} You can change this in your profile.${kids.items.length ? ` You look after ${kids.items.length === 1 ? 'one child' : `${kids.items.length} children`}.` : ''}`, { details, intent: 'network' });
+  return out(`Your cricket profile is set to "${who.label}": ${who.text} You can change this in your profile.${kids.items.length ? ` You look after ${kids.items.length === 1 ? 'one child' : `${kids.items.length} children`}.` : ''}${invites.items.length ? ` ${invites.items.length === 1 ? 'One tournament team has' : `${invites.items.length} tournament teams have`} asked to add your profile; nothing is linked until you agree.` : ''}`, { details, intent: 'network' });
 }

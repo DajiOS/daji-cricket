@@ -294,7 +294,7 @@ export function setChildConsent(u: UserRow, childId: string, body: unknown) {
     run('INSERT INTO child_consents(child_id, guardian_id, scope, given, wording, at) VALUES(?,?,?,?,?,?)', childId, u.id, scope!, given ? 1 : 0, CONSENT_WORDING[scope!], now());
     if (!given && scope === 'play_record') {
       run('INSERT INTO child_consents(child_id, guardian_id, scope, given, wording, at) VALUES(?,?,?,?,?,?)', childId, u.id, 'network_share', 0, CONSENT_WORDING.network_share, now());
-      takeOffEverything(childId);
+      takeOffEverything(childId, 'consent withdrawn');
     }
     if (!given && scope === 'network_share') run("UPDATE player_sharing SET visibility = 'private', updated_at = ? WHERE user_id = ?", now(), childId);
     audit({ id: u.id, role: u.role }, given ? 'network.consent_give' : 'network.consent_withdraw', 'user', childId, { scope });
@@ -302,10 +302,25 @@ export function setChildConsent(u: UserRow, childId: string, body: unknown) {
   return childOut(c);
 }
 
-function takeOffEverything(userId: string): void {
+/**
+ * A withdrawn consent, a removed child or a deleted account, at once (review of PR #202):
+ *  - network tournament teams: the player leaves the team (the row is closed, not just unlinked), and open requests to them close;
+ *  - squads of matches that have not started: the player comes off;
+ *  - matches that started or finished: the scorecard keeps the name the ball-by-ball record uses (for a child from a network team that is
+ *    the first name and initial), no longer linked to the profile, so it is on nobody's record;
+ *  - open claims close.
+ */
+function takeOffEverything(userId: string, reason: string): void {
+  const t = now(), child = isChild(userId);
+  run(`UPDATE match_players SET removed_at = ? WHERE user_id = ? AND removed_at IS NULL
+    AND match_id IN (SELECT m.id FROM matches m WHERE m.status = 'scheduled' AND NOT EXISTS (SELECT 1 FROM match_balls b WHERE b.match_id = m.id))`, t, userId);
   forgetPlayerLinks(userId);
-  run('UPDATE net_team_players SET user_id = NULL WHERE user_id = ?', userId);
-  run("UPDATE profile_claims SET closed_at = ?, outcome = 'gone', reason = 'consent withdrawn' WHERE user_id = ? AND closed_at IS NULL", now(), userId);
+  for (const p of many<{ id: string; name: string }>('SELECT id, name FROM net_team_players WHERE user_id = ? OR invited_user_id = ?', userId, userId)) {
+    // a child's name is not kept in full even on a closed row
+    run('UPDATE net_team_players SET user_id = NULL, invited_user_id = NULL, name = ?, removed_at = COALESCE(removed_at, ?), removed_reason = COALESCE(removed_reason, ?) WHERE id = ?',
+      child ? shortName(p.name) : p.name, t, reason, p.id);
+  }
+  run("UPDATE profile_claims SET closed_at = ?, outcome = 'gone', reason = ? WHERE user_id = ? AND closed_at IS NULL", t, reason, userId);
 }
 
 /** The guardian removes the child's profile: consent withdrawn, links off, the profile closed. Scorecards keep the names the scorer used. */
@@ -313,7 +328,7 @@ export function removeChild(u: UserRow, childId: string) {
   guardianOf(u, childId);
   tx(() => {
     for (const scope of ['play_record', 'network_share'] as const) run('INSERT INTO child_consents(child_id, guardian_id, scope, given, wording, at) VALUES(?,?,?,?,?,?)', childId, u.id, scope, 0, CONSENT_WORDING[scope], now());
-    takeOffEverything(childId);
+    takeOffEverything(childId, 'profile removed');
     run('DELETE FROM player_sharing WHERE user_id = ?', childId);
     run('UPDATE child_profiles SET removed_at = ? WHERE child_id = ?', now(), childId);
     run('UPDATE users SET active = 0, updated_at = ? WHERE id = ?', now(), childId);
@@ -326,12 +341,12 @@ export function removeChild(u: UserRow, childId: string) {
 export function forgetNetwork(userId: string): void {
   for (const c of many<{ child_id: string }>('SELECT child_id FROM child_profiles WHERE guardian_id = ? AND removed_at IS NULL', userId)) {
     for (const scope of ['play_record', 'network_share'] as const) run('INSERT INTO child_consents(child_id, guardian_id, scope, given, wording, at) VALUES(?,?,?,?,?,?)', c.child_id, userId, scope, 0, CONSENT_WORDING[scope], now());
-    takeOffEverything(c.child_id);
+    takeOffEverything(c.child_id, 'account deleted');
     run('DELETE FROM player_sharing WHERE user_id = ?', c.child_id);
     run('UPDATE child_profiles SET removed_at = ? WHERE child_id = ?', now(), c.child_id);
     run("UPDATE users SET name = 'Deleted user', active = 0, updated_at = ? WHERE id = ?", now(), c.child_id);
   }
-  takeOffEverything(userId);
+  takeOffEverything(userId, 'account deleted');
   run('DELETE FROM player_sharing WHERE user_id = ?', userId);
 }
 

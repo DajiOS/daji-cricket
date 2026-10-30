@@ -192,8 +192,13 @@ test('scoring and verification: the host scores at its own ground, the organiser
   await ok(h.post(`${T}/${id}/teams/${teamA}/players`, { name: 'Amit', phone: player.phone }, w.o1), 201);
   await ok(h.post(`${T}/${id}/teams/${teamA}/players`, { name: 'Ravi' }, w.o1), 201);
   await ok(h.post(`${T}/${id}/teams/${otherSide}/players`, { name: 'Zed' }, w.o1), 201);
-  assert.equal((await h.post(`${T}/${id}/teams/${otherSide}/players`, { name: 'Amit again', phone: player.phone }, w.o1)).status, 409, 'one team per player');
-  assert.equal((await h.post(`${T}/${id}/teams/${teams[0]}/players`, { name: 'Nobody', phone: '9111111111' }, w.o1)).status, 404);
+  // the same number on a second team is not asked twice (one team per player), and the organiser sees the same answer
+  await ok(h.post(`${T}/${id}/teams/${otherSide}/players`, { name: 'Amit again', phone: player.phone }, w.o1), 201);
+  void teams;
+  // the player agrees to the request; only then is the profile linked
+  const asks = (await ok(h.get('/api/me/network/team-invitations', player.token))).items;
+  assert.equal(asks.length, 1);
+  await ok(h.post(`/api/me/network/team-invitations/${asks[0].id}`, { accept: true }, player.token));
   for (const f of fx0) await ok(asHost(f, 'POST', `${T}/${id}/fixtures/${f.id}/confirm`, {}));
   assert.equal((await h.post(`${T}/${id}/fixtures/${onRiver.id}/scoring`, {}, w.o2)).status, 409, 'not published yet');
   await ok(h.post(`${T}/${id}/publish`, {}, w.o1));
@@ -205,7 +210,7 @@ test('scoring and verification: the host scores at its own ground, the organiser
   const squads = (await ok(h.get(`/api/staff/matches/${matchId}/players`, w.o2))).items ?? (await ok(h.get(`/api/staff/matches/${matchId}/players`, w.o2)));
   void squads;
   const a = many<{ name: string; user_id: string | null; side: string }>('SELECT name, user_id, side FROM match_players WHERE match_id = ? ORDER BY side, name', matchId);
-  assert.deepEqual(a.map((x) => [x.side, x.name, !!x.user_id]), [['a', 'Amit', true], ['a', 'Ravi', false], ['b', 'Zed', false]]);
+  assert.deepEqual(a.map((x) => [x.side, x.name, !!x.user_id]), [['a', 'Amit', true], ['a', 'Ravi', false], ['b', 'Amit again', false], ['b', 'Zed', false]]);
   // Amit 1 a ball for six balls; the chase makes nothing: team A wins by 6 runs
   for (let i = 0; i < 6; i++) await ok(h.post(`/api/staff/matches/${matchId}/balls`, { innings: 1, batter: 'Amit', bowler: 'Zed', runsBat: 1 }, w.o2), 201);
   for (let i = 0; i < 6; i++) await ok(h.post(`/api/staff/matches/${matchId}/balls`, { innings: 2, batter: 'Zed', bowler: 'Amit', runsBat: 0 }, w.o2), 201);
@@ -428,4 +433,156 @@ test('Platform AI: staff hear what waits for them in the network, without player
   // a question about a child's sessions is not taken by the network answer; one about their profile is
   assert.notEqual((await ok(h.post('/api/ask', { question: "When is my child's next session?" }, player.token))).intent, 'network');
   assert.equal((await ok(h.post('/api/ask', { question: "Who can see my daughter's cricket profile?" }, player.token))).intent, 'network');
+  // the request to put the profile on a team is something the player can ask about
+  const req = await ok(h.post('/api/ask', { question: 'Do I have any team requests?' }, player.token));
+  assert.equal(req.intent, 'network');
+  assert.match(req.answer, /asked to add your profile; nothing is linked until you agree/);
+  assert.ok(req.details.some((d: any) => /Surat Network Cup/.test(d.label)), JSON.stringify(req.details));
+});
+
+// ------------------------------------------------------------------ review of PR #202 (Sunny, 30 Oct 2026)
+
+test('review: a player added by mobile number is only asked; the organiser cannot tell whether the number has a profile', async () => {
+  const { id, teams } = await setUp();
+  const neha = await newCustomer('Neha Joshi');
+  const add = (team: string, body: unknown) => h.post(`${T}/${id}/teams/${team}/players`, body, w.o1);
+  assert.equal((await add(teams[0]!, { phone: neha.phone })).status, 400, 'by mobile number the organiser types the name');
+  const withProfile = await ok(add(teams[0]!, { name: 'Neha', phone: neha.phone }), 201);
+  const noProfile = await ok(add(teams[0]!, { name: 'Nobody Here', phone: '9111111111' }), 201);
+  const same = (x: any) => ({ ...x, id: undefined, name: undefined });
+  assert.deepEqual(same(withProfile), same(noProfile), 'the same answer either way');
+  assert.deepEqual([withProfile.hasProfile, withProfile.asked], [false, true]);
+  const shown = async () => (await ok(h.get(`${T}/${id}`, w.o1))).teams.find((t: any) => t.id === teams[0]).players.map((p: any) => same(p));
+  const before0 = await shown();
+  assert.deepEqual(before0[0], before0[1], 'the team list shows the same too');
+  assert.equal(one<{ user_id: string | null }>('SELECT user_id FROM net_team_players WHERE id = ?', withProfile.id)!.user_id, null, 'nothing linked before the player agrees');
+  // the audit names how the player was added, never whether a profile was found
+  const audits = many<{ detail: string }>("SELECT detail FROM audit_log WHERE action = 'network.player_add'").map((a) => { const d = JSON.parse(a.detail); delete d.player; return d; });
+  assert.deepEqual(audits[0], audits[1]);
+  // the player sees the request (their sharing choice is still private: they decide for themselves)
+  const mine = (await ok(h.get('/api/me/network/team-invitations', neha.token))).items;
+  assert.equal(mine.length, 1);
+  assert.deepEqual([mine[0].tournament, mine[0].team, mine[0].nameOnTeam], ['Surat Network Cup', 'Daji XI', 'Neha']);
+  const other = await newCustomer('Other Person');
+  assert.equal((await ok(h.get('/api/me/network/team-invitations', other.token))).items.length, 0);
+  assert.equal((await h.post(`/api/me/network/team-invitations/${mine[0].id}`, { accept: true }, other.token)).status, 404, 'only the person asked answers');
+  assert.equal((await h.get('/api/me/network/team-invitations', w.o1)).status, 403);
+  // a no: the organiser sees nothing change; the request does not come back
+  await ok(h.post(`/api/me/network/team-invitations/${mine[0].id}`, { accept: false }, neha.token));
+  assert.deepEqual(await shown(), before0);
+  assert.equal((await h.post(`/api/me/network/team-invitations/${mine[0].id}`, { accept: true }, neha.token)).status, 404);
+  assert.equal(one<{ user_id: string | null }>('SELECT user_id FROM net_team_players WHERE id = ?', withProfile.id)!.user_id, null);
+
+  // a profile shared with the network, picked from the player search: also asked; linked on yes
+  const vik = await newCustomer('Vikram Rao');
+  assert.equal((await add(teams[1]!, { playerId: vik.id })).status, 404, 'a private profile cannot be picked');
+  await ok(h.put('/api/me/network/sharing', { visibility: 'network' }, vik.token));
+  const picked = await ok(add(teams[1]!, { playerId: vik.id }), 201);
+  assert.deepEqual([picked.name, picked.hasProfile, picked.asked], ['Vikram Rao', false, true]);
+  assert.equal((await add(teams[2]!, { playerId: vik.id })).status, 409, 'asked for one team already');
+  const ask = (await ok(h.get('/api/me/network/team-invitations', vik.token))).items[0];
+  await ok(h.post(`/api/me/network/team-invitations/${ask.id}`, { accept: true }, vik.token));
+  const linked = (await ok(h.get(`${T}/${id}`, w.o1))).teams.find((t: any) => t.id === teams[1]).players[0];
+  assert.deepEqual([linked.hasProfile, linked.asked], [true, false]);
+  // Neha said no in this tournament: she is not asked again here (the organiser still sees the same answer)
+  const again = await ok(add(teams[3]!, { name: 'Neha J', phone: neha.phone }), 201);
+  assert.deepEqual(same(again), same(noProfile));
+  assert.equal((await ok(h.get('/api/me/network/team-invitations', neha.token))).items.length, 0);
+  // a request on a player the organiser took off the team closes with it
+  const kabir = await newCustomer('Kabir Shah');
+  const k = await ok(add(teams[3]!, { name: 'Kabir', phone: kabir.phone }), 201);
+  assert.equal((await ok(h.get('/api/me/network/team-invitations', kabir.token))).items.length, 1);
+  await ok(h.del(`${T}/${id}/teams/${teams[3]}/players/${k.id}`, w.o1));
+  assert.equal((await ok(h.get('/api/me/network/team-invitations', kabir.token))).items.length, 0);
+});
+
+test('review: a child whose consent is withdrawn, or whose profile is removed, leaves the team and unstarted squads; started scorecards keep only the short name, unlinked', async () => {
+  const admin = await h.login('admin');
+  const { id, teams } = await setUp();
+  await ok(h.put('/api/admin/network/children', { on: true, legalReviewRef: 'TEST ONLY: no real review recorded' }, admin));
+  const parent = await newCustomer('Priya Mehta');
+  const kid = await ok(h.post('/api/me/network/children', { firstName: 'Aarav', lastName: 'Mehta', bornOn: '2015-06-01', iAmGuardian: true }, parent.token), 201);
+  await ok(h.post(`/api/me/network/children/${kid.id}/consent`, { scope: 'play_record', given: true }, parent.token));
+  // the organiser types the full name: it is stored as first name and initial
+  const added = await ok(h.post(`${T}/${id}/teams/${teams[0]}/players`, { childCode: kid.playerCode, name: 'Aarav Mehta' }, w.o1), 201);
+  assert.deepEqual([added.name, added.hasProfile, added.asked], ['Aarav M.', true, false]);
+  assert.equal(one<{ name: string }>('SELECT name FROM net_team_players WHERE id = ?', added.id)!.name, 'Aarav M.');
+  for (const t of teams.slice(1)) await ok(h.post(`${T}/${id}/teams/${t}/players`, { name: 'Zed' }, w.o1), 201);
+  const fx = await confirmAllAndPublish(id);
+  const kidFx = fx.filter((f: any) => f.teamAId === teams[0] || f.teamBId === teams[0]);
+  assert.ok(kidFx.length >= 2);
+  // one match has started (balls scored), another is set up but not started
+  const started = (await ok(asHost(kidFx[0], 'POST', `${T}/${id}/fixtures/${kidFx[0].id}/scoring`, {}), 201)).matchId as string;
+  const waiting = (await ok(asHost(kidFx[1], 'POST', `${T}/${id}/fixtures/${kidFx[1].id}/scoring`, {}), 201)).matchId as string;
+  const kidRow = (m: string) => one<{ name: string; user_id: string | null; removed_at: number | null }>("SELECT name, user_id, removed_at FROM match_players WHERE match_id = ? AND name = 'Aarav M.'", m);
+  assert.ok(kidRow(started)?.user_id === kid.id && kidRow(waiting)?.user_id === kid.id, 'squads use the short name, linked with consent');
+  const x = hostToken(kidFx[0]);
+  const kidBats = kidFx[0].teamAId === teams[0];
+  await ok(h.call('POST', `/api/staff/matches/${started}/balls`, { token: x.token, headers: x.headers, body: { innings: 1, batter: kidBats ? 'Aarav M.' : 'Zed', bowler: kidBats ? 'Zed' : 'Aarav M.', runsBat: 4 } }), 201);
+
+  // the guardian withdraws the match record
+  await ok(h.post(`/api/me/network/children/${kid.id}/consent`, { scope: 'play_record', given: false }, parent.token));
+  const team = (await ok(h.get(`${T}/${id}`, w.o1))).teams.find((t: any) => t.id === teams[0]);
+  assert.deepEqual([team.players.length, team.playerCount], [0, 0], 'off the team in every team view');
+  const closed = one<{ name: string; user_id: string | null; removed_at: number | null; removed_reason: string | null }>('SELECT * FROM net_team_players WHERE id = ?', added.id)!;
+  assert.deepEqual([closed.name, closed.user_id, !!closed.removed_at, closed.removed_reason], ['Aarav M.', null, true, 'consent withdrawn']);
+  assert.ok(kidRow(waiting)!.removed_at, 'off the squad of the match that has not started');
+  const kept = kidRow(started)!;
+  assert.deepEqual([kept.name, kept.user_id, kept.removed_at], ['Aarav M.', null, null], 'the started scorecard keeps the short name, unlinked');
+  assert.equal(many("SELECT 1 FROM match_balls WHERE match_id = ? AND 'Aarav M.' IN (batter, bowler)", started).length, 1, 'the ball-by-ball record is untouched');
+  assert.equal((await ok(h.get(`/api/me/network/children/${kid.id}`, parent.token))).career.matches, 0, 'on nobody\'s record');
+  assert.equal(many("SELECT 1 FROM net_team_players WHERE name LIKE '%Mehta%' UNION ALL SELECT 1 FROM match_players WHERE name LIKE '%Mehta%'").length, 0, 'the full name is nowhere outside the family');
+  // a new consent does not put the child back by itself; the organiser adds them again with the code
+  await ok(h.post(`/api/me/network/children/${kid.id}/consent`, { scope: 'play_record', given: true }, parent.token));
+  assert.equal((await ok(h.get(`${T}/${id}`, w.o1))).teams.find((t: any) => t.id === teams[0]).players.length, 0);
+  const back = await ok(h.post(`${T}/${id}/teams/${teams[0]}/players`, { childCode: kid.playerCode }, w.o1), 201);
+  // removing the child's profile closes the row the same way
+  await ok(h.del(`/api/me/network/children/${kid.id}`, parent.token));
+  const gone = one<{ user_id: string | null; removed_reason: string | null }>('SELECT * FROM net_team_players WHERE id = ?', back.id)!;
+  assert.deepEqual([gone.user_id, gone.removed_reason], [null, 'profile removed']);
+  assert.equal((await ok(h.get(`${T}/${id}`, w.o1))).teams.find((t: any) => t.id === teams[0]).playerCount, 0);
+});
+
+test('review: a host sees only its own ground\'s charge and answer note; the organiser sees every ground\'s', async () => {
+  const { id } = await setUp();
+  const charge = (d: any) => Object.fromEntries(d.grounds.map((g: any) => [g.ground, g.chargePerMatchPaise]));
+  assert.deepEqual(charge(await ok(h.get(`${T}/${id}`, w.o1))), { 'Cricket Ground': 0, 'Riverside Box Cricket': 200000, 'Portfolio Turf': 50000 });
+  assert.deepEqual(charge(await ok(h.get(`${T}/${id}`, w.o2))), { 'Cricket Ground': null, 'Riverside Box Cricket': 200000, 'Portfolio Turf': null });
+  assert.deepEqual(charge(await ok(sp('GET', `${T}/${id}`))), { 'Cricket Ground': null, 'Riverside Box Cricket': null, 'Portfolio Turf': 50000 });
+  const riv = await ok(h.get(`${T}/${id}`, w.o2));
+  assert.ok(riv.grounds.filter((g: any) => !g.isMine).every((g: any) => g.note === null));
+  assert.ok(!JSON.stringify(riv).includes('50000'), 'the portfolio\'s charge appears nowhere in Riverside\'s view');
+});
+
+test('review: another tournament\'s unconfirmed proposal is advice only; the first ground confirmation wins', async () => {
+  await joinAll();
+  const cup = async (name: string) => {
+    const t = (await ok(h.post(T, { name, startDate: dayFromNow(5), endDate: dayFromNow(6), overs: 1, matchMinutes: 180 }, w.o1), 201)).tournament.id as string;
+    await ok(h.post(`${T}/${t}/grounds`, { groundId: w.river, chargePerMatchPaise: 0 }, w.o1), 201);
+    const inv = (await ok(h.get(`${T}/${t}`, w.o2))).grounds.find((g: any) => g.isMine);
+    await ok(h.post(`${T}/${t}/grounds/${inv.id}`, { accept: true }, w.o2));
+    for (const team of ['North', 'South']) await ok(h.post(`${T}/${t}/teams`, { name: team }, w.o1), 201);
+    return t;
+  };
+  const one1 = await cup('First Cup'), two = await cup('Second Cup');
+  const plan = { days: [dayFromNow(5)], times: ['09:00'] };
+  const a = (await ok(h.post(`${T}/${one1}/fixtures/propose`, plan, w.o1), 201)).fixtures[0];
+  // the first cup's draft proposal does not stop the second cup asking for the same time
+  const b = (await ok(h.post(`${T}/${two}/fixtures/propose`, plan, w.o1), 201)).fixtures[0];
+  assert.deepEqual([a.groundId, a.startsAt], [b.groundId, b.startsAt]);
+  // the ground sees that two tournaments want the time; the organiser does not
+  const forHost = async (t: string) => (await ok(h.get(`${T}/${t}`, w.o2))).fixtures[0].otherRequests;
+  assert.deepEqual([await forHost(one1), await forHost(two)], [1, 1]);
+  assert.equal((await ok(h.get(`${T}/${one1}`, w.o1))).fixtures[0].otherRequests, 0);
+  // the ground confirms the second cup: it is held; the first cup can no longer have that time
+  await ok(h.post(`${T}/${two}/fixtures/${b.id}/confirm`, {}, w.o2));
+  const lost = await h.post(`${T}/${one1}/fixtures/${a.id}/confirm`, {}, w.o2);
+  assert.equal(lost.status, 409); assert.match(JSON.stringify(lost.body), /already blocked|another network match/);
+  assert.equal((await ok(h.get(`${T}/${one1}`, w.o2))).fixtures[0].otherRequests, 0, 'a confirmed match is not a competing request');
+  // a fresh proposal for the first cup now leaves the confirmed time alone
+  assert.equal((await h.post(`${T}/${one1}/fixtures/propose`, { ...plan, replace: true }, w.o1)).status, 400);
+  const moved = (await ok(h.post(`${T}/${one1}/fixtures/propose`, { days: [dayFromNow(5)], times: ['09:00', '13:00'], replace: true }, w.o1), 201)).fixtures[0];
+  assert.equal(moved.startsAt, new Date(`${dayFromNow(5)}T13:00:00+05:30`).getTime());
+  await ok(h.post(`${T}/${one1}/fixtures/${moved.id}/confirm`, {}, w.o2));
+  assert.equal(many("SELECT 1 FROM booking_slots WHERE kind = 'block' AND note LIKE 'Network tournament:%'").length, 6, 'two matches held, three hours each');
 });

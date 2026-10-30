@@ -5,8 +5,8 @@ import {
   removeChild, searchPlayers, setChildConsent, setChildProfiles, setChildSharing, setMySharing, staffClaims, staffDecideClaim, staffSuggest, viewProfile,
 } from '../network.ts';
 import {
-  addNetPlayer, addNetTeam, addSettlement, answerInvitation, assignScorer, cancelFixture, cancelNetTournament, cancelSettlement, completeNetTournament, confirmSlot,
-  createNetTournament, declineSlot, fixtureResults, inviteGround, listNetTournaments, markSettlementPaid, moveFixture, netTournamentDetail, openScoring, proposeFixtures,
+  addNetPlayer, addNetTeam, addSettlement, answerInvitation, answerTeamInvitation, assignScorer, cancelFixture, cancelNetTournament, cancelSettlement, completeNetTournament, confirmSlot,
+  createNetTournament, declineSlot, fixtureResults, inviteGround, listNetTournaments, markSettlementPaid, moveFixture, myTeamInvitations, netTournamentDetail, openScoring, proposeFixtures,
   publicNetTournament, publishNetTournament, removeNetPlayer, removeNetTeam, submitResult, verifyResult,
 } from '../netTournaments.ts';
 
@@ -66,6 +66,9 @@ export function networkRoutes(r: Router): void {
   r.get('/api/me/network/claims', (c) => ok(myClaims(U(c))), ME);
   r.post('/api/me/network/claims', (c) => created(claimMatch(U(c), c.json())), ME);
   r.post('/api/me/network/claims/:id', (c) => ok(answerClaim(U(c), c.params.id!, c.json())), ME);
+  // a network tournament organiser asked to put the player's profile on a team: linked only if the player agrees
+  r.get('/api/me/network/team-invitations', (c) => ok(myTeamInvitations(U(c))), ME);
+  r.post('/api/me/network/team-invitations/:id', (c) => ok(answerTeamInvitation(U(c), c.params.id!, c.json())), ME);
   // children, run by their parent or guardian (apart from academy students, which stay one academy's own record: /api/me/children)
   r.get('/api/me/network/children', (c) => ok(myChildren(U(c))), ME);
   r.post('/api/me/network/children', (c) => created(addChild(U(c), c.json())), ME);

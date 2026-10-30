@@ -19,6 +19,7 @@ export interface Fixture {
   id: string; round: number; teamAId: string; teamBId: string; teamA: string; teamB: string; groundId: string | null; ground: string | null; host: string | null; hostIsMe: boolean;
   startsAt: number | null; endsAt: number | null; status: string; timeHeld: boolean;
   move: { groundId: string; ground: string | null; startsAt: number | null; reason: string | null; hostIsMe: boolean } | null;
+  otherRequests: number;
   matchId: string | null; scorer: string | null; scorerId: string | null; result: Result | null; waiting: Result | null;
 }
 export interface Settlement {
@@ -28,8 +29,8 @@ export interface Settlement {
 export interface Detail {
   tournament: Summary & { pointsWin: number; pointsTie: number; notes: string | null; publishedAt: number | null; closedAt: number | null; closeReason: string | null };
   myRole: 'organiser' | 'host';
-  grounds: { id: string; groundId: string; ground: string | null; business: string; isMine: boolean; status: string; chargePerMatchPaise: number; note: string | null }[];
-  teams: { id: string; name: string; captain: string | null; players?: { id: string; name: string; hasProfile: boolean }[]; playerCount: number }[];
+  grounds: { id: string; groundId: string; ground: string | null; business: string; isMine: boolean; status: string; chargePerMatchPaise: number | null; note: string | null }[];
+  teams: { id: string; name: string; captain: string | null; players?: { id: string; name: string; hasProfile: boolean; asked: boolean }[]; playerCount: number }[];
   fixtures: Fixture[];
   standings: { teamId: string; team: string; played: number; won: number; lost: number; tied: number; noResult: number; points: number; nrr: number | null }[];
   standingsNote: string;
