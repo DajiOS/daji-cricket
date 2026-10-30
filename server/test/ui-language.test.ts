@@ -45,17 +45,26 @@ test('the phone app and website copies are exactly what the build script makes f
 });
 
 test('every line the screens ask for exists, and every line in the list is used on a screen', () => {
-  const mobile = ['mobile/App.tsx', ...readdirSync(join(ROOT, 'mobile/src')).filter((f) => f.endsWith('.tsx')).map((f) => `mobile/src/${f}`)].map(read).join('\n');
-  const web = read('web/public/app.js') + read('web/public/index.html');
+  const mobile = ['mobile/App.tsx', ...readdirSync(join(ROOT, 'mobile/src')).filter((f) => /\.tsx?$/.test(f) && f !== 'strings.gen.ts').map((f) => `mobile/src/${f}`)].map(read).join('\n');
+  const web = read('web/public/app.js') + read('web/public/club.js') + read('web/public/index.html');
   const used = new Set([
     ...[...mobile.matchAll(/(?:\bt|\))\('([\w.]+)'/g)].map((m) => m[1]!),
     ...[...mobile.matchAll(/\? '([a-z]+\.[\w.]+)' : '([a-z]+\.[\w.]+)'/g)].flatMap((m) => [m[1]!, m[2]!]),
     ...[...web.matchAll(/\bT\('([\w.]+)'/g)].map((m) => m[1]!),
     ...[...web.matchAll(/data-i18n(?:-aria)?="([\w.]+)"/g)].map((m) => m[1]!),
+    // server messages are looked up by error code from a list of quoted keys
+    ...[...(mobile + web).matchAll(/'(err\.[A-Z_]+)'/g)].map((m) => m[1]!),
   ]);
   const known = new Set<string>(UI_KEYS);
   for (const k of used) assert.ok(known.has(k), `a screen asks for "${k}", which is not in shared/src/i18n.ts`);
   for (const k of UI_KEYS) assert.ok(used.has(k), `"${k}" is in the list but no screen uses it`);
+});
+
+test('every translated server message is for an error code the server really sends', () => {
+  const src = readdirSync(join(ROOT, 'server/src'), { recursive: true }).filter((f) => String(f).endsWith('.ts')).map((f) => read(`server/src/${f}`)).join('\n');
+  const codes = UI_KEYS.filter((k) => k.startsWith('err.')).map((k) => k.slice(4));
+  assert.ok(codes.length >= 20);
+  for (const c of codes) assert.ok(c === 'NETWORK' || src.includes(`'${c}'`), `err.${c}: the server never sends ${c}`);
 });
 
 test('isUiLanguageQuestion: questions about the screens, in three languages, and not questions about what the assistant speaks', () => {

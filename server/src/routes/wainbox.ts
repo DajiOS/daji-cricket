@@ -41,6 +41,6 @@ export function waInboxRoutes(r: Router): void {
   r.post('/api/whatsapp/messages/:id/dismiss', (c) => ok(dismissMessage(U(c), o(c), c.params.id!, c.json())), TEAM);
   r.post('/api/whatsapp/messages/:id/restore', (c) => ok(restoreMessage(U(c), o(c), c.params.id!)), TEAM);
   r.post('/api/whatsapp/messages/:id/media/retry', (c) => ok(retryMedia(U(c), o(c), c.params.id!)), TEAM);
-  r.post('/api/whatsapp/messages/:id/move', (c) => ok(moveMessage(U(c), c.realUser ?? U(c), o(c), c.params.id!, c.json())), TEAM);
+  r.post('/api/whatsapp/messages/:id/move', (c) => ok(moveMessage(c.cfg.dataDir, U(c), c.realUser ?? U(c), o(c), c.params.id!, c.json())), TEAM);
   r.post('/api/whatsapp/messages/:id/reply', async (c) => created(await replyTo(c.cfg, U(c), o(c), c.params.id!, c.json())), TEAM);
 }
