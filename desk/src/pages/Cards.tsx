@@ -1,24 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chip, Field, Filters, Modal, PageHead, Table, useForm, NameField, useToast } from '../ui';
-import { ApiError, del, download, getToken, getViewOwner, patch, post, qs, sendFile, useApi, formatPhone } from '../lib';
+import { ApiError, del, download, getToken, getViewOwner, patch, post, qs, sendFile, useApi, formatPhone, shrinkPhoto as shrink } from '../lib';
 import { Async, errMsg, useDebounced } from '../parts/club/common';
 
 interface Card { id: string; name: string; title: string; company: string; phones: string[]; emails: string[]; website: string; address: string; notes: string; hasImage: boolean }
 interface Scan { fields: Omit<Card, 'id' | 'hasImage'>; readable: boolean; duplicates: { id: string; name: string; company: string }[] }
 const LIMIT = 50;
 const API_BASE = ((window as any).DAJI_API || '').replace(/\/$/, '');
-
-/** Shrinks a phone photo (often 4–10 MB) to a sharp 1800px JPEG so it uploads fast and stays under the 5 MB limit. */
-async function shrink(file: File): Promise<Blob> {
-  try {
-    const bmp = await createImageBitmap(file);
-    const k = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
-    const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
-    cv.getContext('2d')!.drawImage(bmp, 0, 0, cv.width, cv.height);
-    const b = await new Promise<Blob | null>((r) => cv.toBlob(r, 'image/jpeg', 0.88));
-    return b ?? file;
-  } catch { return file; }
-}
 
 /** Card photos need the sign-in header, so they are fetched and shown from a local blob. */
 function CardPhoto({ id }: { id: string }) {

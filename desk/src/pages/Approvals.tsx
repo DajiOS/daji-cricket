@@ -10,13 +10,13 @@ const Queues = lazy(() => import('../parts/dash/Queues'));
 
 // Approvals, as in the design: everything waiting on a decision on one stage board (Submitted, Review, Approval, Final sign-off, Done),
 // filtered by kind, with the selected item's facts, its sign-off chain and the decision. The old bills table is still at /approvals/bills.
-// Bills, staff pay, refunds, discounts, fee waivers and expenses follow the owner's approval rules (built at /approvals/rules):
+// Bills, staff pay, refunds, discounts, fee waivers, expenses and cash spends (cashbook.ts) follow the owner's approval rules (built at /approvals/rules):
 // the server sends each chain's steps, who may sign and its trail.
 // /approvals/<kind> opens the board filtered to that kind. Booking approvals and UPI payments also show their full table under the board:
 // they were the Approvals and UPI to verify tabs of Bookings, and /approvals/book and /approvals/upi open them here (routes.ts, MERGED).
-type Kind = 'bill' | 'pay' | 'book' | 'upi' | 'refund' | 'discount' | 'waiver' | 'expense';
+type Kind = 'bill' | 'pay' | 'book' | 'upi' | 'refund' | 'discount' | 'waiver' | 'expense' | 'cash';
 // The kinds that only ever come from the rules, with the right that lets a team member see them.
-const RULED: Partial<Record<Kind, string>> = { refund: 'record_payments', discount: 'manage_bookings', waiver: 'manage_academy', expense: 'manage_accounting' };
+const RULED: Partial<Record<Kind, string>> = { refund: 'record_payments', discount: 'manage_bookings', waiver: 'manage_academy', expense: 'manage_accounting', cash: 'manage_accounting' };
 const K: Record<Kind, { name: string; ink: string; tint: string; href: string }> = {
   bill: { name: 'Bills', ink: '#B86E12', tint: 'var(--t-amber)', href: '/bills' },
   pay: { name: 'Staff pay', ink: 'var(--i-violet)', tint: 'var(--t-violet)', href: '/payroll' },
@@ -26,6 +26,7 @@ const K: Record<Kind, { name: string; ink: string; tint: string; href: string }>
   discount: { name: 'Discounts', ink: 'var(--i-blue)', tint: 'var(--t-blue)', href: '/bookings' },
   waiver: { name: 'Fee waivers', ink: 'var(--i-teal)', tint: 'var(--t-teal)', href: '/academy/fees' },
   expense: { name: 'Expenses', ink: 'var(--i-amber)', tint: 'var(--t-amber)', href: '/transactions' },
+  cash: { name: 'Cash spends', ink: 'var(--i-green)', tint: 'var(--t-green)', href: '/cash' },
 };
 const ST: [string, string, string, string][] = [
   ['Submitted', 'New in', 'var(--i-blue)', 'var(--t-blue)'], ['Review', 'First check', '#0B5F67', 'var(--t-teal)'],
@@ -41,9 +42,10 @@ const CHAIN: Record<Kind, string[]> = {
   discount: ['Asked for', 'Signed off', 'Discount given'],
   waiver: ['Asked for', 'Signed off', 'Fee waived'],
   expense: ['Entered', 'Signed off', 'Recorded in the books'],
+  cash: ['Spent from cash in hand', 'Signed off', 'Confirmed in the cash record'],
 };
 // The first and last links of a ruled chain, around the owner's steps.
-const ENDS: Partial<Record<Kind, [string, string]>> = { pay: ['Sent by', 'Month locked'], refund: ['Started by', 'Super admin authorises'], discount: ['Asked for by', 'Discount given'], waiver: ['Asked for by', 'Fee waived'], expense: ['Entered by', 'Recorded in the books'] };
+const ENDS: Partial<Record<Kind, [string, string]>> = { pay: ['Sent by', 'Month locked'], refund: ['Started by', 'Super admin authorises'], discount: ['Asked for by', 'Discount given'], waiver: ['Asked for by', 'Fee waived'], expense: ['Entered by', 'Recorded in the books'], cash: ['Spent by', 'Confirmed in the cash record'] };
 const RULE: Record<Kind, string> = {
   bill: 'A bill is approved by someone other than the person who entered it. The owner can approve any bill.',
   pay: 'The month locks when the last step signs.',
@@ -53,11 +55,12 @@ const RULE: Record<Kind, string> = {
   discount: 'The booking owes less once the last step signs.',
   waiver: 'The fee drops once the last step signs.',
   expense: 'It is added to the books once the last step signs.',
+  cash: 'The cash in hand already counts it; it is confirmed once the last step signs. It is not posted to the books.',
 };
-const KIND_OF: Record<string, Kind> = { payroll: 'pay', refund: 'refund', discount: 'discount', waiver: 'waiver', expense: 'expense' };
+const KIND_OF: Record<string, Kind> = { payroll: 'pay', refund: 'refund', discount: 'discount', waiver: 'waiver', expense: 'expense', cash: 'cash' };
 interface Pay { id: string; bookingId: string; amountPaise: number; reference: string | null; submittedAt: number | null; createdAt: number }
 export interface Req {
-  id: string; kind: 'bill' | 'payroll' | 'refund' | 'discount' | 'waiver' | 'expense'; entityId: string; title: string; amountPaise: number; status: string; round: number; submittedByName: string | null; submittedAt: number; atStep: number;
+  id: string; kind: 'bill' | 'payroll' | 'refund' | 'discount' | 'waiver' | 'expense' | 'cash'; entityId: string; title: string; amountPaise: number; status: string; round: number; submittedByName: string | null; submittedAt: number; atStep: number;
   steps: { label: string; who: string; overPaise: number | null; state: 'done' | 'now' | 'later'; signedByName: string | null; signedAt: number | null; note: string | null }[];
   rule: string; canSign: boolean; whyNot: string | null; trail: { id: number; at: number; action: string; actorName: string | null; detail: any }[];
 }

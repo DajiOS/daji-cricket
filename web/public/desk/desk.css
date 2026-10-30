@@ -286,6 +286,10 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .stat .value { font-size: 26px; }
 }
 @media (max-width: 520px) { .g4 { grid-template-columns: 1fr 1fr; } .stat { padding: 14px; } .stat .value { font-size: 22px; } }
+/* Work › Cash (pages/Cash.tsx): a card per entry on phones instead of the wide table; the four figures one under another. */
+.cash-list { display: none; }
+@media (max-width: 860px) { .cash-list { display: block; } }
+@media (max-width: 520px) { .cash-stats { grid-template-columns: 1fr; } }
 
 @media print {
   body { background: #fff !important; }

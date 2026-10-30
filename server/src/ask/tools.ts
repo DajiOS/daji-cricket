@@ -22,6 +22,7 @@ import { leaders } from '../playerStats.ts';
 import { fantasyOverview } from '../fantasy.ts';
 import { serverConsole, serverStatus } from '../serverConsole.ts';
 import { areaFilter, listAreas } from '../areas.ts';
+import { listWallets } from '../cashbook.ts';
 import type { Config } from '../config.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
@@ -305,6 +306,22 @@ export function branches(ctx: Ctx) {
     }));
   const list = listAreas(ctx.user, ctx.ownerId).items;
   return { today, branches: list.map((a) => ({ name: a.name, restricted: a.restricted, projects: projects(a.id) })), notInABranch: projects(null) };
+}
+
+/**
+ * Supervisor Cash (cashbook.ts): the owner sees every person who holds the business's cash, a team member only the cash they
+ * hold. For each: what was handed over, the cash that should be in hand (every spend counted at once) and the confirmed figure
+ * (signed-off spends only), spends waiting for sign-off, spends with no receipt, uncertain ones, and the last count against
+ * what was expected. Anyone else is told they keep no cash here. Nothing is posted to the books from these records.
+ */
+export function cash(ctx: Ctx) {
+  let items;
+  try { items = listWallets(ctx.user, ctx.ownerId).items; } catch { return { available: false, why: 'You do not keep any of this business\'s cash.' }; }
+  return { available: true, holders: items.map((b) => ({
+    name: b.holderName, givenPaise: b.givenPaise, expectedInHandPaise: b.expectedPaise, confirmedInHandPaise: b.confirmedPaise,
+    spendsWaitingForSignOff: b.waiting, waitingPaise: b.spentWaitingPaise, spendsWithoutReceipt: b.missingReceipts, uncertainSpends: b.uncertain,
+    lastCount: b.lastCount ? { countedPaise: b.lastCount.countedPaise, expectedPaise: b.lastCount.expectedPaise, differencePaise: b.lastCount.differencePaise, at: b.lastCount.at } : null,
+  })) };
 }
 
 /** The team's attendance sheet for a period: days present, half days, absences and leave, as totals. No names. */
