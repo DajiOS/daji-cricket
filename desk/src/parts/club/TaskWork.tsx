@@ -2,7 +2,7 @@
 // the job's history, the requests inbox, raising a request, and the daily site report.
 import { useEffect, useRef, useState } from 'react';
 import { Field, Modal, useToast, DateInput } from '../../ui';
-import { fetchBlob, fmtDateTime, post, sendFile, todayISO as today, useApi } from '../../lib';
+import { download, fetchBlob, fmtDateTime, post, sendFile, todayISO as today, useApi } from '../../lib';
 import { Select, errMsg } from './common';
 import type { Project, Task, TaskRef } from './taskTypes';
 
@@ -78,7 +78,10 @@ function RefThumb({ r }: { r: TaskRef }) {
 }
 
 /** References: pictures from the gallery or WhatsApp, quotes, PDFs and links. They explain the job; only camera photos prove it. */
-export function References({ t, onChanged, setErr }: { t: Task; onChanged: () => void; setErr: SetErr }) {
+/** The real site a link goes to, shown beside any name given to it so a look-alike name cannot hide where it leads. */
+const linkHost = (r: TaskRef): string => { try { return new URL(r.url).hostname; } catch { return ''; } };
+
+export function References({ t, manager, meId, onChanged, setErr }: { t: Task; manager: boolean; meId: string; onChanged: () => void; setErr: SetErr }) {
   const toast = useToast(); const pick = useRef<HTMLInputElement>(null);
   const [link, setLink] = useState(''); const [showLink, setShowLink] = useState(false);
   const add = async (file?: File) => {
@@ -90,8 +93,12 @@ export function References({ t, onChanged, setErr }: { t: Task; onChanged: () =>
     try { await post(`/api/tasks/${tid(t)}/links`, { url: link.trim() }); setLink(''); setShowLink(false); toast('Link added.'); onChanged(); } catch (e) { setErr(errMsg(e)); }
   };
   const openRef = async (r: TaskRef) => {
-    if (r.kind === 'link') { window.open(r.url, '_blank', 'noopener,noreferrer'); return; }
-    try { const b = await fetchBlob(r.url); const u = URL.createObjectURL(b); window.open(u, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(u), 60_000); } catch (e) { toast(errMsg(e)); }
+    if (r.kind === 'link') { if (r.url.startsWith('https://')) window.open(r.url, '_blank', 'noopener,noreferrer'); return; }
+    // a PDF is saved rather than opened: the site's policy blocks the browser's PDF viewer inside a page made from it
+    try {
+      if (r.mime === 'application/pdf') { await download(r.url, r.name); return; }
+      const b = await fetchBlob(r.url); const u = URL.createObjectURL(b); window.open(u, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(u), 60_000);
+    } catch (e) { toast(errMsg(e)); }
   };
   const hide = async (r: TaskRef) => {
     try { await post(`/api/tasks/refs/${encodeURIComponent(r.id)}/hide`, {}); toast('Reference taken off. It stays on record.'); onChanged(); } catch (e) { setErr(errMsg(e)); toast(errMsg(e)); }
@@ -105,9 +112,9 @@ export function References({ t, onChanged, setErr }: { t: Task; onChanged: () =>
         <div className="trefs">
           {t.references.map((r) => (
             <div key={r.id} className="tref">
-              <button type="button" className="tref-open" onClick={() => openRef(r)} title={`Added ${fmtDateTime(r.addedAt)}${r.addedByName ? ' by ' + r.addedByName : ''}`}><RefThumb r={r} /><span>{r.name}</span></button>
+              <button type="button" className="tref-open" onClick={() => openRef(r)} title={`Added ${fmtDateTime(r.addedAt)}${r.addedByName ? ' by ' + r.addedByName : ''}`}><RefThumb r={r} /><span>{r.name}</span>{r.kind === 'link' && linkHost(r) !== r.name && <span className="muted small">{linkHost(r)}</span>}</button>
               {r.note && <span className="muted small">{r.note}</span>}
-              {live && <button type="button" className="btn ghost sm" onClick={() => hide(r)}>Take off</button>}
+              {live && (manager || r.addedById === meId) && <button type="button" className="btn ghost sm" onClick={() => hide(r)}>Take off</button>}
             </div>
           ))}
         </div>
@@ -147,7 +154,7 @@ export function HistoryList({ taskId, stamp }: { taskId: string; stamp: string }
 }
 
 /** Requests from the team, waiting for a manager to take them in (as a job for someone) or turn them down with a reason. */
-export function InboxDialog({ team, manager, onClose, onChanged }: { team: { id: string; name: string }[]; manager: boolean; onClose: () => void; onChanged: () => void }) {
+export function InboxDialog({ team, manager, meId, onClose, onChanged }: { team: { id: string; name: string }[]; manager: boolean; meId: string; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
   const [d, err, reload] = useApi<{ items: Task[] }>('/api/tasks/inbox');
   const [pickFor, setPickFor] = useState<Record<string, { who: string; need: string; due: string; note: string }>>({});
@@ -172,7 +179,7 @@ export function InboxDialog({ team, manager, onClose, onChanged }: { team: { id:
           <b>{t.title}</b>
           <div className="muted small">From {t.intake?.byName ?? 'the team'} · {fmtDateTime(t.createdAt)}{t.projectName ? ` · ${t.projectName}` : ''}{t.references.length ? ` · ${t.references.length} reference${t.references.length === 1 ? '' : 's'}` : ''}</div>
           {t.details && <p>{t.details}</p>}
-          <References t={t} onChanged={() => { reload(); onChanged(); }} setErr={setMsg} />
+          <References t={t} manager={manager} meId={meId} onChanged={() => { reload(); onChanged(); }} setErr={setMsg} />
           {manager && (
             <div className="form-grid" style={{ marginTop: 8 }}>
               <Field label="For"><Select value={val(t.id).who} onChange={(v) => set(t.id, 'who', v)} options={[['', 'Anyone on the team'], ...team.map((m) => [m.id, m.name] as [string, string])]} /></Field>

@@ -11,9 +11,11 @@ import { C } from './theme';
 
 const when = (ms: number): string => new Date(ms).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 type Msg = (m: string) => void;
+/** The real site a link goes to, shown beside any name given to it so a look-alike name cannot hide where it leads. */
+const linkHost = (r: TaskRef): string => { const m = /^https:\/\/([^/?#]+)/.exec(r.url); return m ? m[1]! : ''; };
 
 /** References: pictures from the gallery or WhatsApp, quotes and links. They explain a job and never count as proof. */
-function Refs({ t, onChanged, setErr, setNote }: { t: Task; onChanged: () => void; setErr: Msg; setNote: Msg }) {
+function Refs({ t, mayHide, onChanged, setErr, setNote }: { t: Task; mayHide: (r: TaskRef) => boolean; onChanged: () => void; setErr: Msg; setNote: Msg }) {
   const [busy, setBusy] = useState(false); const [link, setLink] = useState(''); const [showLink, setShowLink] = useState(false);
   const refs = t.references ?? [];
   const addPic = async () => {
@@ -39,11 +41,11 @@ function Refs({ t, onChanged, setErr, setNote }: { t: Task; onChanged: () => voi
       {refs.map((r) => (
         <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
           {r.kind === 'file' && r.mime?.startsWith('image/') ? <Image source={authImage(r.url)} style={{ width: 48, height: 48, borderRadius: 6, backgroundColor: C.line, marginRight: 8 }} /> : null}
-          <Pressable style={{ flex: 1 }} accessibilityRole={r.kind === 'link' ? 'link' : 'text'} onPress={() => { if (r.kind === 'link') Linking.openURL(r.url).catch(() => setErr('This phone cannot open that link.')); }}>
-            <Text style={[s.text, r.kind === 'link' ? { color: C.gold } : null]} numberOfLines={1}>{r.name}</Text>
+          <Pressable style={{ flex: 1 }} accessibilityRole={r.kind === 'link' ? 'link' : 'text'} onPress={() => { if (r.kind === 'link' && r.url.startsWith('https://')) Linking.openURL(r.url).catch(() => setErr('This phone cannot open that link.')); }}>
+            <Text style={[s.text, r.kind === 'link' ? { color: C.gold } : null]} numberOfLines={1}>{r.name}{r.kind === 'link' && linkHost(r) !== r.name ? ` · ${linkHost(r)}` : ''}</Text>
             <Text style={[s.muted, { fontSize: 11 }]}>{r.kind === 'file' && r.mime === 'application/pdf' ? 'PDF, open it on the desk · ' : ''}{r.addedByName ?? ''} {when(r.addedAt)}</Text>
           </Pressable>
-          {live && <Btn kind="link" label="Take off" onPress={() => hide(r)} />}
+          {live && mayHide(r) && <Btn kind="link" label="Take off" onPress={() => hide(r)} />}
         </View>
       ))}
       {live && (
@@ -91,7 +93,7 @@ export function TaskExtras({ t, user, manager, team, onChanged, setErr, setNote 
           {helperChange && <Btn kind="outline" label="Save helpers" onPress={() => call('helpers', { userIds: helpers }, 'Helpers saved.')} />}
         </View>
       )}
-      <Refs t={t} onChanged={onChanged} setErr={setErr} setNote={setNote} />
+      <Refs t={t} mayHide={(r) => manager || r.addedById === user.id} onChanged={onChanged} setErr={setErr} setNote={setNote} />
       {manager && t.status === 'done' && !t.signedOffAt && <Btn label="Sign off the work" onPress={() => call('signoff', {}, 'Signed off.')} />}
       {manager && t.status !== 'open' && (asking
         ? (<><Field label="Why it needs more work (optional)" value={why} onChangeText={setWhy} autoCapitalize="sentences" maxLength={300} /><Btn kind="outline" label="Reopen" onPress={() => { setAsking(false); call('reopen', why.trim() ? { reason: why.trim() } : {}, 'Reopened.'); }} /></>)
@@ -101,7 +103,7 @@ export function TaskExtras({ t, user, manager, team, onChanged, setErr, setNote 
 }
 
 /** Requests the team raised. A manager takes one in (for someone, with photos needed) or turns it down with a reason. Anyone can raise one. */
-export function Requests({ manager, team }: { manager: boolean; team: { id: string; name: string }[] }) {
+export function Requests({ manager, meId, team }: { manager: boolean; meId: string; team: { id: string; name: string }[] }) {
   const [items, setItems] = useState<Task[] | null>(null); const [err, setErr] = useState(''); const [note, setNote] = useState('');
   const [title, setTitle] = useState(''); const [details, setDetails] = useState('');
   const [pick, setPick] = useState<Record<string, { who: string; need: string; why: string }>>({});
@@ -139,7 +141,7 @@ export function Requests({ manager, team }: { manager: boolean; team: { id: stri
           <Text style={s.h2}>{t.title}</Text>
           <Text style={s.muted}>From {t.intake?.byName ?? 'the team'}{t.createdAt ? ` · ${when(t.createdAt)}` : ''}</Text>
           {!!t.details && <Text style={[s.muted, { marginVertical: 6 }]}>{t.details}</Text>}
-          <Refs t={t} onChanged={load} setErr={setErr} setNote={setNote} />
+          <Refs t={t} mayHide={(r) => manager || r.addedById === meId} onChanged={load} setErr={setErr} setNote={setNote} />
           {manager && (
             <View style={{ marginTop: 8 }}>
               <Text style={[s.muted, { marginBottom: 6, fontSize: 12, fontWeight: '600' }]}>For</Text>
@@ -156,23 +158,32 @@ export function Requests({ manager, team }: { manager: boolean; team: { id: stri
   );
 }
 
-interface Report { date: string; notes: { id: string; authorName: string | null; workers: number | null; body: string; issues: string | null; mine: boolean }[]; done: { title: string; proofPhotos: number }[]; overdue: { title: string }[]; started: { title: string }[]; proofPhotos: number; references: number }
+interface Report { date: string; projectId: string | null; projectName: string | null; notes: { id: string; authorName: string | null; workers: number | null; body: string; issues: string | null; mine: boolean }[]; done: { title: string; proofPhotos: number }[]; overdue: { title: string }[]; started: { title: string }[]; proofPhotos: number; references: number }
 
 /** Today's site note (or a day in the last week): people working, what was done, problems; with the day's jobs from the board. */
 export function SiteNote() {
   const today = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
   const [date, setDate] = useState(today); const [r, setR] = useState<Report | null>(null);
+  // which site: the whole business or one project (only projects in branches this person may see come back)
+  const [projects, setProjects] = useState<{ id: string; name: string; status: string }[]>([]); const [projectId, setProjectId] = useState('');
+  useEffect(() => { api<{ items: { id: string; name: string; status: string }[] }>('/api/projects').then((x) => setProjects(x.items.filter((p) => p.status === 'active'))).catch(() => setProjects([])); }, []);
   const [workers, setWorkers] = useState(''); const [body, setBody] = useState(''); const [issues, setIssues] = useState('');
   const [err, setErr] = useState(''); const [note, setNote] = useState('');
   const fill = (x: Report) => { setR(x); const m = x.notes.find((n) => n.mine); setWorkers(m?.workers != null ? String(m.workers) : ''); setBody(m?.body ?? ''); setIssues(m?.issues ?? ''); };
-  useEffect(() => { setR(null); api<Report>(`/api/site-reports?date=${date || today}`).then(fill).catch((e) => setErr(e.message)); }, [date]);
+  useEffect(() => { setR(null); setErr(''); api<Report>(`/api/site-reports?date=${date || today}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ''}`).then(fill).catch((e) => setErr(e.message)); }, [date, projectId]);
   const save = async () => {
     setErr(''); setNote('');
-    try { fill(await api<Report>('/api/site-reports', { method: 'POST', body: { date: date || today, workers: workers === '' ? undefined : Number(workers), body: body.trim(), issues: issues.trim() || undefined } })); setNote('Site note saved.'); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
+    try { fill(await api<Report>('/api/site-reports', { method: 'POST', body: { date: date || today, projectId: projectId || null, workers: workers === '' ? undefined : Number(workers), body: body.trim(), issues: issues.trim() || undefined } })); setNote('Site note saved.'); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
   };
   return (
     <View>
       <DateField label="Day" value={date} onChange={setDate} />
+      {projects.length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
+          <Chip label="Whole business" on={!projectId} onPress={() => setProjectId('')} />
+          {projects.map((p) => <Chip key={p.id} label={p.name} on={projectId === p.id} onPress={() => setProjectId(p.id)} />)}
+        </View>
+      )}
       {r === null ? <Loading /> : (
         <View style={s.card}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>

@@ -21,6 +21,7 @@ const Bills = lazy(() => import('./pages/Bills'));
 const Payroll = lazy(() => import('./pages/Payroll'));
 const Memberships = lazy(() => import('./pages/Memberships'));
 const Tournaments = lazy(() => import('./pages/Tournaments'));
+const Network = lazy(() => import('./pages/Network'));
 const Reminders = lazy(() => import('./pages/Reminders'));
 const Team = lazy(() => import('./pages/Team'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -84,7 +85,7 @@ export const PAGES: { path: string; page: ComponentType<{ sub: string }> }[] = [
   { path: '/cards', page: Cards }, { path: '/contacts', page: Contacts }, { path: '/academy', page: Academy },
   { path: '/accounting', page: Accounting }, { path: '/transactions', page: Transactions },
   { path: '/approvals', page: Approvals }, { path: '/bills', page: Bills }, { path: '/payroll', page: Payroll },
-  { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/reminders', page: Reminders },
+  { path: '/memberships', page: Memberships }, { path: '/tournaments', page: Tournaments }, { path: '/network', page: Network }, { path: '/reminders', page: Reminders },
   { path: '/team', page: Team }, { path: '/settings', page: Settings }, { path: '/platform', page: Platform }, { path: '/media', page: Media }, { path: '/cameras', page: Cameras }, { path: '/compliance', page: Compliance },
   { path: '/calendar', page: Calendar }, { path: '/money', page: MoneyFlow }, { path: '/pipeline', page: Pipeline }, { path: '/activity', page: Activity }, { path: '/close', page: CloseWizard }, { path: '/health', page: Health }, { path: '/explore', page: Explorer }, { path: '/hub', page: Hub }, { path: '/grounds', page: Spots },
   { path: '/enquiries', page: Enquiries }, { path: '/blocks', page: Blocks }, { path: '/waitlist', page: Waitlist }, { path: '/guppi', page: Guppi }, { path: '/booking-report', page: BookingsReport }, { path: '/documents', page: Documents },
@@ -122,6 +123,7 @@ export const NAV: NavGroup[] = [
   { section: 'bookings', group: 'Matches & tournaments', items: [
     { to: '/matches', label: 'Fixtures', icon: 'ball', perm: 'manage_matches' },
     { to: '/tournaments', label: 'Tournaments', icon: 'trophy', perm: 'manage_matches' },
+    { to: '/network', label: 'Cricket network', icon: 'users', perm: 'manage_matches' },
   ] },
   { section: 'bookings', group: 'Grounds & nets', items: [
     { to: '/grounds/layout', href: '/resources', label: 'Grounds & nets', icon: 'map', ...grounds },

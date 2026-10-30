@@ -1,7 +1,7 @@
-export interface TaskPhoto { url: string; takenAt: number; uploadedByName?: string | null; note?: string | null }
+export interface TaskPhoto { url: string; takenAt: number; uploadedByName?: string | null; note?: string | null; counts?: boolean }
 export interface Task {
   id: string; title: string; details: string | null; assignedTo: string | null; assignedName: string | null; priority: 'low' | 'medium' | 'high' | 'urgent';
-  stage: 'todo' | 'doing' | 'review' | 'done'; status: 'open' | 'done' | 'cancelled'; dueDate: string | null; overdue: boolean; photosRequired: number; photos: TaskPhoto[];
+  stage: 'todo' | 'doing' | 'review' | 'done'; status: 'open' | 'done' | 'cancelled'; dueDate: string | null; overdue: boolean; photosRequired: number; photos: TaskPhoto[]; proofCounted: number;
   commentCount: number; repeat: 'daily' | 'weekly' | 'monthly' | null; checklist: { text: string; done: boolean }[]; projectId: string | null; projectName: string | null; milestoneId: string | null; milestoneTitle: string | null; completedAt: number | null; completedByName: string | null;
   createdAt: number; nextAction: string | null; helpers: { id: string; name: string | null }[]; references: TaskRef[];
   intake: { state: 'new' | 'accepted' | 'declined'; byId: string; byName: string | null; note: string | null } | null;
