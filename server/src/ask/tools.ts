@@ -23,6 +23,8 @@ import { fantasyOverview } from '../fantasy.ts';
 import { serverConsole, serverStatus } from '../serverConsole.ts';
 import { areaFilter, listAreas } from '../areas.ts';
 import { listWallets } from '../cashbook.ts';
+import { combinedView, realOwnerFor } from '../combined.ts';
+import { acting } from '../audit.ts';
 import type { Config } from '../config.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
@@ -474,5 +476,29 @@ export function server(ctx: Ctx) {
     warnings: s.warnings,
     sshButton: c.instance ? `Opens Amazon Lightsail's browser SSH for instance ${c.instance} in ${c.regionName} (${c.region}); you sign in to AWS there.` : 'Not set up: enter the Lightsail instance name in Settings › Server.',
     codingConsole: c.codingUrl,
+  };
+}
+
+/**
+ * The owner's combined view (combined.ts): the businesses they marked "Mine", side by side, for a period. Only for the business
+ * owner who signed in, whichever of their businesses is open; a team member is told it is the owner's view. Each business says
+ * "not available" when it could not be read, never ₹0. Cash spends are shown next to the books, not added to them.
+ */
+export function combined(ctx: Ctx, a: Partial<Range> = {}) {
+  const real = realOwnerFor(ctx.user, acting.getStore());
+  if (!real || real.role !== 'owner') return { available: false, why: 'The combined view of all businesses is for the business owner.' };
+  const v = combinedView(real, { from: a.from, to: a.to });
+  return {
+    available: true, from: v.filters.from, to: v.filters.to, businessesYouSupportLeftOut: v.options.supported,
+    businesses: v.businesses.map((b) => ({
+      name: b.name, readable: b.status === 'ok',
+      books: b.books.status === 'ok' ? { revenuePaise: b.books.revenuePaise, expensesPaise: b.books.expensesPaise, netProfitPaise: b.books.netProfitPaise } : 'not available',
+      cash: b.cash.status === 'ok' ? { handedOutPaise: b.cash.handedOutPaise, spentSignedPaise: b.cash.spentConfirmedPaise, spentWaitingPaise: b.cash.spentWaitingPaise } : 'not available',
+      jobs: b.tasks.status === 'ok' ? { open: b.tasks.open, overdue: b.tasks.overdue, doneInPeriod: b.tasks.doneInRange } : 'not available',
+      approvalsWaiting: b.approvalsWaiting.status === 'ok' ? b.approvalsWaiting.count : 'not available',
+    })),
+    branches: v.byArea.map((r) => ({ business: r.businessName, branch: r.areaName ?? 'Not in a branch', spentSignedPaise: r.spentConfirmedPaise, spentWaitingPaise: r.spentWaitingPaise, openJobs: r.openTasks, overdueJobs: r.overdueTasks })),
+    totals: v.totals.map((t) => ({ currency: t.currency, businesses: t.businesses, leftOut: t.leftOut, books: t.books, booksNote: t.booksNote, handedOutPaise: t.handedOutPaise, spentSignedPaise: t.spentConfirmedPaise, spentWaitingPaise: t.spentWaitingPaise, openJobs: t.openTasks, overdueJobs: t.overdueTasks })),
+    notes: v.notes,
   };
 }

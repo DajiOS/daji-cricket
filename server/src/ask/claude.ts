@@ -37,6 +37,7 @@ export const TOOL_DEFS = [
   { name: 'get_jobs', description: 'Jobs on the task board: how many are open, overdue and finished, with the titles of overdue jobs.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_branches', description: 'The branches (areas) of this business the asker may see, such as Office or House, each with its projects and their open and overdue jobs.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_cash', description: 'Supervisor cash: cash the owner handed to team members to spend for the business. For each holder (the owner sees all, a team member only their own): cash handed over, cash that should be in hand now, the confirmed figure, spends waiting for the owner\'s sign-off, spends without a receipt, uncertain spends, and the last cash count with its difference. Not posted to the books.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_my_businesses', description: 'The owner\'s combined view across every business they marked "Mine" (not the ones they only support), side by side for a period: each business\'s own books (revenue, expenses, profit), supervisor cash handed out and spent, open and overdue jobs, approvals waiting, and each branch. Read-only. A business that could not be read is "not available", not zero. Cash spends are not in the books and are never added to them.', input_schema: { type: 'object', properties: RANGE } },
   { name: 'get_team_attendance', description: 'Staff attendance totals for a period: present, half days, absent and on leave, and how many staff are active.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_approvals_waiting', description: 'What is waiting for a sign-off right now (bills, staff pay runs, refunds, discounts, fee waivers and expenses): who it waits on, how far along it is, and whether the asker can sign it and if not why not.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_approval_rules', description: 'The sign-off rules for each kind of approval (bills, staff pay, refunds, discounts, fee waivers, expenses), in words.', input_schema: { type: 'object', properties: {} } },
@@ -89,6 +90,7 @@ export function runTool(ctx: T.Ctx, name: string, i: Input): unknown {
     case 'get_jobs': return T.jobs(ctx, range(i));
     case 'get_branches': return T.branches(ctx);
     case 'get_cash': return T.cash(ctx);
+    case 'get_my_businesses': return T.combined(ctx, { from: typeof i.from === 'string' ? i.from : undefined, to: typeof i.to === 'string' ? i.to : undefined });
     case 'get_team_attendance': return T.team(ctx, range(i));
     case 'get_approvals_waiting': return T.approvalsWaiting(ctx);
     case 'get_approval_rules': return T.approvalRules(ctx);
