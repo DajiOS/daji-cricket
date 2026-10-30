@@ -159,7 +159,7 @@ test('a receipt photo is kept with the spend, its earlier version is kept when r
 });
 
 interface Fake { url: string; calls: any[]; close(): Promise<void> }
-async function fakeAi(text: string): Promise<Fake> {
+async function stubReader(text: string): Promise<Fake> {
   const f: Fake = { url: '', calls: [], close: async () => {} };
   const srv = http.createServer((req, res) => {
     let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => {
@@ -180,7 +180,7 @@ test('reading a receipt: typed in when the AI connection is off, a checked draft
   assert.equal(off.body.error.code, 'OCR_NOT_CONFIGURED');
   assert.equal((await sp('GET', '/api/cash/status', w.sup)).body.ocr, false);
 
-  const f = await fakeAi('{"total": "1,240.50", "date": "2026-10-29", "payee": "Shree Hardware", "description": "Cement 2 bags", "sure": true}');
+  const f = await stubReader('{"total": "1,240.50", "date": "2026-10-29", "payee": "Shree Hardware", "description": "Cement 2 bags", "sure": true}');
   try {
     h.cfg.ai = { ...h.cfg.ai, apiKey: 'sk-test', apiUrl: f.url, limitPerHour: 500, timeoutMs: 5000 };
     const on = await upload('/api/cash/receipts/read', w.sup, PNG);

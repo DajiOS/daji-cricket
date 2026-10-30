@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api, loadToken, serverSignOut, setToken, setViewOwner } from './src/api';
+import { api, loadToken, serverSignOut, setBusiness, setToken, setViewOwner } from './src/api';
 import type { Booking, HoldResponse, User } from './src/types';
 import { AuthScreen } from './src/AuthScreen';
 import { BookScreen } from './src/BookScreen';
@@ -30,6 +30,7 @@ import { RefundsScreen } from './src/RefundsScreen';
 import { CostsScreen } from './src/CostsScreen';
 import { RemindersScreen } from './src/RemindersScreen';
 import { CardsScreen } from './src/CardsScreen';
+import { CashScreen } from './src/CashScreen';
 import { SettingsScreen } from './src/SettingsScreen';
 import { Avatar, Btn, Chip, Icon, type IconName, ListCard, ListRow, Loading, Steps, s, refreshStyles } from './src/ui';
 import { Appearance } from './src/photo';
@@ -52,7 +53,7 @@ import { parseVoiceLink, voiceOn, type VoiceRequest } from './src/voice';
 //   owner        the same, plus Promo codes, Team, Booking controls, Staff pay and Compliance under More
 //   super admin  the same as the owner, working inside the owner chosen under More, plus Refunds and Software costs
 type Tab = 'home' | 'book' | 'me' | 'live' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'more' | 'signin' | 'auctions' | 'fantasy';
-type More = null | 'accounts' | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings';
+type More = null | 'accounts' | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings' | 'cash';
 
 const TAB_ICON: Record<string, IconName> = { home: 'home', book: 'calendar', me: 'receipt', live: 'radio', ask: 'sparkles', profile: 'person-circle', bookings: 'calendar', tasks: 'checkbox', more: 'grid', signin: 'log-in' };
 /** The bar of tabs along the bottom: an icon over each name; the open tab is filled green. */
@@ -94,6 +95,11 @@ function AppInner({ theme }: { theme: Mode }) {
   const [staffView, setStaffView] = useState<{ v: StaffView; n: number }>({ v: 'today', n: 0 }); // Home can open Bookings on one of its tabs
   const [meStart, setMeStart] = useState<{ v: 'ground' | 'academy'; n: number }>({ v: 'ground', n: 0 }); // customer Home can open My Bookings on Academy
   const [voiceNote, setVoiceNote] = useState('');
+  // a portfolio owner, or a team member on more than one business's team, works in one business at a time (server areas.ts)
+  const [businesses, setBusinesses] = useState<{ id: string; businessName: string; own: boolean; permissions?: string[] }[]>([]);
+  const [biz, setBiz] = useState<string | null>(null);
+  const [homePerms, setHomePerms] = useState<string[] | undefined>(undefined);
+  const [cashSpend, setCashSpend] = useState(0); // a voice shortcut opens Cash on the spend form
   useEffect(() => {
     const take = (url: string | null) => { const v = parseVoiceLink(url); if (v) setVoiceLink(v); };
     void Linking.getInitialURL().then(take).catch(() => {});
@@ -111,6 +117,7 @@ function AppInner({ theme }: { theme: Mode }) {
       setVoiceNote(''); setHold(null); setDone(null); setMore(null);
       const a = v.action;
       if (a.screen === 'tasks') { setTaskDraft({ title: v.title ?? '', n: Date.now() }); setTab('tasks'); }
+      else if (a.screen === 'cash' && user.role !== 'customer') { setCashSpend(Date.now()); setTab('more'); setMore('cash'); }
       else if (a.screen === 'book' || a.screen === 'live') setTab(a.screen);
       // hosted tournaments are a customer screen; on the staff app the link opens the assistant instead
       else if (a.screen === 'auctions' && user.role === 'customer') setTab('auctions');
@@ -135,8 +142,18 @@ function AppInner({ theme }: { theme: Mode }) {
       .then((r) => { setOwners(r.items); setView((cur) => { const id = cur ?? r.items[0]?.id ?? null; setViewOwner(id); return id; }); })
       .catch(() => {});
   }, [user?.role]);
+  useEffect(() => {
+    setBusinesses([]); setBiz(null); setBusiness(null); setHomePerms(user?.permissions);
+    if (user?.role === 'owner') api<{ items: { id: string; businessName: string; own: boolean }[] }>('/api/me/portfolio').then((r) => setBusinesses(r.items)).catch(() => {});
+    else if (user?.role === 'staff') api<{ items: { id: string; businessName: string; own: boolean; permissions: string[] }[] }>('/api/me/businesses').then((r) => setBusinesses(r.items)).catch(() => {});
+  }, [user?.id, user?.role]);
+  /** Work in another business: every request carries it, and a team member has the rights given there. */
+  const pickBusiness = (b: { id: string; own: boolean; permissions?: string[] }) => {
+    setBiz(b.own ? null : b.id); setBusiness(b.own ? null : b.id); setMore(null); setTab('home');
+    if (user?.role === 'staff') setUser((u) => (u ? { ...u, permissions: b.own ? homePerms : b.permissions } : u));
+  };
   useEffect(() => onNotificationTap(() => { setHold(null); setDone(null); setMore(null); setTab(user && user.role !== 'customer' ? 'tasks' : 'me'); }), [user?.role]);
-  const signOut = useCallback(async () => { await unregisterPush(); await serverSignOut(); await setToken(null); await setLockOn(false); setViewOwner(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('home'); }, []);
+  const signOut = useCallback(async () => { await unregisterPush(); await serverSignOut(); await setToken(null); await setLockOn(false); setViewOwner(null); setBusiness(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('home'); }, []);
 
   if (user === undefined) return <View style={s.screen}><Loading /></View>;
   if (user === null && ADMIN_APP) return <><StatusBar style="light" /><AuthScreen admin onUser={setUser} /></>;
@@ -170,7 +187,7 @@ function AppInner({ theme }: { theme: Mode }) {
   const bookingsOk = perm('manage_bookings') || perm('verify_payments') || perm('record_payments');
   const accountsOk = perm('manage_accounting') || perm('view_reports');
   const boss = user.role === 'owner' || user.role === 'super_admin';
-  const deskKey = viewOwner ?? 'self'; // a different owner reloads the screen
+  const deskKey = `${viewOwner ?? 'self'}:${biz ?? 'home'}`; // a different owner or business reloads the screen
   // the assistant's tab shows the name this person picked, exactly as given; a long one is cut to fit the bar
   const aiName = user.aiName || 'Ask AI';
   const aiTab = aiName.length > 10 ? `${aiName.slice(0, 9)}…` : aiName;
@@ -197,6 +214,7 @@ function AppInner({ theme }: { theme: Mode }) {
       else if (more === 'costs' && user.role === 'super_admin') body = <CostsScreen />;
       else if (more === 'reminders' && perm('send_broadcasts')) body = <RemindersScreen key={deskKey} />;
       else if (more === 'cards' && perm('view_customers')) body = <CardsScreen key={deskKey} />;
+      else if (more === 'cash' && (boss || perm('manage_tasks'))) body = <CashScreen key={`${deskKey}:${cashSpend}`} user={user} startSpend={cashSpend || undefined} />;
       else if (more === 'settings' && boss) body = <SettingsScreen user={user} />;
       else if (more === 'academy' && perm('manage_academy')) body = <AcademyScreen key={deskKey} />;
       else if (more === 'matches' && perm('manage_matches')) body = <MatchesScreen key={deskKey} />;
@@ -214,6 +232,10 @@ function AppInner({ theme }: { theme: Mode }) {
             <><Text style={s.muted}>Working inside</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 8 }}>{owners.map((o) => <Chip key={o.id} label={o.name} on={viewOwner === o.id} onPress={() => { setView(o.id); setViewOwner(o.id); }} />)}</View></>
           )}
+          {businesses.length > 1 && (
+            <><Text style={s.muted}>Working in</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 8 }}>{businesses.map((b) => <Chip key={b.id} label={b.businessName} on={(biz ?? '') === (b.own ? '' : b.id)} onPress={() => pickBusiness(b)} />)}</View></>
+          )}
           <MenuGroup title="Ground" rows={[
             perm('manage_matches') && ['trophy-outline', 'Matches and live scoring', 'Score ball by ball; customers see it under Live', 'matches'],
             perm('manage_academy') && ['school-outline', 'Academy', 'Attendance and report cards', 'academy'],
@@ -229,6 +251,7 @@ function AppInner({ theme }: { theme: Mode }) {
           ]} onPick={setMore} />
           <MenuGroup title="Money" rows={[
             accountsOk && ['wallet-outline', 'Books', 'Accounts, money in and out', 'accounts'],
+            (boss || perm('manage_tasks')) && ['card-outline', 'Cash', boss ? 'Cash your team holds, spends to sign' : 'Cash you hold, spends and receipts', 'cash'],
             boss && ['cash-outline', 'Staff pay and attendance', '', 'payroll'],
             boss && ['shield-checkmark-outline', 'Compliance', '', 'compliance'],
             user.role === 'super_admin' && ['return-down-back-outline', 'Refunds to authorise', '', 'refunds'],
