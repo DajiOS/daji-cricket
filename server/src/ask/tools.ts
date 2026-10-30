@@ -285,7 +285,7 @@ export function jobs(ctx: Ctx, a: Range) {
   const overdue = many<{ title: string; due_date: string }>(`SELECT title, due_date FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ? ${seen} ORDER BY due_date LIMIT 10`, ctx.ownerId, today, ...f.params);
   return {
     today,
-    open: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open'"),
+    open: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND (intake_state IS NULL OR intake_state <> 'new')"),
     overdue: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ?", today),
     dueInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date BETWEEN ? AND ?", a.from, a.to),
     doneInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'done' AND completed_at >= ? AND completed_at < ?", istMidnight(a.from), istMidnight(addDays(a.to, 1))),
