@@ -7,7 +7,8 @@ import { Validator } from './input.ts';
 import { hasPermission, type UserRow } from './auth.ts';
 import { areaFilter, canSeeArea } from './areas.ts';
 import { createProject } from './taskboard.ts';
-import { createBill, submitBill } from './accounting/bills.ts';
+import { manages } from './tasks.ts';
+import { createBill, guardBills, submitBill } from './accounting/bills.ts';
 import { sendBack, signStep, startRequest, withdrawRequest, type ReqRow } from './approvals.ts';
 import { istDate } from './time.ts';
 
@@ -190,6 +191,25 @@ BEGIN SELECT RAISE(ABORT, 'a certified RA bill cannot be changed'); END;
 CREATE TRIGGER trg_ao_ra_bills_certified_delete BEFORE DELETE ON ra_bills WHEN OLD.status = 'certified'
 BEGIN SELECT RAISE(ABORT, 'a certified RA bill cannot be removed'); END;
 
+-- What a cancelled draft RA bill held. Its lines leave ra_bill_lines so each measurement can be billed again; the copy here keeps
+-- exactly which measurements, rates and amounts it had. It is only ever added to.
+CREATE TABLE ra_bill_cancelled_lines (
+  ra_bill_id TEXT NOT NULL REFERENCES ra_bills(id),
+  measurement_id TEXT NOT NULL REFERENCES measurements(id),
+  rate_paise INTEGER NOT NULL,
+  tax_bps INTEGER NOT NULL,
+  amount_paise INTEGER NOT NULL,
+  tax_paise INTEGER NOT NULL,
+  cancelled_at INTEGER NOT NULL,
+  cancelled_by TEXT REFERENCES users(id),
+  PRIMARY KEY (ra_bill_id, measurement_id)
+);
+CREATE INDEX ix_ra_bill_cancelled_lines_measurement ON ra_bill_cancelled_lines(measurement_id);
+CREATE TRIGGER trg_ao_ra_bill_cancelled_lines_update BEFORE UPDATE ON ra_bill_cancelled_lines
+BEGIN SELECT RAISE(ABORT, 'the record of a cancelled RA bill cannot be changed'); END;
+CREATE TRIGGER trg_ao_ra_bill_cancelled_lines_delete BEFORE DELETE ON ra_bill_cancelled_lines
+BEGIN SELECT RAISE(ABORT, 'the record of a cancelled RA bill cannot be removed'); END;
+
 -- Supplier invoices are bills in the books; this says which project and order each one belongs to.
 CREATE TABLE construction_bills (
   bill_id TEXT PRIMARY KEY REFERENCES acct_bills(id),
@@ -327,9 +347,15 @@ export function figuresOf(projectId: string): FiguresOut {
     outstandingPaise: approved - paid, retentionHeldPaise: retention, remainingBudgetPaise: budget - committed, overBudget: budget > 0 && committed > budget };
 }
 
+/** The task board's own visibility (tasks.ts listTasks): staff who do not manage tasks see only jobs for everyone or for them. Construction
+ *  can be opened through accounting or reports rights, so its job lists and counts apply the same rule. `t` is the tasks alias. */
+function jobsSeen(u: UserRow, t = 'tasks'): { sql: string; params: string[] } {
+  return u.role === 'staff' && !manages(u) ? { sql: ` AND (${t}.assigned_to IS NULL OR ${t}.assigned_to = ?)`, params: [u.id] } : { sql: '', params: [] };
+}
+
 function projectOut(u: UserRow, p: ProjRow, c: CpRow): CProjectOut {
   const n = (sql: string, ...a: (string | number)[]) => one<{ n: number }>(sql, ...a)!.n;
-  const t = today();
+  const t = today(), js = jobsSeen(u);
   return {
     id: p.id, name: p.name, details: p.details, code: c.code, site: c.site, phase: c.phase, startDate: c.start_date, targetEndDate: c.target_end_date,
     areaId: p.area_id, areaName: p.area_id ? one<{ name: string }>('SELECT name FROM areas WHERE id = ?', p.area_id)?.name ?? null : null,
@@ -340,8 +366,8 @@ function projectOut(u: UserRow, p: ProjRow, c: CpRow): CProjectOut {
       ordersWaiting: n("SELECT COUNT(*) n FROM purchase_orders WHERE project_id = ? AND status = 'pending_approval'", p.id),
       openDefects: n("SELECT COUNT(*) n FROM construction_defects WHERE project_id = ? AND status != 'closed'", p.id),
       drawings: n("SELECT COUNT(*) n FROM construction_docs d JOIN docs x ON x.id = d.doc_id WHERE d.project_id = ? AND d.kind = 'drawing' AND d.current = 1 AND x.deleted_at IS NULL", p.id),
-      jobs: n("SELECT COUNT(*) n FROM tasks WHERE project_id = ? AND status != 'cancelled'", p.id),
-      jobsDone: n("SELECT COUNT(*) n FROM tasks WHERE project_id = ? AND status = 'done'", p.id),
+      jobs: n(`SELECT COUNT(*) n FROM tasks WHERE project_id = ? AND status != 'cancelled'${js.sql}`, p.id, ...js.params),
+      jobsDone: n(`SELECT COUNT(*) n FROM tasks WHERE project_id = ? AND status = 'done'${js.sql}`, p.id, ...js.params),
       milestones: n('SELECT COUNT(*) n FROM milestones WHERE project_id = ?', p.id),
       milestonesOverdue: n('SELECT COUNT(*) n FROM milestones WHERE project_id = ? AND done_at IS NULL AND due_date IS NOT NULL AND due_date < ?', p.id, t),
     },
@@ -448,11 +474,11 @@ function boqOut(u: UserRow, b: BoqRow): BoqOut {
 export function plan(u: UserRow, ownerId: string, id: string) {
   cproject(u, ownerId, id);
   const boq = many<BoqRow>('SELECT * FROM boq_items WHERE project_id = ? AND current = 1 ORDER BY item_code', id).map((b) => boqOut(u, b));
-  const t = today();
+  const t = today(), js = jobsSeen(u, 't');
   const milestones = many<{ id: string; title: string; due_date: string | null; done_at: number | null; n: number; d: number }>(
-    `SELECT m.id, m.title, m.due_date, m.done_at, (SELECT COUNT(*) FROM tasks t WHERE t.milestone_id = m.id AND t.status != 'cancelled') n,
-            (SELECT COUNT(*) FROM tasks t WHERE t.milestone_id = m.id AND t.status = 'done') d
-       FROM milestones m WHERE m.project_id = ? ORDER BY COALESCE(m.due_date, '9999-12-31'), m.created_at`, id)
+    `SELECT m.id, m.title, m.due_date, m.done_at, (SELECT COUNT(*) FROM tasks t WHERE t.milestone_id = m.id AND t.status != 'cancelled'${js.sql}) n,
+            (SELECT COUNT(*) FROM tasks t WHERE t.milestone_id = m.id AND t.status = 'done'${js.sql}) d
+       FROM milestones m WHERE m.project_id = ? ORDER BY COALESCE(m.due_date, '9999-12-31'), m.created_at`, ...js.params, ...js.params, id)
     .map((m) => ({ id: m.id, title: m.title, dueDate: m.due_date, done: m.done_at !== null, overdue: m.done_at === null && !!m.due_date && m.due_date < t, jobs: m.n, jobsDone: m.d }));
   return { boq, boqTotalPaise: seesMoney(u) ? boq.reduce((s, b) => s + (b.amountPaise ?? 0), 0) : null, milestones };
 }
@@ -691,7 +717,8 @@ export function signOrder(ownerId: string, actor: Actor, req: ReqRow, note: stri
     if (!s.done) return;
     const t = now();
     run("UPDATE purchase_orders SET status = 'approved', decided_at = ?, decided_by = ?, decided_note = ?, version = version + 1, updated_at = ? WHERE id = ?", t, actor.id, note, t, o.id);
-    audit(actor, 'po.approve', 'construction_po', o.id, { step: s.index + 1, label: s.step.label, ...(note ? { note } : {}) }, ownerId);
+    // the owner may sign an order they raised themselves (approvals.ts whyNot: the owner can always sign); it is recorded as such
+    audit(actor, 'po.approve', 'construction_po', o.id, { step: s.index + 1, label: s.step.label, selfApproved: o.created_by === actor.id, ...(note ? { note } : {}) }, ownerId);
   });
 }
 /** Sent back from the Approvals board: to the person who made it (the order is a draft again), or one step back, as the rules say. */
@@ -818,6 +845,27 @@ export function addSupplierBill(u: UserRow, ownerId: string, poId: string, body:
   });
 }
 
+/** A bill made from Construction is edited, sent again and removed in Revenue & Accounting › Bills. These checks follow it there:
+ *  a bill on an order keeps the order's supplier and, with the order's other live bills, stays within the order total; the bill of a
+ *  certified RA bill keeps its supplier and its certified net amount, and cannot be removed. */
+guardBills((ownerId, billId, next) => {
+  const link = one<{ po_id: string | null; ra_bill_id: string | null }>('SELECT po_id, ra_bill_id FROM construction_bills WHERE bill_id = ? AND owner_id = ?', billId, ownerId);
+  if (!link?.po_id) return;
+  const o = poRow(ownerId, link.po_id);
+  if (link.ra_bill_id) {
+    const net = one<{ net_paise: number; bill_no: string }>('SELECT net_paise, bill_no FROM ra_bills WHERE id = ?', link.ra_bill_id)!;
+    if (!next) throw conflict('LINKED_RA_BILL', `This bill is the certified RA bill ${net.bill_no} of ${o.po_no}, so it cannot be removed`);
+    if (next.vendorId !== o.vendor_id) throw conflict('VENDOR_MISMATCH', `This bill is for ${o.po_no}, so its supplier cannot change`);
+    if (next.amountPaise !== net.net_paise) throw conflict('RA_AMOUNT_FIXED', `This bill is the certified RA bill ${net.bill_no}: its amount stays ${rupees(net.net_paise)}`);
+    return;
+  }
+  if (!next) return; // removing a draft or rejected bill frees that part of the order
+  if (next.vendorId !== o.vendor_id) throw conflict('VENDOR_MISMATCH', `This bill is for ${o.po_no}, so its supplier cannot change`);
+  const others = one<{ s: number }>(`SELECT COALESCE(SUM(b.amount_paise), 0) s FROM construction_bills cb JOIN acct_bills b ON b.id = cb.bill_id
+      WHERE cb.po_id = ? AND cb.bill_id != ? AND b.deleted_at IS NULL AND b.status != 'rejected'`, link.po_id, billId)!.s;
+  if (others + next.amountPaise > o.total_paise) throw conflict('OVER_BILLED', `Bills on this order would come to ${rupees(others + next.amountPaise)}, more than the order total of ${rupees(o.total_paise)}`);
+});
+
 // ------------------------------------------------------------------ measurements and RA bills
 
 interface MeasRow { id: string; owner_id: string; project_id: string; po_id: string; po_line_id: string; measured_date: string; qty_milli: number; location: string | null; notes: string | null; revision: number; supersedes_id: string | null; status: 'draft' | 'billed' | 'certified' | 'superseded'; created_at: number; created_by: string | null }
@@ -886,7 +934,7 @@ function raOut(u: UserRow, b: RaRow) {
   return { id: b.id, billNo: b.bill_no, sequenceNo: b.sequence_no, status: b.status, version: b.version,
     grossPaise: m(b.gross_paise), taxPaise: m(b.tax_paise), retentionPaise: m(b.retention_paise), advanceRecoveryPaise: m(b.advance_recovery_paise), otherDeductionPaise: m(b.other_deduction_paise), netPaise: m(b.net_paise),
     adjustments: money ? JSON.parse(b.adjustments) as { type: string; amountPaise: number; description: string }[] : [],
-    measurementIds: many<{ measurement_id: string }>('SELECT measurement_id FROM ra_bill_lines WHERE ra_bill_id = ?', b.id).map((r) => r.measurement_id),
+    measurementIds: many<{ measurement_id: string }>(`SELECT measurement_id FROM ${b.status === 'cancelled' ? 'ra_bill_cancelled_lines' : 'ra_bill_lines'} WHERE ra_bill_id = ?`, b.id).map((r) => r.measurement_id),
     billId: money ? b.acct_bill_id : null, createdByName: nameOf(b.created_by), createdAt: b.created_at, certifiedByName: nameOf(b.certified_by), certifiedAt: b.certified_at };
 }
 
@@ -987,10 +1035,12 @@ export function cancelRaBill(u: UserRow, ownerId: string, id: string) {
   if (b.status !== 'draft') throw conflict('BAD_STATUS', b.status === 'certified' ? 'A certified RA bill is final' : 'Already cancelled');
   return tx(() => {
     for (const r of many<{ measurement_id: string }>('SELECT measurement_id FROM ra_bill_lines WHERE ra_bill_id = ?', id)) run("UPDATE measurements SET status = 'draft' WHERE id = ?", r.measurement_id);
-    // the lines go with the draft so each measurement can be billed again; the bill row stays, cancelled
+    // a copy of the lines is kept with the cancelled bill (ra_bill_cancelled_lines); the live lines go so each measurement can be billed again
+    run(`INSERT INTO ra_bill_cancelled_lines(ra_bill_id, measurement_id, rate_paise, tax_bps, amount_paise, tax_paise, cancelled_at, cancelled_by)
+         SELECT ra_bill_id, measurement_id, rate_paise, tax_bps, amount_paise, tax_paise, ?, ? FROM ra_bill_lines WHERE ra_bill_id = ?`, now(), u.id, id);
     run('DELETE FROM ra_bill_lines WHERE ra_bill_id = ?', id);
     run("UPDATE ra_bills SET status = 'cancelled', version = version + 1 WHERE id = ?", id);
-    audit(actorOf(u), 'ra_bill.cancel', 'ra_bill', id, { billNo: b.bill_no }, ownerId);
+    audit(actorOf(u), 'ra_bill.cancel', 'ra_bill', id, { billNo: b.bill_no, measurementIds: many<{ measurement_id: string }>('SELECT measurement_id FROM ra_bill_cancelled_lines WHERE ra_bill_id = ?', id).map((r) => r.measurement_id) }, ownerId);
     return raOut(u, one<RaRow>('SELECT * FROM ra_bills WHERE id = ?', id)!);
   });
 }
@@ -1005,9 +1055,9 @@ const defectOut = (d: DefectRow) => ({ id: d.id, title: d.title, location: d.loc
 /** The Site view: the project's jobs (the task board's own records), its milestones, defects and recent goods received. */
 export function site(u: UserRow, ownerId: string, id: string) {
   cproject(u, ownerId, id);
-  const t = today();
+  const t = today(), js = jobsSeen(u);
   const jobs = many<{ id: string; title: string; status: string; stage: string; assigned_to: string | null; due_date: string | null }>(
-    "SELECT id, title, status, stage, assigned_to, due_date FROM tasks WHERE project_id = ? AND status != 'cancelled' ORDER BY status = 'done', COALESCE(due_date, '9999-12-31'), created_at DESC LIMIT 200", id)
+    `SELECT id, title, status, stage, assigned_to, due_date FROM tasks WHERE project_id = ? AND status != 'cancelled'${js.sql} ORDER BY status = 'done', COALESCE(due_date, '9999-12-31'), created_at DESC LIMIT 200`, id, ...js.params)
     .map((j) => ({ id: j.id, title: j.title, status: j.status, stage: j.stage, assignedName: nameOf(j.assigned_to), dueDate: j.due_date, overdue: j.status === 'open' && !!j.due_date && j.due_date < t }));
   const defects = many<DefectRow>("SELECT * FROM construction_defects WHERE project_id = ? ORDER BY status = 'closed', CASE severity WHEN 'critical' THEN 0 WHEN 'major' THEN 1 ELSE 2 END, raised_at DESC", id).map(defectOut);
   const receipts = many<{ id: string; grn_no: string; received_date: string; po_no: string; po_id: string }>(

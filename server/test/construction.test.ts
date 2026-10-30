@@ -290,3 +290,125 @@ test('Ask AI answers about construction behind the same walls, and leaves money 
   assert.equal(site.projects[0].money, null);
   assert.equal(site.projects[0].ordersWaitingForApproval, 1);
 });
+
+// ------------------------------------------------------------------ review findings (PR #201)
+
+test('the Site view and the job counts follow the task board: staff who do not manage tasks see only jobs for everyone or for them', async () => {
+  await start();
+  const mk = async (email: string, permissions: string[]) => {
+    const r = await call('POST', '/api/staff/team', w.owner, { firstName: 'Team', lastName: email.split('@')[0], email, password: SITE_PASSWORD, permissions });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    return { id: r.body.id as string, token: (await h.post('/api/auth/login', { email, password: SITE_PASSWORD })).body.token as string };
+  };
+  const books = await mk('books@daji.test', ['manage_accounting']);
+  const reports = await mk('reports@daji.test', ['view_reports']);
+  assert.equal((await call('POST', '/api/tasks', w.owner, { title: 'Wiring for the site engineer only', projectId: w.project, assignedTo: w.siteId, photosRequired: 0 })).status, 201);
+  assert.equal((await call('POST', '/api/tasks', w.owner, { title: 'Count the cement for books', projectId: w.project, assignedTo: books.id, photosRequired: 0 })).status, 201);
+  const titles = async (token: string) => (await call('GET', `/api/construction/projects/${w.project}/site`, token)).body.jobs.map((j: any) => j.title).sort();
+  const all = ['Count the cement for books', 'Fix the kitchen tiles', 'Wiring for the site engineer only'];
+  assert.deepEqual(await titles(w.owner), all);
+  assert.deepEqual(await titles(w.site), all, 'manage_tasks sees every job, as on the task board');
+  assert.deepEqual(await titles(books.token), ['Count the cement for books', 'Fix the kitchen tiles'], 'their own and the unassigned job only');
+  assert.deepEqual(await titles(reports.token), ['Fix the kitchen tiles']);
+  // the same rows the task board gives each of them
+  for (const t of [books.token, reports.token]) {
+    const board = (await call('GET', `/api/tasks?projectId=${w.project}`, t));
+    assert.equal(board.status, 200);
+    assert.deepEqual(board.body.items.map((x: any) => x.title).sort(), await titles(t));
+  }
+  // the counts are cut the same way
+  assert.equal((await call('GET', `/api/construction/projects/${w.project}`, reports.token)).body.counts.jobs, 1);
+  assert.equal((await call('GET', `/api/construction/projects/${w.project}`, w.owner)).body.counts.jobs, 3);
+});
+
+test('a bill made from an order keeps its supplier and the order limit when it is edited, sent again or removed in Bills', async () => {
+  await start();
+  const o = (await order({})).body;
+  await approve(o.id);
+  const b1 = (await call('POST', `/api/construction/orders/${o.id}/bills`, w.owner, { billNo: 'SCT/201', billDate: '2026-10-30', amountPaise: 40_000_00 })).body.bill;
+  assert.equal((await call('POST', `/api/accounting/bills/${b1.id}/reject`, w.owner, { reason: 'Wrong rate on the bill' })).status, 200);
+  // the rejected bill's room on the order is free again, so a second bill can use it
+  const b2 = await call('POST', `/api/construction/orders/${o.id}/bills`, w.owner, { billNo: 'SCT/202', billDate: '2026-10-30', amountPaise: o.totalPaise - 10_000_00 });
+  assert.equal(b2.status, 201, JSON.stringify(b2.body));
+  const edit = (body: Record<string, unknown>) => call('PATCH', `/api/accounting/bills/${b1.id}`, w.owner, body);
+  const over = await edit({ amountPaise: 10_000_00 + 1 });
+  assert.equal(over.status, 409); assert.equal(over.body.error.code, 'OVER_BILLED');
+  const other = await edit({ vendorId: w.sub });
+  assert.equal(other.status, 409); assert.equal(other.body.error.code, 'VENDOR_MISMATCH');
+  assert.equal(one<{ amount_paise: number; vendor_id: string }>('SELECT amount_paise, vendor_id FROM acct_bills WHERE id = ?', b1.id)!.amount_paise, 40_000_00, 'a refused edit changes nothing');
+  // sending the rejected bill again unchanged would take the order over its total
+  const again = await call('POST', `/api/accounting/bills/${b1.id}/submit`, w.owner);
+  assert.equal(again.status, 409); assert.equal(again.body.error.code, 'OVER_BILLED');
+  // within what is left, it goes through
+  assert.equal((await edit({ amountPaise: 10_000_00 })).status, 200);
+  assert.equal((await call('POST', `/api/accounting/bills/${b1.id}/submit`, w.owner)).status, 200);
+  const billed = one<{ s: number }>("SELECT SUM(b.amount_paise) s FROM construction_bills cb JOIN acct_bills b ON b.id = cb.bill_id WHERE cb.po_id = ? AND b.status != 'rejected' AND b.deleted_at IS NULL", o.id)!.s;
+  assert.equal(billed, o.totalPaise, 'exactly the order total, never more');
+});
+
+test('the bill of a certified RA bill keeps its supplier and certified amount, and cannot be removed', async () => {
+  await start();
+  const wo = (await order({ kind: 'work', vendorId: w.sub, lines: [{ description: 'Plaster', unit: 'sqm', quantity: 10, ratePaise: 100_00, taxPct: 0 }] })).body;
+  await approve(wo.id);
+  const lineId = (await call('GET', `/api/construction/orders/${wo.id}`, w.owner)).body.lines[0].id;
+  const m = (await call('POST', `/api/construction/orders/${wo.id}/measurements`, w.site, { lineId, quantity: 10 })).body;
+  const ra = (await call('POST', `/api/construction/orders/${wo.id}/ra-bills`, w.owner, { measurementIds: [m.id] })).body;
+  const cert = (await call('POST', `/api/construction/ra-bills/${ra.id}/certify`, w.owner, {})).body;
+  const billId = one<{ acct_bill_id: string }>('SELECT acct_bill_id FROM ra_bills WHERE id = ?', ra.id)!.acct_bill_id;
+  assert.ok(cert.raBill && billId);
+  assert.equal((await call('POST', `/api/accounting/bills/${billId}/reject`, w.owner, { reason: 'Check the measurement sheet' })).status, 200);
+  const amt = await call('PATCH', `/api/accounting/bills/${billId}`, w.owner, { amountPaise: ra.netPaise + 1 });
+  assert.equal(amt.status, 409); assert.equal(amt.body.error.code, 'RA_AMOUNT_FIXED');
+  assert.equal((await call('PATCH', `/api/accounting/bills/${billId}`, w.owner, { vendorId: w.vendor })).body.error.code, 'VENDOR_MISMATCH');
+  const del = await call('DELETE', `/api/accounting/bills/${billId}`, w.owner);
+  assert.equal(del.status, 409); assert.equal(del.body.error.code, 'LINKED_RA_BILL');
+  // the note or the bill number can still be put right, and it goes back for approval
+  assert.equal((await call('PATCH', `/api/accounting/bills/${billId}`, w.owner, { notes: 'Measurement sheet attached' })).status, 200);
+  assert.equal((await call('POST', `/api/accounting/bills/${billId}/submit`, w.owner)).status, 200);
+});
+
+test('who may sign an order: a team member who raised it never can; the owner may sign their own, and it is recorded as self-approved', async () => {
+  await start();
+  run('UPDATE users SET permissions = ? WHERE id = ?', JSON.stringify(['manage_tasks', 'view_revenue', 'manage_accounting']), w.siteId);
+  const theirs = (await order({}, w.site)).body;
+  await call('POST', `/api/construction/orders/${theirs.id}/submit`, w.site);
+  const reqOf = async (id: string) => (await call('GET', '/api/accounting/approvals/requests', w.owner)).body.items.find((r: any) => r.kind === 'purchase_order' && r.entityId === id);
+  const r1 = await reqOf(theirs.id);
+  const refused = await call('POST', `/api/accounting/approvals/requests/${r1.id}/approve`, w.site, {});
+  assert.equal(refused.status, 403);
+  assert.match(refused.body.error.message, /You raised this order/);
+  assert.equal(one<{ status: string }>('SELECT status FROM purchase_orders WHERE id = ?', theirs.id)!.status, 'pending_approval');
+  // the owner signs every step, including on an order they raised themselves
+  const mine = (await order({})).body;
+  await approve(mine.id);
+  const a = one<{ detail: string }>("SELECT detail FROM audit_log WHERE entity = 'construction_po' AND action = 'po.approve' AND entity_id = ?", mine.id)!;
+  assert.equal(JSON.parse(a.detail).selfApproved, true);
+  assert.equal(one<{ status: string }>('SELECT status FROM purchase_orders WHERE id = ?', mine.id)!.status, 'approved');
+  await call('POST', `/api/accounting/approvals/requests/${r1.id}/approve`, w.owner, {});
+  const b = one<{ detail: string }>("SELECT detail FROM audit_log WHERE entity = 'construction_po' AND action = 'po.approve' AND entity_id = ?", theirs.id)!;
+  assert.equal(JSON.parse(b.detail).selfApproved, false);
+});
+
+test('cancelling a draft RA bill keeps an unchangeable record of its measurements, and frees them to be billed again', async () => {
+  await start();
+  const wo = (await order({ kind: 'work', vendorId: w.sub, lines: [{ description: 'Plaster', unit: 'sqm', quantity: 10, ratePaise: 100_00, taxPct: 18 }] })).body;
+  await approve(wo.id);
+  const lineId = (await call('GET', `/api/construction/orders/${wo.id}`, w.owner)).body.lines[0].id;
+  const m = (await call('POST', `/api/construction/orders/${wo.id}/measurements`, w.site, { lineId, quantity: 4 })).body;
+  const ra = (await call('POST', `/api/construction/orders/${wo.id}/ra-bills`, w.owner, { measurementIds: [m.id] })).body;
+  const cancelled = await call('POST', `/api/construction/ra-bills/${ra.id}/cancel`, w.owner);
+  assert.equal(cancelled.status, 200, JSON.stringify(cancelled.body));
+  assert.equal(cancelled.body.status, 'cancelled');
+  assert.deepEqual(cancelled.body.measurementIds, [m.id], 'the cancelled bill still says what it held');
+  const kept = many<{ measurement_id: string; amount_paise: number; tax_paise: number }>('SELECT measurement_id, amount_paise, tax_paise FROM ra_bill_cancelled_lines WHERE ra_bill_id = ?', ra.id).map((x) => ({ ...x }));
+  assert.deepEqual(kept, [{ measurement_id: m.id, amount_paise: 400_00, tax_paise: 72_00 }]);
+  assert.throws(() => run('DELETE FROM ra_bill_cancelled_lines WHERE ra_bill_id = ?', ra.id), /cannot be removed/);
+  assert.throws(() => run('UPDATE ra_bill_cancelled_lines SET amount_paise = 1 WHERE ra_bill_id = ?', ra.id), /cannot be changed/);
+  const audit = JSON.parse(one<{ detail: string }>("SELECT detail FROM audit_log WHERE action = 'ra_bill.cancel' AND entity_id = ?", ra.id)!.detail);
+  assert.deepEqual(audit.measurementIds, [m.id]);
+  // the measurement can go on a new bill
+  const again = await call('POST', `/api/construction/orders/${wo.id}/ra-bills`, w.owner, { measurementIds: [m.id] });
+  assert.equal(again.status, 201, JSON.stringify(again.body));
+  const ctx = (await call('GET', `/api/construction/orders/${wo.id}`, w.owner)).body;
+  assert.deepEqual(ctx.raBills.find((b: any) => b.id === ra.id).measurementIds, [m.id]);
+});

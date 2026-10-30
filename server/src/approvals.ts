@@ -70,7 +70,8 @@ interface Snap extends FlowStep { signedBy: string | null; signedAt: number | nu
 /** Out of the box: a bill needs one sign-off from someone else who manages the books; a refund needs the owner or the general
  * manager before the super admin authorises it; a discount or fee waiver of ₹1,000 or more needs the owner; an expense of
  * ₹5,000 or more needs a second person; a cash spend from money someone holds needs the owner, whatever the amount (Sunny: everything
- * needs his approval from ₹0); a construction purchase or work order needs the owner, from ₹0 as well; a pay run needs no extra sign-off. */
+ * needs his approval from ₹0); a construction purchase or work order needs the owner, from ₹0 as well (a team member who raised it can
+ * never sign it; the owner, who signs every step, may sign an order they raised themselves, and that is recorded); a pay run needs no extra sign-off. */
 export function defaultFlow(kind: ApprovalKind): Flow {
   if (kind === 'bill') return { steps: [{ id: 'approve', label: 'Approve the bill', who: { type: 'anyone' }, overPaise: null }], notSelf: true, distinct: false, sendBack: 'start' };
   if (kind === 'discount' || kind === 'waiver') return { steps: [{ id: 'owner', label: 'Owner sign-off', who: { type: 'owner' }, overPaise: 1000_00 }], notSelf: false, distinct: false, sendBack: 'start' };

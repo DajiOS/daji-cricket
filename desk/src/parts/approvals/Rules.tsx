@@ -19,7 +19,7 @@ const ABOUT: Record<string, string> = {
   waiver: 'All or part of an academy fee that a student no longer has to pay.',
   expense: 'Money out entered by hand in the books, such as cash spent at the ground. Bank imports are not held.',
   cash: 'Spends from cash a team member holds for the business (Work › Cash). They count against the cash in hand at once and are confirmed when signed. Not posted to the books.',
-  purchase_order: 'Supply and work orders raised on a construction project (Construction › Commercial). Someone other than the person who raised it signs. Nothing is paid here: bills against the order go through Bills.',
+  purchase_order: 'Supply and work orders raised on a construction project (Construction › Commercial). A team member who raised an order cannot sign it; the owner can sign any order, including one they raised, and that is recorded. Nothing is paid here: bills against the order go through Bills.',
 };
 // What the builder shows for each kind: the empty state, the first and last step of the try-it chain, and the amount's name.
 const WORDS: Record<string, { none: string; start: string; end: string; amount: string }> = {

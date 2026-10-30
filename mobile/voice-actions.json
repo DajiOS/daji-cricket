@@ -51,6 +51,13 @@
       "screen": "cash"
     },
     {
+      "id": "site",
+      "title": "Open construction projects",
+      "phrase": "Open construction projects in APP",
+      "personal": "Tell NAME to open construction projects",
+      "screen": "construction"
+    },
+    {
       "id": "ask",
       "title": "Ask a question",
       "phrase": "Ask APP a question",
