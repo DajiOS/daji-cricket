@@ -27,6 +27,7 @@ import { combinedView, realOwnerFor } from '../combined.ts';
 import { acting } from '../audit.ts';
 import { inboxForAsk } from '../wainbox.ts';
 import { siteReport as siteDay } from '../taskwork.ts';
+import { networkFacts } from '../netTournaments.ts';
 import type { Config } from '../config.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
@@ -286,7 +287,7 @@ export function jobs(ctx: Ctx, a: Range) {
   const overdue = many<{ title: string; due_date: string }>(`SELECT title, due_date FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ? ${seen} ORDER BY due_date LIMIT 10`, ctx.ownerId, today, ...f.params);
   return {
     today,
-    open: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open'"),
+    open: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND (intake_state IS NULL OR intake_state <> 'new')"),
     overdue: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ?", today),
     dueInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date BETWEEN ? AND ?", a.from, a.to),
     doneInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'done' AND completed_at >= ? AND completed_at < ?", istMidnight(a.from), istMidnight(addDays(a.to, 1))),
@@ -543,4 +544,14 @@ export function combined(ctx: Ctx, a: Partial<Range> = {}) {
  */
 export function whatsapp(ctx: Ctx) {
   return inboxForAsk(ctx.cfg, ctx.user, ctx.ownerId);
+}
+
+/**
+ * The cricket network (network.ts, netTournaments.ts): whether this business is in it, the network tournaments it organises or hosts, invitations
+ * and match times waiting for it, results waiting for its verification, the settlement lines it is a party to (never another business's), and
+ * profile claims waiting for its staff. The same people as the Tournaments page. Tournament and ground names only: no players or contact details.
+ */
+export function network(ctx: Ctx) {
+  need(ctx, 'tournaments');
+  return withText(networkFacts(ctx.user, ctx.ownerId));
 }

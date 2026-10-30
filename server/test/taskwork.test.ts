@@ -3,7 +3,7 @@
 // accepting a job and signing off finished work, reopening with a reason, the job's history and the daily site report.
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { startHarness, T0, MIN, type Harness } from './helpers.ts';
+import { startHarness, advance, T0, MIN, type Harness } from './helpers.ts';
 import { many } from '../src/db.ts';
 
 let h: Harness, owner: string, staff: string, staffId: string, helper: string, helperId: string, owner2: string;
@@ -89,11 +89,11 @@ test('a reference picture from the gallery is kept, but it is not proof: the job
   assert.equal((await h.call('GET', link.body.references[0].url, { token: owner2 })).status, 404);
 });
 
-test('references: only pictures and PDFs, web links only, and taking one off hides it without deleting', async () => {
+test('references: only pictures and PDFs, https links only, and taking one off hides it without deleting', async () => {
   const id = await makeTask();
   const exe = await raw(owner, `/api/tasks/${id}/references`, Buffer.from('MZ not a picture'));
   assert.equal(exe.status, 415);
-  for (const url of ['javascript:alert(1)', 'ftp://files.example.com/x', 'https://user:pw@example.com/']) {
+  for (const url of ['javascript:alert(1)', 'ftp://files.example.com/x', 'https://user:pw@example.com/', 'http://example.com/plain', 'data:text/html,hi']) {
     const r = await h.post(`/api/tasks/${id}/links`, { url }, owner);
     assert.equal(r.status, 400, url);
   }
@@ -202,6 +202,10 @@ test('the daily site report: jobs from the board for that day, a note per person
   // writing again the same day changes the same note
   const again = await h.post('/api/site-reports', { projectId: site, workers: 5, body: 'Walls primed and sanded' }, staff);
   assert.equal(again.body.notes.length, 1); assert.equal(again.body.notes[0].workers, 5);
+  // the correction keeps the earlier text
+  assert.equal(again.body.notes[0].corrections, 1);
+  const kept = many<{ body: string; workers: number; issues: string | null }>('SELECT body, workers, issues FROM site_report_edits');
+  assert.deepEqual(kept.map((k) => ({ ...k })), [{ body: 'Walls primed', workers: 4, issues: 'Paint short by 2 tins' }]);
   const rep = (await h.get(`/api/site-reports?projectId=${site}`, owner)).body;
   assert.equal(rep.projectName, 'Office fit-out');
   assert.deepEqual(rep.done.map((d: any) => [d.title, d.proofPhotos]), [['Make the poker table', 1]]);
@@ -216,9 +220,22 @@ test('the daily site report: jobs from the board for that day, a note per person
   assert.equal(a.status, 200, JSON.stringify(a.body));
   assert.equal(a.body.intent, 'site_report', JSON.stringify(a.body));
   assert.doesNotMatch(JSON.stringify(a.body), /Private/);
+  // a whole-team job in the hidden branch, finished today, is in the owner's day but never in the team member's
+  const hiddenJob = await makeTask({ title: 'Paint the private room', projectId: hiddenSite, assignedTo: null });
+  await raw(owner, `/api/tasks/${hiddenJob}/photos`, jpeg(T0 - MIN, 'hidden'));
+  assert.equal((await h.post(`/api/tasks/${hiddenJob}/complete`, {}, owner)).status, 200);
+  assert.ok((await h.get('/api/site-reports', owner)).body.done.some((d: any) => d.title === 'Paint the private room'));
+  const staffDay = (await h.get('/api/site-reports', staff)).body;
+  assert.deepEqual(staffDay.done.map((d: any) => d.title), ['Make the poker table']);
   // the staff member hears about the jobs they work on only
   const s = await h.post('/api/staff/ask', { question: 'daily report' }, staff);
   assert.equal(s.status, 200, JSON.stringify(s.body));
+  assert.equal(s.body.intent, 'site_report', JSON.stringify(s.body));
+  assert.match(JSON.stringify(s.body), /Make the poker table/);
+  assert.doesNotMatch(JSON.stringify(s.body), /Paint the private room|Private/);
+  // the note's audit entries name the note itself
+  const ids = many<{ entity_id: string | null }>("SELECT entity_id FROM audit_log WHERE action IN ('site_report.create', 'site_report.update')");
+  assert.equal(ids.length, 2); assert.ok(ids.every((x) => x.entity_id === note.body.notes[0].id), JSON.stringify(ids));
 });
 
 test('the desk may show private pictures it fetched with the sign-in (blob: images), and nothing else is loosened', async () => {
@@ -227,4 +244,188 @@ test('the desk may show private pictures it fetched with the sign-in (blob: imag
   assert.match(csp, /img-src 'self' data: blob: https:/);
   assert.match(csp, /script-src 'self' https:\/\/checkout\.razorpay\.com;/);
   assert.match(csp, /object-src 'none'/);
+});
+
+test('request lifecycle: raised, taken in, worked, closed, signed off, reopened; who can see it at each stage; one record throughout', async () => {
+  const r = await h.post('/api/tasks/requests', { title: 'Fix the scoreboard bulb', clientKey: 'life-1' }, staff);
+  const id = r.body.id;
+  // before take-in: the raiser and the owner; not the helper (an unrelated team member), not another business
+  assert.equal((await h.get(`/api/tasks/${id}`, staff)).status, 200);
+  assert.equal((await h.get(`/api/tasks/${id}`, owner)).status, 200);
+  assert.equal((await h.get(`/api/tasks/${id}`, helper)).status, 404);
+  assert.equal((await h.get(`/api/tasks/${id}`, owner2)).status, 404);
+  // taken in for the helper: the same record (same id), now on the board
+  const taken = await h.post(`/api/tasks/${id}/decide`, { accept: true, assignedTo: helperId, photosRequired: 1 }, owner);
+  assert.equal(taken.body.id, id);
+  assert.equal((await h.post(`/api/tasks/${id}/decide`, { accept: true }, owner)).status, 409, 'a second take-in is refused');
+  assert.equal(many<{ n: number }>("SELECT COUNT(*) n FROM tasks WHERE title = 'Fix the scoreboard bulb'")[0]!.n, 1, 'no duplicate work record');
+  assert.equal((await h.get(`/api/tasks/${id}`, helper)).status, 200, 'the accountable person sees it');
+  // the raiser, who is neither the accountable person nor a helper, no longer sees it once it is someone else's job
+  assert.equal((await h.get(`/api/tasks/${id}`, staff)).status, 404, 'IMPLEMENTED BEHAVIOUR: raiser loses access after conversion (for Sunny to decide)');
+  assert.equal((await h.get(`/api/tasks/${id}`, owner2)).status, 404);
+  await raw(helper, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'life'));
+  assert.equal((await h.post(`/api/tasks/${id}/complete`, {}, helper)).status, 200);
+  assert.equal((await h.post(`/api/tasks/${id}/signoff`, {}, owner)).status, 200);
+  const re = await h.post(`/api/tasks/${id}/reopen`, { reason: 'Bulb flickers again' }, owner);
+  assert.equal(re.body.status, 'open'); assert.equal(re.body.photos.length, 1);
+  const says = (await h.get(`/api/tasks/${id}/history`, owner)).body.items.map((x: any) => x.what);
+  for (const w of ['Raised it as a request', 'Took the request in', 'Added a proof photo', 'Marked it done', 'Signed off the work', 'Reopened it: Bulb flickers again']) assert.ok(says.some((s: string) => s.startsWith(w)), w);
+  // a declined request keeps its history and reason
+  const d = await h.post('/api/tasks/requests', { title: 'Gold paint for the pavilion' }, staff);
+  await h.post(`/api/tasks/${d.body.id}/decide`, { accept: false, note: 'Not this season' }, owner);
+  assert.ok((await h.get(`/api/tasks/${d.body.id}/history`, owner)).body.items.some((x: any) => x.what === 'Turned the request down: Not this season'));
+});
+
+test('helper authority map (implemented behaviour, recorded for Sunny\'s decision)', async () => {
+  const id = await makeTask({ checklist: ['Sand', 'Varnish'] });
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [helperId] }, owner);
+  const can = async (r: Promise<any>) => (await r).status < 300;
+  const map = {
+    view: await can(h.get(`/api/tasks/${id}`, helper)),
+    comment: await can(h.post(`/api/tasks/${id}/comments`, { body: 'On it' }, helper)),
+    reference: await can(raw(helper, `/api/tasks/${id}/references`, PNG)),
+    proof: await can(raw(helper, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'map'))),
+    tick: await can(h.post(`/api/tasks/${id}/checklist`, { index: 0, done: true }, helper)),
+    nextAction: await can(h.post(`/api/tasks/${id}/next`, { text: 'Buy varnish' }, helper)),
+    accept: await can(h.post(`/api/tasks/${id}/accept`, {}, helper)),
+    assignOther: await can(h.patch(`/api/tasks/${id}`, { assignedTo: helperId }, helper)),
+    changeHelpers: await can(h.post(`/api/tasks/${id}/helpers`, { userIds: [] }, helper)),
+    complete: await can(h.post(`/api/tasks/${id}/complete`, {}, helper)),
+  };
+  const after = { signOff: await can(h.post(`/api/tasks/${id}/signoff`, {}, helper)), reopen: await can(h.post(`/api/tasks/${id}/reopen`, { reason: 'x' }, helper)) };
+  assert.deepEqual({ ...map, ...after }, { view: true, comment: true, reference: true, proof: true, tick: true, nextAction: true, accept: false, assignOther: false, changeHelpers: false, complete: true, signOff: false, reopen: false });
+});
+
+test('a request in the inbox can be read and given references, nothing more; cancelling or reopening around the inbox is refused', async () => {
+  const r = await h.post('/api/tasks/requests', { title: 'New nets for lane 2' }, staff);
+  const id = r.body.id;
+  // the raiser may add a reference, but not proof, steps, a next action, or close it
+  assert.equal((await raw(staff, `/api/tasks/${id}/references`, PNG)).status, 201);
+  for (const [what, res] of [
+    ['proof', await raw(staff, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'inbox'))],
+    ['complete', await h.post(`/api/tasks/${id}/complete`, {}, staff)],
+    ['next action', await h.post(`/api/tasks/${id}/next`, { text: 'Buy nets' }, staff)],
+    ['accept', await h.post(`/api/tasks/${id}/accept`, {}, staff)],
+  ] as const) assert.equal(res.status, 409, `${what}: ${JSON.stringify(res.body)}`);
+  // a manager decides it from the inbox: not cancelled, edited or given helpers around it
+  for (const [what, res] of [
+    ['cancel', await h.post(`/api/tasks/${id}/cancel`, {}, owner)],
+    ['edit', await h.patch(`/api/tasks/${id}`, { assignedTo: helperId }, owner)],
+    ['helpers', await h.post(`/api/tasks/${id}/helpers`, { userIds: [helperId] }, owner)],
+    ['move', await h.post(`/api/tasks/${id}/move`, { stage: 'doing' }, owner)],
+  ] as const) assert.ok([409, 404].includes(res.status), `${what}: ${res.status} ${JSON.stringify(res.body)}`);
+  assert.equal(many<{ n: number }>('SELECT COUNT(*) n FROM task_photos WHERE task_id = ?', id)[0]!.n, 0);
+  const still = many<{ status: string; intake_state: string; assigned_to: string | null }>('SELECT status, intake_state, assigned_to FROM tasks WHERE id = ?', id)[0]!;
+  assert.deepEqual({ ...still }, { status: 'open', intake_state: 'new', assigned_to: null });
+  // another team member never sees it, on the board, the calendar or the site report
+  assert.equal((await h.get(`/api/tasks/${id}`, helper)).status, 404);
+  assert.ok(!(await h.get('/api/tasks', helper)).body.items.some((t: any) => t.id === id));
+  assert.ok(!JSON.stringify((await h.get('/api/site-reports', helper)).body).includes('New nets for lane 2'));
+});
+
+test('a turned-down request stays the raiser\'s: not a whole-team job for anyone else, and it cannot be reopened', async () => {
+  const r = await h.post('/api/tasks/requests', { title: 'Gold paint for the pavilion' }, staff);
+  const id = r.body.id;
+  assert.equal((await h.post(`/api/tasks/${id}/decide`, { accept: false, note: 'Not this season' }, owner)).status, 200);
+  const d = await h.get(`/api/tasks/${id}`, staff);
+  assert.equal(d.status, 200); assert.equal(d.body.intake.note, 'Not this season');
+  assert.equal((await h.get(`/api/tasks/${id}`, helper)).status, 404, 'another team member cannot open it');
+  assert.ok(!(await h.get('/api/tasks', helper)).body.items.some((t: any) => t.id === id), 'nor see it in the list');
+  const re = await h.post(`/api/tasks/${id}/reopen`, { reason: 'Changed my mind' }, owner);
+  assert.equal(re.status, 409, JSON.stringify(re.body));
+  assert.equal(many<{ status: string }>('SELECT status FROM tasks WHERE id = ?', id)[0]!.status, 'cancelled');
+});
+
+test('changing helpers audits only a real change, and the people list is for managers only', async () => {
+  const id = await makeTask();
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [helperId, staffId] }, owner);
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [staffId, helperId] }, owner);
+  assert.equal(many<{ n: number }>("SELECT COUNT(*) n FROM audit_log WHERE action = 'task.helpers' AND entity_id = ?", id)[0]!.n, 1, 'a reorder is not a change');
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [staffId] }, owner);
+  assert.equal(many<{ n: number }>("SELECT COUNT(*) n FROM audit_log WHERE action = 'task.helpers' AND entity_id = ?", id)[0]!.n, 2);
+  assert.equal((await h.get('/api/tasks/people', helper)).status, 403);
+});
+
+test('Ask AI: inbox and sign-off questions are not mistaken for the site report', async () => {
+  for (const q of ['how many requests in the inbox', 'jobs to sign off']) {
+    const a = await h.post('/api/staff/ask', { question: q }, owner);
+    assert.notEqual(a.body.intent, 'site_report', q);
+  }
+});
+
+test('links: malformed and look-alike addresses, and what the desk and phone are given to open', async () => {
+  const id = await makeTask();
+  for (const url of ['https//no-colon.example.com', 'not a link at all', 'https://', 'HTTPS://exa mple.com/x', 'vbscript:msgbox(1)', 'file:///etc/passwd']) {
+    assert.equal((await h.post(`/api/tasks/${id}/links`, { url }, owner)).status, 400, url);
+  }
+  // a look-alike international name is stored in its plain (punycode) form, and a given name never hides the real site
+  const look = await h.post(`/api/tasks/${id}/links`, { url: 'https://dаji.in/quote', name: 'daji.in quote' }, owner);
+  assert.equal(look.status, 201, JSON.stringify(look.body));
+  const ref = look.body.references.find((r: any) => r.kind === 'link');
+  assert.equal(new URL(ref.url).hostname, 'xn--dji-6cd.in');
+  assert.ok(ref.url.startsWith('https://'));
+  // the server never fetches a link, so a redirect is the browser's business: the stored address is exactly the one given
+  const redir = await h.post(`/api/tasks/${id}/links`, { url: 'https://example.com/redirect?to=http://evil.example' }, owner);
+  assert.equal(redir.body.references.at(-1).url, 'https://example.com/redirect?to=http://evil.example');
+});
+
+test('references never touch the books, and a helper taken off the job loses its files at once', async () => {
+  const id = await makeTask();
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [helperId] }, owner);
+  const money = () => many<{ n: number }>("SELECT (SELECT COUNT(*) FROM acct_journals) + (SELECT COUNT(*) FROM acct_transactions) + (SELECT COUNT(*) FROM acct_bills) + (SELECT COUNT(*) FROM payments) n")[0]!.n;
+  const before = money();
+  const pdf = await raw(helper, `/api/tasks/${id}/references?name=quote.pdf`, PDF);
+  assert.equal(pdf.status, 201, JSON.stringify(pdf.body));
+  await h.post(`/api/tasks/${id}/links`, { url: 'https://shop.example.com/felt', name: 'Felt price' }, helper);
+  assert.equal(money(), before, 'a quote as a reference creates no money record');
+  const refId = pdf.body.references[0].id;
+  assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: helper })).status, 200);
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [] }, owner);
+  assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: helper })).status, 404, 'file closed to the removed helper');
+  assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: owner2 })).status, 404, 'and to another business');
+  assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: owner })).status, 200);
+});
+
+test('a reopened job needs fresh proof for the new attempt; the earlier photos stay on the job but no longer count', async () => {
+  const id = await makeTask({ photosRequired: 1 });
+  await raw(staff, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'first'));
+  assert.equal((await h.post(`/api/tasks/${id}/complete`, {}, staff)).status, 200);
+  const re = await h.post(`/api/tasks/${id}/reopen`, { reason: 'Legs are loose' }, owner);
+  assert.equal(re.body.photos.length, 1, 'the earlier photo is kept');
+  assert.equal(re.body.proofCounted, 0); assert.equal(re.body.photos[0].counts, false);
+  const again = await h.post(`/api/tasks/${id}/complete`, {}, staff);
+  assert.equal(again.status, 409, 'old proof does not close the reopened job');
+  assert.equal(again.body.error.code, 'PHOTOS_NEEDED');
+  assert.match(again.body.error.message, /reopened/);
+  advance(60_000);
+  const add = await raw(staff, `/api/tasks/${id}/photos`, jpeg(T0 + 60_000 - MIN, 'second'));
+  assert.equal(add.status, 201, JSON.stringify(add.body));
+  assert.equal(add.body.proofCounted, 1);
+  assert.equal((await h.post(`/api/tasks/${id}/complete`, {}, staff)).status, 200);
+  // a job never reopened counts every photo, as before
+  const plain = await makeTask({ title: 'Plain job', photosRequired: 1 });
+  assert.equal((await raw(staff, `/api/tasks/${plain}/photos`, jpeg(T0 + 60_000 - MIN, 'plain'))).body.proofCounted, 1);
+});
+
+test('giving the job to someone else clears the earlier person\'s "I\'ve got it"; an unrelated edit keeps it', async () => {
+  const id = await makeTask();
+  assert.ok((await h.post(`/api/tasks/${id}/accept`, {}, staff)).body.acknowledgedAt);
+  assert.ok((await h.patch(`/api/tasks/${id}`, { title: 'Make the poker table, green felt' }, owner)).body.acknowledgedAt, 'a title change keeps it');
+  const moved = await h.patch(`/api/tasks/${id}`, { assignedTo: helperId }, owner);
+  assert.equal(moved.status, 200, JSON.stringify(moved.body));
+  assert.equal(moved.body.acknowledgedAt, null); assert.equal(moved.body.acknowledgedByName, null);
+  assert.equal((await h.post(`/api/tasks/${id}/accept`, {}, helper)).status, 200, 'the new person can accept it');
+});
+
+test('someone named on a job in a branch they cannot see cannot open it; the branch stays closed to them', async () => {
+  const secret = (await h.post('/api/areas', { name: 'Personal', restricted: true }, owner)).body.id;
+  const hidden = (await h.post('/api/projects', { name: 'Private', areaId: secret }, owner)).body.id;
+  const id = await makeTask({ title: 'Private errand', projectId: hidden, assignedTo: helperId });
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [staffId] }, owner);
+  for (const tok of [helper, staff]) {
+    assert.equal((await h.get(`/api/tasks/${id}`, tok)).status, 404, 'cannot open the job');
+    assert.ok(!(await h.get('/api/tasks', tok)).body.items.some((t: any) => t.id === id), 'not in the list');
+    assert.equal((await raw(tok, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'hid' + tok.slice(-4)))).status, 404);
+    assert.equal((await h.get(`/api/projects`, tok)).body.items.some((p: any) => p.id === hidden), false, 'nor the project');
+  }
 });

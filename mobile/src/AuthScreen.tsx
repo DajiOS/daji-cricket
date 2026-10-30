@@ -5,13 +5,14 @@ import type { User } from './types';
 import { Btn, Field, PhoneField, s, NameFields, splitName } from './ui';
 import { C } from './theme';
 import { useAppearance, useGroundPhoto } from './photo';
+import { useT } from './lang';
 
 export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) => void; admin?: boolean; onBack?: () => void; note?: string }) {
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [f, setF] = useState({ name: '', countryCode: '+91', phone: '', email: '', password: '', code: '' });
   const [needCode, setNeedCode] = useState(false);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
-  const pic = useGroundPhoto(); const look = useAppearance();
+  const pic = useGroundPhoto(); const look = useAppearance(); const t = useT();
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
 
   const go = async () => {
@@ -21,7 +22,7 @@ export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) 
       const r = await api<{ token: string; user: User }>(mode === 'in' ? '/api/auth/login' : '/api/auth/register', { method: 'POST', body });
       await setToken(r.token); onUser(r.user);
     } catch (e: any) {
-      if (e.code === 'MFA_REQUIRED' || e.code === 'MFA_CODE_REQUIRED') { setNeedCode(true); setErr('Enter the 6-digit code from your authenticator app.'); } else setErr(e.message);
+      if (e.code === 'MFA_REQUIRED' || e.code === 'MFA_CODE_REQUIRED') { setNeedCode(true); setErr(t('auth.codeNote')); } else setErr(e.message);
     } finally { setBusy(false); }
   };
 
@@ -35,20 +36,20 @@ export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) 
           <Text style={{ color: 'rgba(255,255,255,.9)', fontSize: 13, fontWeight: '700', letterSpacing: 2, marginTop: 6 }}>{admin ? 'DAJI ADMIN' : 'PLAY · PRACTICE · GROW'}</Text>
         </View>
         <View style={s.pad}>
-        <Text style={s.h1}>{mode === 'in' ? 'Sign in' : 'Create your account'}</Text>
-        <Text style={[s.note, { marginBottom: 22 }]}>{note ?? (admin ? 'For the ground team and owners.' : 'Book the ground, see what you have played and spent, and follow your child at the academy.')}</Text>
+        <Text style={s.h1}>{mode === 'in' ? t('auth.signIn') : t('auth.create')}</Text>
+        <Text style={[s.note, { marginBottom: 22 }]}>{note ?? (admin ? 'For the ground team and owners.' : t('auth.intro'))}</Text>
         {mode === 'up' && (<><NameFields value={f.name} onChange={set('name')} /><PhoneField code={f.countryCode} number={f.phone} onCode={set('countryCode')} onNumber={set('phone')} /></>)}
-        <Field label={mode === 'in' ? 'Email or mobile number' : 'Email'} value={f.email} onChangeText={set('email')} keyboardType={mode === 'in' ? 'default' : 'email-address'} autoCapitalize="none" autoComplete={mode === 'in' ? 'username' : 'email'} />
-        {mode === 'in' && <Text style={[s.note, { marginTop: -6, marginBottom: 12 }]}>Number from outside India? Start it with + and the country code.</Text>}
-        <Field label="Password" value={f.password} onChangeText={set('password')} secureTextEntry autoComplete="password" />
-        {mode === 'up' && <Text style={[s.note, { marginBottom: 12 }]}>8 or more characters with a capital letter, a small letter and a number.</Text>}
-        {needCode && <Field label="Code" value={f.code} onChangeText={set('code')} keyboardType="number-pad" maxLength={6} />}
+        <Field label={mode === 'in' ? t('auth.idLabel') : t('profile.email')} value={f.email} onChangeText={set('email')} keyboardType={mode === 'in' ? 'default' : 'email-address'} autoCapitalize="none" autoComplete={mode === 'in' ? 'username' : 'email'} />
+        {mode === 'in' && <Text style={[s.note, { marginTop: -6, marginBottom: 12 }]}>{t('auth.abroad')}</Text>}
+        <Field label={t('profile.password')} value={f.password} onChangeText={set('password')} secureTextEntry autoComplete="password" />
+        {mode === 'up' && <Text style={[s.note, { marginBottom: 12 }]}>{t('auth.pwRule')}</Text>}
+        {needCode && <Field label={t('auth.code')} value={f.code} onChangeText={set('code')} keyboardType="number-pad" maxLength={6} />}
         {!!err && <Text style={s.err}>{err}</Text>}
-        <Btn label={mode === 'in' ? 'Sign in' : 'Create account'} onPress={go} busy={busy} />
-        {!admin && <Btn kind="link" label={mode === 'in' ? 'New here? Create an account' : 'Have an account? Sign in'} onPress={() => { setMode(mode === 'in' ? 'up' : 'in'); setErr(''); }} />}
-        {onBack && <Btn kind="link" label="Back to booking" onPress={onBack} />}
+        <Btn label={mode === 'in' ? t('auth.signIn') : t('auth.createBtn')} onPress={go} busy={busy} />
+        {!admin && <Btn kind="link" label={mode === 'in' ? t('auth.toCreate') : t('auth.toSignIn')} onPress={() => { setMode(mode === 'in' ? 'up' : 'in'); setErr(''); }} />}
+        {onBack && <Btn kind="link" label={t('auth.back')} onPress={onBack} />}
         <View style={{ height: 1, backgroundColor: C.line, marginVertical: 14 }} />
-        <Btn kind="link" label={look.mode === 'dark' ? 'Use the light look' : 'Use the dark look'} onPress={look.flip} />
+        <Btn kind="link" label={look.mode === 'dark' ? t('auth.useLight') : t('auth.useDark')} onPress={look.flip} />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

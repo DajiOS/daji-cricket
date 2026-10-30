@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,6 +44,7 @@ import { useWake } from './src/fresh';
 import { lockOn, setLockOn, useLock } from './src/lock';
 import { LockScreen } from './src/LockScreen';
 import { parseVoiceLink, voiceOn, type VoiceRequest } from './src/voice';
+import { Lang, isLang, rememberLang, savedLang, translator, useLang, type UiLang } from './src/lang';
 
 // One app for everyone. What each person sees depends on who signed in:
 //   guest        Book, Live, Sign in
@@ -80,6 +81,18 @@ function AppInner({ theme }: { theme: Mode }) {
   const insets = useSafeAreaInsets(); // Android draws behind the system bars now, so the tab bar clears the gesture or button bar itself
   void theme; // a new value makes the whole app draw again with the new colours
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const { lang, t, setLang } = useLang();
+  // a signed-in person's screen language comes from their profile, so it is the same on every phone and on the website. Someone who never
+  // saved one keeps the language they picked before signing in or registering, and it is saved to their profile, so nobody is switched
+  // back to English halfway through booking. If that save fails the screens stay in their pick on this phone, and it is tried again next time.
+  const adopting = useRef(false);
+  useEffect(() => {
+    if (!user) return;
+    if (user.languageChosen) { if (isLang(user.language)) setLang(user.language); return; }
+    if (lang === 'en' || adopting.current) return;
+    adopting.current = true;
+    api<{ user: User }>('/api/me', { method: 'PATCH', body: { language: lang } }).then((r) => setUser(r.user), () => {}).finally(() => { adopting.current = false; });
+  }, [user, lang, setLang]);
   const [tab, setTab] = useState<Tab>('home');
   const [hold, setHold] = useState<HoldResponse | null>(null);
   const [done, setDone] = useState<{ b: Booking; paid: boolean } | null>(null);
@@ -167,8 +180,8 @@ function AppInner({ theme }: { theme: Mode }) {
         <View style={{ flex: 1, display: signin || tab !== 'book' ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
         {!signin && tab === 'live' && <LiveScreen />}
         {!signin && tab === 'home' && <CustomerHome user={null} aiName="" go={(to) => { if (to === 'book' || to === 'live') setTab(to); else ask(); }} />}
-        {signin && <AuthScreen onUser={(u) => { setSignin(false); setUser(u); }} onBack={() => setSignin(false)} note="Sign in to hold your slot. Your day and time stay as you left them." />}
-        <TabBar tabs={[['home', 'Home'], ['book', 'Book'], ['live', 'Live'], ['signin', 'Sign in']]} on={signin ? 'signin' : tab === 'live' || tab === 'home' ? tab : 'book'} onPick={(id) => { if (id === 'signin') ask(); else { setSignin(false); setTab(id as Tab); } }} bottom={insets.bottom} />
+        {signin && <AuthScreen onUser={(u) => { setSignin(false); setUser(u); }} onBack={() => setSignin(false)} note={t('auth.holdNote')} />}
+        <TabBar tabs={[['home', t('tab.home')], ['book', t('tab.book')], ['live', t('tab.live')], ['signin', t('tab.signin')]]} on={signin ? 'signin' : tab === 'live' || tab === 'home' ? tab : 'book'} onPick={(id) => { if (id === 'signin') ask(); else { setSignin(false); setTab(id as Tab); } }} bottom={insets.bottom} />
       </View>
     );
   }
@@ -272,10 +285,10 @@ function AppInner({ theme }: { theme: Mode }) {
         <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: done.paid && done.b.status === 'confirmed' ? C.strong : C.soft, alignItems: 'center', justifyContent: 'center', marginTop: 18, marginBottom: 14 }}>
           <Text style={{ color: done.paid && done.b.status === 'confirmed' ? C.onStrong : C.gold, fontSize: 30, fontWeight: '800' }}>{done.paid && done.b.status === 'confirmed' ? '✓' : '…'}</Text>
         </View>
-        <Text style={s.eyebrow}>{done.paid && done.b.status === 'confirmed' ? 'Confirmed' : done.paid ? 'Payment received' : 'Reference sent'}</Text>
-        <Text style={s.h1}>{done.paid && done.b.status === 'confirmed' ? "You're booked" : 'Thank you'}</Text>
-        <Text style={[s.muted, { marginBottom: 18 }]}>{done.paid ? `${done.b.groundName}, ${niceDate(done.b.date)}. Paid ${inr(done.b.paidPaise)}${done.b.balancePaise > 0 ? `, balance ${inr(done.b.balancePaise)} at the ground` : ''}.` : 'We will confirm the booking once the payment is checked. You will see it under My Bookings.'}</Text>
-        <Btn label="My Bookings" onPress={() => { setDone(null); setTab('me'); }} /><Btn kind="outline" label="Book another" onPress={() => { setDone(null); setTab('book'); }} />
+        <Text style={s.eyebrow}>{done.paid && done.b.status === 'confirmed' ? t('done.confirmed') : done.paid ? t('done.paymentReceived') : t('done.refSent')}</Text>
+        <Text style={s.h1}>{done.paid && done.b.status === 'confirmed' ? t('done.booked') : t('done.thanks')}</Text>
+        <Text style={[s.muted, { marginBottom: 18 }]}>{done.paid ? t(done.b.balancePaise > 0 ? 'done.paidBalance' : 'done.paid', { ground: done.b.groundName, date: niceDate(done.b.date), paid: inr(done.b.paidPaise), balance: inr(done.b.balancePaise) }) : t('done.checking')}</Text>
+        <Btn label={t('me.title')} onPress={() => { setDone(null); setTab('me'); }} /><Btn kind="outline" label={t('done.another')} onPress={() => { setDone(null); setTab('book'); }} />
       </View>
     );
   } else if (hold) body = <PayScreen hold={hold} user={user} onBack={() => setHold(null)} onDone={(b, paid) => { setHold(null); setDone({ b, paid }); }} />;
@@ -289,7 +302,7 @@ function AppInner({ theme }: { theme: Mode }) {
   else body = <AskScreen user={user} onUser={setUser} voice={voiceAsk} />;
 
   const tabs: [Tab, string][] = customer
-    ? [['home', 'Home'], ['me', 'Bookings'], ['ask', aiTab], ['live', 'Live'], ['profile', 'Profile']]
+    ? [['home', t('tab.home')], ['me', t('tab.bookings')], ['ask', aiTab], ['live', t('tab.live')], ['profile', t('tab.profile')]]
     : [['home', 'Home'], ...(bookingsOk ? [['bookings', 'Bookings'] as [Tab, string]] : []), ['tasks', 'Tasks'], ['ask', aiTab], ['more', 'More']];
   return (
     <View style={s.screen}>
@@ -318,16 +331,20 @@ export default function App() {
   const [m, setM] = useState<Mode>(mode);
   const [intro, setIntro] = useState(true);
   const [ready, setReady] = useState(false);
-  useEffect(() => { (async () => { try { const v = await SecureStore.getItemAsync(THEME_KEY); if (v === 'light' || v === 'dark') { setMode(v); refreshStyles(); setM(v); } } catch { /* keep light */ } setReady(true); })(); }, []);
+  const [lang, setLangState] = useState<UiLang>('en');
+  useEffect(() => { (async () => { try { const v = await SecureStore.getItemAsync(THEME_KEY); if (v === 'light' || v === 'dark') { setMode(v); refreshStyles(); setM(v); } } catch { /* keep light */ } setLangState(await savedLang()); setReady(true); })(); }, []);
+  const setLang = useCallback((l: UiLang) => { setLangState(l); rememberLang(l); }, []);
   const flip = () => { const next: Mode = m === 'dark' ? 'light' : 'dark'; setMode(next); refreshStyles(); setM(next); SecureStore.setItemAsync(THEME_KEY, next).catch(() => {}); };
   if (!ready) return <View style={{ flex: 1, backgroundColor: '#0E2A1B' }} />;
   return (
     <SafeAreaProvider>
       <Appearance.Provider value={{ mode: m, flip }}>
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
-          <AppInner theme={m} />
-          {intro && <Intro onDone={() => setIntro(false)} />}
-        </View>
+        <Lang.Provider value={{ lang, t: translator(lang), setLang }}>
+          <View style={{ flex: 1, backgroundColor: C.bg }}>
+            <AppInner theme={m} />
+            {intro && <Intro onDone={() => setIntro(false)} />}
+          </View>
+        </Lang.Provider>
       </Appearance.Provider>
     </SafeAreaProvider>
   );

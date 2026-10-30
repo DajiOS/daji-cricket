@@ -2013,3 +2013,8 @@ html[data-tone="light"][data-decor="berries"] #view-home .hero-decor,html[data-t
 .gp-offer.pick{display:block;border-color:var(--gold)}
 #guppi-input{width:100%;margin:8px 0;padding:10px;border-radius:12px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text);font:inherit}
 #guppi-open{margin-top:8px}
+/* the screen language (English, ગુજરાતી, हिन्दी) in the menu */
+.lang-pick select{font:inherit;font-size:13px;color:var(--text);background:var(--surface);border:1px solid var(--line-strong);border-radius:999px;padding:6px 12px;min-height:36px;cursor:pointer}
+.lang-pick select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+html[data-lang="gu"] body{font-family:"Hind Vadodara",var(--font-body),system-ui,sans-serif}
+html[data-lang="hi"] body{font-family:"Hind",var(--font-body),system-ui,sans-serif}
