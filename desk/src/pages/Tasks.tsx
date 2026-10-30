@@ -85,7 +85,7 @@ export default function Tasks({ sub }: { sub: string }) {
                         <span className={t.overdue ? 'kdue bad' : 'kdue'}>{t.stage === 'done' ? 'Done' : t.dueDate ? (t.overdue ? 'Overdue · ' : 'Due ') + fmtDate(t.dueDate) : 'No due day'}</span>
                         {t.repeat && <span title={REPEAT[t.repeat]}>{REPEAT[t.repeat]}</span>}
                         {t.checklist.length > 0 && <span title="Checklist">Steps {t.checklist.filter((c) => c.done).length}/{t.checklist.length}</span>}
-                        {t.photosRequired > 0 && <span title="Photos">Photos {t.photos.length}/{t.photosRequired}</span>}
+                        {t.photosRequired > 0 && <span title="Photos">Photos {t.proofCounted}/{t.photosRequired}</span>}
                         {t.references.length > 0 && <span title="References (not proof)">{t.references.length} ref{t.references.length === 1 ? '' : 's'}</span>}
                         {t.commentCount > 0 && <span title="Comments">{t.commentCount} comments</span>}
                         {t.status === 'done' && <span title={t.signedOffAt ? 'Signed off' : 'Waiting for sign-off'}>{t.signedOffAt ? 'Signed off' : 'Not signed off'}</span>}

@@ -158,23 +158,32 @@ export function Requests({ manager, meId, team }: { manager: boolean; meId: stri
   );
 }
 
-interface Report { date: string; notes: { id: string; authorName: string | null; workers: number | null; body: string; issues: string | null; mine: boolean }[]; done: { title: string; proofPhotos: number }[]; overdue: { title: string }[]; started: { title: string }[]; proofPhotos: number; references: number }
+interface Report { date: string; projectId: string | null; projectName: string | null; notes: { id: string; authorName: string | null; workers: number | null; body: string; issues: string | null; mine: boolean }[]; done: { title: string; proofPhotos: number }[]; overdue: { title: string }[]; started: { title: string }[]; proofPhotos: number; references: number }
 
 /** Today's site note (or a day in the last week): people working, what was done, problems; with the day's jobs from the board. */
 export function SiteNote() {
   const today = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
   const [date, setDate] = useState(today); const [r, setR] = useState<Report | null>(null);
+  // which site: the whole business or one project (only projects in branches this person may see come back)
+  const [projects, setProjects] = useState<{ id: string; name: string; status: string }[]>([]); const [projectId, setProjectId] = useState('');
+  useEffect(() => { api<{ items: { id: string; name: string; status: string }[] }>('/api/projects').then((x) => setProjects(x.items.filter((p) => p.status === 'active'))).catch(() => setProjects([])); }, []);
   const [workers, setWorkers] = useState(''); const [body, setBody] = useState(''); const [issues, setIssues] = useState('');
   const [err, setErr] = useState(''); const [note, setNote] = useState('');
   const fill = (x: Report) => { setR(x); const m = x.notes.find((n) => n.mine); setWorkers(m?.workers != null ? String(m.workers) : ''); setBody(m?.body ?? ''); setIssues(m?.issues ?? ''); };
-  useEffect(() => { setR(null); api<Report>(`/api/site-reports?date=${date || today}`).then(fill).catch((e) => setErr(e.message)); }, [date]);
+  useEffect(() => { setR(null); setErr(''); api<Report>(`/api/site-reports?date=${date || today}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ''}`).then(fill).catch((e) => setErr(e.message)); }, [date, projectId]);
   const save = async () => {
     setErr(''); setNote('');
-    try { fill(await api<Report>('/api/site-reports', { method: 'POST', body: { date: date || today, workers: workers === '' ? undefined : Number(workers), body: body.trim(), issues: issues.trim() || undefined } })); setNote('Site note saved.'); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
+    try { fill(await api<Report>('/api/site-reports', { method: 'POST', body: { date: date || today, projectId: projectId || null, workers: workers === '' ? undefined : Number(workers), body: body.trim(), issues: issues.trim() || undefined } })); setNote('Site note saved.'); } catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
   };
   return (
     <View>
       <DateField label="Day" value={date} onChange={setDate} />
+      {projects.length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
+          <Chip label="Whole business" on={!projectId} onPress={() => setProjectId('')} />
+          {projects.map((p) => <Chip key={p.id} label={p.name} on={projectId === p.id} onPress={() => setProjectId(p.id)} />)}
+        </View>
+      )}
       {r === null ? <Loading /> : (
         <View style={s.card}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>

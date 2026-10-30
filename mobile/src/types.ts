@@ -49,9 +49,9 @@ export interface StaffBooking {
   block?: { tournament?: { id: string; name: string } | null; seriesId: string; days: number; fromDate: string; toDate: string; totalPaise: number; paidPaise: number; balancePaise: number } | null;
 }
 export interface PaymentRow { id: string; bookingId: string; method: string; status: string; purpose: string; amountPaise: number; reference: string | null }
-export interface TaskPhoto { id: string; url: string; takenAt: number; uploadedByName: string | null; note: string | null; source: string }
+export interface TaskPhoto { id: string; url: string; takenAt: number; uploadedByName: string | null; note: string | null; source: string; counts?: boolean }
 export type TaskRepeat = 'daily' | 'weekly' | 'monthly';
-export interface Task { id: string; title: string; details: string | null; assignedTo: string | null; assignedName: string | null; dueDate: string | null; overdue: boolean; priority?: 'low' | 'medium' | 'high' | 'urgent'; repeat?: TaskRepeat | null; checklist?: { text: string; done: boolean }[]; photosRequired: number; status: 'open' | 'done' | 'cancelled'; completedAt: number | null; completedByName: string | null; photos: TaskPhoto[];
+export interface Task { id: string; title: string; details: string | null; assignedTo: string | null; assignedName: string | null; dueDate: string | null; overdue: boolean; priority?: 'low' | 'medium' | 'high' | 'urgent'; repeat?: TaskRepeat | null; checklist?: { text: string; done: boolean }[]; photosRequired: number; status: 'open' | 'done' | 'cancelled'; completedAt: number | null; completedByName: string | null; photos: TaskPhoto[]; proofCounted?: number;
   createdAt?: number; projectName?: string | null; nextAction?: string | null; helpers?: { id: string; name: string | null }[]; references?: TaskRef[];
   intake?: { state: 'new' | 'accepted' | 'declined'; byId: string; byName: string | null; note: string | null } | null;
   acknowledgedAt?: number | null; acknowledgedByName?: string | null; signedOffAt?: number | null; signedOffByName?: string | null; reopenNote?: string | null }

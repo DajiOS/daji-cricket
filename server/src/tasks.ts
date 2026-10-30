@@ -127,11 +127,17 @@ CREATE INDEX ix_task_helpers_task ON task_helpers(task_id);
 CREATE INDEX ix_task_helpers_user ON task_helpers(user_id);
 `);
 
+// A reopened job needs fresh proof for the new attempt: only camera photos added after proof_from count toward closing it.
+// The earlier photos stay on the job and in its history. Null (every job never reopened) counts every photo, as before.
+registerSchema('tasks-6', `ALTER TABLE tasks ADD COLUMN proof_from INTEGER;`);
+
 /** How old the moment of the shot may be when it arrives, and how far ahead of the server clock a phone clock may be. */
 export const MAX_PHOTO_AGE_MS = 5 * MIN;
 export const FUTURE_SLACK_MS = 2 * MIN;
 export const MAX_TASK_PHOTO_BYTES = 8 * 1024 * 1024;
 export const MAX_PHOTOS_PER_TASK = 10;
+/** Proof photos for the current attempt: since the last reopen, or all of them for a job never reopened. */
+const proofCount = (t: { id: string; proof_from: number | null }): number => one<{ c: number }>('SELECT COUNT(*) c FROM task_photos WHERE task_id = ? AND uploaded_at > ?', t.id, t.proof_from ?? -1)!.c;
 
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 export const STAGES = ['todo', 'doing', 'review', 'done'] as const;
@@ -142,7 +148,7 @@ export type Stage = (typeof STAGES)[number];
 export type Repeat = (typeof REPEATS)[number];
 export interface CheckItem { text: string; done: boolean }
 interface TaskRow { id: string; owner_id: string; title: string; details: string | null; assigned_to: string | null; due_date: string | null; photos_required: number; status: 'open' | 'done' | 'cancelled'; created_at: number; created_by: string; completed_at: number | null; completed_by: string | null; completion_note: string | null; priority: Priority; stage: Stage; project_id: string | null; milestone_id: string | null; position: number; repeat: Repeat | null; series_id: string | null; checklist: string | null;
-  next_action: string | null; intake_by: string | null; intake_state: 'new' | 'accepted' | 'declined' | null; intake_note: string | null; ack_at: number | null; ack_by: string | null; signoff_at: number | null; signoff_by: string | null; reopen_note: string | null }
+  next_action: string | null; intake_by: string | null; intake_state: 'new' | 'accepted' | 'declined' | null; intake_note: string | null; ack_at: number | null; ack_by: string | null; signoff_at: number | null; signoff_by: string | null; reopen_note: string | null; proof_from: number | null }
 interface PhotoRow { source: string; id: string; task_id: string; uploaded_by: string; taken_at: number; uploaded_at: number; ext: string; bytes: number; camera: string | null; note: string | null }
 
 export interface TaskOut {
@@ -154,7 +160,10 @@ export interface TaskOut {
   acknowledgedAt: number | null; acknowledgedByName: string | null; signedOffAt: number | null; signedOffByName: string | null; reopenNote: string | null;
   references: RefOut[];
   photosRequired: number; status: TaskRow['status']; createdAt: number; completedAt: number | null; completedByName: string | null; completionNote: string | null;
-  photos: { id: string; url: string; takenAt: number; uploadedAt: number; uploadedByName: string | null; note: string | null; camera: string | null; source: string }[];
+  /** counts: whether the photo is proof for the current attempt (false for photos from before a reopen). */
+  photos: { id: string; url: string; takenAt: number; uploadedAt: number; uploadedByName: string | null; note: string | null; camera: string | null; source: string; counts: boolean }[];
+  /** Proof photos that count toward closing the job now. */
+  proofCounted: number;
 }
 
 /** A reference: a file (gallery picture, WhatsApp picture, quote, drawing, PDF) or a link. Never proof. */
@@ -204,7 +213,8 @@ export function toOut(t: TaskRow): TaskOut {
     acknowledgedAt: t.ack_at, acknowledgedByName: nameOf(t.ack_by), signedOffAt: t.signoff_at, signedOffByName: nameOf(t.signoff_by), reopenNote: t.reopen_note,
     references: refsOf(t.id),
     photosRequired: t.photos_required, status: t.status, createdAt: t.created_at, completedAt: t.completed_at, completedByName: nameOf(t.completed_by), completionNote: t.completion_note,
-    photos: photos.map((p) => ({ id: p.id, url: `/api/tasks/photos/${p.id}`, takenAt: p.taken_at, uploadedAt: p.uploaded_at, uploadedByName: nameOf(p.uploaded_by), note: p.note, camera: p.camera, source: p.source })),
+    photos: photos.map((p) => ({ id: p.id, url: `/api/tasks/photos/${p.id}`, takenAt: p.taken_at, uploadedAt: p.uploaded_at, uploadedByName: nameOf(p.uploaded_by), note: p.note, camera: p.camera, source: p.source, counts: p.uploaded_at > (t.proof_from ?? -1) })),
+    proofCounted: photos.filter((p) => p.uploaded_at > (t.proof_from ?? -1)).length,
   };
 }
 
@@ -290,6 +300,8 @@ export function updateTask(u: UserRow, id: string, body: unknown): TaskOut {
   run('UPDATE tasks SET title = ?, details = ?, assigned_to = ?, due_date = ?, photos_required = ?, priority = ?, project_id = ?, milestone_id = ?, repeat = ?, series_id = ?, checklist = ? WHERE id = ?',
     t.title ?? cur.title, t.details ?? cur.details, t.assignedTo === undefined ? cur.assigned_to : t.assignedTo, t.dueDate === undefined ? cur.due_date : t.dueDate, t.photosRequired ?? cur.photos_required, t.priority ?? cur.priority, proj, mile,
     repeat, repeat ? cur.series_id ?? id : cur.series_id, list, id);
+  // the job now belongs to someone else: the earlier person's "I've got it" no longer stands
+  if (t.assignedTo !== undefined && t.assignedTo !== cur.assigned_to && cur.ack_at) run('UPDATE tasks SET ack_at = NULL, ack_by = NULL WHERE id = ?', id);
   audit({ id: u.id, role: u.role }, 'task.update', 'task', id, t, cur.owner_id);
   return toOut(getTask(id));
 }
@@ -336,7 +348,7 @@ export function addTaskPhoto(dataDir: string, u: UserRow, id: string, data: Buff
   if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'This task is already closed');
   if (u.role === 'staff' && !onJob(u, t)) throw notFound('Task not found');
   notInInbox(t);
-  if (one<{ c: number }>('SELECT COUNT(*) c FROM task_photos WHERE task_id = ?', id)!.c >= MAX_PHOTOS_PER_TASK) throw new HttpError(409, 'TOO_MANY_PHOTOS', `Up to ${MAX_PHOTOS_PER_TASK} photos per task`);
+  if (proofCount(t) >= MAX_PHOTOS_PER_TASK) throw new HttpError(409, 'TOO_MANY_PHOTOS', `Up to ${MAX_PHOTOS_PER_TASK} photos per task`);
   const { takenAt, camera, source } = checkCameraPhoto(data, now(), appShotAt);
   const sha = createHash('sha256').update(data).digest('hex');
   if (one('SELECT 1 FROM task_photos WHERE sha256 = ?', sha)) throw new HttpError(409, 'PHOTO_ALREADY_USED', 'This photo has already been uploaded. Take a new one.');
@@ -357,8 +369,10 @@ export function completeTask(u: UserRow, id: string, noteIn?: string): TaskOut {
   if (u.role === 'staff' && !onJob(u, t)) throw notFound('Task not found');
   if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'This task is already closed');
   notInInbox(t);
-  const have = one<{ c: number }>('SELECT COUNT(*) c FROM task_photos WHERE task_id = ?', id)!.c;
-  if (have < t.photos_required) throw new HttpError(409, 'PHOTOS_NEEDED', `This task needs ${t.photos_required} photo${t.photos_required === 1 ? '' : 's'} taken with the camera first (${have} added).`, { required: t.photos_required, have });
+  const have = proofCount(t);
+  if (have < t.photos_required) throw new HttpError(409, 'PHOTOS_NEEDED', t.proof_from
+    ? `This job was reopened, so it needs ${t.photos_required} new photo${t.photos_required === 1 ? '' : 's'} taken with the camera since then (${have} added).`
+    : `This task needs ${t.photos_required} photo${t.photos_required === 1 ? '' : 's'} taken with the camera first (${have} added).`, { required: t.photos_required, have });
   run("UPDATE tasks SET status = 'done', stage = 'done', completed_at = ?, completed_by = ?, completion_note = ? WHERE id = ?", now(), u.id, noteIn?.trim().slice(0, 300) || null, id);
   audit({ id: u.id, role: u.role }, 'task.done', 'task', id, { photos: have }, t.owner_id);
   if (t.repeat) nextInSeries(u, getTask(id));
@@ -418,7 +432,7 @@ export function reopenTask(u: UserRow, id: string, body: unknown = {}): TaskOut 
   const t = visibleTask(u, id);
   if (t.status === 'open') return toOut(t);
   if (t.intake_state === 'declined') throw new HttpError(409, 'REQUEST_DECLINED', 'A turned-down request cannot be reopened. Raise it again if it is needed after all.');
-  run("UPDATE tasks SET status = 'open', stage = 'todo', completed_at = NULL, completed_by = NULL, completion_note = NULL, signoff_at = NULL, signoff_by = NULL, ack_at = NULL, ack_by = NULL, reopen_note = ? WHERE id = ?", reason, id);
+  run("UPDATE tasks SET status = 'open', stage = 'todo', completed_at = NULL, completed_by = NULL, completion_note = NULL, signoff_at = NULL, signoff_by = NULL, ack_at = NULL, ack_by = NULL, reopen_note = ?, proof_from = ? WHERE id = ?", reason, now(), id);
   audit({ id: u.id, role: u.role }, 'task.reopen', 'task', id, { reason }, t.owner_id);
   return toOut(getTask(id));
 }

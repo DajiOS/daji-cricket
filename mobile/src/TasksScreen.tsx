@@ -91,7 +91,8 @@ export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: str
       <Field label="Search" value={q} onChangeText={setQ} placeholder="Title, details, step or person" />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       {shown === null ? <Loading /> : !shown.length ? <Text style={s.note}>{q.trim() ? 'No task matches the search.' : filter === 'open' ? 'Nothing to do right now.' : 'Nothing here yet.'}</Text> : shown.map((t) => {
-        const missing = Math.max(0, t.photosRequired - t.photos.length);
+        const counted = t.proofCounted ?? t.photos.length;
+        const missing = Math.max(0, t.photosRequired - counted);
         const list = t.checklist ?? []; const ticked = list.filter((c) => c.done).length;
         const canTick = t.status === 'open' && (manager || !t.assignedTo || t.assignedTo === user.id || (t.helpers ?? []).some((x) => x.id === user.id));
         return (
@@ -100,7 +101,7 @@ export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: str
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
               {t.status === 'done' && <Badge tone="ok" label="Done" />}{t.overdue && <Badge tone="danger" label="Overdue" />}{(t.priority === 'high' || t.priority === 'urgent') && <Badge tone={t.priority === 'urgent' ? 'danger' : 'gold'} label={cap(t.priority)} />}{t.dueDate && <Badge label={`Due ${niceDate(t.dueDate)}`} />}
               {!!t.repeat && <Badge label={REPEATS.find(([k]) => k === t.repeat)?.[1] ?? t.repeat} />}{list.length > 0 && <Badge tone={ticked === list.length ? 'ok' : 'muted'} label={`Steps ${ticked}/${list.length}`} />}
-              <Badge tone="gold" label={`${t.photos.length} of ${t.photosRequired} photos`} /><Badge label={t.assignedName ? `For ${t.assignedName}` : 'Whole team'} />
+              <Badge tone="gold" label={`${counted} of ${t.photosRequired} photos`} /><Badge label={t.assignedName ? `For ${t.assignedName}` : 'Whole team'} />
             </View>
             {!!t.details && <Text style={[s.muted, { marginVertical: 6 }]}>{t.details}</Text>}
             {list.length > 0 && (
@@ -115,7 +116,7 @@ export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: str
                 ))}
               </View>
             )}
-            {t.photos.length > 0 && <Text style={[s.muted, { fontSize: 12, fontWeight: '600', marginTop: 6 }]}>Proof photos</Text>}
+            {t.photos.length > 0 && <Text style={[s.muted, { fontSize: 12, fontWeight: '600', marginTop: 6 }]}>Proof photos{t.photos.length > counted ? ` (${t.photos.length - counted} from before it was reopened no longer count)` : ''}</Text>}
             {t.photos.length > 0 && <ScrollView horizontal style={{ marginVertical: 8 }}>{t.photos.map((p) => <View key={p.id} style={{ marginRight: 8 }}><Image source={authImage(p.url)} style={{ width: 92, height: 92, borderRadius: 8, backgroundColor: C.line }} /><Text style={[s.muted, { fontSize: 10, marginTop: 2 }]}>{when(p.takenAt)}</Text></View>)}</ScrollView>}
             {t.status === 'done' && <Text style={s.muted}>Done {t.completedAt ? when(t.completedAt) : ''}{t.completedByName ? ` by ${t.completedByName}` : ''}</Text>}
             {t.status === 'open' && (<>

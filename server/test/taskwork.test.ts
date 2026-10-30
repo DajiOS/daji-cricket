@@ -3,7 +3,7 @@
 // accepting a job and signing off finished work, reopening with a reason, the job's history and the daily site report.
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { startHarness, T0, MIN, type Harness } from './helpers.ts';
+import { startHarness, advance, T0, MIN, type Harness } from './helpers.ts';
 import { many } from '../src/db.ts';
 
 let h: Harness, owner: string, staff: string, staffId: string, helper: string, helperId: string, owner2: string;
@@ -384,4 +384,48 @@ test('references never touch the books, and a helper taken off the job loses its
   assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: helper })).status, 404, 'file closed to the removed helper');
   assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: owner2 })).status, 404, 'and to another business');
   assert.equal((await h.call('GET', `/api/tasks/refs/${refId}`, { token: owner })).status, 200);
+});
+
+test('a reopened job needs fresh proof for the new attempt; the earlier photos stay on the job but no longer count', async () => {
+  const id = await makeTask({ photosRequired: 1 });
+  await raw(staff, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'first'));
+  assert.equal((await h.post(`/api/tasks/${id}/complete`, {}, staff)).status, 200);
+  const re = await h.post(`/api/tasks/${id}/reopen`, { reason: 'Legs are loose' }, owner);
+  assert.equal(re.body.photos.length, 1, 'the earlier photo is kept');
+  assert.equal(re.body.proofCounted, 0); assert.equal(re.body.photos[0].counts, false);
+  const again = await h.post(`/api/tasks/${id}/complete`, {}, staff);
+  assert.equal(again.status, 409, 'old proof does not close the reopened job');
+  assert.equal(again.body.error.code, 'PHOTOS_NEEDED');
+  assert.match(again.body.error.message, /reopened/);
+  advance(60_000);
+  const add = await raw(staff, `/api/tasks/${id}/photos`, jpeg(T0 + 60_000 - MIN, 'second'));
+  assert.equal(add.status, 201, JSON.stringify(add.body));
+  assert.equal(add.body.proofCounted, 1);
+  assert.equal((await h.post(`/api/tasks/${id}/complete`, {}, staff)).status, 200);
+  // a job never reopened counts every photo, as before
+  const plain = await makeTask({ title: 'Plain job', photosRequired: 1 });
+  assert.equal((await raw(staff, `/api/tasks/${plain}/photos`, jpeg(T0 + 60_000 - MIN, 'plain'))).body.proofCounted, 1);
+});
+
+test('giving the job to someone else clears the earlier person\'s "I\'ve got it"; an unrelated edit keeps it', async () => {
+  const id = await makeTask();
+  assert.ok((await h.post(`/api/tasks/${id}/accept`, {}, staff)).body.acknowledgedAt);
+  assert.ok((await h.patch(`/api/tasks/${id}`, { title: 'Make the poker table, green felt' }, owner)).body.acknowledgedAt, 'a title change keeps it');
+  const moved = await h.patch(`/api/tasks/${id}`, { assignedTo: helperId }, owner);
+  assert.equal(moved.status, 200, JSON.stringify(moved.body));
+  assert.equal(moved.body.acknowledgedAt, null); assert.equal(moved.body.acknowledgedByName, null);
+  assert.equal((await h.post(`/api/tasks/${id}/accept`, {}, helper)).status, 200, 'the new person can accept it');
+});
+
+test('someone named on a job in a branch they cannot see cannot open it; the branch stays closed to them', async () => {
+  const secret = (await h.post('/api/areas', { name: 'Personal', restricted: true }, owner)).body.id;
+  const hidden = (await h.post('/api/projects', { name: 'Private', areaId: secret }, owner)).body.id;
+  const id = await makeTask({ title: 'Private errand', projectId: hidden, assignedTo: helperId });
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [staffId] }, owner);
+  for (const tok of [helper, staff]) {
+    assert.equal((await h.get(`/api/tasks/${id}`, tok)).status, 404, 'cannot open the job');
+    assert.ok(!(await h.get('/api/tasks', tok)).body.items.some((t: any) => t.id === id), 'not in the list');
+    assert.equal((await raw(tok, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'hid' + tok.slice(-4)))).status, 404);
+    assert.equal((await h.get(`/api/projects`, tok)).body.items.some((p: any) => p.id === hidden), false, 'nor the project');
+  }
 });
