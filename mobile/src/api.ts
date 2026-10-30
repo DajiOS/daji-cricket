@@ -18,7 +18,7 @@ export const setViewOwner = (id: string | null): void => { viewOwner = id; };
 let business: string | null = null;
 export const setBusiness = (id: string | null): void => { business = id; };
 const bizHeader = (): Record<string, string> => (business ? { 'X-Daji-Business': business } : {});
-const OWNER_SCOPED = ['/api/cash', '/api/tasks', '/api/site-reports', '/api/staff', '/api/accounting', '/api/media', '/api/desk'];
+const OWNER_SCOPED = ['/api/cash', '/api/tasks', '/api/site-reports', '/api/staff', '/api/accounting', '/api/media', '/api/desk', '/api/whatsapp'];
 const scoped = (path: string): string => (viewOwner && OWNER_SCOPED.some((p) => path.startsWith(p)) && !/[?&]ownerId=/.test(path) ? path + (path.includes('?') ? '&' : '?') + 'ownerId=' + encodeURIComponent(viewOwner) : path);
 
 export async function loadToken(): Promise<string | null> { try { token = await SecureStore.getItemAsync(KEY); } catch { token = null; } return token; }

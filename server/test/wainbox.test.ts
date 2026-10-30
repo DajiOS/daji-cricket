@@ -9,6 +9,8 @@ import { many, one, run } from '../src/db.ts';
 import { now } from '../src/clock.ts';
 import { DEFAULT_SETTINGS } from '../src/settings.ts';
 import { integrationStatuses } from '../src/integrations.ts';
+import { readFileSync } from 'node:fs';
+import { classify } from '../src/ask/builtin.ts';
 import { fetchWaitingMedia, waHooks, webhookSignature, type MediaFetch, type SendFetch } from '../src/wainbox.ts';
 
 let h: Harness;
@@ -328,4 +330,138 @@ test('Settings › Connections lists the incoming side with its four settings, a
   const missing = integrationStatuses({ ...h.cfg, whatsapp: { ...h.cfg.whatsapp, appSecret: '', verifyToken: '' } }).find((i) => i.id === 'whatsapp-inbound')!;
   assert.equal(missing.status, 'partial');
   assert.deepEqual(missing.missing, ['WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN']);
+});
+
+test('the Admin app voice question about WhatsApp reaches the WhatsApp answer, not another one', () => {
+  const actions = JSON.parse(readFileSync(new URL('../../mobile/voice-actions.json', import.meta.url), 'utf8')) as { staff: { id: string; question?: string }[] };
+  const q = actions.staff.find((a) => a.id === 'whatsapp')?.question;
+  assert.ok(q, 'the staff voice actions include the WhatsApp question');
+  assert.equal(classify(q).intent, 'whatsapp');
+  assert.ok(actions.staff.length <= 10, 'Apple allows at most 10 App Shortcuts in one app');
+});
+
+// ---- after review of PR #199
+
+test('a picture filed on a job before it finished downloading goes on the job when it arrives, and shows as coming until then', async () => {
+  on();
+  const task = (await h.post('/api/tasks', { title: 'Mend the roller' }, owner)).body;
+  await deliver(payload([msg(STAFF_PHONE, { type: 'image', image: { id: 'MEDIA-LATE', mime_type: 'image/png', caption: 'Roller handle' } })]));
+  const [m] = (await inbox()).body.items;
+  const linked = await h.post(`/api/whatsapp/messages/${m.id}/link`, { kind: 'task', recordId: task.id }, owner);
+  assert.equal(linked.status, 200, JSON.stringify(linked.body));
+  assert.match(linked.body.note, /goes on the job by itself/);
+  assert.equal(linked.body.links[0].file, 'coming');
+  assert.equal((await h.get('/api/whatsapp/status', owner)).body.counts.filesNotOnJob, 1);
+  assert.equal((await h.get(`/api/tasks/${task.id}`, owner)).body.references.length, 0);
+
+  // a request made from a second waiting picture gets its file the same way
+  await deliver(payload([msg(STAFF_PHONE, { type: 'image', image: { id: 'MEDIA-LATE2', mime_type: 'image/png', caption: 'The nets are torn here' } })]));
+  const m2 = (await inbox()).body.items.find((x: any) => x.text === 'The nets are torn here');
+  const req = await h.post(`/api/whatsapp/messages/${m2.id}/request`, { title: 'Repair the nets' }, owner);
+  assert.equal(req.status, 201, JSON.stringify(req.body));
+
+  const r = await fetchWaitingMedia(h.cfg, fakeMedia(PNG));
+  assert.deepEqual([r.stored, r.attached], [2, 2]);
+  assert.equal((await h.get(`/api/tasks/${task.id}`, owner)).body.references.length, 1, 'the picture is on the job now');
+  assert.equal((await h.get(`/api/tasks/${req.body.task.id}`, owner)).body.references.length, 1, 'and on the request');
+  assert.equal((await h.get(`/api/whatsapp/messages/${m.id}`, owner)).body.message.links[0].file, 'on_job');
+  assert.equal((await h.get('/api/whatsapp/status', owner)).body.counts.filesNotOnJob, 0);
+  // the next sweep adds nothing twice
+  assert.equal((await fetchWaitingMedia(h.cfg, fakeMedia(PNG))).attached, 0);
+  assert.equal(many("SELECT id FROM task_refs WHERE note LIKE 'WhatsApp %'").length, 2);
+});
+
+test('a picture that never arrives shows as not on the job, and comes on after Try again', async () => {
+  on();
+  const task = (await h.post('/api/tasks', { title: 'Fix the scoreboard' }, owner)).body;
+  await deliver(payload([msg(STAFF_PHONE, { type: 'image', image: { id: 'MEDIA-GONE', mime_type: 'image/png' } })]));
+  const [m] = (await inbox()).body.items;
+  await h.post(`/api/whatsapp/messages/${m.id}/link`, { kind: 'task', recordId: task.id }, owner);
+  for (let i = 0; i < 5; i++) await fetchWaitingMedia(h.cfg, fakeMedia(PNG, { metaStatus: 500 }));
+  const failed = (await h.get(`/api/whatsapp/messages/${m.id}`, owner)).body.message;
+  assert.equal(failed.mediaState, 'failed');
+  assert.equal(failed.links[0].file, 'not_on_job');
+  assert.equal((await h.post(`/api/whatsapp/messages/${m.id}/media/retry`, {}, owner)).status, 200);
+  assert.equal((await fetchWaitingMedia(h.cfg, fakeMedia(PNG))).attached, 1);
+  assert.equal((await h.get(`/api/whatsapp/messages/${m.id}`, owner)).body.message.links[0].file, 'on_job');
+});
+
+test('two managers pressing Make a request on the same message, even at the same moment, make one request', async () => {
+  on();
+  const mgr = await h.post('/api/staff/team', { firstName: 'Second', lastName: 'Manager', email: 'manager2@daji.test', password: 'Manager-Pass-2026!', permissions: ['manage_tasks'] }, owner);
+  assert.equal(mgr.status, 201, JSON.stringify(mgr.body));
+  const mtok = (await h.post('/api/auth/login', { email: 'manager2@daji.test', password: 'Manager-Pass-2026!' })).body.token;
+  await deliver(payload([msg(STAFF_PHONE, { type: 'text', text: { body: 'The gate lock is broken' } })]));
+  const [m] = (await inbox()).body.items;
+  const [a, b] = await Promise.all([
+    h.post(`/api/whatsapp/messages/${m.id}/request`, { title: 'Fix the gate lock' }, owner),
+    h.post(`/api/whatsapp/messages/${m.id}/request`, { title: 'Gate lock' }, mtok),
+  ]);
+  assert.deepEqual([a.status, b.status], [201, 201], JSON.stringify([a.body, b.body]));
+  assert.equal(a.body.task.id, b.body.task.id, 'both get the same request');
+  const again = await h.post(`/api/whatsapp/messages/${m.id}/request`, { title: 'Another go' }, mtok);
+  assert.equal(again.body.task.id, a.body.task.id);
+  assert.equal(many("SELECT id FROM tasks WHERE intake_key LIKE 'wa:%'").length, 1);
+  assert.equal(many('SELECT id FROM wa_links WHERE unlinked_at IS NULL').length, 1);
+  // the database refuses a second one too, not only the page
+  assert.throws(() => run("INSERT INTO tasks(id, owner_id, title, photos_required, priority, position, intake_by, intake_state, intake_key, created_at, created_by) SELECT 'tsk_dup', owner_id, 'dup', 0, 'normal', 0, 'someone-else', 'new', intake_key, created_at, created_by FROM tasks WHERE intake_key LIKE 'wa:%'"), /UNIQUE/);
+});
+
+test('passing a message to another business takes its file along, kept or still coming', async () => {
+  on();
+  const ownerId = one<{ id: string }>("SELECT id FROM users WHERE email = 'owner1@daji.test'")!.id;
+  const owner2Id = one<{ id: string }>("SELECT id FROM users WHERE email = 'owner2@daji.test'")!.id;
+  run('INSERT INTO business_portfolio(user_id, owner_id, added_at) VALUES (?,?,?)', ownerId, owner2Id, now());
+  // a file already kept
+  await deliver(payload([msg(STRANGER, { type: 'image', image: { id: 'MEDIA-MOVE1', mime_type: 'image/png', caption: 'For the other ground' } })]));
+  await fetchWaitingMedia(h.cfg, fakeMedia(PNG));
+  const [m] = (await inbox()).body.items;
+  assert.equal((await h.get(`/api/whatsapp/messages/${m.id}/media`, owner)).status, 200);
+  const mv = await h.post(`/api/whatsapp/messages/${m.id}/move`, { businessId: owner2Id }, owner);
+  assert.equal(mv.status, 200, JSON.stringify(mv.body));
+  const got = await h.get(`/api/whatsapp/messages/${m.id}/media`, other);
+  assert.equal(got.status, 200, 'the new business opens the file');
+  assert.equal((await h.get(`/api/whatsapp/messages/${m.id}/media`, owner)).status, 404, 'the old one no longer sees the message');
+
+  // a file still coming, moved while it downloads, lands where the message is now
+  await deliver(payload([msg(STRANGER, { type: 'image', image: { id: 'MEDIA-MOVE2', mime_type: 'image/png', caption: 'Second one' } })]));
+  const m2 = (await inbox()).body.items.find((x: any) => x.text === 'Second one');
+  const moving: MediaFetch = async (url, init) => {
+    if (url.includes('lookaside')) assert.equal((await h.post(`/api/whatsapp/messages/${m2.id}/move`, { businessId: owner2Id }, owner)).status, 200);
+    return fakeMedia(PNG)(url, init);
+  };
+  assert.equal((await fetchWaitingMedia(h.cfg, moving)).stored, 1);
+  assert.equal((await h.get(`/api/whatsapp/messages/${m2.id}/media`, other)).status, 200);
+});
+
+test('a delivery status that arrives before WhatsApp answers the send is not lost', async () => {
+  on();
+  await deliver(payload([msg(STAFF_PHONE)]));
+  const [m] = (await inbox()).body.items;
+  const at = String(Math.floor(now() / 1000));
+  // WhatsApp reports the reply delivered and read while its answer to the send is still on the way
+  waHooks.send = async () => {
+    await deliver(payload([], [{ id: 'wamid.EARLY1', status: 'delivered', timestamp: at, recipient_id: STAFF_PHONE }, { id: 'wamid.EARLY1', status: 'read', timestamp: at, recipient_id: STAFF_PHONE }]));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ messages: [{ id: 'wamid.EARLY1' }] }) };
+  };
+  const rep = await h.post(`/api/whatsapp/messages/${m.id}/reply`, { text: 'On my way', clientKey: 'early-1' }, owner);
+  assert.equal(rep.status, 201, JSON.stringify(rep.body));
+  assert.equal(rep.body.state, 'read');
+  // and an early failure wins, with its reason
+  waHooks.send = async () => {
+    await deliver(payload([], [{ id: 'wamid.EARLY2', status: 'failed', timestamp: at, recipient_id: STAFF_PHONE, errors: [{ code: 131026, title: 'Message undeliverable' }] }]));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ messages: [{ id: 'wamid.EARLY2' }] }) };
+  };
+  const rep2 = await h.post(`/api/whatsapp/messages/${m.id}/reply`, { text: 'Hello?', clientKey: 'early-2' }, owner);
+  assert.equal(rep2.body.state, 'failed');
+  assert.match(rep2.body.mediaError, /undeliverable/);
+});
+
+test('while switched off nothing is kept, and the owner is told how many messages arrived and were not kept', async () => {
+  await deliver(payload([msg(STAFF_PHONE), msg(STRANGER)]));
+  assert.equal(many('SELECT id FROM wa_messages').length, 0);
+  const st = (await h.get('/api/whatsapp/status', owner)).body;
+  assert.equal(st.droppedWhileOff.messages, 2);
+  run("UPDATE users SET permissions = ? WHERE phone = '9000000004'", JSON.stringify(['manage_tasks']));
+  assert.equal((await h.get('/api/whatsapp/status', staff)).body.droppedWhileOff, null, 'only the owner sees it');
 });

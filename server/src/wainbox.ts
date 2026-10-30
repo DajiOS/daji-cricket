@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { many, one, registerSchema, run, tx } from './db.ts';
 import { now } from './clock.ts';
@@ -34,7 +34,8 @@ import type { Config } from './config.ts';
 //   approved template, which this does not send.
 //
 // It is switched off until the owner turns it on (whatsappInboundEnabled), and does nothing until the connection is set up
-// (Settings › Connections, "WhatsApp messages coming in"). Off, a delivery is acknowledged and dropped: nothing is kept.
+// (Settings › Connections, "WhatsApp messages coming in"). Off, a delivery is acknowledged and dropped: nothing is kept,
+// only the number of messages it carried, so the owner knows what was missed (WhatsApp does not send them again).
 //
 // Nothing is filed by a guess. A message is filed by itself only when it is a reply to one we sent about a record (the
 // person pressed Reply on it); everything else waits in the review inbox with, at most, a suggestion. Message text and
@@ -111,6 +112,11 @@ CREATE TRIGGER trg_ao_wa_messages_delete BEFORE DELETE ON wa_messages BEGIN SELE
 CREATE TRIGGER trg_ao_wa_links_delete BEFORE DELETE ON wa_links BEGIN SELECT RAISE(ABORT, 'wa_links are never deleted: unlink instead'); END;
 `);
 
+// One request per WhatsApp message in a business, whoever makes it: the database refuses a second, not only the page.
+registerSchema('wainbox-2', `
+CREATE UNIQUE INDEX ux_tasks_whatsapp_request ON tasks(owner_id, intake_key) WHERE intake_key LIKE 'wa:%';
+`);
+
 /** WhatsApp's own cap for documents is 100 MB; a team update larger than this is refused rather than kept. */
 export const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
 const MAX_MEDIA_TRIES = 5;
@@ -175,7 +181,7 @@ export function handleInbound(cfg: Config, raw: Buffer, signature: string | unde
   const none = { messages: 0, duplicates: 0, statuses: 0 };
   if (!cfg.whatsapp.appSecret) { logHook('not_set_up'); return { status: 503, outcome: 'not_set_up', ...none }; }
   if (!signature || !safeEq(signature, webhookSignature(cfg.whatsapp.appSecret, raw))) { logHook('bad_signature'); return { status: 401, outcome: 'bad_signature', ...none }; }
-  if (!inboundOn()) { logHook('switched_off'); return { status: 200, outcome: 'switched_off', ...none }; }
+  if (!inboundOn()) { logHook('switched_off', { ...none, messages: countMessages(raw) }); return { status: 200, outcome: 'switched_off', ...none }; }
   let body: any;
   try { body = JSON.parse(raw.toString('utf8')); } catch { logHook('bad_body'); return { status: 400, outcome: 'bad_body', ...none }; }
   if (!body || body.object !== 'whatsapp_business_account' || !Array.isArray(body.entry)) { logHook('bad_body'); return { status: 400, outcome: 'bad_body', ...none }; }
@@ -197,6 +203,16 @@ export function handleInbound(cfg: Config, raw: Buffer, signature: string | unde
   }
   logHook(other && !n.messages && !n.statuses ? 'other_number' : 'accepted', n);
   return { status: 200, outcome: 'accepted', ...n };
+}
+
+/** How many messages a delivery carried, read only to count them: while switched off nothing in it is kept, but the owner is told how many arrived. */
+function countMessages(raw: Buffer): number {
+  try {
+    const body = JSON.parse(raw.toString('utf8'));
+    let n = 0;
+    for (const e of Array.isArray(body?.entry) ? body.entry : []) for (const c of Array.isArray(e?.changes) ? e.changes : []) if (Array.isArray(c?.value?.messages)) n += c.value.messages.length;
+    return Math.min(n, 1000);
+  } catch { return 0; }
 }
 
 const digits = (s: unknown): string => String(s ?? '').replace(/\D/g, '').slice(0, 20);
@@ -284,6 +300,16 @@ function route(ownerId: string, person: UserRow | null, kind: Kind, words: strin
 }
 
 const STATUS_RANK: Record<string, number> = { sending: 0, sent: 1, delivered: 2, read: 3 };
+/** The state a sent message has reached from the statuses kept for it: failed wins whenever it comes, otherwise the furthest. */
+function settleState(rowId: string, wamid: string, from: State): void {
+  const got = many<{ status: string; error: string | null }>('SELECT status, error FROM wa_statuses WHERE wamid = ?', wamid);
+  const failed = got.find((g) => g.status === 'failed');
+  if (failed) { if (from !== 'failed') run("UPDATE wa_messages SET state = 'failed', media_error = COALESCE(?, media_error) WHERE id = ?", failed.error, rowId); return; }
+  if (from === 'failed') return;
+  let best: State = from;
+  for (const g of got) if ((STATUS_RANK[g.status] ?? -1) > (STATUS_RANK[best] ?? -1)) best = g.status as State;
+  if (best !== from) run('UPDATE wa_messages SET state = ? WHERE id = ?', best, rowId);
+}
 function keepStatus(s: any): boolean {
   const wamid = String(s?.id ?? '').slice(0, 200);
   const status = String(s?.status ?? '');
@@ -293,7 +319,7 @@ function keepStatus(s: any): boolean {
   const r = run('INSERT INTO wa_statuses(id, wamid, status, phone, error, at, received_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(wamid, status) DO NOTHING', newId('was'), wamid, status, digits(s.recipient_id) || null, err, at, now());
   // a status only moves forward; failed wins whenever it comes
   const m = one<{ id: string; state: State }>("SELECT id, state FROM wa_messages WHERE wamid = ? AND direction = 'out'", wamid);
-  if (m && m.state !== 'failed' && (status === 'failed' || (STATUS_RANK[status] ?? -1) > (STATUS_RANK[m.state] ?? -1))) run('UPDATE wa_messages SET state = ? WHERE id = ?', status, m.id);
+  if (m) settleState(m.id, wamid, m.state);
   return Number(r.changes) > 0;
 }
 
@@ -302,14 +328,23 @@ function keepStatus(s: any): boolean {
 export type MediaFetch = (url: string, init: { method: string; headers: Record<string, string>; body?: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; text(): Promise<string>; arrayBuffer(): Promise<ArrayBuffer> }>;
 
 const mediaPath = (dataDir: string, m: { owner_id: string; id: string }) => join(dataDir, 'whatsapp', m.owner_id, m.id);
+/** Where a kept file is. It moves with its message; a file left under another business by an earlier move is still found. */
+function keptFile(dataDir: string, m: { owner_id: string; id: string }): string | null {
+  const p = mediaPath(dataDir, m);
+  if (existsSync(p)) return p;
+  const root = join(dataDir, 'whatsapp');
+  if (!existsSync(root)) return null;
+  for (const d of readdirSync(root)) { const q = join(root, d, m.id); if (d !== m.owner_id && existsSync(q)) return q; }
+  return null;
+}
 
 /**
  * Fetches the files of messages that are waiting: asks WhatsApp where the file is, downloads it with the token, checks its
  * size and checksum, runs the virus check and keeps it. A file that fails the virus check is refused for good; a fetch that
  * fails is tried again later, up to five times, then shown as failed with a Try again button.
  */
-export async function fetchWaitingMedia(cfg: Config, f: MediaFetch = fetch as unknown as MediaFetch, limit = 20): Promise<{ stored: number; failed: number; rejected: number; waiting: number }> {
-  const out = { stored: 0, failed: 0, rejected: 0, waiting: 0 };
+export async function fetchWaitingMedia(cfg: Config, f: MediaFetch = fetch as unknown as MediaFetch, limit = 20): Promise<{ stored: number; failed: number; rejected: number; waiting: number; attached: number }> {
+  const out = { stored: 0, failed: 0, rejected: 0, waiting: 0, attached: 0 };
   if (!cfg.whatsapp.token) return out;
   const rows = many<MsgRow>("SELECT * FROM wa_messages WHERE media_state = 'waiting' AND media_id IS NOT NULL ORDER BY received_at LIMIT ?", limit);
   for (const m of rows) {
@@ -340,9 +375,13 @@ export async function fetchWaitingMedia(cfg: Config, f: MediaFetch = fetch as un
         fail(e instanceof HttpError ? e.message : 'The virus check could not run'); continue;
       }
       const mime = (info.mime_type || m.media_mime || 'application/octet-stream').split(';')[0]!.trim().slice(0, 100);
-      storeUpload({ dataDir: cfg.dataDir, buf, finalPath: mediaPath(cfg.dataDir, m), purpose: 'whatsapp_media', actor: SYSTEM, ownerId: m.owner_id,
+      // read again after the downloads: the message may have been passed to another business meanwhile, and the file goes where it is now
+      const now_ = one<{ owner_id: string; media_state: string }>('SELECT owner_id, media_state FROM wa_messages WHERE id = ?', m.id);
+      if (!now_ || now_.media_state !== 'waiting') continue;
+      storeUpload({ dataDir: cfg.dataDir, buf, finalPath: mediaPath(cfg.dataDir, { owner_id: now_.owner_id, id: m.id }), purpose: 'whatsapp_media', actor: SYSTEM, ownerId: now_.owner_id,
         writeMetadata: () => run("UPDATE wa_messages SET media_state = 'stored', media_mime = ?, media_tries = ?, media_error = NULL WHERE id = ?", mime, tried, m.id) });
       out.stored++;
+      out.attached += await attachToJobs(cfg.dataDir, m.id);
     } catch (e) { fail(`Could not reach WhatsApp: ${(e as Error).message}`); }
   }
   return out;
@@ -394,7 +433,8 @@ export interface MessageOut {
   id: string; direction: 'in' | 'out'; from: string; personId: string | null; personName: string | null; profileName: string | null; onTeam: boolean;
   kind: Kind; text: string | null; hasMedia: boolean; mediaState: MsgRow['media_state']; mediaMime: string | null; mediaName: string | null; mediaError: string | null;
   sentAt: number; receivedAt: number; state: State; suggestion: (Suggestion & { title: string | null }) | null;
-  links: { id: string; kind: LinkKind; recordId: string; title: string | null; why: string | null; byName: string | null; at: number }[];
+  /** file, on a job link: whether the picture or PDF with the message is on the job yet. coming: it goes on by itself when it arrives. */
+  links: { id: string; kind: LinkKind; recordId: string; title: string | null; why: string | null; byName: string | null; at: number; file: 'on_job' | 'coming' | 'not_on_job' | null }[];
   reviewedByName: string | null; reviewNote: string | null; canReply: boolean; replyClosesAt: number | null;
 }
 
@@ -414,9 +454,17 @@ function out(u: UserRow, m: MsgRow, links = liveLinks(m.id)): MessageOut {
     kind: m.kind, text: readText(m.body), hasMedia: !!m.media_id, mediaState: m.media_state, mediaMime: m.media_mime, mediaName: m.media_name, mediaError: m.media_error,
     sentAt: m.sent_at, receivedAt: m.received_at, state: m.state,
     suggestion: sug ? { ...sug, title: sug.recordId && sug.kind !== 'none' ? recordTitle(sug.kind, sug.recordId) : null } : null,
-    links: seen.map((l) => ({ id: l.id, kind: l.kind, recordId: l.record_id, title: recordTitle(l.kind, l.record_id), why: l.why, byName: nameOf(l.linked_by), at: l.linked_at })),
+    links: seen.map((l) => ({ id: l.id, kind: l.kind, recordId: l.record_id, title: recordTitle(l.kind, l.record_id), why: l.why, byName: nameOf(l.linked_by), at: l.linked_at, file: fileOnJob(m, l) })),
     reviewedByName: nameOf(m.reviewed_by), reviewNote: m.review_note, canReply: m.direction === 'in' && closes !== null && closes > now(), replyClosesAt: m.direction === 'in' ? closes : null,
   };
+}
+
+/** Whether a job link's picture or PDF has reached the job. Null when there is no such file, or someone took it off the job. */
+function fileOnJob(m: MsgRow, l: LinkRow): 'on_job' | 'coming' | 'not_on_job' | null {
+  if (l.kind !== 'task' || !m.media_id || !m.media_mime || !REF_MIMES.has(m.media_mime)) return null;
+  const ref = one<{ hidden_at: number | null }>('SELECT hidden_at FROM task_refs WHERE task_id = ? AND note = ? ORDER BY hidden_at IS NULL DESC LIMIT 1', l.record_id, `WhatsApp ${m.id}`);
+  if (ref) return ref.hidden_at === null ? 'on_job' : null;
+  return m.media_state === 'waiting' ? 'coming' : 'not_on_job';
 }
 
 function rowOr404(u: UserRow, ownerId: string, id: string): MsgRow {
@@ -430,8 +478,10 @@ function rowOr404(u: UserRow, ownerId: string, id: string): MsgRow {
 
 export interface InboxStatus {
   enabled: boolean; connected: boolean | null; inboxHere: boolean;
-  counts: { review: number; filed: number; dismissed: number; mediaFailed: number; mediaWaiting: number; sendsFailed: number };
+  counts: { review: number; filed: number; dismissed: number; mediaFailed: number; mediaWaiting: number; sendsFailed: number; filesNotOnJob: number };
   lastDelivery: { at: number; outcome: string } | null;
+  /** Owner of the main business only: messages that arrived while switched off. They were not kept, and WhatsApp does not send them again. */
+  droppedWhileOff: { messages: number; lastAt: number } | null;
 }
 export function inboxStatus(cfg: Config | undefined, u: UserRow, ownerId: string): InboxStatus {
   mayUseInbox(u, ownerId);
@@ -440,8 +490,13 @@ export function inboxStatus(cfg: Config | undefined, u: UserRow, ownerId: string
             COALESCE(SUM(direction = 'in' AND media_state IN ('failed','rejected')), 0) mf, COALESCE(SUM(direction = 'in' AND media_state = 'waiting'), 0) mw,
             COALESCE(SUM(direction = 'out' AND state = 'failed'), 0) sf FROM wa_messages WHERE owner_id = ?`, ownerId)!;
   const last = isBoss(u, ownerId) ? one<{ at: number; outcome: string }>('SELECT at, outcome FROM wa_webhook_log ORDER BY at DESC, id DESC LIMIT 1') ?? null : null;
+  const notOnJob = one<{ n: number }>(`SELECT COUNT(*) n FROM wa_links l JOIN wa_messages m ON m.id = l.message_id
+    WHERE l.owner_id = ? AND l.kind = 'task' AND l.unlinked_at IS NULL AND m.media_id IS NOT NULL AND m.media_mime IN (${[...REF_MIMES].map(() => '?').join(',')})
+      AND NOT EXISTS (SELECT 1 FROM task_refs r WHERE r.task_id = l.record_id AND r.note = 'WhatsApp ' || m.id)`, ownerId, ...REF_MIMES)!.n;
+  const dropped = isBoss(u, ownerId) && inboxBusiness() === ownerId ? one<{ n: number; at: number | null }>("SELECT COALESCE(SUM(messages), 0) n, MAX(at) at FROM wa_webhook_log WHERE outcome = 'switched_off'")! : null;
   return { enabled: inboundOn(), connected: cfg ? inboundConnected(cfg) : null, inboxHere: inboxBusiness() === ownerId,
-    counts: { review: c.review, filed: c.filed, dismissed: c.dismissed, mediaFailed: c.mf, mediaWaiting: c.mw, sendsFailed: c.sf }, lastDelivery: last };
+    counts: { review: c.review, filed: c.filed, dismissed: c.dismissed, mediaFailed: c.mf, mediaWaiting: c.mw, sendsFailed: c.sf, filesNotOnJob: notOnJob }, lastDelivery: last,
+    droppedWhileOff: dropped && dropped.n > 0 ? { messages: dropped.n, lastAt: dropped.at! } : null };
 }
 
 export function listMessages(u: UserRow, ownerId: string, q: { state?: string | null; personId?: string | null; limit?: number }): { items: MessageOut[] } {
@@ -465,8 +520,8 @@ export function getMessage(u: UserRow, ownerId: string, id: string): { message: 
 
 export function mediaFile(dataDir: string, u: UserRow, ownerId: string, id: string): { buf: Buffer; mime: string; name: string | null } {
   const m = rowOr404(u, ownerId, id);
-  const p = mediaPath(dataDir, m);
-  if (m.media_state !== 'stored' || !existsSync(p)) throw notFound('This file has not been kept');
+  const p = keptFile(dataDir, m);
+  if (m.media_state !== 'stored' || !p) throw notFound('This file has not been kept');
   return { buf: readFileSync(p), mime: m.media_mime ?? 'application/octet-stream', name: m.media_name };
 }
 
@@ -494,10 +549,11 @@ const REF_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp', 'application
  */
 async function addAsReference(dataDir: string, u: UserRow, m: MsgRow, taskId: string): Promise<string | null> {
   if (!m.media_id) return null;
-  if (m.media_state !== 'stored') return 'The file has not been fetched yet, so it was not added to the job.';
+  if (m.media_state === 'waiting') return 'The file is still coming from WhatsApp. It goes on the job by itself when it arrives.';
+  if (m.media_state !== 'stored') return 'The file could not be fetched from WhatsApp, so it is not on the job. Press Try again on the message.';
   if (!m.media_mime || !REF_MIMES.has(m.media_mime)) return 'Only pictures and PDFs go on a job as references; this file stays with the message.';
-  const p = mediaPath(dataDir, m);
-  if (!existsSync(p)) return 'The file is missing on the server.';
+  const p = keptFile(dataDir, m);
+  if (!p) return 'The file is missing on the server.';
   const buf = readFileSync(p);
   if (buf.length > MAX_REF_BYTES) return `References can be up to ${MAX_REF_BYTES / 1024 / 1024} MB; this file stays with the message.`;
   if (one('SELECT 1 x FROM task_refs WHERE task_id = ? AND note = ? AND hidden_at IS NULL', taskId, `WhatsApp ${m.id}`)) return null;
@@ -506,6 +562,29 @@ async function addAsReference(dataDir: string, u: UserRow, m: MsgRow, taskId: st
     addRefFile(dataDir, u, taskId, buf, m.media_name ?? `whatsapp-${m.kind}`, `WhatsApp ${m.id}`);
     return null;
   } catch (e) { return e instanceof HttpError ? e.message : 'The file could not be added to the job.'; }
+}
+
+/**
+ * A file that arrives after its message was filed on a job, or made into a request, goes on those jobs now. It is added as
+ * the person who filed it, or the owner when that person may no longer work on the job. Returns how many jobs it reached.
+ */
+async function attachToJobs(dataDir: string, messageId: string): Promise<number> {
+  const m = one<MsgRow>('SELECT * FROM wa_messages WHERE id = ?', messageId);
+  if (!m || m.media_state !== 'stored') return 0;
+  let n = 0;
+  for (const l of liveLinks(m.id).filter((x) => x.kind === 'task')) {
+    if (one('SELECT 1 x FROM task_refs WHERE task_id = ? AND note = ?', l.record_id, `WhatsApp ${m.id}`)) continue; // on already, or taken off by a person
+    const people = [l.linked_by, m.owner_id].filter((x): x is string => !!x).map((id) => one<UserRow>('SELECT * FROM users WHERE id = ? AND active = 1', id)).filter((x): x is UserRow => !!x);
+    let why: string | null = 'No one who may work on the job';
+    for (const u of people) {
+      try { visibleTask(u, l.record_id); } catch { continue; }
+      why = await addAsReference(dataDir, u, m, l.record_id);
+      if (why === null) break;
+    }
+    if (why === null) { n++; audit(SYSTEM, 'whatsapp.file_on_job', 'whatsapp', m.id, { taskId: l.record_id }, m.owner_id); }
+    else console.error(JSON.stringify({ level: 'warn', where: 'whatsapp-attach', message: m.id, task: l.record_id, error: why }));
+  }
+  return n;
 }
 
 /**
@@ -555,10 +634,24 @@ export async function requestFromMessage(dataDir: string, u: UserRow, ownerId: s
   const m = rowOr404(u, ownerId, id);
   if (m.direction !== 'in') throw conflict('NOT_INBOUND', 'Only a message that came in becomes a request');
   const src = (body && typeof body === 'object' && !Array.isArray(body) ? body : {}) as Record<string, unknown>;
+  // one request per message, whoever presses: a second manager gets the request already made. Everything from here to the
+  // insert below runs without a pause, so two presses at the same moment cannot both get past this check.
+  const key = `wa:${m.wamid}`.slice(0, 80);
+  const already = () => one<{ id: string; title: string }>('SELECT id, title FROM tasks WHERE owner_id = ? AND intake_key = ? ORDER BY created_at LIMIT 1', ownerId, key);
+  const made = already();
+  if (made) {
+    if (!maySeeRecord(u, ownerId, 'task', made.id)) throw conflict('REQUEST_MADE', 'A request was already made from this message');
+    run('INSERT INTO wa_links(id, message_id, owner_id, kind, record_id, why, linked_by, linked_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING', newId('wal'), m.id, ownerId, 'task', made.id, 'A request made from this message', u.id, now());
+    if (m.state === 'review') run("UPDATE wa_messages SET state = 'filed', reviewed_by = ?, reviewed_at = ? WHERE id = ?", u.id, now(), m.id);
+    const note = await addAsReference(dataDir, u, one<MsgRow>('SELECT * FROM wa_messages WHERE id = ?', m.id)!, made.id);
+    return { task: made, message: out(u, one<MsgRow>('SELECT * FROM wa_messages WHERE id = ?', m.id)!), note };
+  }
   const who = nameOf(m.person_id) ?? m.profile_name ?? maskPhone(m.phone);
   const words = readText(m.body);
   const details = typeof src.details === 'string' && src.details.trim() ? src.details : `From WhatsApp, ${who}${words ? `: ${words}` : m.media_id ? ` (${m.kind})` : ''}`.slice(0, 1000);
-  const t = raiseRequest(u, ownerId, { title: src.title, details, projectId: src.projectId ?? null, priority: src.priority, clientKey: `wa:${m.wamid}`.slice(0, 80) });
+  let t: { id: string; title: string };
+  try { t = raiseRequest(u, ownerId, { title: src.title, details, projectId: src.projectId ?? null, priority: src.priority, clientKey: key }); }
+  catch (e) { if (already()) return requestFromMessage(dataDir, u, ownerId, id, body); throw e; }
   tx(() => {
     run('INSERT INTO wa_links(id, message_id, owner_id, kind, record_id, why, linked_by, linked_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING', newId('wal'), m.id, ownerId, 'task', t.id, 'A request made from this message', u.id, now());
     run("UPDATE wa_messages SET state = 'filed', reviewed_by = ?, reviewed_at = ? WHERE id = ?", u.id, now(), m.id);
@@ -601,7 +694,7 @@ export function retryMedia(u: UserRow, ownerId: string, id: string): MessageOut 
  * Passes a message to another business the sender works in (or, for a number not on any team, another business the
  * owner holds). Only an owner who holds both businesses may do it. The message keeps its history; links do not travel.
  */
-export function moveMessage(u: UserRow, realUser: UserRow, ownerId: string, id: string, body: unknown): { moved: true; to: string } {
+export function moveMessage(dataDir: string, u: UserRow, realUser: UserRow, ownerId: string, id: string, body: unknown): { moved: true; to: string } {
   const m = rowOr404(u, ownerId, id);
   const v = new Validator(body);
   const to = v.str('businessId', { required: true, max: 64 });
@@ -611,7 +704,11 @@ export function moveMessage(u: UserRow, realUser: UserRow, ownerId: string, id: 
   if (!holder) throw forbidden('Only an owner who holds both businesses passes a message between them');
   if (m.person_id && !(worksIn(m.person_id, to!) || m.person_id === to)) throw conflict('NOT_THEIR_BUSINESS', 'The sender does not work in that business');
   if (liveLinks(m.id).length) throw conflict('FILED', 'Take it off its records first');
-  run("UPDATE wa_messages SET owner_id = ?, state = 'review', suggestion = NULL WHERE id = ?", to!, m.id);
+  // the kept file moves with it, so the new business can open it; a file still coming is kept where the message is when it arrives
+  const from = keptFile(dataDir, m);
+  const dest = mediaPath(dataDir, { owner_id: to!, id: m.id });
+  if (from && from !== dest) { mkdirSync(join(dataDir, 'whatsapp', to!), { recursive: true }); renameSync(from, dest); }
+  try { run("UPDATE wa_messages SET owner_id = ?, state = 'review', suggestion = NULL WHERE id = ?", to!, m.id); } catch (e) { if (from && from !== dest) renameSync(dest, from); throw e; }
   audit(actorOf(u), 'whatsapp.move', 'whatsapp', m.id, { from: ownerId, to }, ownerId);
   audit(actorOf(u), 'whatsapp.move', 'whatsapp', m.id, { from: ownerId, to }, to!);
   return { moved: true, to: to! };
@@ -666,7 +763,8 @@ export async function replyTo(cfg: Config, u: UserRow, ownerId: string, id: stri
     else error = `WhatsApp refused the reply (${res.status})`;
   } catch (e) { error = `Could not reach WhatsApp: ${(e as Error).message}`.slice(0, 200); }
   // an unknown outcome stays unknown: a timeout is shown as failed to send from here, and is never retried by itself
-  if (wamid) run("UPDATE wa_messages SET wamid = ?, state = 'sent' WHERE id = ?", wamid, rowId);
+  // WhatsApp can report delivered, read or failed before its answer to the send reaches us; those statuses are already kept
+  if (wamid) { run("UPDATE wa_messages SET wamid = ?, state = 'sent' WHERE id = ?", wamid, rowId); settleState(rowId, wamid, 'sent'); }
   else run("UPDATE wa_messages SET state = 'failed', media_error = ? WHERE id = ?", error, rowId);
   audit(actorOf(u), 'whatsapp.reply', 'whatsapp', rowId, { to: m.id, ok: !!wamid }, ownerId);
   if (!wamid) console.error(JSON.stringify({ level: 'error', where: 'whatsapp-reply', message: rowId, error }));

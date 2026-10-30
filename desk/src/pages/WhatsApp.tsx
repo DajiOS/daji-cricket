@@ -10,7 +10,7 @@ import { Chip, ErrorBox, Field, Load, Modal, PageHead, Stat, Table, Tabs, useToa
 import { Panel, errText } from '../parts/admin/common';
 
 type LinkKind = 'task' | 'project' | 'cash';
-interface Link { id: string; kind: LinkKind; recordId: string; title: string | null; why: string | null; byName: string | null; at: number }
+interface Link { id: string; kind: LinkKind; recordId: string; title: string | null; why: string | null; byName: string | null; at: number; file: 'on_job' | 'coming' | 'not_on_job' | null }
 interface Msg {
   id: string; direction: 'in' | 'out'; from: string; personId: string | null; personName: string | null; profileName: string | null; onTeam: boolean;
   kind: string; text: string | null; hasMedia: boolean; mediaState: 'none' | 'waiting' | 'stored' | 'failed' | 'rejected'; mediaMime: string | null; mediaName: string | null; mediaError: string | null;
@@ -18,7 +18,7 @@ interface Msg {
   suggestion: { kind: LinkKind | 'none'; recordId: string | null; why: string; title: string | null } | null;
   links: Link[]; reviewedByName: string | null; reviewNote: string | null; canReply: boolean; replyClosesAt: number | null;
 }
-interface Status { enabled: boolean; connected: boolean | null; inboxHere: boolean; counts: { review: number; filed: number; dismissed: number; mediaFailed: number; mediaWaiting: number; sendsFailed: number }; lastDelivery: { at: number; outcome: string } | null }
+interface Status { enabled: boolean; connected: boolean | null; inboxHere: boolean; counts: { review: number; filed: number; dismissed: number; mediaFailed: number; mediaWaiting: number; sendsFailed: number; filesNotOnJob: number }; lastDelivery: { at: number; outcome: string } | null; droppedWhileOff: { messages: number; lastAt: number } | null }
 type Tab = 'review' | 'filed' | 'dismissed' | 'failed' | 'all';
 
 const STATE: Record<Msg['state'], [Tone, string]> = {
@@ -49,7 +49,7 @@ export default function WhatsApp() {
         <div className="grid g4">
           <Stat label="To review" value={status.counts.review} foot="Waiting for someone to file them" />
           <Stat label="Filed" value={status.counts.filed} foot="On a job, project or cash spend" />
-          <Stat label="Files to fix" value={status.counts.mediaFailed} foot={status.counts.mediaWaiting ? `${status.counts.mediaWaiting} still being fetched` : 'Not fetched, or failed the virus check'} />
+          <Stat label="Files to fix" value={status.counts.mediaFailed} foot={[status.counts.mediaWaiting ? `${status.counts.mediaWaiting} still being fetched` : 'Not fetched, or failed the virus check', status.counts.filesNotOnJob ? `${status.counts.filesNotOnJob} filed on a job but not on it yet` : ''].filter(Boolean).join(' · ')} />
           <Stat label="Replies not sent" value={status.counts.sendsFailed} foot="WhatsApp refused them" />
         </div>
       )}
@@ -74,7 +74,8 @@ export default function WhatsApp() {
 }
 
 function Banner({ s }: { s: Status }) {
-  if (!s.enabled) return <div className="state state-partial" role="status"><b>Messages coming in are switched off.</b><span className="small">Nothing sent to the business number is kept until the owner switches this on. Check the WhatsApp account's messaging limits first (Settings › Connections).</span></div>;
+  const dropped = s.droppedWhileOff ? ` ${s.droppedWhileOff.messages} message${s.droppedWhileOff.messages === 1 ? '' : 's'} arrived while it was off (last ${fmtDateTime(s.droppedWhileOff.lastAt)}) and ${s.droppedWhileOff.messages === 1 ? 'was' : 'were'} not kept; WhatsApp does not send them again.` : '';
+  if (!s.enabled) return <div className="state state-partial" role="status"><b>Messages coming in are switched off.</b><span className="small">Nothing sent to the business number is kept until the owner switches this on. Check the WhatsApp account's messaging limits first (Settings › Connections).{dropped}</span></div>;
   if (s.connected === false) return <div className="state state-partial" role="status"><b>WhatsApp is not fully set up.</b><span className="small">Messages may not arrive. See Settings › Connections, "WhatsApp messages coming in".</span></div>;
   return null;
 }
@@ -179,8 +180,13 @@ function Links({ m, onChanged }: { m: Msg; onChanged: () => void }) {
   return (
     <div className="stack" style={{ gap: 4 }}>
       {m.links.map((l) => <div key={l.id} className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <span><b>{LINK[l.kind]}:</b> {l.title ?? 'not available'}<span className="muted small">{l.why ? ` · ${l.why}` : ''}{l.byName ? ` · by ${l.byName}` : ''}</span></span>
-        {m.direction === 'in' && <button className="btn ghost sm" onClick={() => setTaking(l)}>Take off</button>}
+        <span><b>{LINK[l.kind]}:</b> {l.title ?? 'not available'}<span className="muted small">{l.why ? ` · ${l.why}` : ''}{l.byName ? ` · by ${l.byName}` : ''}</span>
+          {l.file === 'coming' && <> <Chip tone="info">File still coming; it goes on the job when it arrives</Chip></>}
+          {l.file === 'not_on_job' && <> <Chip tone="warn">File not on the job</Chip></>}</span>
+        <span className="row" style={{ gap: 6 }}>
+          {l.file === 'not_on_job' && m.mediaState === 'stored' && <button className="btn ghost sm" onClick={async () => { try { const r = await post<{ note: string | null }>(`/api/whatsapp/messages/${encodeURIComponent(m.id)}/link`, { kind: l.kind, recordId: l.recordId }); toast(r.note ?? 'The file is on the job now.'); onChanged(); } catch (e) { toast(errText(e)); } }}>Add the file to the job</button>}
+          {m.direction === 'in' && <button className="btn ghost sm" onClick={() => setTaking(l)}>Take off</button>}
+        </span>
       </div>)}
       {taking && <Reason label={`Why take it off ${LINK[taking.kind].toLowerCase()} "${taking.title ?? ''}"?`} button="Take off" onCancel={() => setTaking(null)}
         onDone={async (reason) => { try { await post(`/api/whatsapp/messages/${encodeURIComponent(m.id)}/unlink`, { linkId: taking.id, reason }); toast('Taken off. The link stays on file.'); setTaking(null); onChanged(); } catch (e) { toast(errText(e)); } }} />}
