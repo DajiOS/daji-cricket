@@ -4,6 +4,7 @@
 // see its record. WhatsApp allows one-to-one chats only and typed replies only within 24 hours of the person's last message.
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { startHarness, setting, advance, HOUR, type Harness } from './helpers.ts';
 import { many, one, run } from '../src/db.ts';
 import { now } from '../src/clock.ts';
@@ -506,4 +507,58 @@ test('the inbox numbers count only what the viewer may see', async () => {
   assert.equal(ask.status, 200, JSON.stringify(ask.body));
   assert.match(ask.body.answer, /1 WhatsApp message waits for review/);
   assert.doesNotMatch(JSON.stringify(ask.body), /Private one/);
+});
+
+// ---- after the review of PR #203
+
+test('two WhatsApp ids that differ only after the first 80 characters make two requests, not one', async () => {
+  on();
+  const stem = 'wamid.' + 'H'.repeat(120);
+  await deliver(payload([{ ...msg(STAFF_PHONE, { type: 'text', text: { body: 'First long one' } }), id: `${stem}AAA` }, { ...msg(STAFF_PHONE, { type: 'text', text: { body: 'Second long one' } }), id: `${stem}BBB` }]));
+  const items = (await inbox()).body.items;
+  const a = items.find((x: any) => x.text === 'First long one'), b = items.find((x: any) => x.text === 'Second long one');
+  const ra = await h.post(`/api/whatsapp/messages/${a.id}/request`, { title: 'First request' }, owner);
+  const rb = await h.post(`/api/whatsapp/messages/${b.id}/request`, { title: 'Second request' }, owner);
+  assert.deepEqual([ra.status, rb.status], [201, 201], JSON.stringify([ra.body, rb.body]));
+  assert.notEqual(ra.body.task.id, rb.body.task.id, 'each message has its own request');
+  assert.equal(rb.body.task.title, 'Second request');
+  // and pressing again on the first still gives the first
+  assert.equal((await h.post(`/api/whatsapp/messages/${a.id}/request`, { title: 'Again' }, owner)).body.task.id, ra.body.task.id);
+});
+
+test('a base64 checksum must match exactly: one that differs only in letter case is refused', async () => {
+  on();
+  const b64 = createHash('sha256').update(PNG).digest('base64');
+  const swapped = [...b64].map((ch) => (ch >= 'a' && ch <= 'z' ? ch.toUpperCase() : ch >= 'A' && ch <= 'Z' ? ch.toLowerCase() : ch)).join('');
+  assert.notEqual(swapped, b64);
+  await deliver(payload([msg(STAFF_PHONE, { type: 'image', image: { id: 'MEDIA-B64-BAD', mime_type: 'image/png' } })]));
+  assert.equal((await fetchWaitingMedia(h.cfg, fakeMedia(PNG, { sha: swapped }))).stored, 0, 'a case change is a different checksum');
+  run("UPDATE wa_messages SET media_state = 'failed' WHERE media_id = 'MEDIA-B64-BAD'");
+  await deliver(payload([msg(STAFF_PHONE, { type: 'image', image: { id: 'MEDIA-B64-OK', mime_type: 'image/png' } })]));
+  assert.equal((await fetchWaitingMedia(h.cfg, fakeMedia(PNG, { sha: b64 }))).stored, 1, 'the exact base64 checksum is accepted');
+  await deliver(payload([msg(STAFF_PHONE, { type: 'image', image: { id: 'MEDIA-HEX-UP', mime_type: 'image/png' } })]));
+  assert.equal((await fetchWaitingMedia(h.cfg, fakeMedia(PNG, { sha: createHash('sha256').update(PNG).digest('hex').toUpperCase() }))).stored, 1, 'hex ignores case');
+});
+
+test('a message filed on a restricted job and an open job is seen only by people who may see both', async () => {
+  on();
+  const area = (await h.post('/api/areas', { name: 'House', restricted: true }, owner)).body.id;
+  const project = (await h.post('/api/projects', { name: 'House work', areaId: area }, owner)).body.id;
+  const house = (await h.post('/api/tasks', { title: 'House repair', projectId: project }, owner)).body;
+  const cricket = (await h.post('/api/tasks', { title: 'Cricket nets' }, owner)).body;
+  const mgr = await h.post('/api/staff/team', { firstName: 'Nets', lastName: 'Manager', email: 'manager4@daji.test', password: 'Manager-Pass-2026!', permissions: ['manage_tasks'] }, owner);
+  assert.equal(mgr.status, 201, JSON.stringify(mgr.body));
+  const mtok = (await h.post('/api/auth/login', { email: 'manager4@daji.test', password: 'Manager-Pass-2026!' })).body.token;
+  assert.equal((await h.get(`/api/tasks/${cricket.id}`, mtok)).status, 200, 'the manager can see the cricket job');
+  await deliver(payload([msg(STAFF_PHONE, { type: 'text', text: { body: 'House key is under the mat; nets need new poles' } })]));
+  const [m] = (await inbox()).body.items;
+  await h.post(`/api/whatsapp/messages/${m.id}/link`, { kind: 'task', recordId: cricket.id }, owner);
+  assert.equal((await h.get(`/api/whatsapp/messages/${m.id}`, mtok)).status, 200, 'on the cricket job only, the manager sees it');
+  await h.post(`/api/whatsapp/messages/${m.id}/link`, { kind: 'task', recordId: house.id }, owner);
+  assert.equal((await h.get(`/api/whatsapp/messages/${m.id}`, mtok)).status, 404, 'once it is also on the house job, it is hidden');
+  assert.equal((await h.get('/api/whatsapp/messages?state=all', mtok)).body.items.length, 0);
+  assert.equal((await h.get(`/api/whatsapp/linked?kind=task&id=${cricket.id}`, mtok)).body.items.length, 0, 'not on the cricket job page either');
+  assert.equal((await h.get('/api/whatsapp/status', mtok)).body.counts.filed, 0);
+  assert.doesNotMatch(JSON.stringify((await h.post('/api/staff/ask', { question: 'What is in the WhatsApp inbox?' }, mtok)).body), /House key/);
+  assert.equal((await h.get(`/api/whatsapp/messages/${m.id}`, owner)).status, 200, 'the owner still sees it');
 });
