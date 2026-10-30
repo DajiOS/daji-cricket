@@ -70,6 +70,8 @@ jobs:
             set -e
             cd ~/cricket-booking
             chmod -R a+rX server web shared
+            # A 1 GB server with no swap freezes when memory runs out (30 Oct 2026); this adds swap once and is a no-op after
+            sudo sh deploy/ensure-swap.sh
             cd deploy
             sudo docker compose up -d --build
             # Caddy reads its config once and retries failed HTTPS certificates slowly; restarting makes it pick up Caddyfile changes and ask for certificates straight away
