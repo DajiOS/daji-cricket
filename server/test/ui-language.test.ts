@@ -71,8 +71,10 @@ const me = async (t: string) => (await h.get('/api/me', t)).body.user;
 
 test('everyone starts in English; a person picks Gujarati or Hindi for themselves only, and it follows them to a new sign-in', async () => {
   assert.equal((await me(cust)).language, 'en');
+  assert.equal((await me(cust)).languageChosen, false, 'nothing saved yet: the app and website keep the language picked before sign-in');
   assert.equal((await me(staff)).language, 'en');
   const r = await h.patch('/api/me', { language: 'gu' }, cust);
+  assert.equal(r.body.user.languageChosen, true);
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.user.language, 'gu');
   assert.equal((await me(cust)).language, 'gu');
@@ -81,7 +83,8 @@ test('everyone starts in English; a person picks Gujarati or Hindi for themselve
   const again = await h.login('customer'); // a second phone, or the website
   assert.equal((await me(again)).language, 'gu');
   assert.equal((await h.patch('/api/me', { language: 'hi' }, staff)).body.user.language, 'hi', 'staff can pick one too');
-  assert.equal((await h.patch('/api/me', { language: null }, cust)).body.user.language, 'en', 'clearing goes back to English');
+  const cleared = (await h.patch('/api/me', { language: null }, cust)).body.user;
+  assert.equal(cleared.language, 'en', 'clearing goes back to English'); assert.equal(cleared.languageChosen, false);
   assert.equal(many('SELECT 1 FROM ui_languages WHERE user_id = (SELECT id FROM users WHERE role = ? LIMIT 1)', 'customer').length, 0);
 });
 

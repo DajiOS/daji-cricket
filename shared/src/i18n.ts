@@ -199,6 +199,7 @@ const LINES = {
   'profile.useLight': ['Use light', 'લાઇટ વાપરો', 'लाइट इस्तेमाल करें'],
   'profile.language': ['Screen language', 'સ્ક્રીનની ભાષા', 'स्क्रीन की भाषा'],
   'profile.languageNote': ['Changes the words on your screens only. Bookings, prices and payments stay exactly the same. The assistant still answers in the language you write in.', 'ફક્ત તમારી સ્ક્રીન પરના શબ્દો બદલાય છે. બુકિંગ, ભાવ અને ચુકવણી બિલકુલ એ જ રહે છે. આસિસ્ટન્ટ તમે જે ભાષામાં લખો તે જ ભાષામાં જવાબ આપે છે.', 'सिर्फ़ आपकी स्क्रीन के शब्द बदलते हैं। बुकिंग, कीमत और भुगतान बिल्कुल वही रहते हैं। असिस्टेंट उसी भाषा में जवाब देता है जिसमें आप लिखते हैं।'],
+  'profile.languageNotSaved': ['The language was not saved, so nothing changed. Please try again.', 'ભાષા સાચવી શકાઈ નહીં, તેથી કંઈ બદલાયું નથી. ફરી પ્રયાસ કરો.', 'भाषा सहेजी नहीं जा सकी, इसलिए कुछ नहीं बदला। फिर से कोशिश करें।'],
   'profile.languageSaved': ['Your screens are now in English.', 'તમારી સ્ક્રીન હવે ગુજરાતીમાં છે.', 'आपकी स्क्रीन अब हिन्दी में है।'],
   'profile.voice': ['Voice Shortcuts', 'વોઇસ શોર્ટકટ', 'वॉइस शॉर्टकट'],
   'profile.voiceSub': ["Siri and Android, and the assistant's name ({ai})", 'Siri અને Android, અને આસિસ્ટન્ટનું નામ ({ai})', 'Siri और Android, और असिस्टेंट का नाम ({ai})'],

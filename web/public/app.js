@@ -943,18 +943,29 @@ async function finishAuth(a, after) {
 }
 
 // A signed-in person's screen language is on their profile, so it is the same here and in the phone app. Before sign-in it is this browser's pick.
+// Someone who never saved one keeps the language they picked before signing in or registering, and it is saved to their profile, so nobody
+// is switched back to English halfway through booking. If that save fails the page stays in their pick in this browser and tries again next time.
+let adoptingLang = false;
 function syncLang() {
-  const u = state.user;
-  if (u && u.language && u.language !== window.DajiI18n.lang) window.DajiI18n.set(u.language);
+  const u = state.user, l = window.DajiI18n.lang;
+  if (u && u.languageChosen) { if (u.language && u.language !== l) window.DajiI18n.set(u.language); }
+  else if (u && l !== 'en' && !adoptingLang) {
+    adoptingLang = true;
+    api('/api/me', { method: 'PATCH', body: { language: l } }).then((r) => { if (state.user && state.user.id === r.user.id) state.user = r.user; }, () => {}).finally(() => { adoptingLang = false; });
+  }
   const sel = $('#lang-pick'); if (sel) sel.value = window.DajiI18n.lang;
 }
 function wireLang() {
   const sel = $('#lang-pick'); if (!sel) return;
   sel.value = window.DajiI18n.lang;
   sel.addEventListener('change', async () => {
-    const l = sel.value; window.DajiI18n.set(l);
-    if (!state.user) return;
-    try { state.user = (await api('/api/me', { method: 'PATCH', body: { language: l } })).user; } catch (e) { toast(e.message, true); }
+    const before = window.DajiI18n.lang, l = sel.value;
+    if (!state.user) { window.DajiI18n.set(l); return; }
+    // signed in: the profile is saved first and the page switches only once it is, so what is on screen is always what follows the person
+    sel.disabled = true;
+    try { state.user = (await api('/api/me', { method: 'PATCH', body: { language: l } })).user; window.DajiI18n.set(l); }
+    catch { sel.value = before; toast(T('profile.languageNotSaved'), true); }
+    finally { sel.disabled = false; }
   });
   // the words the page wrote itself are written again in the new language
   window.DajiI18n.onChange(() => { sel.value = window.DajiI18n.lang; if (state.ground && state.config) renderPanel(); });
@@ -1288,13 +1299,18 @@ function renderPanel() {
   loadSlots();
 }
 
+// Only the newest request draws the slots: a language change, or a quick tap on another day, starts a fresh one, and an older answer that
+// arrives later is dropped, so two answers for the same ground and day never both add buttons.
+let slotsSeq = 0;
 async function loadSlots() {
-  const g = state.ground, date = state.date, hint = $('#p-hint'), grid = clear($('#p-slots'));
+  const g = state.ground, date = state.date, hint = $('#p-hint'), seq = ++slotsSeq;
+  clear($('#p-slots'));
   hint.className = 'hint'; hint.textContent = T('web.checking');
   let a;
   try { a = await api(`/api/grounds/${encodeURIComponent(g.id)}/availability?date=${date}`); }
-  catch (e) { hint.className = 'hint err'; hint.textContent = e.message; renderSummary(); return; }
-  if (g.id !== state.ground.id || date !== state.date) return; // the person moved on while this was loading
+  catch (e) { if (seq !== slotsSeq) return; hint.className = 'hint err'; hint.textContent = e.message; renderSummary(); return; }
+  if (seq !== slotsSeq || g.id !== state.ground.id || date !== state.date) return; // the person moved on while this was loading
+  const grid = clear($('#p-slots'));
   state.slots = a.slots; state.avail = a;
   const hasR = !!a.rates, hasF = !hasR && !!(g.formats && g.formats.length);
   $('#p-step2').hidden = !(hasF || hasR); $('#p-step3 i').textContent = hasF || hasR ? '3' : '2';

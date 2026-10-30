@@ -9,7 +9,7 @@ import { now } from './clock.ts';
 import { newId } from './ids.ts';
 import { HttpError, forbidden } from './errors.ts';
 import { aiNameFor, aiNameNotice, ownAiName } from './aiNames.ts';
-import { uiLanguageFor } from './uiLanguage.ts';
+import { ownUiLanguage, uiLanguageFor } from './uiLanguage.ts';
 import type { Config } from './config.ts';
 
 // First and last name are kept apart so the admin can edit them; `name` stays the two joined.
@@ -117,7 +117,7 @@ export function toUser(r: UserRow): User {
     permissions: perms, active: !!r.active, consent, businessName: r.business_name, upiId: r.upi_id, createdAt: r.created_at,
     avatarUrl: r.avatar_id ? `/api/avatar/${r.avatar_id}` : null, hasPassword: !!r.password_hash,
     aiName: aiNameFor(r.id), aiNameOwn: ownAiName(r.id), aiNameNotice: aiNameNotice(r.id),
-    language: uiLanguageFor(r.id),
+    language: uiLanguageFor(r.id), languageChosen: ownUiLanguage(r.id) !== null,
     readOnly: isReadOnly(r),
   };
 }

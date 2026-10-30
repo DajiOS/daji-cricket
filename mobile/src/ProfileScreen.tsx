@@ -44,7 +44,7 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const pickLang = async (l: UiLang) => {
     setErr(''); setNote('');
     try { const r = await api<{ user: User }>('/api/me', { method: 'PATCH', body: { language: l } }); onUser(r.user); setNote(translator(l)('profile.languageSaved')); }
-    catch (e: any) { setErr((e.details?.fields?.[0]?.message as string) ?? e.message); }
+    catch { setErr(t('profile.languageNotSaved')); }
   };
 
   const save = async () => {

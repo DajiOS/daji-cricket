@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -80,9 +80,18 @@ function AppInner({ theme }: { theme: Mode }) {
   const insets = useSafeAreaInsets(); // Android draws behind the system bars now, so the tab bar clears the gesture or button bar itself
   void theme; // a new value makes the whole app draw again with the new colours
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  const { t, setLang } = useLang();
-  // a signed-in person's screen language comes from their profile, so it is the same on every phone and on the website
-  useEffect(() => { const l = user?.language; if (isLang(l)) setLang(l); }, [user?.language, setLang]);
+  const { lang, t, setLang } = useLang();
+  // a signed-in person's screen language comes from their profile, so it is the same on every phone and on the website. Someone who never
+  // saved one keeps the language they picked before signing in or registering, and it is saved to their profile, so nobody is switched
+  // back to English halfway through booking. If that save fails the screens stay in their pick on this phone, and it is tried again next time.
+  const adopting = useRef(false);
+  useEffect(() => {
+    if (!user) return;
+    if (user.languageChosen) { if (isLang(user.language)) setLang(user.language); return; }
+    if (lang === 'en' || adopting.current) return;
+    adopting.current = true;
+    api<{ user: User }>('/api/me', { method: 'PATCH', body: { language: lang } }).then((r) => setUser(r.user), () => {}).finally(() => { adopting.current = false; });
+  }, [user, lang, setLang]);
   const [tab, setTab] = useState<Tab>('home');
   const [hold, setHold] = useState<HoldResponse | null>(null);
   const [done, setDone] = useState<{ b: Booking; paid: boolean } | null>(null);
