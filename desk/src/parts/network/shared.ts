@@ -48,13 +48,14 @@ export const S_STATUS: Record<string, [Tone, string]> = { agreed: ['warn', 'Agre
 export const KIND: Record<string, string> = { entry_fee: 'Entry fee', ground_charge: 'Ground charge', prize: 'Prize', other: 'Other' };
 export const FORMAT: Record<string, string> = { round_robin: 'Round robin', double_round_robin: 'Double round robin' };
 
-/** One action at a time: busy while it runs, the server's reason when it is refused. */
+/** One action at a time: busy while it runs, the server's reason when it is refused. Like the hooks in lib.ts, it hands the reason
+ *  to the screen, and every screen that uses it shows it with <ErrorBox msg={a.err} />. */
 export function useAct(after: () => void, toast: (m: string) => void) {
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
   async function act(fn: () => Promise<unknown>, done: string): Promise<boolean> {
-    setBusy(true); setErr(null);
-    try { await fn(); toast(done); after(); return true; } catch (e: any) { setErr(e.message); return false; } finally { setBusy(false); }
+    setBusy(true); setRefusal(null);
+    try { await fn(); toast(done); after(); return true; } catch (e: any) { setRefusal(e.message); return false; } finally { setBusy(false); }
   }
-  return { busy, err, setErr, act };
+  return { busy, err: refusal, setErr: setRefusal, act };
 }

@@ -6,7 +6,7 @@ import { Validator, normalizePhone } from './input.ts';
 import { audit } from './audit.ts';
 import { hasPermission, type UserRow } from './auth.ts';
 import { businessName } from './businesses.ts';
-import { groundRow, slotStarts } from './grounds.ts';
+import { blockRange, groundRow, slotStarts } from './grounds.ts';
 import { linkedBusy } from './groundLinks.ts';
 import { createMatch, nameKey } from './matches.ts';
 import { ballsToOvers, oversToBalls, pointsTable, roundRobin } from './tournaments.ts';
@@ -291,7 +291,10 @@ function holdTime(t: TRow, f: FRow, groundId: string, startsAt: number): void {
   const names = new Map(teamsOf(t.id).map((x) => [x.id, x.name]));
   const note = `Network tournament: ${t.name} · ${names.get(f.team_a_id) ?? 'Team'} v ${names.get(f.team_b_id) ?? 'Team'} · ${f.id}`.slice(0, 200);
   const end = startsAt + t.match_minutes * MIN;
-  for (const s of slotStarts(g, istDate(startsAt)).filter((x) => x >= startsAt && x < end)) run("INSERT INTO booking_slots(ground_id, slot_start, kind, note) VALUES(?,?,'block',?)", g.id, s, note);
+  // through the grounds' own block path (grounds.ts blockRange, the one booking engine): whole slots, all or nothing, never over a booking
+  const date = istDate(startsAt), from = (startsAt - istMidnight(date)) / MIN, to = from + Math.ceil(t.match_minutes / g.slot_minutes) * g.slot_minutes;
+  const clock = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  blockRange(g, date, clock(from), clock(to), note);
   run('UPDATE net_fixtures SET hold_ground_id = ?, hold_from = ?, hold_until = ?, hold_note = ? WHERE id = ?', g.id, startsAt, end, note, f.id);
 }
 /** Gives the time back: only the block rows this fixture wrote (same ground, its time, its note), never a booking or anyone else's block. */

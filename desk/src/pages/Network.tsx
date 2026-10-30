@@ -32,6 +32,7 @@ function Overview() {
   const { me } = useSession();
   const [d, err, reload, status] = useApi<NetStatus>(NET);
   const a = useAct(reload, toast);
+  const busy = a.busy;
   return (
     <Load data={d} error={err} status={status} retry={reload}>{(d) => <div className="stack">
       <ErrorBox msg={a.err} />
@@ -40,8 +41,8 @@ function Overview() {
           <div><b>{d.joined ? 'Your business is in the cricket network' : 'Your business is not in the cricket network'}</b>
             <div className="small muted">{d.joined && d.joinedAt ? `Joined ${fmtDateTime(d.joinedAt)}. ` : ''}{d.note}</div></div>
           {d.canChange && (d.joined
-            ? <button className="btn" disabled={a.busy} onClick={() => a.act(() => post(`${NET}/leave`), 'Left the cricket network')}>Leave the network</button>
-            : <button className="btn primary" disabled={a.busy} onClick={() => a.act(() => post(`${NET}/join`), 'Joined the cricket network')}>Join the network</button>)}
+            ? <button className="btn" disabled={busy} onClick={() => a.act(() => post(`${NET}/leave`), 'Left the cricket network')}>Leave the network</button>
+            : <button className="btn primary" disabled={busy} onClick={() => a.act(() => post(`${NET}/join`), 'Joined the cricket network')}>Join the network</button>)}
         </div>
         {!d.canChange && <div className="small muted">Only the owner can join or leave.</div>}
       </div>
@@ -72,13 +73,14 @@ function Overview() {
 function ChildSwitch({ on, reload }: { on: boolean; reload: () => void }) {
   const toast = useToast();
   const a = useAct(reload, toast);
+  const busy = a.busy;
   const [ref, setRef] = useState('');
   return (
     <div className="stack">
       <ErrorBox msg={a.err} />
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         {!on && <input className="inp" style={{ minWidth: 320 }} placeholder="Legal and product review: who, when, which document" value={ref} onChange={(e) => setRef(e.target.value)} />}
-        <button className={on ? 'btn' : 'btn primary'} disabled={a.busy} onClick={() => a.act(() => put('/api/admin/network/children', on ? { on: false } : { on: true, legalReviewRef: ref }), on ? 'Children\'s profiles switched off' : 'Children\'s profiles switched on')}>
+        <button className={on ? 'btn' : 'btn primary'} disabled={busy} onClick={() => a.act(() => put('/api/admin/network/children', on ? { on: false } : { on: true, legalReviewRef: ref }), on ? 'Children\'s profiles switched off' : 'Children\'s profiles switched on')}>
           {on ? 'Switch children\'s profiles off' : 'Switch children\'s profiles on'}</button>
       </div>
     </div>
@@ -116,6 +118,7 @@ function Tournaments() {
 function NewTournament({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   const a = useAct(() => {}, toast);
+  const busy = a.busy;
   const [v, setV] = useState({ name: '', format: 'round_robin', overs: '20', matchMinutes: '180', startDate: '', endDate: '', notes: '' });
   const set = (k: keyof typeof v) => (e: any) => setV((s) => ({ ...s, [k]: e.target.value }));
   const save = async () => {
@@ -124,7 +127,7 @@ function NewTournament({ onClose }: { onClose: () => void }) {
     if (ok) go('/network/tournaments/' + id);
   };
   return (
-    <Modal title="New network tournament" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={a.busy} onClick={save}>Create</button></>}>
+    <Modal title="New network tournament" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={save}>Create</button></>}>
       <ErrorBox msg={a.err} />
       <div className="form-grid">
         <Field label="Name" full required><input className="inp" value={v.name} onChange={set('name')} /></Field>
@@ -146,6 +149,7 @@ function Duplicates() {
   const toast = useToast();
   const [d, err, reload, status] = useApi<{ claims: Claim[]; suggestions: Suggestion[]; note: string }>(`${NET}/claims`);
   const a = useAct(reload, toast);
+  const busy = a.busy;
   const [why, setWhy] = useState<Record<string, string>>({});
   return (
     <Load data={d} error={err} status={status} retry={reload}>{(d) => <div className="stack">
@@ -161,8 +165,8 @@ function Duplicates() {
             { head: 'Status', cell: (c) => <>{c.status}{c.reason && <div className="small muted">{c.reason}</div>}</> },
             { head: '', num: true, cell: (c) => c.status === 'open' && !c.staffSaidYes && <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
               <input className="inp" style={{ width: 150 }} placeholder="Reason to refuse" value={why[c.id] ?? ''} onChange={(e) => setWhy((s) => ({ ...s, [c.id]: e.target.value }))} />
-              <button className="btn sm primary" disabled={a.busy} onClick={() => a.act(() => post(`${NET}/claims/${c.id}`, { yes: true }), 'Agreed')}>Agree</button>
-              <button className="btn sm" disabled={a.busy} onClick={() => a.act(() => post(`${NET}/claims/${c.id}`, { yes: false, reason: why[c.id] || undefined }), 'Refused')}>Refuse</button>
+              <button className="btn sm primary" disabled={busy} onClick={() => a.act(() => post(`${NET}/claims/${c.id}`, { yes: true }), 'Agreed')}>Agree</button>
+              <button className="btn sm" disabled={busy} onClick={() => a.act(() => post(`${NET}/claims/${c.id}`, { yes: false, reason: why[c.id] || undefined }), 'Refused')}>Refuse</button>
             </div> },
           ]} /></div>
       <div className="card"><div className="card-head"><h3>Possible duplicates</h3><span className="small muted">Guests on your scorecards with the same name as a customer of yours</span></div>
@@ -170,7 +174,7 @@ function Duplicates() {
           cols={[
             { head: 'Scorecard name', cell: (s) => <><b>{s.scorecardName}</b><div className="small muted">{s.match} · {fmtDateTime(s.date)}</div></> },
             { head: 'Customer', cell: (s) => <>{s.player}{s.sameNameProfiles > 1 && <Chip tone="warn">{s.sameNameProfiles} with this name</Chip>}</> },
-            { head: '', num: true, cell: (s) => <button className="btn sm" disabled={a.busy} onClick={() => a.act(() => post(`${NET}/claims`, { matchPlayerId: s.matchPlayerId, playerId: s.playerId }), 'Suggested: the player is asked to agree')}>Ask the player</button> },
+            { head: '', num: true, cell: (s) => <button className="btn sm" disabled={busy} onClick={() => a.act(() => post(`${NET}/claims`, { matchPlayerId: s.matchPlayerId, playerId: s.playerId }), 'Suggested: the player is asked to agree')}>Ask the player</button> },
           ]} /></div>
     </div>}</Load>
   );

@@ -45,6 +45,7 @@ export function NetTournament({ id }: { id: string }) {
 function Lifecycle({ d, reload }: { d: Detail; reload: () => void }) {
   const toast = useToast();
   const a = useAct(reload, toast);
+  const busy = a.busy;
   const [reason, setReason] = useState('');
   const t = d.tournament, base = `${NT}/${t.id}`;
   if (t.status === 'completed' || t.status === 'cancelled') return null;
@@ -52,8 +53,8 @@ function Lifecycle({ d, reload }: { d: Detail; reload: () => void }) {
     <div className="card card-pad stack">
       <ErrorBox msg={a.err} />
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        {t.status === 'draft' && <button className="btn primary" disabled={a.busy} onClick={() => a.act(() => post(`${base}/publish`), 'Published: the fixtures are now public')}>Publish fixtures</button>}
-        {t.status === 'published' && <button className="btn primary" disabled={a.busy} onClick={() => a.act(() => post(`${base}/complete`), 'Tournament completed')}>Mark completed</button>}
+        {t.status === 'draft' && <button className="btn primary" disabled={busy} onClick={() => a.act(() => post(`${base}/publish`), 'Published: the fixtures are now public')}>Publish fixtures</button>}
+        {t.status === 'published' && <button className="btn primary" disabled={busy} onClick={() => a.act(() => post(`${base}/complete`), 'Tournament completed')}>Mark completed</button>}
         <input className="inp" style={{ minWidth: 220 }} placeholder="Reason, to cancel the tournament" value={reason} onChange={(e) => setReason(e.target.value)} />
         <Confirm label="Cancel tournament" ask="Cancel it and free every held ground time?" onYes={() => a.act(() => post(`${base}/cancel`, { reason }), 'Tournament cancelled')} />
       </div>
@@ -69,6 +70,7 @@ const when = (ms: number | null) => (ms ? fmtDateTime(ms) : 'No time yet');
 function Fixtures({ d, reload }: { d: Detail; reload: () => void }) {
   const toast = useToast();
   const a = useAct(reload, toast);
+  const busy = a.busy;
   const [propose, setPropose] = useState(false);
   const [move, setMove] = useState<Fixture | null>(null);
   const [result, setResult] = useState<Fixture | null>(null);
@@ -92,9 +94,9 @@ function Fixtures({ d, reload }: { d: Detail; reload: () => void }) {
             { head: 'Scorer', cell: (f) => f.scorer ?? <span className="muted">—</span> },
             { head: '', num: true, cell: (f) => live && <div className="row" style={{ gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               {((f.status === 'proposed' && f.hostIsMe) || f.move?.hostIsMe) && <>
-                <button className="btn sm primary" disabled={a.busy} onClick={() => a.act(() => post(`${base}/${f.id}/confirm`), 'Slot confirmed and held')}>Confirm slot</button>
+                <button className="btn sm primary" disabled={busy} onClick={() => a.act(() => post(`${base}/${f.id}/confirm`), 'Slot confirmed and held')}>Confirm slot</button>
                 <input className="inp" style={{ width: 150 }} placeholder="Reason to turn down" value={why[f.id] ?? ''} onChange={(e) => setWhy((s) => ({ ...s, [f.id]: e.target.value }))} />
-                <button className="btn sm" disabled={a.busy} onClick={() => a.act(() => post(`${base}/${f.id}/decline`, { reason: why[f.id] ?? '' }), 'Turned down: the organiser will pick another time')}>Turn down</button>
+                <button className="btn sm" disabled={busy} onClick={() => a.act(() => post(`${base}/${f.id}/decline`, { reason: why[f.id] ?? '' }), 'Turned down: the organiser will pick another time')}>Turn down</button>
               </>}
               {org && f.status !== 'cancelled' && !f.result && <button className="btn sm" onClick={() => setMove(f)}>Move</button>}
               {f.hostIsMe && f.status === 'confirmed' && t.status === 'published' && <>
@@ -102,7 +104,7 @@ function Fixtures({ d, reload }: { d: Detail; reload: () => void }) {
                   <option value="">Assign scorer</option>{d.scorers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 {f.matchId ? <button className="btn sm" onClick={() => go('/matches/' + f.matchId)}>Open scorer</button>
-                  : <button className="btn sm" disabled={a.busy} onClick={() => a.act(() => post(`${base}/${f.id}/scoring`), 'Scoring opened in your Fixtures')}>Open scoring</button>}
+                  : <button className="btn sm" disabled={busy} onClick={() => a.act(() => post(`${base}/${f.id}/scoring`), 'Scoring opened in your Fixtures')}>Open scoring</button>}
                 <button className="btn sm primary" onClick={() => setResult(f)}>{f.result || f.waiting ? 'Send a correction' : 'Send result'}</button>
               </>}
               {org && f.waiting && <button className="btn sm primary" onClick={() => setVerify(f)}>Verify</button>}
@@ -120,13 +122,14 @@ function Fixtures({ d, reload }: { d: Detail; reload: () => void }) {
 function ProposeForm({ d, onClose, onSaved }: { d: Detail; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const a = useAct(onSaved, toast);
+  const busy = a.busy;
   const t = d.tournament;
   const [days, setDays] = useState(`${t.startDate}`);
   const [times, setTimes] = useState('09:00, 13:00');
   const split = (s: string) => s.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
   return (
     <Modal title="Propose fixtures" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button>
-      <button className="btn primary" disabled={a.busy} onClick={() => a.act(() => post(`${NT}/${t.id}/fixtures/propose`, { days: split(days), times: split(times), replace: d.fixtures.length > 0 }), 'Fixtures proposed: each ground now confirms its own times')}>{a.busy ? 'Checking the grounds…' : 'Propose'}</button></>}>
+      <button className="btn primary" disabled={busy} onClick={() => a.act(() => post(`${NT}/${t.id}/fixtures/propose`, { days: split(days), times: split(times), replace: d.fixtures.length > 0 }), 'Fixtures proposed: each ground now confirms its own times')}>{busy ? 'Checking the grounds…' : 'Propose'}</button></>}>
       <ErrorBox msg={a.err} />
       <div className="form-grid">
         <Field label="Days (yyyy-mm-dd, comma separated)" full hint={`Between ${fmtDate(t.startDate)} and ${fmtDate(t.endDate)}`}><input className="inp" value={days} onChange={(e) => setDays(e.target.value)} /></Field>
@@ -140,13 +143,14 @@ function ProposeForm({ d, onClose, onSaved }: { d: Detail; onClose: () => void; 
 function MoveForm({ d, f, onClose, onSaved }: { d: Detail; f: Fixture; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const a = useAct(onSaved, toast);
+  const busy = a.busy;
   const at = splitIst(f.startsAt);
   const accepted = d.grounds.filter((g) => g.status === 'accepted');
   const [v, setV] = useState({ groundId: f.groundId ?? accepted[0]?.groundId ?? '', date: at.date || d.tournament.startDate, time: at.time || '09:00', reason: '' });
   const set = (k: keyof typeof v) => (e: any) => setV((s) => ({ ...s, [k]: e.target.value }));
   return (
     <Modal title={`Move ${f.teamA} v ${f.teamB}`} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button>
-      <button className="btn primary" disabled={a.busy} onClick={() => a.act(() => post(`${NT}/${d.tournament.id}/fixtures/${f.id}/move`, v), 'Move asked: the ground confirms the new time')}>Ask for the move</button></>}>
+      <button className="btn primary" disabled={busy} onClick={() => a.act(() => post(`${NT}/${d.tournament.id}/fixtures/${f.id}/move`, v), 'Move asked: the ground confirms the new time')}>Ask for the move</button></>}>
       <ErrorBox msg={a.err} />
       <div className="form-grid">
         <Field label="Ground" full><select className="inp" value={v.groundId} onChange={set('groundId')}>{accepted.map((g) => <option key={g.groundId} value={g.groundId}>{g.ground} · {g.business}</option>)}</select></Field>
@@ -162,6 +166,7 @@ function MoveForm({ d, f, onClose, onSaved }: { d: Detail; f: Fixture; onClose: 
 function ResultForm({ d, f, onClose, onSaved }: { d: Detail; f: Fixture; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const a = useAct(onSaved, toast);
+  const busy = a.busy;
   const [v, setV] = useState({ outcome: 'team_a', resultText: '', aRuns: '', aOvers: '', bRuns: '', bOvers: '', reason: '' });
   const set = (k: keyof typeof v) => (e: any) => setV((s) => ({ ...s, [k]: e.target.value }));
   const correcting = !!(f.result || f.waiting);
@@ -170,8 +175,8 @@ function ResultForm({ d, f, onClose, onSaved }: { d: Detail; f: Fixture; onClose
     : { outcome: v.outcome, resultText: v.resultText || undefined, aRuns: num(v.aRuns), aOvers: v.aOvers || undefined, bRuns: num(v.bRuns), bOvers: v.bOvers || undefined, reason: v.reason || undefined }), 'Result sent to the organiser to verify');
   return (
     <Modal title={`Result: ${f.teamA} v ${f.teamB}`} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button>
-      {f.matchId && <button className="btn" disabled={a.busy} onClick={() => send(true)}>Send from the scorecard</button>}
-      <button className="btn primary" disabled={a.busy} onClick={() => send(false)}>Send result</button></>}>
+      {f.matchId && <button className="btn" disabled={busy} onClick={() => send(true)}>Send from the scorecard</button>}
+      <button className="btn primary" disabled={busy} onClick={() => send(false)}>Send result</button></>}>
       <ErrorBox msg={a.err} />
       <div className="form-grid">
         <Field label="Outcome" full><select className="inp" value={v.outcome} onChange={set('outcome')}>
@@ -191,12 +196,13 @@ function ResultForm({ d, f, onClose, onSaved }: { d: Detail; f: Fixture; onClose
 function VerifyForm({ d, f, onClose, onSaved }: { d: Detail; f: Fixture; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const a = useAct(onSaved, toast);
+  const busy = a.busy;
   const [reason, setReason] = useState('');
   const w = f.waiting!;
   const go2 = (approve: boolean) => a.act(() => post(`${NT}/${d.tournament.id}/fixtures/${f.id}/verify`, { approve, reason: reason || undefined }), approve ? 'Result verified: the standings are updated' : 'Result sent back to the ground');
   return (
     <Modal title={`Verify: ${f.teamA} v ${f.teamB}`} onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button>
-      <button className="btn" disabled={a.busy} onClick={() => go2(false)}>Send back</button><button className="btn primary" disabled={a.busy} onClick={() => go2(true)}>Verify</button></>}>
+      <button className="btn" disabled={busy} onClick={() => go2(false)}>Send back</button><button className="btn primary" disabled={busy} onClick={() => go2(true)}>Verify</button></>}>
       <ErrorBox msg={a.err} />
       <div className="stack">
         <div><b>{w.resultText || (w.winner ? `${w.winner} won` : w.outcome)}</b></div>
@@ -214,6 +220,7 @@ function VerifyForm({ d, f, onClose, onSaved }: { d: Detail; f: Fixture; onClose
 function Grounds({ d, reload }: { d: Detail; reload: () => void }) {
   const toast = useToast();
   const a = useAct(reload, toast);
+  const busy = a.busy;
   const [pick, setPick] = useState({ groundId: '', charge: '' });
   const [note, setNote] = useState<Record<string, string>>({});
   const t = d.tournament, org = d.myRole === 'organiser', open = t.status === 'draft' || t.status === 'published';
@@ -231,7 +238,7 @@ function Grounds({ d, reload }: { d: Detail; reload: () => void }) {
           <option value="">Pick a network ground</option>{d.networkGrounds.filter((g) => !invited.has(g.id)).map((g) => <option key={g.id} value={g.id}>{g.name} · {g.business} · {g.city}</option>)}
         </select>
         <input className="inp" style={{ width: 170 }} placeholder="Charge per match (₹)" value={pick.charge} onChange={(e) => setPick((s) => ({ ...s, charge: e.target.value }))} />
-        <button className="btn primary" disabled={a.busy} onClick={invite}>Invite ground</button>
+        <button className="btn primary" disabled={busy} onClick={invite}>Invite ground</button>
       </div>}
       <div className="card">
         <Table rows={d.grounds} rowKey={(g) => g.id} empty="No grounds invited yet."
@@ -242,8 +249,8 @@ function Grounds({ d, reload }: { d: Detail; reload: () => void }) {
             { head: 'Note', cell: (g) => g.note ?? <span className="muted">—</span> },
             { head: '', num: true, cell: (g) => g.isMine && g.status === 'invited' && <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
               <input className="inp" style={{ width: 160 }} placeholder="Note (optional)" value={note[g.id] ?? ''} onChange={(e) => setNote((s) => ({ ...s, [g.id]: e.target.value }))} />
-              <button className="btn sm primary" disabled={a.busy} onClick={() => a.act(() => post(`${NT}/${t.id}/grounds/${g.id}`, { accept: true, note: note[g.id] || undefined }), 'Invitation accepted')}>Accept</button>
-              <button className="btn sm" disabled={a.busy} onClick={() => a.act(() => post(`${NT}/${t.id}/grounds/${g.id}`, { accept: false, note: note[g.id] || undefined }), 'Invitation declined')}>Decline</button>
+              <button className="btn sm primary" disabled={busy} onClick={() => a.act(() => post(`${NT}/${t.id}/grounds/${g.id}`, { accept: true, note: note[g.id] || undefined }), 'Invitation accepted')}>Accept</button>
+              <button className="btn sm" disabled={busy} onClick={() => a.act(() => post(`${NT}/${t.id}/grounds/${g.id}`, { accept: false, note: note[g.id] || undefined }), 'Invitation declined')}>Decline</button>
             </div> },
           ]} />
       </div>
@@ -255,6 +262,7 @@ function Grounds({ d, reload }: { d: Detail; reload: () => void }) {
 function Teams({ d, reload }: { d: Detail; reload: () => void }) {
   const toast = useToast();
   const a = useAct(reload, toast);
+  const busy = a.busy;
   const [name, setName] = useState('');
   const [add, setAdd] = useState<Record<string, { name: string; key: string }>>({});
   const t = d.tournament, org = d.myRole === 'organiser', draft = t.status === 'draft';
@@ -269,7 +277,7 @@ function Teams({ d, reload }: { d: Detail; reload: () => void }) {
       <ErrorBox msg={a.err} />
       {org && draft && <div className="card card-pad row" style={{ gap: 8 }}>
         <input className="inp" style={{ minWidth: 220 }} placeholder="Team name" value={name} onChange={(e) => setName(e.target.value)} />
-        <button className="btn primary" disabled={a.busy} onClick={() => a.act(() => post(`${NT}/${t.id}/teams`, { name }), 'Team added').then((ok) => ok && setName(''))}>Add team</button>
+        <button className="btn primary" disabled={busy} onClick={() => a.act(() => post(`${NT}/${t.id}/teams`, { name }), 'Team added').then((ok) => ok && setName(''))}>Add team</button>
       </div>}
       {d.teams.length === 0 && <div className="card card-pad muted">No teams yet.</div>}
       {d.teams.map((team) => (
@@ -279,12 +287,12 @@ function Teams({ d, reload }: { d: Detail; reload: () => void }) {
           {team.players && <div className="card-pad stack">
             {team.players.map((p) => <div key={p.id} className="row" style={{ justifyContent: 'space-between' }}>
               <span>{p.name} {p.hasProfile ? <Chip tone="good">Network profile</Chip> : <Chip>Guest</Chip>}</span>
-              {org && <button className="btn sm ghost" disabled={a.busy} onClick={() => a.act(() => del(`${NT}/${t.id}/teams/${team.id}/players/${p.id}`), 'Player removed')}>Remove</button>}
+              {org && <button className="btn sm ghost" disabled={busy} onClick={() => a.act(() => del(`${NT}/${t.id}/teams/${team.id}/players/${p.id}`), 'Player removed')}>Remove</button>}
             </div>)}
             {org && <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
               <input className="inp" style={{ width: 170 }} placeholder="Name on the scorecard" value={add[team.id]?.name ?? ''} onChange={(e) => setAdd((s) => ({ ...s, [team.id]: { ...(s[team.id] ?? { key: '' }), name: e.target.value } }))} />
               <input className="inp" style={{ width: 220 }} placeholder="Mobile, child's code or profile id" value={add[team.id]?.key ?? ''} onChange={(e) => setAdd((s) => ({ ...s, [team.id]: { ...(s[team.id] ?? { name: '' }), key: e.target.value } }))} />
-              <button className="btn sm primary" disabled={a.busy} onClick={() => addPlayer(team.id)}>Add player</button>
+              <button className="btn sm primary" disabled={busy} onClick={() => addPlayer(team.id)}>Add player</button>
             </div>}
           </div>}
         </div>))}
@@ -313,6 +321,7 @@ function Standings({ d }: { d: Detail }) {
 function Settlements({ d, reload }: { d: Detail; reload: () => void }) {
   const toast = useToast();
   const a = useAct(reload, toast);
+  const busy = a.busy;
   const [form, setForm] = useState(false);
   const [ref, setRef] = useState<Record<string, string>>({});
   const [why, setWhy] = useState<Record<string, string>>({});
@@ -337,11 +346,11 @@ function Settlements({ d, reload }: { d: Detail; reload: () => void }) {
             { head: '', num: true, cell: (x) => x.status === 'agreed' && <div className="row" style={{ gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               {(x.iReceive || org) && <>
                 <input className="inp" style={{ width: 150 }} placeholder="Payment reference" value={ref[x.id] ?? ''} onChange={(e) => setRef((s) => ({ ...s, [x.id]: e.target.value }))} />
-                <button className="btn sm primary" disabled={a.busy} onClick={() => a.act(() => post(`${base}/${x.id}/paid`, { ref: ref[x.id] ?? '' }), 'Marked as paid')}>Mark received</button>
+                <button className="btn sm primary" disabled={busy} onClick={() => a.act(() => post(`${base}/${x.id}/paid`, { ref: ref[x.id] ?? '' }), 'Marked as paid')}>Mark received</button>
               </>}
               {org && <>
                 <input className="inp" style={{ width: 140 }} placeholder="Reason to cancel" value={why[x.id] ?? ''} onChange={(e) => setWhy((s) => ({ ...s, [x.id]: e.target.value }))} />
-                <button className="btn sm" disabled={a.busy} onClick={() => a.act(() => post(`${base}/${x.id}/cancel`, { reason: why[x.id] ?? '' }), 'Line cancelled (kept in the history)')}>Cancel line</button>
+                <button className="btn sm" disabled={busy} onClick={() => a.act(() => post(`${base}/${x.id}/cancel`, { reason: why[x.id] ?? '' }), 'Line cancelled (kept in the history)')}>Cancel line</button>
               </>}
             </div> },
           ]} />
@@ -354,6 +363,7 @@ function Settlements({ d, reload }: { d: Detail; reload: () => void }) {
 function SettlementForm({ d, onClose, onSaved }: { d: Detail; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const a = useAct(onSaved, toast);
+  const busy = a.busy;
   // the businesses in the tournament (the organiser and its grounds) and its teams, plus anyone else by name
   const parties = [
     ...d.businessOwners.map((b) => ({ key: `b:${b.ownerId}`, label: b.name, kind: 'business' as const, ref: b.ownerId })),
@@ -375,7 +385,7 @@ function SettlementForm({ d, onClose, onSaved }: { d: Detail; onClose: () => voi
   const pickParty = (k: 'payer' | 'payee') => <select className="inp" value={v[k]} onChange={set(k)}>
     <option value="">Pick</option>{parties.map((p) => <option key={p.key} value={p.key}>{p.label}{p.kind === 'team' ? ' (team)' : ''}</option>)}<option value="other">Someone else…</option></select>;
   return (
-    <Modal title="Add a settlement line" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={a.busy} onClick={save}>Add line</button></>}>
+    <Modal title="Add a settlement line" onClose={onClose} foot={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={save}>Add line</button></>}>
       <ErrorBox msg={a.err} />
       <div className="form-grid">
         <Field label="What for" full><select className="inp" value={v.kind} onChange={set('kind')}>{Object.entries(KIND).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
