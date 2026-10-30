@@ -16,7 +16,7 @@ import { nameKey } from '../matches.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'fantasy' | 'server' | 'branches' | 'cash' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'fantasy' | 'server' | 'branches' | 'cash' | 'site_report' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -33,6 +33,7 @@ export interface Built {
 }
 
 const RULES: [Intent, RegExp][] = [
+  ['site_report', /\b(site reports?|daily reports?|daily site|day on (the )?site|what happened (on|at) (the )?site|requests? (waiting )?in (the )?inbox|jobs? (waiting|to) sign off)\b/],
   ['cash', /\b(cash in hand|cash balance|cash float|cash advances?|petty cash|supervisor('?s)? cash|wallet|cash (he|she|they|i) (holds?|has|have)|cash count)\b/],
   ['branches', /\bbranch(es)?\b|\bprojects?\b.*\b(office|house)\b|\b(office|house)\b.*\bprojects?\b|which projects/],
   ['fantasy', /\bfantasy\b|\bdream ?11\b/],
@@ -70,7 +71,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'cash', 'branches', 'server', 'auctions', 'fantasy', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'site_report', 'cash', 'branches', 'server', 'auctions', 'fantasy', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -145,7 +146,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', fantasy: 'Fantasy cricket', sheet: 'Shared spreadsheet', server: 'Server status', branches: 'Branches and projects', cash: 'Supervisor cash', auctions: 'Auction tournaments', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', fantasy: 'Fantasy cricket', sheet: 'Shared spreadsheet', server: 'Server status', branches: 'Branches and projects', cash: 'Supervisor cash', site_report: 'Daily site report', auctions: 'Auction tournaments', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -181,6 +182,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'fantasy') return fantasyAnswer(ctx, base);
   if (intent === 'branches') return branchesAnswer(ctx, base);
   if (intent === 'cash') return cashAnswer(ctx, base);
+  if (intent === 'site_report') return siteReportAnswer(ctx, question, base);
   if (intent === 'unknown') {
     const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
     return base('unknown', "I'm not sure what you're asking. I can answer questions about revenue, expenses, profit, account balances, bookings, money owed, cancellations and more, for any dates you like.", { suggestions: lot });
@@ -681,4 +683,25 @@ function cashAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partia
     ? `${c.holders![0]!.name ?? 'You'} should have ${R(c.holders![0]!.expectedInHandPaise)} in hand.`
     : `${count(c.holders!.length, 'person holds', 'people hold')} cash for this business; ${count(waiting, 'spend')} waiting for sign-off.`;
   return base('cash', head, { details, notes: ['These cash records are not posted to the books.'] });
+}
+
+/**
+ * The daily site report (taskwork.ts): today's, or yesterday's when asked. The same jobs the task board shows the asker. Proof counts
+ * are only fresh camera photos; reference pictures and files are counted apart and never called proof.
+ */
+function siteReportAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  const today = istDate(now());
+  const date = /\byesterday\b/i.test(question) ? addDays(today, -1) : today;
+  const r = T.siteReport(ctx, date, null);
+  if (!r.found) return base('site_report', r.why!);
+  const day = date === today ? 'today' : 'yesterday';
+  const details = [
+    ...(r.finished!.length ? [{ label: 'Finished', text: r.finished!.map((f) => `${f.title}${f.by ? ` (${f.by})` : ''}, ${count(f.proofPhotos, 'proof photo')}${f.signedOff ? ', signed off' : ''}`).join('; ') }] : []),
+    ...(r.started!.length ? [{ label: 'Started', text: r.started!.join('; ') }] : []),
+    ...(r.raisedRequests!.length ? [{ label: 'Requests raised', text: r.raisedRequests!.map((x) => `${x.title}${x.by ? ` (${x.by})` : ''}`).join('; ') }] : []),
+    ...(r.overdue!.length ? [{ label: 'Overdue', text: r.overdue!.map((x) => x.title).join('; ') }] : []),
+    ...r.notes!.map((n) => ({ label: `Note from ${n.by ?? 'the team'}`, text: [n.workers !== null ? `${count(n.workers, 'person', 'people')} working` : null, n.note, n.problems ? `Problems: ${n.problems}` : null].filter(Boolean).join('. ') })),
+  ];
+  const head = `On the site ${day}: ${count(r.finished!.length, 'job')} finished, ${count(r.started!.length, 'job')} started, ${count(r.overdue!.length, 'job')} overdue, and ${count(r.notes!.length, 'note')} from the team.`;
+  return base('site_report', head, { details, notes: r.references ? [`${count(r.references, 'reference file')} added. References explain a job; they are not proof.`] : [] });
 }

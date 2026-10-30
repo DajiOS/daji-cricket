@@ -23,6 +23,7 @@ import { fantasyOverview } from '../fantasy.ts';
 import { serverConsole, serverStatus } from '../serverConsole.ts';
 import { areaFilter, listAreas } from '../areas.ts';
 import { listWallets } from '../cashbook.ts';
+import { siteReport as siteDay } from '../taskwork.ts';
 import type { Config } from '../config.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
@@ -287,6 +288,31 @@ export function jobs(ctx: Ctx, a: Range) {
     dueInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date BETWEEN ? AND ?", a.from, a.to),
     doneInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'done' AND completed_at >= ? AND completed_at < ?", istMidnight(a.from), istMidnight(addDays(a.to, 1))),
     overdueJobs: overdue.map((t) => ({ title: t.title, due: t.due_date })),
+    requestsInInbox: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND intake_state = 'new'"),
+    waitingForSignOff: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'done' AND signoff_at IS NULL AND completed_at >= ?", istMidnight(addDays(today, -30))),
+  };
+}
+
+/**
+ * The daily site report (taskwork.ts) for one day: jobs finished (with how many proof photos), started, raised and overdue, and
+ * each person's note. The same jobs the task board shows the asker, so a team member hears only about the jobs they work on.
+ * A project the asker may not see is reported as not found.
+ */
+export function siteReport(ctx: Ctx, date: string | null, project: string | null) {
+  let projectId: string | null = null;
+  if (project) {
+    const f = areaFilter(ctx.user, ctx.ownerId, 'area_id');
+    const p = one<{ id: string }>(`SELECT id FROM projects WHERE owner_id = ? AND lower(name) = lower(?) AND ${f.sql}`, ctx.ownerId, project.trim(), ...f.params);
+    if (!p) return { found: false, why: `No project called "${project}" that you can see.` };
+    projectId = p.id;
+  }
+  const r = siteDay(ctx.user, ctx.ownerId, date, projectId);
+  return {
+    found: true, date: r.date, project: r.projectName,
+    finished: r.done.map((d) => ({ title: d.title, by: d.byName, proofPhotos: d.proofPhotos, signedOff: d.signedOff })),
+    started: r.started.map((d) => d.title), raisedRequests: r.raised.map((d) => ({ title: d.title, by: d.byName })), overdue: r.overdue.map((d) => ({ title: d.title, due: d.dueDate })),
+    proofPhotos: r.proofPhotos, references: r.references,
+    notes: r.notes.map((n) => ({ by: n.authorName, workers: n.workers, note: n.body, problems: n.issues })),
   };
 }
 

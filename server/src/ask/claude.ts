@@ -36,6 +36,7 @@ export const TOOL_DEFS = [
   { name: 'get_gst', description: 'GST on sessions played in a period, and GST owed right now.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_jobs', description: 'Jobs on the task board: how many are open, overdue and finished, with the titles of overdue jobs.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_branches', description: 'The branches (areas) of this business the asker may see, such as Office or House, each with its projects and their open and overdue jobs.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_site_report', description: 'The daily site report for one day: jobs finished (with how many fresh camera proof photos, and whether signed off), started, raised as requests and overdue, plus each person\'s note for the day (people working, what was done, problems). Reference files are counted separately and are never proof. Without a project, it covers every job the asker may see, and the notes written for the business as a whole.', input_schema: { type: 'object', properties: { date: DATE, project: { type: 'string', description: 'Project name, if the question names one.' } } } },
   { name: 'get_cash', description: 'Supervisor cash: cash the owner handed to team members to spend for the business. For each holder (the owner sees all, a team member only their own): cash handed over, cash that should be in hand now, the confirmed figure, spends waiting for the owner\'s sign-off, spends without a receipt, uncertain spends, and the last cash count with its difference. Not posted to the books.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_team_attendance', description: 'Staff attendance totals for a period: present, half days, absent and on leave, and how many staff are active.', input_schema: { type: 'object', properties: RANGE, required: ['from', 'to'] } },
   { name: 'get_approvals_waiting', description: 'What is waiting for a sign-off right now (bills, staff pay runs, refunds, discounts, fee waivers and expenses): who it waits on, how far along it is, and whether the asker can sign it and if not why not.', input_schema: { type: 'object', properties: {} } },
@@ -88,6 +89,7 @@ export function runTool(ctx: T.Ctx, name: string, i: Input): unknown {
     case 'get_gst': return T.gst(ctx, range(i));
     case 'get_jobs': return T.jobs(ctx, range(i));
     case 'get_branches': return T.branches(ctx);
+    case 'get_site_report': return T.siteReport(ctx, typeof i.date === 'string' ? i.date : null, typeof i.project === 'string' ? i.project : null);
     case 'get_cash': return T.cash(ctx);
     case 'get_team_attendance': return T.team(ctx, range(i));
     case 'get_approvals_waiting': return T.approvalsWaiting(ctx);
