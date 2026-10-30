@@ -10,6 +10,7 @@ echo "== Installing Docker and the firewall"
 apt-get update -y && apt-get upgrade -y
 command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh
 if command -v ufw >/dev/null; then ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw --force enable; fi
+sh deploy/ensure-swap.sh
 
 if [ ! -f deploy/.env ]; then
   echo "== Writing deploy/.env with new secrets"
