@@ -167,5 +167,6 @@ rel('PAR-API-D', 'what the mobile and web clients support is recorded from the c
     'PAR-030 construction': construction.mobile,
   };
   ev('mobileScreens', map); ev('deskFiles', desk.length); ev('constructionInMobile', construction.mobile);
-  assert.deepEqual(construction.mobile, [], 'construction has no mobile screens, so it is recorded UNSUPPORTED on iOS and Android');
+  // the Admin app's Construction screen (orders, goods received, measured work, defects, drawings); bills, RA bills and the BOQ stay on the desk
+  assert.ok(construction.mobile.includes('ConstructionScreen.tsx'), 'construction has a screen in the Admin phone app');
 });
