@@ -412,3 +412,42 @@ test('cancelling a draft RA bill keeps an unchangeable record of its measurement
   const ctx = (await call('GET', `/api/construction/orders/${wo.id}`, w.owner)).body;
   assert.deepEqual(ctx.raBills.find((b: any) => b.id === ra.id).measurementIds, [m.id]);
 });
+
+test('a request still in the Tasks inbox is not a job on Construction for anyone, and a taken-in one follows the board; the Site view carries the day\'s site report', async () => {
+  await start();
+  const mk = async (email: string, permissions: string[]) => {
+    const r = await call('POST', '/api/staff/team', w.owner, { firstName: 'Team', lastName: email.split('@')[0], email, password: SITE_PASSWORD, permissions });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    return { id: r.body.id as string, token: (await h.post('/api/auth/login', { email, password: SITE_PASSWORD })).body.token as string };
+  };
+  const books = await mk('books@daji.test', ['manage_accounting']);
+  const reports = await mk('reports@daji.test', ['view_reports']);
+  // requests raised by different people on this project, all unassigned while they wait in the inbox
+  const raise = async (token: string, title: string) => { const r = await call('POST', '/api/tasks/requests', token, { title, projectId: w.project }); assert.equal(r.status, 201, JSON.stringify(r.body)); return r.body.id as string; };
+  const fromBooks = await raise(books.token, 'Request from books: fix the store lock');
+  await raise(reports.token, 'Request from reports: paint the gate');
+  await raise(w.site, 'Request from the site: more shuttering');
+  const titles = async (token: string) => (await call('GET', `/api/construction/projects/${w.project}/site`, token)).body.jobs.map((j: any) => j.title).sort();
+  for (const t of [w.owner, w.site, books.token, reports.token]) {
+    assert.deepEqual(await titles(t), ['Fix the kitchen tiles'], 'undecided requests are not jobs, whoever looks');
+    assert.equal((await call('GET', `/api/construction/projects/${w.project}`, t)).body.counts.jobs, 1);
+    // the same as the task board for each of them
+    assert.deepEqual((await call('GET', `/api/tasks?projectId=${w.project}`, t)).body.items.map((x: any) => x.title).sort(), await titles(t));
+  }
+  // taken in for everyone, it is a job for all of them; turned down, it is not a job at all
+  assert.equal((await call('POST', `/api/tasks/${fromBooks}/decide`, w.owner, { accept: true, assignedTo: null })).status, 200);
+  assert.deepEqual(await titles(reports.token), ['Fix the kitchen tiles', 'Request from books: fix the store lock']);
+  const inbox = (await call('GET', '/api/tasks/inbox', w.owner)).body.items;
+  const gate = inbox.find((x: any) => x.title.includes('paint the gate'));
+  assert.equal((await call('POST', `/api/tasks/${gate.id}/decide`, w.owner, { accept: false, note: 'Not this month' })).status, 200);
+  assert.ok(!(await titles(w.owner)).some((t: string) => t.includes('paint the gate')));
+  // the day's site report for the project, the same one Work › Tasks shows
+  assert.equal((await call('POST', '/api/site-reports', w.site, { projectId: w.project, workers: 6, body: 'Shuttering done on the east side', issues: 'Cement late by two hours' })).status, 200);
+  const s = (await call('GET', `/api/construction/projects/${w.project}/site`, w.owner)).body;
+  assert.equal(s.report.projectId, w.project);
+  assert.deepEqual(s.report.notes.map((n: any) => [n.workers, n.body, n.issues]), [[6, 'Shuttering done on the east side', 'Cement late by two hours']]);
+  const viaTasks = (await call('GET', `/api/site-reports?projectId=${w.project}`, w.owner)).body;
+  assert.deepEqual(s.report, viaTasks, 'one report, two views');
+  // someone without manage_tasks sees only their own note, as on Work › Tasks
+  assert.deepEqual((await call('GET', `/api/construction/projects/${w.project}/site`, reports.token)).body.report.notes, []);
+});

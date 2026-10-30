@@ -505,15 +505,36 @@ function Reason({ title, onClose, onSave }: { title: string; onClose: () => void
   );
 }
 
-interface SiteData { jobs: { id: string; title: string; status: string; assignedName: string | null; dueDate: string | null; overdue: boolean }[]; defects: { id: string; title: string; location: string | null; severity: 'minor' | 'major' | 'critical'; vendorName: string | null; status: 'open' | 'fixed' | 'closed'; raisedByName: string | null }[]; receipts: { id: string; grnNo: string; date: string; poNo: string }[]; subcontractors: { id: string; name: string; orders: number }[] }
+interface SiteReport { date: string; notes: { id: string; authorName: string | null; workers: number | null; body: string; issues: string | null; corrections: number }[]; done: { id: string; title: string; byName: string | null; proofPhotos: number; signedOff: boolean }[]; started: { id: string; title: string }[]; raised: { id: string; title: string; byName: string | null }[]; overdue: { id: string; title: string; dueDate: string }[]; proofPhotos: number; references: number }
+interface SiteData { report: SiteReport; jobs: { id: string; title: string; status: string; assignedName: string | null; dueDate: string | null; overdue: boolean }[]; defects: { id: string; title: string; location: string | null; severity: 'minor' | 'major' | 'critical'; vendorName: string | null; status: 'open' | 'fixed' | 'closed'; raisedByName: string | null }[]; receipts: { id: string; grnNo: string; date: string; poNo: string }[]; subcontractors: { id: string; name: string; orders: number }[] }
+function SiteDay({ r }: { r: SiteReport }) {
+  const line = (label: string, items: string[]) => (items.length ? <div className="small"><b>{label}:</b> {items.join('; ')}</div> : null);
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      {r.notes.length ? r.notes.map((n) => (
+        <div key={n.id} className="small"><b>{n.authorName ?? 'Team'}</b>{n.workers !== null ? ` · ${n.workers} working` : ''}: {n.body}{n.issues ? <span style={{ color: 'var(--i-red)' }}> Problems: {n.issues}</span> : null}{n.corrections ? <span className="muted"> (corrected)</span> : null}</div>
+      )) : <p className="hint">No notes for {fmtDay(r.date)} yet.</p>}
+      {line('Finished', r.done.map((j) => `${j.title}${j.byName ? ` (${j.byName})` : ''}, ${j.proofPhotos} proof photo${j.proofPhotos === 1 ? '' : 's'}${j.signedOff ? ', signed off' : ''}`))}
+      {line('Started', r.started.map((j) => j.title))}
+      {line('Requests raised', r.raised.map((j) => `${j.title}${j.byName ? ` (${j.byName})` : ''}`))}
+      {line('Overdue', r.overdue.map((j) => j.title))}
+      <div className="muted small">{r.proofPhotos} proof photo{r.proofPhotos === 1 ? '' : 's'} taken that day{r.references ? `; ${r.references} reference file${r.references === 1 ? '' : 's'} added (references are not proof)` : ''}.</div>
+    </div>
+  );
+}
+
 function SiteTab({ p, onChanged }: { p: Project; onChanged: () => void }) {
   const toast = useToast();
-  const [data, err, reload, status] = useApi<SiteData>(`/api/construction/projects/${enc(p.id)}/site`);
+  const [day, setDay] = useState(todayISO());
+  const [data, err, reload, status] = useApi<SiteData>(`/api/construction/projects/${enc(p.id)}/site?date=${day}`);
   const [raising, setRaising] = useState(false);
   const setDefect = async (id: string, s: string) => { try { await patch(`/api/construction/defects/${enc(id)}`, { status: s }); reload(); onChanged(); } catch (e) { toast(errText(e)); } };
   return (
     <Load data={data} error={err} status={status} retry={reload}>
       {(d) => (<div className="stack">
+        <Panel title="Daily site report" note="The same report as Work › Tasks: the team's notes for the day and the jobs behind them. Notes are written there." actions={<span className="row" style={{ gap: 6 }}><DateInput aria-label="Report day" value={day} max={todayISO()} onChange={(e) => setDay(e.target.value || todayISO())} /><button className="btn ghost sm" onClick={() => go('/tasks')}>Write a note</button></span>}>
+          <SiteDay r={d.report} />
+        </Panel>
         <Panel title="Jobs" note="The project's jobs on Work › Tasks, closed there with camera proof." actions={<button className="btn ghost sm" onClick={() => go('/tasks')}>Open Tasks</button>}>
           <Table rows={d.jobs} rowKey={(j) => j.id} empty="No jobs on this project yet." cols={[
             { head: 'Job', cell: (j) => <b>{j.title}</b> },

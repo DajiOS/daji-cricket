@@ -55,7 +55,8 @@
       "title": "Open construction projects",
       "phrase": "Open construction projects in APP",
       "personal": "Tell NAME to open construction projects",
-      "screen": "construction"
+      "screen": "construction",
+      "awaitsStoreBuild": true
     },
     {
       "id": "ask",

@@ -44,8 +44,8 @@ export function constructionRoutes(r: Router): void {
   r.post(`${P}/ra-bills/:id/certify`, (c) => ok(certifyRaBill(U(c), o(c), c.params.id!, c.json())), I);
   r.post(`${P}/ra-bills/:id/cancel`, (c) => ok(cancelRaBill(U(c), o(c), c.params.id!)), A);
 
-  // Site: the project's jobs, defects and goods received
-  r.get(`${P}/projects/:id/site`, (c) => ok(site(U(c), o(c), c.params.id!)), A);
+  // Site: the project's jobs, its daily site report (?date=YYYY-MM-DD, today by default), defects and goods received
+  r.get(`${P}/projects/:id/site`, (c) => ok(site(U(c), o(c), c.params.id!, c.query.get('date') ?? undefined)), A);
   r.post(`${P}/projects/:id/defects`, (c) => created(addDefect(U(c), o(c), c.params.id!, c.json())), A);
   r.patch(`${P}/defects/:id`, (c) => ok(updateDefect(U(c), o(c), c.params.id!, c.json())), A);
 

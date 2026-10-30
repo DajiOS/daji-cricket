@@ -7,7 +7,8 @@ import { Validator } from './input.ts';
 import { hasPermission, type UserRow } from './auth.ts';
 import { areaFilter, canSeeArea } from './areas.ts';
 import { createProject } from './taskboard.ts';
-import { manages } from './tasks.ts';
+import { STAFF_JOBS, manages } from './tasks.ts';
+import { siteReport } from './taskwork.ts';
 import { createBill, guardBills, submitBill } from './accounting/bills.ts';
 import { sendBack, signStep, startRequest, withdrawRequest, type ReqRow } from './approvals.ts';
 import { istDate } from './time.ts';
@@ -347,10 +348,13 @@ export function figuresOf(projectId: string): FiguresOut {
     outstandingPaise: approved - paid, retentionHeldPaise: retention, remainingBudgetPaise: budget - committed, overBudget: budget > 0 && committed > budget };
 }
 
-/** The task board's own visibility (tasks.ts listTasks): staff who do not manage tasks see only jobs for everyone or for them. Construction
- *  can be opened through accounting or reports rights, so its job lists and counts apply the same rule. `t` is the tasks alias. */
-function jobsSeen(u: UserRow, t = 'tasks'): { sql: string; params: string[] } {
-  return u.role === 'staff' && !manages(u) ? { sql: ` AND (${t}.assigned_to IS NULL OR ${t}.assigned_to = ?)`, params: [u.id] } : { sql: '', params: [] };
+/** The task board's own rules (tasks.ts listTasks): a request still waiting in the inbox is never a job here, and staff who do not
+ *  manage tasks see only the jobs for everyone, for them, or that they help on (STAFF_JOBS). Construction can be opened through
+ *  accounting or reports rights, so its job lists and counts apply the same rules. Columns are unqualified: the tasks table is the
+ *  innermost one wherever this is used. */
+function jobsSeen(u: UserRow): { sql: string; params: string[] } {
+  const inbox = " AND (intake_state IS NULL OR intake_state <> 'new')";
+  return u.role === 'staff' && !manages(u) ? { sql: `${inbox} AND ${STAFF_JOBS}`, params: [u.id, u.id] } : { sql: inbox, params: [] };
 }
 
 function projectOut(u: UserRow, p: ProjRow, c: CpRow): CProjectOut {
@@ -474,7 +478,7 @@ function boqOut(u: UserRow, b: BoqRow): BoqOut {
 export function plan(u: UserRow, ownerId: string, id: string) {
   cproject(u, ownerId, id);
   const boq = many<BoqRow>('SELECT * FROM boq_items WHERE project_id = ? AND current = 1 ORDER BY item_code', id).map((b) => boqOut(u, b));
-  const t = today(), js = jobsSeen(u, 't');
+  const t = today(), js = jobsSeen(u);
   const milestones = many<{ id: string; title: string; due_date: string | null; done_at: number | null; n: number; d: number }>(
     `SELECT m.id, m.title, m.due_date, m.done_at, (SELECT COUNT(*) FROM tasks t WHERE t.milestone_id = m.id AND t.status != 'cancelled'${js.sql}) n,
             (SELECT COUNT(*) FROM tasks t WHERE t.milestone_id = m.id AND t.status = 'done'${js.sql}) d
@@ -1052,8 +1056,9 @@ interface DefectRow { id: string; project_id: string; title: string; location: s
 const defectOut = (d: DefectRow) => ({ id: d.id, title: d.title, location: d.location, severity: d.severity, vendorId: d.vendor_id,
   vendorName: d.vendor_id ? one<{ name: string }>('SELECT name FROM acct_vendors WHERE id = ?', d.vendor_id)?.name ?? null : null, status: d.status, note: d.note, raisedByName: nameOf(d.raised_by), raisedAt: d.raised_at, updatedAt: d.updated_at });
 
-/** The Site view: the project's jobs (the task board's own records), its milestones, defects and recent goods received. */
-export function site(u: UserRow, ownerId: string, id: string) {
+/** The Site view: the project's jobs (the task board's own records), the daily site report for the project (taskwork.ts, the same
+ *  report as Work › Tasks, with the team's notes and fresh-camera proof counts), its defects and recent goods received. */
+export function site(u: UserRow, ownerId: string, id: string, date?: string) {
   cproject(u, ownerId, id);
   const t = today(), js = jobsSeen(u);
   const jobs = many<{ id: string; title: string; status: string; stage: string; assigned_to: string | null; due_date: string | null }>(
@@ -1065,7 +1070,8 @@ export function site(u: UserRow, ownerId: string, id: string) {
     .map((g) => ({ id: g.id, grnNo: g.grn_no, date: g.received_date, poNo: g.po_no, poId: g.po_id }));
   const subcontractors = many<{ id: string; name: string; n: number }>("SELECT v.id, v.name, COUNT(*) n FROM purchase_orders o JOIN acct_vendors v ON v.id = o.vendor_id WHERE o.project_id = ? AND o.kind = 'work' AND o.status != 'cancelled' GROUP BY v.id ORDER BY v.name", id)
     .map((s) => ({ id: s.id, name: s.name, orders: s.n }));
-  return { jobs, defects, receipts, subcontractors };
+  const report = siteReport(u, ownerId, date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null, id);
+  return { jobs, defects, receipts, subcontractors, report };
 }
 
 export function addDefect(u: UserRow, ownerId: string, projectId: string, body: unknown) {

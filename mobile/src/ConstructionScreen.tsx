@@ -21,7 +21,8 @@ interface Project {
 interface Order { id: string; poNo: string; kind: 'supply' | 'work'; status: PoStatus; vendorName: string; totalPaise: number | null; progress: { receivedPct: number } }
 interface Line { id: string; description: string; unit: string; quantity: string; receivedQty: string; toComeQty: string; measuredQty: string }
 interface OrderCtx { order: Order; lines: Line[]; receipts: { id: string; grnNo: string; date: string; byName: string | null }[]; measurements: { id: string; description: string; unit: string; date: string; quantity: string; location: string | null; status: string }[]; canManage: boolean }
-interface Site { jobs: { id: string; title: string; status: string; assignedName: string | null; overdue: boolean }[]; defects: { id: string; title: string; location: string | null; severity: 'minor' | 'major' | 'critical'; vendorName: string | null; status: 'open' | 'fixed' | 'closed' }[] }
+interface Report { date: string; notes: { id: string; authorName: string | null; workers: number | null; body: string; issues: string | null }[]; done: { id: string; title: string; proofPhotos: number; signedOff: boolean }[]; overdue: { id: string; title: string }[]; proofPhotos: number }
+interface Site { report: Report; jobs: { id: string; title: string; status: string; assignedName: string | null; overdue: boolean }[]; defects: { id: string; title: string; location: string | null; severity: 'minor' | 'major' | 'critical'; vendorName: string | null; status: 'open' | 'fixed' | 'closed' }[] }
 interface Doc { id: string; title: string; kind: 'drawing' | 'document'; drawingNo: string | null; revision: string | null; current: boolean }
 interface Req { id: string; kind: string; entityId: string; canSign: boolean; whyNot: string | null }
 
@@ -129,7 +130,17 @@ function ProjectView({ id, boss, onBack }: { id: string; boss: boolean; onBack: 
         })
       ) : tab === 'site' ? (
         <>
-          <Text style={[s.text, { fontWeight: '700', marginTop: 6 }]}>Defects</Text>
+          <Text style={[s.text, { fontWeight: '700', marginTop: 6 }]}>Today's site report</Text>
+          <Text style={[s.muted, { marginBottom: 6 }]}>The same report as Tasks › Site report, where notes are written.</Text>
+          {site && (
+            <View style={s.card}>
+              {site.report.notes.length ? site.report.notes.map((n) => (
+                <Text key={n.id} style={[s.text, { marginBottom: 4 }]}>{n.authorName ?? 'Team'}{n.workers !== null ? ` · ${n.workers} working` : ''}: {n.body}{n.issues ? ` Problems: ${n.issues}` : ''}</Text>
+              )) : <Text style={s.muted}>No notes yet today.</Text>}
+              <Text style={s.muted}>{site.report.done.length} job{site.report.done.length === 1 ? '' : 's'} finished, {site.report.proofPhotos} proof photo{site.report.proofPhotos === 1 ? '' : 's'}, {site.report.overdue.length} overdue</Text>
+            </View>
+          )}
+          <Text style={[s.text, { fontWeight: '700', marginTop: 12 }]}>Defects</Text>
           {p.canManage && <Btn label="Raise a defect" onPress={() => setRaising(true)} />}
           {!site?.defects.length ? <Text style={s.muted}>No defects.</Text> : site.defects.map((d) => (
             <View key={d.id} style={s.card}>
