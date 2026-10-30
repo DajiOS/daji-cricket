@@ -59,7 +59,7 @@ async function someActivity() {
   const t1 = await sp('POST', '/api/tasks', w.sunny, { title: 'Fix the kitchen tiles', projectId: w.houseProject, assignedTo: w.supId, dueDate: '2020-01-01', photosRequired: 0 });
   assert.equal(t1.status, 201, JSON.stringify(t1.body));
   const pp = (await sp('POST', '/api/projects', w.sunny, { name: 'Family trip', areaId: w.personal })).body.id;
-  assert.equal((await sp('POST', '/api/tasks', w.sunny, { title: 'Book the hotel', projectId: pp, photosRequired: 0 })).status, 201);
+  assert.equal((await sp('POST', '/api/tasks', w.sunny, { title: 'Plan the family dinner', projectId: pp, photosRequired: 0 })).status, 201);
   const g = await h.call<any>('POST', '/api/tasks', { token: w.sunny, body: { title: 'Roll the pitch', photosRequired: 0 } });
   assert.equal(g.status, 201, JSON.stringify(g.body));
   assert.equal((await h.call('POST', `/api/tasks/${g.body.id}/complete`, { token: w.sunny, body: {} })).status, 200);
