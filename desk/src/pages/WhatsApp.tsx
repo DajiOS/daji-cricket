@@ -16,15 +16,17 @@ interface Msg {
   kind: string; text: string | null; hasMedia: boolean; mediaState: 'none' | 'waiting' | 'stored' | 'failed' | 'rejected'; mediaMime: string | null; mediaName: string | null; mediaError: string | null;
   sentAt: number; receivedAt: number; state: 'review' | 'filed' | 'dismissed' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   suggestion: { kind: LinkKind | 'none'; recordId: string | null; why: string; title: string | null } | null;
-  links: Link[]; reviewedByName: string | null; reviewNote: string | null; canReply: boolean; replyClosesAt: number | null;
+  links: Link[]; reviewedByName: string | null; reviewNote: string | null; canReply: boolean; replyClosesAt: number | null; deliveryUnknown: boolean;
 }
-interface Status { enabled: boolean; connected: boolean | null; inboxHere: boolean; counts: { review: number; filed: number; dismissed: number; mediaFailed: number; mediaWaiting: number; sendsFailed: number; filesNotOnJob: number }; lastDelivery: { at: number; outcome: string } | null; droppedWhileOff: { messages: number; lastAt: number } | null }
+interface Status { enabled: boolean; connected: boolean | null; inboxHere: boolean; counts: { review: number; filed: number; dismissed: number; mediaFailed: number; mediaWaiting: number; sendsFailed: number; sendsUnknown: number; filesNotOnJob: number }; lastDelivery: { at: number; outcome: string } | null; droppedWhileOff: { messages: number; lastAt: number } | null }
 type Tab = 'review' | 'filed' | 'dismissed' | 'failed' | 'all';
 
 const STATE: Record<Msg['state'], [Tone, string]> = {
   review: ['warn', 'To review'], filed: ['good', 'Filed'], dismissed: ['mute', 'Set aside'],
   sending: ['info', 'Sending'], sent: ['info', 'Sent'], delivered: ['good', 'Delivered'], read: ['good', 'Read'], failed: ['bad', 'Not sent'],
 };
+/** A reply WhatsApp neither confirmed nor refused is "Delivery unknown", never "Not sent", so nobody sends the same thing twice by mistake. */
+const stateOf = (m: Msg): [Tone, string] => (m.deliveryUnknown ? ['warn', 'Delivery unknown'] : STATE[m.state]);
 const KIND: Record<string, string> = { text: 'Message', image: 'Photo', video: 'Video', audio: 'Voice note', document: 'Document', sticker: 'Sticker', location: 'Location', contacts: 'Contact', interactive: 'Answer', button: 'Answer', reaction: 'Reaction', unsupported: 'Not supported by WhatsApp' };
 const LINK: Record<LinkKind, string> = { task: 'Job', project: 'Project', cash: 'Cash spend' };
 const who = (m: Msg) => (m.direction === 'out' ? 'Reply from the business' : m.personName ?? m.profileName ?? m.from);
@@ -50,7 +52,7 @@ export default function WhatsApp() {
           <Stat label="To review" value={status.counts.review} foot="Waiting for someone to file them" />
           <Stat label="Filed" value={status.counts.filed} foot="On a job, project or cash spend" />
           <Stat label="Files to fix" value={status.counts.mediaFailed} foot={[status.counts.mediaWaiting ? `${status.counts.mediaWaiting} still being fetched` : 'Not fetched, or failed the virus check', status.counts.filesNotOnJob ? `${status.counts.filesNotOnJob} filed on a job but not on it yet` : ''].filter(Boolean).join(' · ')} />
-          <Stat label="Replies not sent" value={status.counts.sendsFailed} foot="WhatsApp refused them" />
+          <Stat label="Replies not sent" value={status.counts.sendsFailed} foot={status.counts.sendsUnknown ? `WhatsApp refused them · ${status.counts.sendsUnknown} more not confirmed, check before resending` : 'WhatsApp refused them'} />
         </div>
       )}
       <div className="tabs-scroll"><Tabs value={tab} onChange={setTab} label="Show" items={[['review', 'To review'], ['filed', 'Filed'], ['dismissed', 'Set aside'], ['failed', 'Problems'], ['all', 'All']]} /></div>
@@ -62,7 +64,7 @@ export default function WhatsApp() {
             { head: 'What', cell: (m) => <span>{m.kind !== 'text' && <Chip tone="info">{KIND[m.kind] ?? m.kind}</Chip>} {m.text ? (m.text.length > 90 ? `${m.text.slice(0, 90)}…` : m.text) : m.kind === 'text' ? '' : <span className="muted small">No words</span>}{m.mediaState === 'failed' || m.mediaState === 'rejected' ? <span className="small"> <Chip tone="bad">{m.mediaState === 'rejected' ? 'Failed virus check' : 'File not fetched'}</Chip></span> : null}</span> },
             { head: 'Where', cell: (m) => m.links.length ? m.links.map((l) => `${LINK[l.kind]}: ${l.title ?? ''}`).join('; ') : m.suggestion && m.suggestion.kind !== 'none' ? <span className="muted small">Suggested: {m.suggestion.title ?? LINK[m.suggestion.kind]}</span> : <span className="muted small">Not filed</span> },
             { head: 'When', cell: (m) => fmtDateTime(m.sentAt) },
-            { head: 'Status', cell: (m) => <Chip tone={STATE[m.state][0]}>{STATE[m.state][1]}</Chip> },
+            { head: 'Status', cell: (m) => <Chip tone={stateOf(m)[0]}>{stateOf(m)[1]}</Chip> },
           ]} />}
         </Load>
       </Panel>
@@ -131,7 +133,7 @@ function Detail({ id, boss, onClose, onChanged }: { id: string; boss: boolean; o
   const [d, err, reload] = useApi<{ message: Msg; conversation: Msg[] }>(`/api/whatsapp/messages/${encodeURIComponent(id)}`, [id]);
   const [mode, setMode] = useState<null | 'file' | 'request' | 'reply' | 'dismiss'>(null);
   const done = (msg: string) => { toast(msg); setMode(null); reload(); onChanged(); };
-  const act = async (path: string, body: unknown, msg: string) => { try { const r = await post<{ note?: string | null }>(`/api/whatsapp/messages/${encodeURIComponent(id)}/${path}`, body); done(r?.note ? `${msg} ${r.note}` : msg); } catch (e) { toast(errText(e)); } };
+  const act = async (path: string, body: unknown, msg: string | ((r: any) => string)) => { try { const r = await post<{ note?: string | null }>(`/api/whatsapp/messages/${encodeURIComponent(id)}/${path}`, body); const said = typeof msg === 'function' ? msg(r) : msg; done(r?.note ? `${said} ${r.note}` : said); } catch (e) { toast(errText(e)); } };
   const m = d?.message;
   return (
     <Modal wide title={m ? `${KIND[m.kind] ?? 'Message'} from ${who(m)}` : 'Message'} onClose={onClose}
@@ -147,9 +149,10 @@ function Detail({ id, boss, onClose, onChanged }: { id: string; boss: boolean; o
         {(x) => (
           <div className="stack">
             <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
-              <Chip tone={STATE[x.message.state][0]}>{STATE[x.message.state][1]}</Chip>
+              <Chip tone={stateOf(x.message)[0]}>{stateOf(x.message)[1]}</Chip>
               <span className="muted small">{x.message.direction === 'in' ? (x.message.onTeam ? x.message.from : `${x.message.from}, not on the team`) : ''} · sent {fmtDateTime(x.message.sentAt)}</span>
             </div>
+            {x.message.direction === 'out' && (x.message.deliveryUnknown || x.message.state === 'failed') && !!x.message.mediaError && <p className={x.message.deliveryUnknown ? 'hint' : 'err'} style={{ margin: 0 }}>{x.message.mediaError}</p>}
             {x.message.text && <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{x.message.text}</p>}
             <Media m={x.message} />
             {x.message.suggestion && x.message.links.length === 0 && <p className="hint">Suggestion: {x.message.suggestion.why}{x.message.suggestion.title ? ` (${x.message.suggestion.title})` : ''}</p>}
@@ -157,14 +160,15 @@ function Detail({ id, boss, onClose, onChanged }: { id: string; boss: boolean; o
             {x.message.reviewNote && <p className="muted small">Set aside: {x.message.reviewNote}{x.message.reviewedByName ? ` (${x.message.reviewedByName})` : ''}</p>}
             {mode === 'file' && <FileOn m={x.message} boss={boss} onCancel={() => setMode(null)} onDone={(kind, recordId) => void act('link', { kind, recordId }, 'Filed.')} />}
             {mode === 'request' && <MakeRequest m={x.message} onCancel={() => setMode(null)} onDone={(title) => void act('request', { title }, 'Request sent to the jobs inbox.')} />}
-            {mode === 'reply' && <Reply m={x.message} onCancel={() => setMode(null)} onDone={(text) => void act('reply', { text, clientKey: key() }, 'Reply sent.')} />}
+            {mode === 'reply' && <Reply m={x.message} onCancel={() => setMode(null)} onDone={(text) => void act('reply', { text, clientKey: key() }, (r: Msg) => (r.deliveryUnknown ? 'WhatsApp did not confirm the reply. It may have been delivered: check with them before sending it again.' : r.state === 'failed' ? `The reply was not sent. ${r.mediaError ?? ''}`.trim() : 'Reply sent.'))} />}
             {mode === 'dismiss' && <Reason label="Why set it aside?" button="Set aside" onCancel={() => setMode(null)} onDone={(reason) => void act('dismiss', { reason }, 'Set aside. It is kept on file.')} />}
             {x.conversation.length > 1 && (
               <div className="stack" style={{ gap: 4 }}>
                 <h3 style={{ margin: '8px 0 0' }}>Conversation</h3>
                 {x.conversation.map((c) => (
                   <div key={c.id} className="card card-pad" style={{ padding: '8px 12px', marginLeft: c.direction === 'out' ? 32 : 0, marginRight: c.direction === 'in' ? 32 : 0, outline: c.id === x.message.id ? '1px solid var(--gold, #b8962e)' : undefined }}>
-                    <div className="small muted">{who(c)} · {fmtDateTime(c.sentAt)} · {STATE[c.state][1]}</div>
+                    <div className="small muted">{who(c)} · {fmtDateTime(c.sentAt)} · {stateOf(c)[1]}</div>
+                    {c.deliveryUnknown && <div className="small">WhatsApp did not confirm this reply. Check with them before sending it again.</div>}
                     <div>{c.kind !== 'text' && <Chip tone="info">{KIND[c.kind] ?? c.kind}</Chip>} {c.text}</div>
                   </div>))}
               </div>)}

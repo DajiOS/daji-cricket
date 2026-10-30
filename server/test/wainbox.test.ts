@@ -448,11 +448,62 @@ test('a delivery status that arrives before WhatsApp answers the send is not los
   assert.match(rep2.body.mediaError, /undeliverable/);
 });
 
-test('while switched off nothing is kept, and the owner is told how many messages arrived and were not kept', async () => {
-  await deliver(payload([msg(STAFF_PHONE), msg(STRANGER)]));
+test('while switched off nothing is kept, and the owner is told how many messages were missed: this number only, each once', async () => {
+  const a = msg(STAFF_PHONE), b = msg(STRANGER);
+  await deliver(payload([a, b]));
+  await deliver(payload([a, b])); // Meta resends the same delivery
+  await deliver(payload([msg(STRANGER)], [], '999999999999')); // another number on the same Meta app
   assert.equal(many('SELECT id FROM wa_messages').length, 0);
+  assert.equal(many<{ id_hash: string }>('SELECT id_hash FROM wa_missed').every((r) => /^[0-9a-f]{64}$/.test(r.id_hash)), true, 'only a hash of the message id is kept');
   const st = (await h.get('/api/whatsapp/status', owner)).body;
   assert.equal(st.droppedWhileOff.messages, 2);
   run("UPDATE users SET permissions = ? WHERE phone = '9000000004'", JSON.stringify(['manage_tasks']));
   assert.equal((await h.get('/api/whatsapp/status', staff)).body.droppedWhileOff, null, 'only the owner sees it');
+});
+
+test('a reply WhatsApp neither confirmed nor refused shows as delivery unknown, never as not sent', async () => {
+  on();
+  await deliver(payload([msg(STAFF_PHONE)]));
+  const [m] = (await inbox()).body.items;
+  waHooks.send = async () => { throw new Error('The operation was aborted due to timeout'); };
+  const timedOut = await h.post(`/api/whatsapp/messages/${m.id}/reply`, { text: 'Lock the gate tonight', clientKey: 'u-1' }, owner);
+  assert.equal(timedOut.status, 201, JSON.stringify(timedOut.body));
+  assert.equal(timedOut.body.deliveryUnknown, true);
+  assert.notEqual(timedOut.body.state, 'failed');
+  assert.match(timedOut.body.mediaError, /may or may not have been delivered/);
+  waHooks.send = async () => ({ ok: false, status: 503, text: async () => '{"error":{"message":"Service unavailable"}}' });
+  assert.equal((await h.post(`/api/whatsapp/messages/${m.id}/reply`, { text: 'Lock the gate tonight', clientKey: 'u-2' }, owner)).body.deliveryUnknown, true, 'a fault on their side is unknown too');
+  waHooks.send = async () => ({ ok: true, status: 200, text: async () => '{}' });
+  assert.equal((await h.post(`/api/whatsapp/messages/${m.id}/reply`, { text: 'Lock the gate tonight', clientKey: 'u-3' }, owner)).body.deliveryUnknown, true, 'accepted with no id is unknown');
+  waHooks.send = async () => ({ ok: false, status: 400, text: async () => '{"error":{"message":"bad"}}' });
+  const refused = await h.post(`/api/whatsapp/messages/${m.id}/reply`, { text: 'Lock the gate tonight', clientKey: 'u-4' }, owner);
+  assert.deepEqual([refused.body.state, refused.body.deliveryUnknown], ['failed', false], 'a refusal is not sent');
+  const st = (await h.get('/api/whatsapp/status', owner)).body.counts;
+  assert.deepEqual([st.sendsUnknown, st.sendsFailed], [3, 1]);
+  assert.equal((await inbox(owner, 'failed')).body.items.length, 4, 'all four are under Problems');
+  // pressing again with the same key sends nothing
+  let sends = 0; waHooks.send = async () => { sends++; return { ok: true, status: 200, text: async () => JSON.stringify({ messages: [{ id: 'wamid.X' }] }) }; };
+  assert.equal((await h.post(`/api/whatsapp/messages/${m.id}/reply`, { text: 'Lock the gate tonight', clientKey: 'u-1' }, owner)).body.id, timedOut.body.id);
+  assert.equal(sends, 0);
+});
+
+test('the inbox numbers count only what the viewer may see', async () => {
+  on();
+  const area = (await h.post('/api/areas', { name: 'Personal', restricted: true }, owner)).body.id;
+  const project = (await h.post('/api/projects', { name: 'Private work', areaId: area }, owner)).body.id;
+  const task = (await h.post('/api/tasks', { title: 'Private errand', projectId: project }, owner)).body;
+  const mgr = await h.post('/api/staff/team', { firstName: 'Count', lastName: 'Manager', email: 'manager3@daji.test', password: 'Manager-Pass-2026!', permissions: ['manage_tasks'] }, owner);
+  assert.equal(mgr.status, 201, JSON.stringify(mgr.body));
+  const mtok = (await h.post('/api/auth/login', { email: 'manager3@daji.test', password: 'Manager-Pass-2026!' })).body.token;
+  await deliver(payload([msg(STAFF_PHONE, { type: 'image', image: { id: 'MEDIA-PRIV', mime_type: 'image/png', caption: 'Private one' } }), msg(STAFF_PHONE)]));
+  const priv = (await inbox()).body.items.find((x: any) => x.text === 'Private one');
+  await h.post(`/api/whatsapp/messages/${priv.id}/link`, { kind: 'task', recordId: task.id }, owner);
+  const own = (await h.get('/api/whatsapp/status', owner)).body.counts;
+  assert.deepEqual([own.review, own.filed, own.mediaWaiting, own.filesNotOnJob], [1, 1, 1, 1]);
+  const theirs = (await h.get('/api/whatsapp/status', mtok)).body.counts;
+  assert.deepEqual([theirs.review, theirs.filed, theirs.mediaWaiting, theirs.filesNotOnJob], [1, 0, 0, 0], 'nothing from the restricted branch');
+  const ask = await h.post('/api/staff/ask', { question: 'What is in the WhatsApp inbox?' }, mtok);
+  assert.equal(ask.status, 200, JSON.stringify(ask.body));
+  assert.match(ask.body.answer, /1 WhatsApp message waits for review/);
+  assert.doesNotMatch(JSON.stringify(ask.body), /Private one/);
 });

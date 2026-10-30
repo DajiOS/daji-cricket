@@ -113,8 +113,15 @@ CREATE TRIGGER trg_ao_wa_links_delete BEFORE DELETE ON wa_links BEGIN SELECT RAI
 `);
 
 // One request per WhatsApp message in a business, whoever makes it: the database refuses a second, not only the page.
+// A database that already holds two requests from one message keeps both: the later ones get a key of their own first
+// (nothing is deleted), so the index can be built. wa_missed counts messages that arrived while switched off, once each,
+// by a hash of WhatsApp's message id: no number, no words.
 registerSchema('wainbox-2', `
+UPDATE tasks SET intake_key = substr(intake_key, 1, 40) || ':dup:' || id
+ WHERE intake_key LIKE 'wa:%'
+   AND rowid NOT IN (SELECT MIN(rowid) FROM tasks WHERE intake_key LIKE 'wa:%' GROUP BY owner_id, intake_key);
 CREATE UNIQUE INDEX ux_tasks_whatsapp_request ON tasks(owner_id, intake_key) WHERE intake_key LIKE 'wa:%';
+CREATE TABLE wa_missed (id_hash TEXT PRIMARY KEY, at INTEGER NOT NULL);
 `);
 
 /** WhatsApp's own cap for documents is 100 MB; a team update larger than this is refused rather than kept. */
@@ -181,7 +188,7 @@ export function handleInbound(cfg: Config, raw: Buffer, signature: string | unde
   const none = { messages: 0, duplicates: 0, statuses: 0 };
   if (!cfg.whatsapp.appSecret) { logHook('not_set_up'); return { status: 503, outcome: 'not_set_up', ...none }; }
   if (!signature || !safeEq(signature, webhookSignature(cfg.whatsapp.appSecret, raw))) { logHook('bad_signature'); return { status: 401, outcome: 'bad_signature', ...none }; }
-  if (!inboundOn()) { logHook('switched_off', { ...none, messages: countMessages(raw) }); return { status: 200, outcome: 'switched_off', ...none }; }
+  if (!inboundOn()) { logHook('switched_off', { ...none, messages: noteMissed(cfg, raw) }); return { status: 200, outcome: 'switched_off', ...none }; }
   let body: any;
   try { body = JSON.parse(raw.toString('utf8')); } catch { logHook('bad_body'); return { status: 400, outcome: 'bad_body', ...none }; }
   if (!body || body.object !== 'whatsapp_business_account' || !Array.isArray(body.entry)) { logHook('bad_body'); return { status: 400, outcome: 'bad_body', ...none }; }
@@ -205,13 +212,26 @@ export function handleInbound(cfg: Config, raw: Buffer, signature: string | unde
   return { status: 200, outcome: 'accepted', ...n };
 }
 
-/** How many messages a delivery carried, read only to count them: while switched off nothing in it is kept, but the owner is told how many arrived. */
-function countMessages(raw: Buffer): number {
+/**
+ * While switched off nothing in a delivery is kept, but the owner is told how many messages were missed: only messages to
+ * this business number, each counted once however often Meta resends it. All that is kept is a hash of WhatsApp's message id.
+ * Returns how many new ones this delivery carried.
+ */
+function noteMissed(cfg: Config, raw: Buffer): number {
   try {
     const body = JSON.parse(raw.toString('utf8'));
     let n = 0;
-    for (const e of Array.isArray(body?.entry) ? body.entry : []) for (const c of Array.isArray(e?.changes) ? e.changes : []) if (Array.isArray(c?.value?.messages)) n += c.value.messages.length;
-    return Math.min(n, 1000);
+    for (const e of Array.isArray(body?.entry) ? body.entry : []) for (const c of Array.isArray(e?.changes) ? e.changes : []) {
+      const v = c?.value;
+      if (c?.field !== 'messages' || !v || !Array.isArray(v.messages)) continue;
+      if (cfg.whatsapp.phoneId && String(v.metadata?.phone_number_id ?? '') !== cfg.whatsapp.phoneId) continue;
+      for (const m of v.messages.slice(0, 1000)) {
+        if (typeof m?.id !== 'string' || !m.id) continue;
+        const r = run('INSERT INTO wa_missed(id_hash, at) VALUES (?,?) ON CONFLICT DO NOTHING', createHash('sha256').update(m.id).digest('hex'), now());
+        n += Number(r.changes);
+      }
+    }
+    return n;
   } catch { return 0; }
 }
 
@@ -436,6 +456,8 @@ export interface MessageOut {
   /** file, on a job link: whether the picture or PDF with the message is on the job yet. coming: it goes on by itself when it arrives. */
   links: { id: string; kind: LinkKind; recordId: string; title: string | null; why: string | null; byName: string | null; at: number; file: 'on_job' | 'coming' | 'not_on_job' | null }[];
   reviewedByName: string | null; reviewNote: string | null; canReply: boolean; replyClosesAt: number | null;
+  /** A reply WhatsApp did not confirm or refuse: shown as "Delivery unknown", never as "Not sent". */
+  deliveryUnknown: boolean;
 }
 
 function lastInboundAt(ownerId: string, phone: string): number | null {
@@ -456,6 +478,7 @@ function out(u: UserRow, m: MsgRow, links = liveLinks(m.id)): MessageOut {
     suggestion: sug ? { ...sug, title: sug.recordId && sug.kind !== 'none' ? recordTitle(sug.kind, sug.recordId) : null } : null,
     links: seen.map((l) => ({ id: l.id, kind: l.kind, recordId: l.record_id, title: recordTitle(l.kind, l.record_id), why: l.why, byName: nameOf(l.linked_by), at: l.linked_at, file: fileOnJob(m, l) })),
     reviewedByName: nameOf(m.reviewed_by), reviewNote: m.review_note, canReply: m.direction === 'in' && closes !== null && closes > now(), replyClosesAt: m.direction === 'in' ? closes : null,
+    deliveryUnknown: unknownOutcome(m),
   };
 }
 
@@ -466,6 +489,10 @@ function fileOnJob(m: MsgRow, l: LinkRow): 'on_job' | 'coming' | 'not_on_job' | 
   if (ref) return ref.hidden_at === null ? 'on_job' : null;
   return m.media_state === 'waiting' ? 'coming' : 'not_on_job';
 }
+
+/** A reply WhatsApp may or may not have taken: the send timed out, the answer was lost, or WhatsApp had a fault of its own. */
+const UNKNOWN_NOTE = 'WhatsApp did not confirm this reply, so it may or may not have been delivered. Check with them before sending it again.';
+const unknownOutcome = (m: MsgRow): boolean => m.direction === 'out' && m.state === 'sending' && m.wamid.startsWith('pending:') && m.media_error !== null;
 
 function rowOr404(u: UserRow, ownerId: string, id: string): MsgRow {
   mayUseInbox(u, ownerId);
@@ -478,32 +505,44 @@ function rowOr404(u: UserRow, ownerId: string, id: string): MsgRow {
 
 export interface InboxStatus {
   enabled: boolean; connected: boolean | null; inboxHere: boolean;
-  counts: { review: number; filed: number; dismissed: number; mediaFailed: number; mediaWaiting: number; sendsFailed: number; filesNotOnJob: number };
+  counts: { review: number; filed: number; dismissed: number; mediaFailed: number; mediaWaiting: number; sendsFailed: number; sendsUnknown: number; filesNotOnJob: number };
   lastDelivery: { at: number; outcome: string } | null;
   /** Owner of the main business only: messages that arrived while switched off. They were not kept, and WhatsApp does not send them again. */
   droppedWhileOff: { messages: number; lastAt: number } | null;
 }
 export function inboxStatus(cfg: Config | undefined, u: UserRow, ownerId: string): InboxStatus {
   mayUseInbox(u, ownerId);
-  const c = one<{ review: number; filed: number; dismissed: number; mf: number; mw: number; sf: number }>(
-    `SELECT COALESCE(SUM(state = 'review'), 0) review, COALESCE(SUM(state = 'filed'), 0) filed, COALESCE(SUM(state = 'dismissed'), 0) dismissed,
-            COALESCE(SUM(direction = 'in' AND media_state IN ('failed','rejected')), 0) mf, COALESCE(SUM(direction = 'in' AND media_state = 'waiting'), 0) mw,
-            COALESCE(SUM(direction = 'out' AND state = 'failed'), 0) sf FROM wa_messages WHERE owner_id = ?`, ownerId)!;
-  const last = isBoss(u, ownerId) ? one<{ at: number; outcome: string }>('SELECT at, outcome FROM wa_webhook_log ORDER BY at DESC, id DESC LIMIT 1') ?? null : null;
-  const notOnJob = one<{ n: number }>(`SELECT COUNT(*) n FROM wa_links l JOIN wa_messages m ON m.id = l.message_id
-    WHERE l.owner_id = ? AND l.kind = 'task' AND l.unlinked_at IS NULL AND m.media_id IS NOT NULL AND m.media_mime IN (${[...REF_MIMES].map(() => '?').join(',')})
-      AND NOT EXISTS (SELECT 1 FROM task_refs r WHERE r.task_id = l.record_id AND r.note = 'WhatsApp ' || m.id)`, ownerId, ...REF_MIMES)!.n;
-  const dropped = isBoss(u, ownerId) && inboxBusiness() === ownerId ? one<{ n: number; at: number | null }>("SELECT COALESCE(SUM(messages), 0) n, MAX(at) at FROM wa_webhook_log WHERE outcome = 'switched_off'")! : null;
-  return { enabled: inboundOn(), connected: cfg ? inboundConnected(cfg) : null, inboxHere: inboxBusiness() === ownerId,
-    counts: { review: c.review, filed: c.filed, dismissed: c.dismissed, mediaFailed: c.mf, mediaWaiting: c.mw, sendsFailed: c.sf, filesNotOnJob: notOnJob }, lastDelivery: last,
+  const boss = isBoss(u, ownerId);
+  const last = boss ? one<{ at: number; outcome: string }>('SELECT at, outcome FROM wa_webhook_log ORDER BY at DESC, id DESC LIMIT 1') ?? null : null;
+  const dropped = boss && inboxBusiness() === ownerId ? one<{ n: number; at: number | null }>('SELECT COUNT(*) n, MAX(at) at FROM wa_missed')! : null;
+  return { enabled: inboundOn(), connected: cfg ? inboundConnected(cfg) : null, inboxHere: inboxBusiness() === ownerId, counts: countsFor(u, ownerId), lastDelivery: last,
     droppedWhileOff: dropped && dropped.n > 0 ? { messages: dropped.n, lastAt: dropped.at! } : null };
+}
+
+/**
+ * The inbox numbers, from the messages and links this person may see, so a total never gives away work in a branch they
+ * may not open. The same rule as the list: a filed message counts only through a record they may see.
+ */
+function countsFor(u: UserRow, ownerId: string): InboxStatus['counts'] {
+  const c = { review: 0, filed: 0, dismissed: 0, mediaFailed: 0, mediaWaiting: 0, sendsFailed: 0, sendsUnknown: 0, filesNotOnJob: 0 };
+  for (const m of many<MsgRow>('SELECT * FROM wa_messages WHERE owner_id = ?', ownerId)) {
+    const links = liveLinks(m.id);
+    if (!visible(u, m, links)) continue;
+    if (m.state === 'review') c.review++; else if (m.state === 'filed') c.filed++; else if (m.state === 'dismissed') c.dismissed++;
+    if (m.direction === 'in' && (m.media_state === 'failed' || m.media_state === 'rejected')) c.mediaFailed++;
+    if (m.direction === 'in' && m.media_state === 'waiting') c.mediaWaiting++;
+    if (m.direction === 'out' && m.state === 'failed') c.sendsFailed++;
+    if (unknownOutcome(m)) c.sendsUnknown++;
+    for (const l of links) { const f = fileOnJob(m, l); if ((f === 'coming' || f === 'not_on_job') && maySeeRecord(u, ownerId, l.kind, l.record_id)) c.filesNotOnJob++; }
+  }
+  return c;
 }
 
 export function listMessages(u: UserRow, ownerId: string, q: { state?: string | null; personId?: string | null; limit?: number }): { items: MessageOut[] } {
   mayUseInbox(u, ownerId);
   const state = q.state ?? 'review';
   const where: string[] = ['owner_id = ?']; const params: (string | number)[] = [ownerId];
-  if (state === 'failed') where.push("((direction = 'in' AND media_state IN ('failed','rejected')) OR (direction = 'out' AND state = 'failed'))");
+  if (state === 'failed') where.push("((direction = 'in' AND media_state IN ('failed','rejected')) OR (direction = 'out' AND (state = 'failed' OR (state = 'sending' AND media_error IS NOT NULL))))");
   else if (state !== 'all') { if (!['review', 'filed', 'dismissed'].includes(state)) throw new HttpError(400, 'VALIDATION_FAILED', 'state must be review, filed, dismissed, failed or all'); where.push('state = ?'); params.push(state); }
   if (q.personId) { where.push('person_id = ?'); params.push(q.personId); }
   const limit = Math.min(Math.max(q.limit ?? 100, 1), 200);
@@ -752,21 +791,24 @@ export async function replyTo(cfg: Config, u: UserRow, ownerId: string, id: stri
     throw e;
   }
   for (const l of liveLinks(m.id)) run('INSERT INTO wa_links(id, message_id, owner_id, kind, record_id, why, linked_by, linked_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING', newId('wal'), rowId, ownerId, l.kind, l.record_id, 'A reply about this', u.id, now());
-  let wamid: string | null = null; let error: string | null = null;
+  let wamid: string | null = null; let error: string | null = null; let refused = false;
   try {
     const res = await f(`${cfg.whatsapp.apiUrl}/${encodeURIComponent(cfg.whatsapp.phoneId)}/messages`, {
       method: 'POST', headers: { authorization: `Bearer ${cfg.whatsapp.token}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(10_000),
       body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: m.phone, type: 'text', context: { message_id: m.wamid }, text: { body: text, preview_url: false } }),
     });
     const t = await res.text();
-    if (res.ok) { try { wamid = String(JSON.parse(t)?.messages?.[0]?.id ?? '') || null; } catch { /* no id */ } if (!wamid) error = 'WhatsApp accepted the reply but gave no message id'; }
-    else error = `WhatsApp refused the reply (${res.status})`;
-  } catch (e) { error = `Could not reach WhatsApp: ${(e as Error).message}`.slice(0, 200); }
-  // an unknown outcome stays unknown: a timeout is shown as failed to send from here, and is never retried by itself
+    if (res.ok) { try { wamid = String(JSON.parse(t)?.messages?.[0]?.id ?? '') || null; } catch { /* no id */ } if (!wamid) error = UNKNOWN_NOTE; }
+    // a 4xx is WhatsApp saying no: not sent. A 5xx is a fault on their side after which the message may still go out.
+    else if (res.status < 500) { refused = true; error = `WhatsApp refused the reply (${res.status})`; }
+    else error = UNKNOWN_NOTE;
+  } catch { error = UNKNOWN_NOTE; }
+  // an unknown outcome stays unknown: it is shown as "Delivery unknown", never as not sent, and is never retried by itself
   // WhatsApp can report delivered, read or failed before its answer to the send reaches us; those statuses are already kept
   if (wamid) { run("UPDATE wa_messages SET wamid = ?, state = 'sent' WHERE id = ?", wamid, rowId); settleState(rowId, wamid, 'sent'); }
-  else run("UPDATE wa_messages SET state = 'failed', media_error = ? WHERE id = ?", error, rowId);
-  audit(actorOf(u), 'whatsapp.reply', 'whatsapp', rowId, { to: m.id, ok: !!wamid }, ownerId);
+  else if (refused) run("UPDATE wa_messages SET state = 'failed', media_error = ? WHERE id = ?", error, rowId);
+  else run('UPDATE wa_messages SET media_error = ? WHERE id = ?', error, rowId);
+  audit(actorOf(u), 'whatsapp.reply', 'whatsapp', rowId, { to: m.id, ok: !!wamid, outcome: wamid ? 'sent' : refused ? 'refused' : 'unknown' }, ownerId);
   if (!wamid) console.error(JSON.stringify({ level: 'error', where: 'whatsapp-reply', message: rowId, error }));
   return out(u, one<MsgRow>('SELECT * FROM wa_messages WHERE id = ?', rowId)!);
 }
@@ -785,10 +827,10 @@ export function failedDeliveries(u: UserRow, ownerId: string): { items: { at: nu
 // ---- for Ask AI
 
 /** What Ask AI may say about the inbox: counts, and the newest messages waiting, as the asker may see them. Message words are quoted as data. */
-export function inboxForAsk(cfg: Config | undefined, u: UserRow, ownerId: string): { available: false; why: string } | { available: true; enabled: boolean; connected: boolean | null; waitingForReview: number; filed: number; filesFailed: number; sendsFailed: number; newestWaiting: { from: string; onTeam: boolean; kind: string; words: string | null; suggestion: string | null; receivedAt: number }[] } {
+export function inboxForAsk(cfg: Config | undefined, u: UserRow, ownerId: string): { available: false; why: string } | { available: true; enabled: boolean; connected: boolean | null; waitingForReview: number; filed: number; filesFailed: number; sendsFailed: number; sendsUnknown: number; newestWaiting: { from: string; onTeam: boolean; kind: string; words: string | null; suggestion: string | null; receivedAt: number }[] } {
   let s: InboxStatus;
   try { s = inboxStatus(cfg, u, ownerId); } catch { return { available: false, why: 'The WhatsApp inbox needs the "manage_tasks" permission.' }; }
   const waiting = listMessages(u, ownerId, { state: 'review', limit: 5 }).items;
-  return { available: true, enabled: s.enabled, connected: s.connected, waitingForReview: s.counts.review, filed: s.counts.filed, filesFailed: s.counts.mediaFailed, sendsFailed: s.counts.sendsFailed,
+  return { available: true, enabled: s.enabled, connected: s.connected, waitingForReview: s.counts.review, filed: s.counts.filed, filesFailed: s.counts.mediaFailed, sendsFailed: s.counts.sendsFailed, sendsUnknown: s.counts.sendsUnknown,
     newestWaiting: waiting.map((m) => ({ from: m.personName ?? m.profileName ?? m.from, onTeam: m.onTeam, kind: m.kind, words: m.text ? m.text.slice(0, 160) : null, suggestion: m.suggestion?.why ?? null, receivedAt: m.receivedAt })) };
 }
