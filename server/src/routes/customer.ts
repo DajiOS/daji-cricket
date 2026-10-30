@@ -33,6 +33,8 @@ import { resolveOwnerCancel } from '../cancellation.ts';
 import { beginSetup, checkCode, confirmSetup, disable as disableMfa, mfaEnabled } from '../mfa.ts';
 import { scopeOwnerId } from '../auth.ts';
 import { checkAiName, setOwnAiName } from '../aiNames.ts';
+import { setUiLanguage, UI_LANGUAGE_REFUSED } from '../uiLanguage.ts';
+import { isUiLang } from '@daji/shared';
 import { acceptOffer, joinWaitlist, myWaitlist, parseJoin, withdrawEntry } from '../waitlist.ts';
 import { addPlayer, checkIn, enrollMyFace, faceCheck, moveCode, myFace, myTeamGames, parseCheckIn, removeMyFace, removePlayer, teamList } from '../players.ts';
 import { faceMatchReady } from '../faceMatch.ts';
@@ -112,6 +114,9 @@ export function customerRoutes(r: Router): void {
     const aiRaw = body.aiName;
     const aiClear = aiRaw === null || (typeof aiRaw === 'string' && aiRaw.trim() === '');
     if (aiRaw !== undefined && !aiClear) { try { checkAiName(aiRaw); } catch (e) { v.fail('aiName', (e as Error).message); } }
+    // Profile › Screen language: 'en', 'gu' or 'hi'; null goes back to English. Words only, never a rule or a permission.
+    const langRaw = body.language;
+    if (langRaw !== undefined && langRaw !== null && !isUiLang(langRaw)) v.fail('language', UI_LANGUAGE_REFUSED);
     v.done();
     if (name !== undefined) {
       const p = nm.firstName ? { first: titleCase(nm.firstName), last: titleCase(nm.lastName ?? '') } : (() => { const x = splitName(titleCase(name)); return { first: x.first, last: x.last }; })();
@@ -131,6 +136,7 @@ export function customerRoutes(r: Router): void {
       audit({ id: u.id, role: u.role }, 'consent.update', 'user', u.id, { email: ce, sms: cs, whatsapp: cw });
     }
     if (aiRaw !== undefined) setOwnAiName({ id: u.id, role: u.role }, aiClear ? null : aiRaw, scopeOwnerId(u));
+    if (langRaw !== undefined) setUiLanguage({ id: u.id, role: u.role }, isUiLang(langRaw) ? langRaw : null, scopeOwnerId(u));
     return ok({ user: toUser(userRow(u.id)!) });
   }, { auth: 'user' });
 

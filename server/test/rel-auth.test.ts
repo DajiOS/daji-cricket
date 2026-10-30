@@ -210,7 +210,10 @@ rel('REL-AUTH-007', 'there is no unprotected way to the data: every route refuse
     'GET /api/sheets/oauth/callback',
     // reviewed (inbound WhatsApp, wainbox.ts): Meta calls these. The GET answers only Meta's subscribe check and only with the right verify token;
     // the POST is refused unless signed with the app secret over the raw body (X-Hub-Signature-256), and keeps nothing while the feature is off
-    'GET /api/webhooks/whatsapp', 'POST /api/webhooks/whatsapp']);
+    'GET /api/webhooks/whatsapp', 'POST /api/webhooks/whatsapp',
+    // reviewed (cricket network): a player profile only when its player made it public (a child never is), and a published network
+    // tournament with team names, grounds, fixtures, verified results and standings only: no players, money or contact details
+    'GET /api/public/network/players/:p', 'GET /api/public/network/tournaments/:p']);
   const pat = (r: { re: RegExp }) => r.re.source.replace(/^\^/, '').replace(/\\\/\?\$$/, '').replace(/\/\?\$$/, '').replace(/\\\//g, '/').replace(/\(\[\^\/\]\+\)/g, ':p');
   const publicNow = router.routes.filter((r) => r.opts.auth === undefined).map((r) => `${r.method} ${pat(r)}`).sort();
   assert.deepEqual(publicNow, [...PUBLIC].sort(), 'the set of routes that need no sign-in is exactly the reviewed list; a new open route fails this test until it is reviewed');

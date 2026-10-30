@@ -16,7 +16,7 @@ import { nameKey } from '../matches.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'fantasy' | 'server' | 'branches' | 'cash' | 'site_report' | 'whatsapp' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'fantasy' | 'server' | 'branches' | 'cash' | 'site_report' | 'whatsapp' | 'network' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -46,6 +46,7 @@ const RULES: [Intent, RegExp][] = [
   ['approvals_why', /why (cant|cannot|am i not|do i not|wont|isnt)\b.*\b(sign|approve|approval)|\b(cant|cannot|unable to|not able to) (i )?(sign|approve)\b|why.* (greyed|disabled|locked)/],
   ['approvals_report', /(how many|report|summary|history|stats|statistics)\b.*\b(approvals?|sign.?offs?|signed off|sent back)|\b(approvals?|sign.?offs?) (report|summary|history)\b/],
   ['approvals_waiting', /\b(whom|who)\b.*\b(waiting|holding|pending)|(waiting|pending|stuck|open|outstanding) (on|for)? ?(whom|who|which)\b|\bapprovals?\b|sign.?offs?|waiting (for|on) (my )?(sign|approval)|bills? (waiting|pending)|pay ?roll (waiting|pending)|(discounts?|waivers?|expenses?|refunds?) (waiting|pending) (for |on )?(sign|approv)/],
+  ['network', /\b(cricket )?network\b|\bground invitations?\b|\b(slots?|match times?) (to|waiting to|waiting for) (confirm|confirmation)\b|\bresults? (to|waiting to|waiting for) (verify|verification)\b|\bsettlements?\b|\bprofile claims?\b|\bduplicate (player )?profiles?\b|\bmulti.?ground\b/],
   ['auctions', /\bauctions?\b|player (draft|auction)|\bsquads?\b|\bipl.?style\b|hosting deposits?|(tournament|host).{0,20}deposits?|deposit waivers?|hosted tournaments?/],
   ['server', /\bservers?\b|\blightsail\b|\bssh\b|\buptime\b|disk (space|full|usage)|(is|was) the (site|website|app) (up|down|working)|coding console/],
   ['sheet', /spread ?sheets?|\bexcel\b|google sheets?|shared sheet|\bthe sheet\b|sheet (sync|link)|requests? from the sheet|sheet requests?/],
@@ -72,7 +73,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'whatsapp', 'site_report', 'cash', 'branches', 'server', 'auctions', 'fantasy', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'whatsapp', 'site_report', 'cash', 'branches', 'server', 'network', 'auctions', 'fantasy', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -147,7 +148,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', fantasy: 'Fantasy cricket', sheet: 'Shared spreadsheet', server: 'Server status', branches: 'Branches and projects', cash: 'Supervisor cash', site_report: 'Daily site report', whatsapp: 'WhatsApp inbox', auctions: 'Auction tournaments', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', fantasy: 'Fantasy cricket', sheet: 'Shared spreadsheet', server: 'Server status', branches: 'Branches and projects', cash: 'Supervisor cash', site_report: 'Daily site report', whatsapp: 'WhatsApp inbox', network: 'Cricket network', auctions: 'Auction tournaments', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -185,6 +186,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'cash') return cashAnswer(ctx, base);
   if (intent === 'whatsapp') return whatsappAnswer(ctx, base);
   if (intent === 'site_report') return siteReportAnswer(ctx, question, base);
+  if (intent === 'network') return networkAnswer(ctx, base);
   if (intent === 'unknown') {
     const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
     return base('unknown', "I'm not sure what you're asking. I can answer questions about revenue, expenses, profit, account balances, bookings, money owed, cancellations and more, for any dates you like.", { suggestions: lot });
@@ -723,3 +725,19 @@ function whatsappAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Pa
   return base('whatsapp', `${count(w.waitingForReview, 'WhatsApp message')} wait${w.waitingForReview === 1 ? 's' : ''} for review, and ${count(w.filed, 'message')} ${w.filed === 1 ? 'is' : 'are'} filed against jobs, projects or cash spends.${extra.length ? ` ${extra.join('; ')}.` : ''}`, { details, notes });
 }
 
+/** The cricket network (netTournaments.ts): tournaments across grounds, what waits for this business, and its settlement lines. No players. */
+function networkAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  if (!T.can(ctx, 'tournaments')) return base('network', 'You do not have access to the tournaments. Ask the owner to give you the "manage_matches" permission.');
+  const n = T.network(ctx);
+  if (!n.member && !n.tournaments.length) return base('network', 'This business has not joined the cricket network. The owner can join it on the Cricket network page.');
+  const bits = [`${count(n.tournaments.length, 'network tournament')}${n.member ? '' : ' (this business has left the network)'}.`];
+  if (n.invitationsWaiting) bits.push(`${count(n.invitationsWaiting, 'ground invitation')} waiting for your answer.`);
+  if (n.slotsWaiting) bits.push(`${count(n.slotsWaiting, 'match time')} waiting for your ground to confirm.`);
+  if (n.resultsToVerify) bits.push(`${count(n.resultsToVerify, 'result')} waiting for you to verify.`);
+  const s = n.settlements;
+  if (s.toReceivePaise || s.toPayPaise) bits.push(`Settlements: ${R(s.toReceivePaise)} to receive and ${R(s.toPayPaise)} to pay. ${s.note}`);
+  if (n.profileClaimsWaiting) bits.push(`${count(n.profileClaimsWaiting, 'profile claim')} waiting for your staff.`);
+  return base('network', bits.join(' '), {
+    details: n.tournaments.slice(0, 8).map((t) => ({ label: t.name, text: `${t.status} · ${t.myRole === 'organiser' ? 'you organise it' : `organised by ${t.organiser}`} · ${niceDay(t.from)} to ${niceDay(t.to)} · ${count(t.teams, 'team')}, ${count(t.grounds, 'ground')} · ${t.confirmed} of ${count(t.fixtures, 'fixture')} confirmed, ${t.verified} verified` })),
+  });
+}
