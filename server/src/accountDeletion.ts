@@ -1,5 +1,6 @@
 import { forgetFaces } from './players.ts';
 import { forgetPlayerLinks } from './playerStats.ts';
+import { forgetNetwork } from './network.ts';
 import { forgetFantasy } from './fantasy.ts';
 import { one, run, tx } from './db.ts';
 import { now } from './clock.ts';
@@ -36,6 +37,7 @@ export function deleteMyAccount(dataDir: string, u: UserRow, body: unknown): { d
     run('DELETE FROM push_tokens WHERE user_id = ?', u.id);
     forgetFaces(u.id);
     forgetPlayerLinks(u.id);
+    forgetNetwork(u.id);
     forgetFantasy(u.id);
     if (u.phone) run('DELETE FROM otp_codes WHERE phone = ?', u.phone);
   });
