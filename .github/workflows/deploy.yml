@@ -77,5 +77,17 @@ jobs:
             # Caddy reads its config once and retries failed HTTPS certificates slowly; restarting makes it pick up Caddyfile changes and ask for certificates straight away
             sudo docker compose restart caddy
             sudo docker image prune -f
+            # The virus scanner takes minutes to load its list after a restart, and uploads are refused until it answers.
+            # Wait for it; if it is still not healthy, restart it once and show its last lines so the cause is in this log.
+            scan_health() { sudo docker inspect --format "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}" "$(sudo docker compose ps -q clamav)"; }
+            for i in $(seq 1 30); do [ "$(scan_health)" = healthy ] && break; sleep 10; done
+            if [ "$(scan_health)" != healthy ]; then
+              echo "Virus scanner is $(scan_health) after 5 minutes; restarting it once"
+              sudo docker compose logs --tail 40 clamav
+              free -m
+              sudo docker compose restart clamav
+              for i in $(seq 1 30); do [ "$(scan_health)" = healthy ] && break; sleep 10; done
+            fi
+            [ "$(scan_health)" = healthy ] && echo "Virus scanner is healthy" || echo "::warning::The virus scanner (ClamAV) is $(scan_health): uploads are refused until it is healthy"
             sudo docker compose ps
           '
