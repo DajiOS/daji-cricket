@@ -100,7 +100,7 @@ export default function Tasks({ sub }: { sub: string }) {
         </div>
       )}
       {open && (open === 'new' || current) && <TaskDialog key={open} task={current} projects={projects} team={team} manager={manager} meId={me.id} defaultProject={projectId} onClose={() => setOpen(null)} onChanged={load} />}
-      {side === 'inbox' && <InboxDialog team={team} manager={manager} onClose={() => setSide(null)} onChanged={load} />}
+      {side === 'inbox' && <InboxDialog team={team} manager={manager} meId={me.id} onClose={() => setSide(null)} onChanged={load} />}
       {side === 'raise' && <RaiseDialog projects={projects} onClose={() => setSide(null)} onChanged={load} />}
       {side === 'report' && <SiteReportDialog projects={projects} onClose={() => setSide(null)} />}
       {projDlg && <ProjectsDialog projects={projects} onClose={() => setProjDlg(false)} onChanged={load} />}

@@ -51,12 +51,12 @@ export default function TaskDialog({ task, projects, team, manager, meId, defaul
       </div>
       {err && <div className="err" role="alert" style={{ marginTop: 12 }}>{err}</div>}
       {t && <WorkPanel t={t} team={team} manager={manager} meId={meId} onChanged={onChanged} setErr={setErr} />}
-      {t && <Extras t={t} onMove={move} onChanged={onChanged} setErr={setErr} />}
+      {t && <Extras t={t} manager={manager} meId={meId} onMove={move} onChanged={onChanged} setErr={setErr} />}
     </Modal>
   );
 }
 
-function Extras({ t, onMove, onChanged, setErr }: { t: Task; onMove: (s: string) => void; onChanged: () => void; setErr: (m: string | null) => void }) {
+function Extras({ t, manager, meId, onMove, onChanged, setErr }: { t: Task; manager: boolean; meId: string; onMove: (s: string) => void; onChanged: () => void; setErr: (m: string | null) => void }) {
   const toast = useToast(); const pick = useRef<HTMLInputElement>(null);
   const [cm, , reload] = useApi<{ items: Comment[] }>(`/api/tasks/${encodeURIComponent(t.id)}/comments`);
   const [text, setText] = useState('');
@@ -81,7 +81,7 @@ function Extras({ t, onMove, onChanged, setErr }: { t: Task; onMove: (s: string)
         : <p className="hint">{need ? 'Taken with the phone camera, within the last 5 minutes. Gallery pictures and screenshots are turned away.' : 'No photos needed.'}</p>}
       {t.status === 'open' && <><input ref={pick} type="file" accept="image/jpeg" capture="environment" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} /><button className="btn sm" style={{ marginTop: 8 }} onClick={() => pick.current?.click()}>Take photo</button></>}
       {t.status === 'done' && <p className="hint">Done {fmtDateTime(t.completedAt)}{t.completedByName ? ' by ' + t.completedByName : ''}</p>}
-      <References t={t} onChanged={onChanged} setErr={setErr} />
+      <References t={t} manager={manager} meId={meId} onChanged={onChanged} setErr={setErr} />
       <div className="eyebrow" style={{ margin: '18px 0 8px' }}>Comments</div>
       <div className="kcomments">
         {cm && !cm.items.length && <p className="hint">No comments yet.</p>}

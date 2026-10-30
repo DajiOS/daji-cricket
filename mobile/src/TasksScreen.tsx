@@ -87,7 +87,7 @@ export function TasksScreen({ user, draftTitle }: { user: User; draftTitle?: str
         </View>
       )}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 10 }}>{(['open', 'done', 'cancelled', 'requests', 'report'] as const).map((f) => <Chip key={f} label={{ open: 'Open', done: 'Done', cancelled: 'Cancelled', requests: 'Requests', report: 'Site report' }[f]} on={filter === f} onPress={() => setFilter(f)} />)}</View>
-      {filter === 'requests' ? <Requests manager={manager} team={team} /> : filter === 'report' ? <SiteNote /> : (<>
+      {filter === 'requests' ? <Requests manager={manager} meId={user.id} team={team} /> : filter === 'report' ? <SiteNote /> : (<>
       <Field label="Search" value={q} onChangeText={setQ} placeholder="Title, details, step or person" />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       {shown === null ? <Loading /> : !shown.length ? <Text style={s.note}>{q.trim() ? 'No task matches the search.' : filter === 'open' ? 'Nothing to do right now.' : 'Nothing here yet.'}</Text> : shown.map((t) => {

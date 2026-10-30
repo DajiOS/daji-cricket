@@ -78,7 +78,7 @@ function RefThumb({ r }: { r: TaskRef }) {
 }
 
 /** References: pictures from the gallery or WhatsApp, quotes, PDFs and links. They explain the job; only camera photos prove it. */
-export function References({ t, onChanged, setErr }: { t: Task; onChanged: () => void; setErr: SetErr }) {
+export function References({ t, manager, meId, onChanged, setErr }: { t: Task; manager: boolean; meId: string; onChanged: () => void; setErr: SetErr }) {
   const toast = useToast(); const pick = useRef<HTMLInputElement>(null);
   const [link, setLink] = useState(''); const [showLink, setShowLink] = useState(false);
   const add = async (file?: File) => {
@@ -111,7 +111,7 @@ export function References({ t, onChanged, setErr }: { t: Task; onChanged: () =>
             <div key={r.id} className="tref">
               <button type="button" className="tref-open" onClick={() => openRef(r)} title={`Added ${fmtDateTime(r.addedAt)}${r.addedByName ? ' by ' + r.addedByName : ''}`}><RefThumb r={r} /><span>{r.name}</span></button>
               {r.note && <span className="muted small">{r.note}</span>}
-              {live && <button type="button" className="btn ghost sm" onClick={() => hide(r)}>Take off</button>}
+              {live && (manager || r.addedById === meId) && <button type="button" className="btn ghost sm" onClick={() => hide(r)}>Take off</button>}
             </div>
           ))}
         </div>
@@ -151,7 +151,7 @@ export function HistoryList({ taskId, stamp }: { taskId: string; stamp: string }
 }
 
 /** Requests from the team, waiting for a manager to take them in (as a job for someone) or turn them down with a reason. */
-export function InboxDialog({ team, manager, onClose, onChanged }: { team: { id: string; name: string }[]; manager: boolean; onClose: () => void; onChanged: () => void }) {
+export function InboxDialog({ team, manager, meId, onClose, onChanged }: { team: { id: string; name: string }[]; manager: boolean; meId: string; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
   const [d, err, reload] = useApi<{ items: Task[] }>('/api/tasks/inbox');
   const [pickFor, setPickFor] = useState<Record<string, { who: string; need: string; due: string; note: string }>>({});
@@ -176,7 +176,7 @@ export function InboxDialog({ team, manager, onClose, onChanged }: { team: { id:
           <b>{t.title}</b>
           <div className="muted small">From {t.intake?.byName ?? 'the team'} · {fmtDateTime(t.createdAt)}{t.projectName ? ` · ${t.projectName}` : ''}{t.references.length ? ` · ${t.references.length} reference${t.references.length === 1 ? '' : 's'}` : ''}</div>
           {t.details && <p>{t.details}</p>}
-          <References t={t} onChanged={() => { reload(); onChanged(); }} setErr={setMsg} />
+          <References t={t} manager={manager} meId={meId} onChanged={() => { reload(); onChanged(); }} setErr={setMsg} />
           {manager && (
             <div className="form-grid" style={{ marginTop: 8 }}>
               <Field label="For"><Select value={val(t.id).who} onChange={(v) => set(t.id, 'who', v)} options={[['', 'Anyone on the team'], ...team.map((m) => [m.id, m.name] as [string, string])]} /></Field>

@@ -33,7 +33,7 @@ export interface Built {
 }
 
 const RULES: [Intent, RegExp][] = [
-  ['site_report', /\b(site reports?|daily reports?|daily site|day on (the )?site|what happened (on|at) (the )?site|requests? (waiting )?in (the )?inbox|jobs? (waiting|to) sign off)\b/],
+  ['site_report', /\b(site reports?|daily reports?|daily site|day on (the )?site|what happened (on|at) (the )?site)\b/],
   ['cash', /\b(cash in hand|cash balance|cash float|cash advances?|petty cash|supervisor('?s)? cash|wallet|cash (he|she|they|i) (holds?|has|have)|cash count)\b/],
   ['branches', /\bbranch(es)?\b|\bprojects?\b.*\b(office|house)\b|\b(office|house)\b.*\bprojects?\b|which projects/],
   ['fantasy', /\bfantasy\b|\bdream ?11\b/],

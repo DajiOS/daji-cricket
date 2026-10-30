@@ -169,9 +169,18 @@ const refsOf = (taskId: string): RefOut[] => {
 };
 export const helperIds = (taskId: string): string[] => many<{ user_id: string }>('SELECT user_id FROM task_helpers WHERE task_id = ? AND removed_at IS NULL ORDER BY added_at', taskId).map((h) => h.user_id);
 const isHelper = (taskId: string, userId: string): boolean => !!one('SELECT 1 FROM task_helpers WHERE task_id = ? AND user_id = ? AND removed_at IS NULL', taskId, userId);
-/** Works on the job: it is for them, for the whole team, or they help on it. A request still in the inbox is only its raiser's. */
+/**
+ * The jobs a team member without manage_tasks works on, as SQL for the tasks table (parameters: their id, twice). A request
+ * still in the inbox, or turned down, is never a whole-team job: only its raiser sees it, through listInbox and onJob.
+ */
+export const STAFF_JOBS = "((assigned_to IS NULL AND (intake_state IS NULL OR intake_state = 'accepted')) OR assigned_to = ? OR id IN (SELECT task_id FROM task_helpers WHERE user_id = ? AND removed_at IS NULL))";
+/** A request still waiting in the inbox can be read and given references, nothing more, until a manager takes it in. */
+function notInInbox(t: { intake_state: string | null }): void {
+  if (t.intake_state === 'new') throw new HttpError(409, 'IN_INBOX', 'This request has not been taken in yet');
+}
+/** Works on the job: it is for them, for the whole team, or they help on it. A request in the inbox, or turned down, is only its raiser's. */
 export function onJob(u: UserRow, t: { id: string; assigned_to: string | null; intake_state?: string | null; intake_by?: string | null }): boolean {
-  if (t.intake_state === 'new') return t.intake_by === u.id;
+  if (t.intake_state === 'new' || t.intake_state === 'declined') return t.intake_by === u.id;
   return t.assigned_to === null || t.assigned_to === u.id || isHelper(t.id, u.id);
 }
 
@@ -268,6 +277,7 @@ export function updateTask(u: UserRow, id: string, body: unknown): TaskOut {
   if (!manages(u)) throw forbidden('This needs the "manage_tasks" permission');
   const cur = visibleTask(u, id);
   if (cur.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'Only an open task can be changed');
+  notInInbox(cur);
   const t = parseTask(body, true);
   if (t.assignedTo !== undefined) checkAssignee(cur.owner_id, t.assignedTo);
   const proj = t.projectId === undefined ? cur.project_id : t.projectId;
@@ -288,7 +298,7 @@ export function listTasks(u: UserRow, ownerId: string | null, status?: string, p
   const where: string[] = [], p: string[] = [];
   if (ownerId) { where.push('owner_id = ?'); p.push(ownerId); }
   if (u.role === 'staff' && !manages(u)) {
-    where.push('(assigned_to IS NULL OR assigned_to = ? OR id IN (SELECT task_id FROM task_helpers WHERE user_id = ? AND removed_at IS NULL))');
+    where.push(STAFF_JOBS);
     p.push(u.id, u.id);
   }
   // requests still waiting in the inbox are listed by listInbox, not on the board
@@ -325,6 +335,7 @@ export function addTaskPhoto(dataDir: string, u: UserRow, id: string, data: Buff
   const t = visibleTask(u, id);
   if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'This task is already closed');
   if (u.role === 'staff' && !onJob(u, t)) throw notFound('Task not found');
+  notInInbox(t);
   if (one<{ c: number }>('SELECT COUNT(*) c FROM task_photos WHERE task_id = ?', id)!.c >= MAX_PHOTOS_PER_TASK) throw new HttpError(409, 'TOO_MANY_PHOTOS', `Up to ${MAX_PHOTOS_PER_TASK} photos per task`);
   const { takenAt, camera, source } = checkCameraPhoto(data, now(), appShotAt);
   const sha = createHash('sha256').update(data).digest('hex');
@@ -345,6 +356,7 @@ export function completeTask(u: UserRow, id: string, noteIn?: string): TaskOut {
   const t = visibleTask(u, id);
   if (u.role === 'staff' && !onJob(u, t)) throw notFound('Task not found');
   if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'This task is already closed');
+  notInInbox(t);
   const have = one<{ c: number }>('SELECT COUNT(*) c FROM task_photos WHERE task_id = ?', id)!.c;
   if (have < t.photos_required) throw new HttpError(409, 'PHOTOS_NEEDED', `This task needs ${t.photos_required} photo${t.photos_required === 1 ? '' : 's'} taken with the camera first (${have} added).`, { required: t.photos_required, have });
   run("UPDATE tasks SET status = 'done', stage = 'done', completed_at = ?, completed_by = ?, completion_note = ? WHERE id = ?", now(), u.id, noteIn?.trim().slice(0, 300) || null, id);
@@ -384,6 +396,7 @@ export function checkStep(u: UserRow, id: string, body: unknown): TaskOut {
   const t = visibleTask(u, id);
   if (u.role === 'staff' && !onJob(u, t)) throw notFound('Task not found');
   if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'This task is already closed');
+  notInInbox(t);
   const v = new Validator(body);
   const index = v.int('index', { min: 0, max: MAX_CHECKLIST_ITEMS - 1, required: true })!;
   const done = v.bool('done', true)!;
@@ -404,6 +417,7 @@ export function reopenTask(u: UserRow, id: string, body: unknown = {}): TaskOut 
   v.done();
   const t = visibleTask(u, id);
   if (t.status === 'open') return toOut(t);
+  if (t.intake_state === 'declined') throw new HttpError(409, 'REQUEST_DECLINED', 'A turned-down request cannot be reopened. Raise it again if it is needed after all.');
   run("UPDATE tasks SET status = 'open', stage = 'todo', completed_at = NULL, completed_by = NULL, completion_note = NULL, signoff_at = NULL, signoff_by = NULL, ack_at = NULL, ack_by = NULL, reopen_note = ? WHERE id = ?", reason, id);
   audit({ id: u.id, role: u.role }, 'task.reopen', 'task', id, { reason }, t.owner_id);
   return toOut(getTask(id));
@@ -413,6 +427,7 @@ export function cancelTask(u: UserRow, id: string): TaskOut {
   if (!manages(u)) throw forbidden('This needs the "manage_tasks" permission');
   const t = visibleTask(u, id);
   if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'Only an open task can be cancelled');
+  if (t.intake_state === 'new') throw new HttpError(409, 'IN_INBOX', 'Turn the request down from the inbox, with a reason');
   run("UPDATE tasks SET status = 'cancelled' WHERE id = ?", id);
   audit({ id: u.id, role: u.role }, 'task.cancel', 'task', id, {}, t.owner_id);
   return toOut(getTask(id));
@@ -493,6 +508,7 @@ export function setHelpers(u: UserRow, id: string, body: unknown): TaskOut {
   if (!manages(u)) throw forbidden('This needs the "manage_tasks" permission');
   const t = visibleTask(u, id);
   if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'Only an open task can be changed');
+  notInInbox(t);
   const v = new Validator(body);
   const ids = [...new Set(v.strArray('userIds', { max: 10, itemMax: 60 }) ?? [])];
   v.done();
@@ -501,7 +517,8 @@ export function setHelpers(u: UserRow, id: string, body: unknown): TaskOut {
   const at = now();
   for (const h of before) if (!ids.includes(h)) run('UPDATE task_helpers SET removed_at = ?, removed_by = ? WHERE task_id = ? AND user_id = ? AND removed_at IS NULL', at, u.id, id, h);
   for (const h of ids) if (!before.includes(h)) run('INSERT INTO task_helpers(task_id, user_id, added_by, added_at) VALUES (?,?,?,?)', id, h, u.id, at);
-  if (ids.join() !== before.join()) audit({ id: u.id, role: u.role }, 'task.helpers', 'task', id, { added: ids.filter((h) => !before.includes(h)), removed: before.filter((h) => !ids.includes(h)) }, t.owner_id);
+  const added = ids.filter((h) => !before.includes(h)), removed = before.filter((h) => !ids.includes(h));
+  if (added.length || removed.length) audit({ id: u.id, role: u.role }, 'task.helpers', 'task', id, { added, removed }, t.owner_id);
   return toOut(getTask(id));
 }
 
@@ -511,6 +528,7 @@ export function setNextAction(u: UserRow, id: string, body: unknown): TaskOut {
   const t = visibleTask(u, id);
   if (u.role === 'staff' && !manages(u) && !onJob(u, t)) throw notFound('Task not found');
   if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'This task is already closed');
+  notInInbox(t);
   const v = new Validator(body);
   const text = v.str('text', { max: 200 })?.trim() || null;
   v.done();
@@ -525,7 +543,7 @@ export function acknowledgeTask(u: UserRow, id: string): TaskOut {
   if (u.role === 'customer') throw forbidden('Only the team can take a job');
   const t = visibleTask(u, id);
   if (t.status !== 'open') throw new HttpError(409, 'TASK_CLOSED', 'This task is already closed');
-  if (t.intake_state === 'new') throw new HttpError(409, 'IN_INBOX', 'This request has not been taken in yet');
+  notInInbox(t);
   if (t.assigned_to ? t.assigned_to !== u.id : !onJob(u, t)) throw forbidden('Only the person the job is for can accept it');
   if (t.ack_at) return toOut(t);
   run('UPDATE tasks SET ack_at = ?, ack_by = ? WHERE id = ?', now(), u.id, id);

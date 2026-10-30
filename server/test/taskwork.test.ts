@@ -220,9 +220,22 @@ test('the daily site report: jobs from the board for that day, a note per person
   assert.equal(a.status, 200, JSON.stringify(a.body));
   assert.equal(a.body.intent, 'site_report', JSON.stringify(a.body));
   assert.doesNotMatch(JSON.stringify(a.body), /Private/);
+  // a whole-team job in the hidden branch, finished today, is in the owner's day but never in the team member's
+  const hiddenJob = await makeTask({ title: 'Paint the private room', projectId: hiddenSite, assignedTo: null });
+  await raw(owner, `/api/tasks/${hiddenJob}/photos`, jpeg(T0 - MIN, 'hidden'));
+  assert.equal((await h.post(`/api/tasks/${hiddenJob}/complete`, {}, owner)).status, 200);
+  assert.ok((await h.get('/api/site-reports', owner)).body.done.some((d: any) => d.title === 'Paint the private room'));
+  const staffDay = (await h.get('/api/site-reports', staff)).body;
+  assert.deepEqual(staffDay.done.map((d: any) => d.title), ['Make the poker table']);
   // the staff member hears about the jobs they work on only
   const s = await h.post('/api/staff/ask', { question: 'daily report' }, staff);
   assert.equal(s.status, 200, JSON.stringify(s.body));
+  assert.equal(s.body.intent, 'site_report', JSON.stringify(s.body));
+  assert.match(JSON.stringify(s.body), /Make the poker table/);
+  assert.doesNotMatch(JSON.stringify(s.body), /Paint the private room|Private/);
+  // the note's audit entries name the note itself
+  const ids = many<{ entity_id: string | null }>("SELECT entity_id FROM audit_log WHERE action IN ('site_report.create', 'site_report.update')");
+  assert.equal(ids.length, 2); assert.ok(ids.every((x) => x.entity_id === note.body.notes[0].id), JSON.stringify(ids));
 });
 
 test('the desk may show private pictures it fetched with the sign-in (blob: images), and nothing else is loosened', async () => {
@@ -281,4 +294,61 @@ test('helper authority map (implemented behaviour, recorded for Sunny\'s decisio
   };
   const after = { signOff: await can(h.post(`/api/tasks/${id}/signoff`, {}, helper)), reopen: await can(h.post(`/api/tasks/${id}/reopen`, { reason: 'x' }, helper)) };
   assert.deepEqual({ ...map, ...after }, { view: true, comment: true, reference: true, proof: true, tick: true, nextAction: true, accept: false, assignOther: false, changeHelpers: false, complete: true, signOff: false, reopen: false });
+});
+
+test('a request in the inbox can be read and given references, nothing more; cancelling or reopening around the inbox is refused', async () => {
+  const r = await h.post('/api/tasks/requests', { title: 'New nets for lane 2' }, staff);
+  const id = r.body.id;
+  // the raiser may add a reference, but not proof, steps, a next action, or close it
+  assert.equal((await raw(staff, `/api/tasks/${id}/references`, PNG)).status, 201);
+  for (const [what, res] of [
+    ['proof', await raw(staff, `/api/tasks/${id}/photos`, jpeg(T0 - MIN, 'inbox'))],
+    ['complete', await h.post(`/api/tasks/${id}/complete`, {}, staff)],
+    ['next action', await h.post(`/api/tasks/${id}/next`, { text: 'Buy nets' }, staff)],
+    ['accept', await h.post(`/api/tasks/${id}/accept`, {}, staff)],
+  ] as const) assert.equal(res.status, 409, `${what}: ${JSON.stringify(res.body)}`);
+  // a manager decides it from the inbox: not cancelled, edited or given helpers around it
+  for (const [what, res] of [
+    ['cancel', await h.post(`/api/tasks/${id}/cancel`, {}, owner)],
+    ['edit', await h.patch(`/api/tasks/${id}`, { assignedTo: helperId }, owner)],
+    ['helpers', await h.post(`/api/tasks/${id}/helpers`, { userIds: [helperId] }, owner)],
+    ['move', await h.post(`/api/tasks/${id}/move`, { stage: 'doing' }, owner)],
+  ] as const) assert.ok([409, 404].includes(res.status), `${what}: ${res.status} ${JSON.stringify(res.body)}`);
+  assert.equal(many<{ n: number }>('SELECT COUNT(*) n FROM task_photos WHERE task_id = ?', id)[0]!.n, 0);
+  const still = many<{ status: string; intake_state: string; assigned_to: string | null }>('SELECT status, intake_state, assigned_to FROM tasks WHERE id = ?', id)[0]!;
+  assert.deepEqual({ ...still }, { status: 'open', intake_state: 'new', assigned_to: null });
+  // another team member never sees it, on the board, the calendar or the site report
+  assert.equal((await h.get(`/api/tasks/${id}`, helper)).status, 404);
+  assert.ok(!(await h.get('/api/tasks', helper)).body.items.some((t: any) => t.id === id));
+  assert.ok(!JSON.stringify((await h.get('/api/site-reports', helper)).body).includes('New nets for lane 2'));
+});
+
+test('a turned-down request stays the raiser\'s: not a whole-team job for anyone else, and it cannot be reopened', async () => {
+  const r = await h.post('/api/tasks/requests', { title: 'Gold paint for the pavilion' }, staff);
+  const id = r.body.id;
+  assert.equal((await h.post(`/api/tasks/${id}/decide`, { accept: false, note: 'Not this season' }, owner)).status, 200);
+  const d = await h.get(`/api/tasks/${id}`, staff);
+  assert.equal(d.status, 200); assert.equal(d.body.intake.note, 'Not this season');
+  assert.equal((await h.get(`/api/tasks/${id}`, helper)).status, 404, 'another team member cannot open it');
+  assert.ok(!(await h.get('/api/tasks', helper)).body.items.some((t: any) => t.id === id), 'nor see it in the list');
+  const re = await h.post(`/api/tasks/${id}/reopen`, { reason: 'Changed my mind' }, owner);
+  assert.equal(re.status, 409, JSON.stringify(re.body));
+  assert.equal(many<{ status: string }>('SELECT status FROM tasks WHERE id = ?', id)[0]!.status, 'cancelled');
+});
+
+test('changing helpers audits only a real change, and the people list is for managers only', async () => {
+  const id = await makeTask();
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [helperId, staffId] }, owner);
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [staffId, helperId] }, owner);
+  assert.equal(many<{ n: number }>("SELECT COUNT(*) n FROM audit_log WHERE action = 'task.helpers' AND entity_id = ?", id)[0]!.n, 1, 'a reorder is not a change');
+  await h.post(`/api/tasks/${id}/helpers`, { userIds: [staffId] }, owner);
+  assert.equal(many<{ n: number }>("SELECT COUNT(*) n FROM audit_log WHERE action = 'task.helpers' AND entity_id = ?", id)[0]!.n, 2);
+  assert.equal((await h.get('/api/tasks/people', helper)).status, 403);
+});
+
+test('Ask AI: inbox and sign-off questions are not mistaken for the site report', async () => {
+  for (const q of ['how many requests in the inbox', 'jobs to sign off']) {
+    const a = await h.post('/api/staff/ask', { question: q }, owner);
+    assert.notEqual(a.body.intent, 'site_report', q);
+  }
 });

@@ -10,7 +10,7 @@ import { storeUpload } from './intake.ts';
 import { sniff } from './accounting/books.ts';
 import { userRow, type UserRow } from './auth.ts';
 import { areaFilter, canSeeArea } from './areas.ts';
-import { getTask, manages, onJob, toOut, visibleTask, type TaskOut } from './tasks.ts';
+import { getTask, manages, onJob, STAFF_JOBS, toOut, visibleTask, type TaskOut } from './tasks.ts';
 import { addDays, istDate, istMidnight } from './time.ts';
 
 // The tasks upgrade (redesign step 5), part two.
@@ -211,7 +211,7 @@ export function siteReport(u: UserRow, ownerId: string, dateIn: string | null, p
   const f = areaFilter(u, ownerId, 'area_id');
   const mine = u.role === 'staff' && !manages(u);
   const where = [`owner_id = ?`, proj ? 'project_id = ?' : '1 = 1', `(project_id IS NULL OR project_id IN (SELECT id FROM projects WHERE ${f.sql}))`,
-    mine ? '(assigned_to IS NULL OR assigned_to = ? OR id IN (SELECT task_id FROM task_helpers WHERE user_id = ? AND removed_at IS NULL))' : '1 = 1'].join(' AND ');
+    mine ? STAFF_JOBS : '1 = 1'].join(' AND ');
   const p = [ownerId, ...(proj ? [proj.id] : []), ...f.params, ...(mine ? [u.id, u.id] : [])];
   type Row = { id: string; title: string; completed_by: string | null; signoff_at: number | null; due_date: string | null; intake_by: string | null; intake_state: string | null };
   const q = (extra: string, ...xp: (string | number)[]) => many<Row>(`SELECT id, title, completed_by, signoff_at, due_date, intake_by, intake_state FROM tasks WHERE ${where} AND ${extra} ORDER BY created_at LIMIT 200`, ...p, ...xp);
@@ -255,7 +255,8 @@ export function saveSiteNote(u: UserRow, ownerId: string, body: unknown): SiteRe
     run('INSERT INTO site_report_edits(id, report_id, workers, body, issues, was_updated_at, edited_by, edited_at) VALUES (?,?,?,?,?,?,?,?)', newId('sre'), was.id, was.workers, was.body, was.issues, was.updated_at, u.id, at);
     run('UPDATE site_reports SET workers = ?, body = ?, issues = ?, updated_at = ? WHERE id = ?', workers, text, issues, at, was.id);
   }
-  else run('INSERT INTO site_reports(id, owner_id, project_id, on_date, author_id, workers, body, issues, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)', newId('srp'), ownerId, projectId, date, u.id, workers, text, issues, at, at);
-  audit(actorOf(u), was ? 'site_report.update' : 'site_report.create', 'site_report', was?.id ?? null, { date, projectId, workers }, ownerId);
+  const id = was?.id ?? newId('srp');
+  if (!was) run('INSERT INTO site_reports(id, owner_id, project_id, on_date, author_id, workers, body, issues, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)', id, ownerId, projectId, date, u.id, workers, text, issues, at, at);
+  audit(actorOf(u), was ? 'site_report.update' : 'site_report.create', 'site_report', id, { date, projectId, workers }, ownerId);
   return siteReport(u, ownerId, date, projectId);
 }

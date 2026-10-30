@@ -13,7 +13,7 @@ const when = (ms: number): string => new Date(ms).toLocaleString('en-IN', { time
 type Msg = (m: string) => void;
 
 /** References: pictures from the gallery or WhatsApp, quotes and links. They explain a job and never count as proof. */
-function Refs({ t, onChanged, setErr, setNote }: { t: Task; onChanged: () => void; setErr: Msg; setNote: Msg }) {
+function Refs({ t, mayHide, onChanged, setErr, setNote }: { t: Task; mayHide: (r: TaskRef) => boolean; onChanged: () => void; setErr: Msg; setNote: Msg }) {
   const [busy, setBusy] = useState(false); const [link, setLink] = useState(''); const [showLink, setShowLink] = useState(false);
   const refs = t.references ?? [];
   const addPic = async () => {
@@ -43,7 +43,7 @@ function Refs({ t, onChanged, setErr, setNote }: { t: Task; onChanged: () => voi
             <Text style={[s.text, r.kind === 'link' ? { color: C.gold } : null]} numberOfLines={1}>{r.name}</Text>
             <Text style={[s.muted, { fontSize: 11 }]}>{r.kind === 'file' && r.mime === 'application/pdf' ? 'PDF, open it on the desk · ' : ''}{r.addedByName ?? ''} {when(r.addedAt)}</Text>
           </Pressable>
-          {live && <Btn kind="link" label="Take off" onPress={() => hide(r)} />}
+          {live && mayHide(r) && <Btn kind="link" label="Take off" onPress={() => hide(r)} />}
         </View>
       ))}
       {live && (
@@ -91,7 +91,7 @@ export function TaskExtras({ t, user, manager, team, onChanged, setErr, setNote 
           {helperChange && <Btn kind="outline" label="Save helpers" onPress={() => call('helpers', { userIds: helpers }, 'Helpers saved.')} />}
         </View>
       )}
-      <Refs t={t} onChanged={onChanged} setErr={setErr} setNote={setNote} />
+      <Refs t={t} mayHide={(r) => manager || r.addedById === user.id} onChanged={onChanged} setErr={setErr} setNote={setNote} />
       {manager && t.status === 'done' && !t.signedOffAt && <Btn label="Sign off the work" onPress={() => call('signoff', {}, 'Signed off.')} />}
       {manager && t.status !== 'open' && (asking
         ? (<><Field label="Why it needs more work (optional)" value={why} onChangeText={setWhy} autoCapitalize="sentences" maxLength={300} /><Btn kind="outline" label="Reopen" onPress={() => { setAsking(false); call('reopen', why.trim() ? { reason: why.trim() } : {}, 'Reopened.'); }} /></>)
@@ -101,7 +101,7 @@ export function TaskExtras({ t, user, manager, team, onChanged, setErr, setNote 
 }
 
 /** Requests the team raised. A manager takes one in (for someone, with photos needed) or turns it down with a reason. Anyone can raise one. */
-export function Requests({ manager, team }: { manager: boolean; team: { id: string; name: string }[] }) {
+export function Requests({ manager, meId, team }: { manager: boolean; meId: string; team: { id: string; name: string }[] }) {
   const [items, setItems] = useState<Task[] | null>(null); const [err, setErr] = useState(''); const [note, setNote] = useState('');
   const [title, setTitle] = useState(''); const [details, setDetails] = useState('');
   const [pick, setPick] = useState<Record<string, { who: string; need: string; why: string }>>({});
@@ -139,7 +139,7 @@ export function Requests({ manager, team }: { manager: boolean; team: { id: stri
           <Text style={s.h2}>{t.title}</Text>
           <Text style={s.muted}>From {t.intake?.byName ?? 'the team'}{t.createdAt ? ` · ${when(t.createdAt)}` : ''}</Text>
           {!!t.details && <Text style={[s.muted, { marginVertical: 6 }]}>{t.details}</Text>}
-          <Refs t={t} onChanged={load} setErr={setErr} setNote={setNote} />
+          <Refs t={t} mayHide={(r) => manager || r.addedById === meId} onChanged={load} setErr={setErr} setNote={setNote} />
           {manager && (
             <View style={{ marginTop: 8 }}>
               <Text style={[s.muted, { marginBottom: 6, fontSize: 12, fontWeight: '600' }]}>For</Text>
