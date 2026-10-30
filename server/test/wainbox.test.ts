@@ -9,8 +9,6 @@ import { many, one, run } from '../src/db.ts';
 import { now } from '../src/clock.ts';
 import { DEFAULT_SETTINGS } from '../src/settings.ts';
 import { integrationStatuses } from '../src/integrations.ts';
-import { readFileSync } from 'node:fs';
-import { classify } from '../src/ask/builtin.ts';
 import { fetchWaitingMedia, waHooks, webhookSignature, type MediaFetch, type SendFetch } from '../src/wainbox.ts';
 
 let h: Harness;
@@ -332,13 +330,6 @@ test('Settings › Connections lists the incoming side with its four settings, a
   assert.deepEqual(missing.missing, ['WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN']);
 });
 
-test('the Admin app voice question about WhatsApp reaches the WhatsApp answer, not another one', () => {
-  const actions = JSON.parse(readFileSync(new URL('../../mobile/voice-actions.json', import.meta.url), 'utf8')) as { staff: { id: string; question?: string }[] };
-  const q = actions.staff.find((a) => a.id === 'whatsapp')?.question;
-  assert.ok(q, 'the staff voice actions include the WhatsApp question');
-  assert.equal(classify(q).intent, 'whatsapp');
-  assert.ok(actions.staff.length <= 10, 'Apple allows at most 10 App Shortcuts in one app');
-});
 
 // ---- after review of PR #199
 

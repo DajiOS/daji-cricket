@@ -37,13 +37,6 @@
       "question": "Who still owes us money?"
     },
     {
-      "id": "whatsapp",
-      "title": "WhatsApp messages to review",
-      "phrase": "Ask APP what is new on WhatsApp",
-      "personal": "Tell NAME what is new on WhatsApp",
-      "question": "What is in the WhatsApp inbox?"
-    },
-    {
       "id": "task",
       "title": "Create a task",
       "phrase": "Create a task in APP",
