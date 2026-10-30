@@ -106,6 +106,22 @@ registerIntegration({
   have: (c) => ({ WHATSAPP_TOKEN: !!c.whatsapp.token, WHATSAPP_PHONE_ID: !!c.whatsapp.phoneId, WHATSAPP_WAITLIST_TEMPLATE: !!c.whatsapp.waitlistTemplate }),
 });
 registerIntegration({
+  id: 'whatsapp-inbound', name: 'WhatsApp messages coming in', what: 'Photos, receipts, voice notes, documents and messages the team sends to the business number land in the WhatsApp inbox (Work › WhatsApp), to be put against a job, a project or a cash spend. One-to-one chats only: WhatsApp does not let a business read group chats. Free-text replies only within 24 hours of the person\'s last message.',
+  setup: 'Needs the WhatsApp connection above. In the Meta app, add the webhook address with a verify token of your own, subscribe to the messages field, and put the app secret and verify token in the server settings. Then the owner turns it on on the WhatsApp page, Work › WhatsApp (it is off until then). Check the WhatsApp account\'s messaging limits and quality rating in WhatsApp Manager before turning it on.',
+  steps: [
+    { text: 'Connect WhatsApp (the first WhatsApp connection) first.' },
+    { text: 'Choose a verify token of your own: any long random word. It only proves to Meta that the webhook address is yours.' },
+    { text: 'In the Meta app, WhatsApp, Configuration, edit the webhook: callback address {api}/api/webhooks/whatsapp and your verify token. Then subscribe to the messages field.', link: { label: 'WhatsApp webhooks, set up', url: 'https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks' } },
+    { text: 'In the Meta app, App settings, Basic, copy the App secret. It signs every message Meta sends, and anything not signed with it is refused.', link: { label: 'Meta for Developers, My Apps', url: 'https://developers.facebook.com/apps/' } },
+    { text: 'In WhatsApp Manager, check the number\'s messaging limit and quality rating, and that business verification is approved. Note them in these notes.', link: { label: 'WhatsApp Manager', url: 'https://business.facebook.com/wa/manage/home/' } },
+    serverStep('WHATSAPP_APP_SECRET=the app secret and WHATSAPP_VERIFY_TOKEN=your verify token'),
+    { text: 'Last, the owner turns on "WhatsApp messages coming in" on the WhatsApp page (Work › WhatsApp). Until then a message sent to the number is not kept.' },
+  ],
+  env: ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN'],
+  have: (c) => ({ WHATSAPP_TOKEN: !!c.whatsapp.token, WHATSAPP_PHONE_ID: !!c.whatsapp.phoneId, WHATSAPP_APP_SECRET: !!c.whatsapp.appSecret, WHATSAPP_VERIFY_TOKEN: !!c.whatsapp.verifyToken }),
+  // there is no safe live check of the webhook from here: Meta checks it when the address is saved
+});
+registerIntegration({
   id: 'face-match', name: 'Face check at check-in (Amazon Rekognition)', what: 'Each player enrols their face once (with consent); every check-in selfie must match it, so nobody can check in on someone else\'s profile. No face photos are kept: Rekognition keeps a face template, each selfie is checked once and dropped. Roughly one US tenth of a cent (about 10 paise) per enrolment or check-in.',
   setup: 'In the AWS console, create an IAM user with only rekognition:CreateCollection, IndexFaces, SearchFacesByImage and DeleteFaces, and make an access key for it. Put the key id in REKOGNITION_KEY_ID and the secret in REKOGNITION_SECRET. REKOGNITION_REGION defaults to ap-south-1 (Mumbai) so faces stay in India; REKOGNITION_COLLECTION defaults to daji-players and is created on first use. Until then players check in without a face check (location, their own phone and a code to change phones still apply).',
   steps: [

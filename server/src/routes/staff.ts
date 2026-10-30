@@ -33,7 +33,8 @@ import * as credits from '../credits.ts';
 import { listAudit } from '../audit.ts';
 import { istDate, istMidnight } from '../time.ts';
 import { moveTask, listComments, addComment, listProjects, createProject, updateProject, addMilestone, updateMilestone } from '../taskboard.ts';
-import { addTaskPhoto, cancelTask, checkStep, completeTask, createTask, getTaskOut, listTasks, readTaskPhoto, reopenTask, updateTask, MAX_TASK_PHOTO_BYTES } from '../tasks.ts';
+import { acknowledgeTask, addTaskPhoto, assignable, cancelTask, checkStep, completeTask, createTask, decideRequest, getTaskOut, listInbox, listTasks, raiseRequest, readTaskPhoto, reopenTask, setHelpers, setNextAction, signOffTask, updateTask, MAX_TASK_PHOTO_BYTES } from '../tasks.ts';
+import { addRefFile, addRefLink, hideRef, refFile, saveSiteNote, siteReport, taskHistory, MAX_REF_BYTES } from '../taskwork.ts';
 import type { Reply } from '../http.ts';
 
 const STAFF_ROLES: ('owner' | 'staff' | 'super_admin')[] = ['owner', 'staff', 'super_admin'];
@@ -191,6 +192,25 @@ export function staffRoutes(r: Router): void {
   // ---- tasks: jobs for the team, closed with camera photos taken within the last 5 minutes
   r.get('/api/tasks', (c) => ok(listTasks(U(c), ownerFilter(c), c.query.get('status') ?? undefined, c.query.get('projectId') ?? undefined)), A);
   r.post('/api/tasks', (c) => created(createTask(U(c), ownerOrFail(c, 'add a task'), c.json())), A);
+  // the tasks upgrade: a requests inbox, references kept apart from proof, helpers, next action, accept and sign-off, history, site reports
+  r.get('/api/tasks/people', (c) => ok(assignable(U(c), ownerOrFail(c, 'see the team'))), A);
+  r.get('/api/tasks/inbox', (c) => ok(listInbox(U(c), ownerOrFail(c, 'see requests'))), A);
+  r.post('/api/tasks/requests', (c) => created(raiseRequest(U(c), ownerOrFail(c, 'raise a request'), c.json())), A);
+  r.post('/api/tasks/:id/decide', (c) => ok(decideRequest(U(c), c.params.id!, c.json())), A);
+  r.post('/api/tasks/:id/helpers', (c) => ok(setHelpers(U(c), c.params.id!, c.json())), A);
+  r.post('/api/tasks/:id/next', (c) => ok(setNextAction(U(c), c.params.id!, c.json())), A);
+  r.post('/api/tasks/:id/accept', (c) => ok(acknowledgeTask(U(c), c.params.id!)), A);
+  r.post('/api/tasks/:id/signoff', (c) => ok(signOffTask(U(c), c.params.id!)), A);
+  r.get('/api/tasks/:id/history', (c) => ok(taskHistory(U(c), c.params.id!)), A);
+  r.post('/api/tasks/:id/references', (c) => created(addRefFile(c.cfg.dataDir, U(c), c.params.id!, c.raw, c.query.get('name') ?? undefined, c.query.get('note') ?? undefined)), { auth: STAFF_ROLES, maxBody: MAX_REF_BYTES + 1024, upload: 'task_reference' });
+  r.post('/api/tasks/:id/links', (c) => created(addRefLink(U(c), c.params.id!, c.json())), A);
+  r.post('/api/tasks/refs/:id/hide', (c) => ok(hideRef(U(c), c.params.id!)), A);
+  r.get('/api/tasks/refs/:id', (c): Reply => {
+    const f = refFile(c.cfg.dataDir, U(c), c.params.id!);
+    return { status: 200, raw: f.buf, contentType: f.mime, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox", 'Content-Disposition': `inline; filename="${f.name.replace(/"/g, '')}"` } };
+  }, A);
+  r.get('/api/site-reports', (c) => ok(siteReport(U(c), ownerOrFail(c, 'see site reports'), c.query.get('date'), c.query.get('projectId'))), A);
+  r.post('/api/site-reports', (c) => ok(saveSiteNote(U(c), ownerOrFail(c, 'write a site report'), c.json())), A);
   // the board: moving cards, comments, projects and milestones
   r.post('/api/tasks/:id/move', (c) => ok(moveTask(U(c), c.params.id!, c.json())), A);
   r.get('/api/tasks/:id/comments', (c) => ok(listComments(U(c), c.params.id!)), A);
@@ -205,7 +225,7 @@ export function staffRoutes(r: Router): void {
   r.post('/api/tasks/:id/photos', (c) => created(addTaskPhoto(c.cfg.dataDir, U(c), c.params.id!, c.raw, c.query.get('note') ?? undefined, c.req.headers['x-app-shot-at'] ? Number(c.req.headers['x-app-shot-at']) : undefined)), { auth: STAFF_ROLES, maxBody: MAX_TASK_PHOTO_BYTES + 1024, upload: 'task_photo' });
   r.post('/api/tasks/:id/checklist', (c) => ok(checkStep(U(c), c.params.id!, c.json())), A);
   r.post('/api/tasks/:id/complete', (c) => { const v = new Validator(c.json()); const note = v.str('note', { max: 300 }); v.done(); return ok(completeTask(U(c), c.params.id!, note)); }, A);
-  r.post('/api/tasks/:id/reopen', (c) => ok(reopenTask(U(c), c.params.id!)), A);
+  r.post('/api/tasks/:id/reopen', (c) => ok(reopenTask(U(c), c.params.id!, c.raw.length ? c.json() : {})), A);
   r.post('/api/tasks/:id/cancel', (c) => ok(cancelTask(U(c), c.params.id!)), A);
   r.get('/api/tasks/photos/:id', (c): Reply => {
     const f = readTaskPhoto(c.cfg.dataDir, U(c), c.params.id!);

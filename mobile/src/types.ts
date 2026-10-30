@@ -53,7 +53,12 @@ export interface StaffBooking {
 export interface PaymentRow { id: string; bookingId: string; method: string; status: string; purpose: string; amountPaise: number; reference: string | null }
 export interface TaskPhoto { id: string; url: string; takenAt: number; uploadedByName: string | null; note: string | null; source: string }
 export type TaskRepeat = 'daily' | 'weekly' | 'monthly';
-export interface Task { id: string; title: string; details: string | null; assignedTo: string | null; assignedName: string | null; dueDate: string | null; overdue: boolean; priority?: 'low' | 'medium' | 'high' | 'urgent'; repeat?: TaskRepeat | null; checklist?: { text: string; done: boolean }[]; photosRequired: number; status: 'open' | 'done' | 'cancelled'; completedAt: number | null; completedByName: string | null; photos: TaskPhoto[] }
+export interface Task { id: string; title: string; details: string | null; assignedTo: string | null; assignedName: string | null; dueDate: string | null; overdue: boolean; priority?: 'low' | 'medium' | 'high' | 'urgent'; repeat?: TaskRepeat | null; checklist?: { text: string; done: boolean }[]; photosRequired: number; status: 'open' | 'done' | 'cancelled'; completedAt: number | null; completedByName: string | null; photos: TaskPhoto[];
+  createdAt?: number; projectName?: string | null; nextAction?: string | null; helpers?: { id: string; name: string | null }[]; references?: TaskRef[];
+  intake?: { state: 'new' | 'accepted' | 'declined'; byId: string; byName: string | null; note: string | null } | null;
+  acknowledgedAt?: number | null; acknowledgedByName?: string | null; signedOffAt?: number | null; signedOffByName?: string | null; reopenNote?: string | null }
+/** A reference explains a job (a gallery or WhatsApp picture, a quote, a PDF, a link). It is never proof. */
+export interface TaskRef { id: string; kind: 'file' | 'link'; name: string; mime: string | null; bytes: number | null; url: string; note: string | null; addedById: string; addedByName: string | null; addedAt: number }
 export interface TeamMember { id: string; name: string; firstName?: string; lastName?: string; email: string | null; phone: string | null; active: boolean; readOnly?: boolean; mfa?: boolean; permissions: string[] }
 export interface Promo { id: string; code: string; label: string | null; active: boolean; kind: 'percent' | 'flat'; value: number; usageLimit: number | null; used: number }
 export interface Student { id: string; name: string; bornOn: string | null; batch: string | null; guardianName: string; guardianEmail: string | null; guardianPhone: string | null; linked: boolean; status: 'active' | 'left' }

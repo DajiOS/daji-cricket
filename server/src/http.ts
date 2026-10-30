@@ -170,13 +170,14 @@ export function frameAncestorsPolicy(cfg: Config): string {
 
 /**
  * The policy for the website itself: scripts only from this server (no inline scripts, so an injected script cannot run),
- * Razorpay's checkout script and frame, Google Fonts, images from anywhere over https (gallery links), and videos from this
+ * Razorpay's checkout script and frame, Google Fonts, images from anywhere over https (gallery links) and from blob: (private
+ * photos fetched with the sign-in header, such as task proof and references), and videos from this
  * server or the media CDN.
  */
 export function sitePolicy(cfg: Config): string {
   let fl = ''; try { if (cfg.yodlee.fastLinkUrl) fl = new URL(cfg.yodlee.fastLinkUrl).origin; } catch { /* a bad URL simply adds nothing */ }
   return ["default-src 'self'", "script-src 'self' https://checkout.razorpay.com", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", 'font-src https://fonts.gstatic.com',
-    "img-src 'self' data: https:", `media-src 'self'${cfg.mediaCdn ? ' ' + cfg.mediaCdn : ''}`, `connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com`, `frame-src https://api.razorpay.com https://checkout.razorpay.com${fl ? ' ' + fl : ''}`,
+    "img-src 'self' data: blob: https:", `media-src 'self'${cfg.mediaCdn ? ' ' + cfg.mediaCdn : ''}`, `connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com`, `frame-src https://api.razorpay.com https://checkout.razorpay.com${fl ? ' ' + fl : ''}`,
     "object-src 'none'", "base-uri 'none'", `form-action 'self'${fl ? ' ' + fl : ''}`, frameAncestorsPolicy(cfg)].join('; ');
 }
 

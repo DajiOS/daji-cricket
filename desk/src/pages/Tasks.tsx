@@ -5,6 +5,7 @@ import { useSession } from '../App';
 import { errMsg } from '../parts/club/common';
 import { COLS, PRI, REPEAT, type Project, type Task } from '../parts/club/taskTypes';
 import TaskDialog from '../parts/club/TaskDialog';
+import { InboxDialog, RaiseDialog, SiteReportDialog } from '../parts/club/TaskWork';
 import ProjectsDialog from '../parts/club/ProjectsDialog';
 
 const initials = (n: string | null) => (n || '?').split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
@@ -14,15 +15,17 @@ export default function Tasks({ sub }: { sub: string }) {
   const { me } = useSession(); const toast = useToast(); const manager = can(me, 'manage_tasks');
   const [tasks, setTasks] = useState<Task[] | null>(null); const [projects, setProjects] = useState<Project[]>([]); const [team, setTeam] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null); const [projectId, setProjectId] = useState(''); const [who, setWho] = useState(''); const [pri, setPri] = useState(''); const [q, setQ] = useState('');
-  const [open, setOpen] = useState<string | 'new' | null>(null); const [projDlg, setProjDlg] = useState(false); const [over, setOver] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | 'new' | null>(null); const [projDlg, setProjDlg] = useState(false); const [side, setSide] = useState<'inbox' | 'raise' | 'report' | null>(null); const [inbox, setInbox] = useState(0); const [over, setOver] = useState<string | null>(null);
   const load = async () => {
     try {
       const [t, p] = await Promise.all([api<{ items: Task[] }>('/api/tasks'), api<{ items: Project[] }>('/api/projects').catch(() => ({ items: [] as Project[] }))]);
       setTasks(t.items); setProjects(p.items); setError(null);
+      api<{ items: Task[] }>('/api/tasks/inbox').then((r) => setInbox(r.items.length)).catch(() => setInbox(0));
     } catch (e) { setError(errMsg(e)); }
   };
   useEffect(() => { load(); }, []);
-  useEffect(() => { if (manager) api<{ items: { id: string; name: string; active?: boolean }[] }>('/api/staff/team').then((r) => setTeam(r.items.filter((m) => m.active !== false))).catch(() => setTeam([])); }, [manager]);
+  // the business's own staff and the team members added from another business (one list for For and Helpers)
+  useEffect(() => { if (manager) api<{ items: { id: string; name: string }[] }>('/api/tasks/people').then((r) => setTeam(r.items)).catch(() => setTeam([])); }, [manager]);
 
   const move = async (id: string, stage: string, index: number) => {
     try { await post(`/api/tasks/${encodeURIComponent(id)}/move`, { stage, index }); } catch (e) { toast(errMsg(e)); }
@@ -41,7 +44,10 @@ export default function Tasks({ sub }: { sub: string }) {
   const current = open && open !== 'new' ? (tasks ?? []).find((t) => t.id === open) ?? null : null;
   return (
     <div className="stack">
-      <PageHead eyebrow="Ground" title="Tasks" lede="Drag a card between columns. A card can only be closed (Done) once its camera photos are in, so work is proven on the spot.">
+      <PageHead eyebrow="Work" title="Tasks" lede="Drag a card between columns. A card can only be closed (Done) once its camera photos are in, so work is proven on the spot. Reference pictures and files explain a job; they are never proof.">
+        <button className="btn" onClick={() => setSide('inbox')}>Requests{inbox ? ` (${inbox})` : ''}</button>
+        <button className="btn" onClick={() => setSide('raise')}>Raise a request</button>
+        <button className="btn" onClick={() => setSide('report')}>Site report</button>
         {manager && <button className="btn" onClick={() => setProjDlg(true)}>Projects and milestones</button>}
         {manager && <button className="btn primary" onClick={() => setOpen('new')}>New task</button>}
       </PageHead>
@@ -74,12 +80,16 @@ export default function Tasks({ sub }: { sub: string }) {
                       <div className="ktop"><span className="kpri">{PRI[t.priority]}</span>{t.projectName && <span className="kproj">{t.projectName}</span>}</div>
                       <b className="ktitle">{t.title}</b>
                       {t.milestoneTitle && <div className="kmile">Milestone: {t.milestoneTitle}</div>}
+                      {t.nextAction && t.status === 'open' && <div className="knext">Next: {t.nextAction}</div>}
                       <div className="kmeta">
                         <span className={t.overdue ? 'kdue bad' : 'kdue'}>{t.stage === 'done' ? 'Done' : t.dueDate ? (t.overdue ? 'Overdue · ' : 'Due ') + fmtDate(t.dueDate) : 'No due day'}</span>
                         {t.repeat && <span title={REPEAT[t.repeat]}>{REPEAT[t.repeat]}</span>}
                         {t.checklist.length > 0 && <span title="Checklist">Steps {t.checklist.filter((c) => c.done).length}/{t.checklist.length}</span>}
                         {t.photosRequired > 0 && <span title="Photos">Photos {t.photos.length}/{t.photosRequired}</span>}
+                        {t.references.length > 0 && <span title="References (not proof)">{t.references.length} ref{t.references.length === 1 ? '' : 's'}</span>}
                         {t.commentCount > 0 && <span title="Comments">{t.commentCount} comments</span>}
+                        {t.status === 'done' && <span title={t.signedOffAt ? 'Signed off' : 'Waiting for sign-off'}>{t.signedOffAt ? 'Signed off' : 'Not signed off'}</span>}
+                        {t.helpers.length > 0 && <span title={'Helpers: ' + t.helpers.map((h) => h.name).join(', ')}>+{t.helpers.length}</span>}
                         <span className="kwho" title={t.assignedName || 'Open to the whole team'}>{t.assignedName ? initials(t.assignedName) : '·'}</span>
                       </div>
                     </div>)) : <div className="kempty">{stage === 'todo' ? 'Nothing waiting.' : 'Drop a card here.'}</div>}
@@ -89,7 +99,10 @@ export default function Tasks({ sub }: { sub: string }) {
           })}
         </div>
       )}
-      {open && (open === 'new' || current) && <TaskDialog key={open} task={current} projects={projects} team={team} manager={manager} defaultProject={projectId} onClose={() => setOpen(null)} onChanged={load} />}
+      {open && (open === 'new' || current) && <TaskDialog key={open} task={current} projects={projects} team={team} manager={manager} meId={me.id} defaultProject={projectId} onClose={() => setOpen(null)} onChanged={load} />}
+      {side === 'inbox' && <InboxDialog team={team} manager={manager} onClose={() => setSide(null)} onChanged={load} />}
+      {side === 'raise' && <RaiseDialog projects={projects} onClose={() => setSide(null)} onChanged={load} />}
+      {side === 'report' && <SiteReportDialog projects={projects} onClose={() => setSide(null)} />}
       {projDlg && <ProjectsDialog projects={projects} onClose={() => setProjDlg(false)} onChanged={load} />}
     </div>
   );
