@@ -16,7 +16,7 @@ import { nameKey } from '../matches.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'fantasy' | 'server' | 'branches' | 'cash' | 'site_report' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'fantasy' | 'server' | 'branches' | 'cash' | 'site_report' | 'whatsapp' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -33,6 +33,7 @@ export interface Built {
 }
 
 const RULES: [Intent, RegExp][] = [
+  ['whatsapp', /\bwhats ?app\b|\bwhatsapp inbox\b|\bmessages? (from|sent by) the (team|supervisor)\b/],
   ['site_report', /\b(site reports?|daily reports?|daily site|day on (the )?site|what happened (on|at) (the )?site)\b/],
   ['cash', /\b(cash in hand|cash balance|cash float|cash advances?|petty cash|supervisor('?s)? cash|wallet|cash (he|she|they|i) (holds?|has|have)|cash count)\b/],
   ['branches', /\bbranch(es)?\b|\bprojects?\b.*\b(office|house)\b|\b(office|house)\b.*\bprojects?\b|which projects/],
@@ -71,7 +72,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'site_report', 'cash', 'branches', 'server', 'auctions', 'fantasy', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'whatsapp', 'site_report', 'cash', 'branches', 'server', 'auctions', 'fantasy', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -146,7 +147,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', fantasy: 'Fantasy cricket', sheet: 'Shared spreadsheet', server: 'Server status', branches: 'Branches and projects', cash: 'Supervisor cash', site_report: 'Daily site report', auctions: 'Auction tournaments', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', fantasy: 'Fantasy cricket', sheet: 'Shared spreadsheet', server: 'Server status', branches: 'Branches and projects', cash: 'Supervisor cash', site_report: 'Daily site report', whatsapp: 'WhatsApp inbox', auctions: 'Auction tournaments', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -182,6 +183,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'fantasy') return fantasyAnswer(ctx, base);
   if (intent === 'branches') return branchesAnswer(ctx, base);
   if (intent === 'cash') return cashAnswer(ctx, base);
+  if (intent === 'whatsapp') return whatsappAnswer(ctx, base);
   if (intent === 'site_report') return siteReportAnswer(ctx, question, base);
   if (intent === 'unknown') {
     const lot = [...EXAMPLES.reports, ...EXAMPLES.bookings].filter((_, i) => i % 2 === 0).slice(0, 5);
@@ -705,3 +707,19 @@ function siteReportAnswer(ctx: T.Ctx, question: string, base: (i: Intent, answer
   const head = `On the site ${day}: ${count(r.finished!.length, 'job')} finished, ${count(r.started!.length, 'job')} started, ${count(r.overdue!.length, 'job')} overdue, and ${count(r.notes!.length, 'note')} from the team.`;
   return base('site_report', head, { details, notes: r.references ? [`${count(r.references, 'reference file')} added. References explain a job; they are not proof.`] : [] });
 }
+
+/**
+ * The WhatsApp inbox (wainbox.ts): whether it is on, what waits for review, and the newest messages waiting, as the asker may
+ * see them. A message's words are quoted as what someone sent, never acted on. Off or not set up is said as such, never as zero.
+ */
+function whatsappAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  const w = T.whatsapp(ctx);
+  if (!w.available) return base('whatsapp', w.why);
+  const notes = ['WhatsApp lets a business read one-to-one chats with its number only, not group chats.'];
+  if (!w.enabled) return base('whatsapp', `WhatsApp messages coming in are switched off, so nothing sent to the business number is kept.${w.waitingForReview ? ` ${count(w.waitingForReview, 'message')} from before still wait${w.waitingForReview === 1 ? 's' : ''} for review.` : ''}`, { notes });
+  if (w.connected === false) notes.push('The WhatsApp connection is not fully set up (Settings › Connections), so new messages may not arrive.');
+  const details = w.newestWaiting.map((m) => ({ label: `${m.from}${m.onTeam ? '' : ' (not on the team)'}`, text: `${m.kind === 'text' ? '' : `${m.kind}: `}${m.words ? `“${m.words}”` : '(no words)'}${m.suggestion ? ` Suggestion: ${m.suggestion}` : ''}` }));
+  const extra = [w.filesFailed ? `${count(w.filesFailed, 'file')} could not be fetched or failed the virus check` : null, w.sendsFailed ? `${count(w.sendsFailed, 'reply', 'replies')} failed to send` : null].filter(Boolean);
+  return base('whatsapp', `${count(w.waitingForReview, 'WhatsApp message')} wait${w.waitingForReview === 1 ? 's' : ''} for review, and ${count(w.filed, 'message')} ${w.filed === 1 ? 'is' : 'are'} filed against jobs, projects or cash spends.${extra.length ? ` ${extra.join('; ')}.` : ''}`, { details, notes });
+}
+

@@ -40,7 +40,7 @@ export const setIsSuper = (v: boolean) => { isSuper = v; };
 let portfolioBiz: string | null = null;
 export const setPortfolioBusiness = (id: string | null) => { portfolioBiz = id; };
 const bizHeader = (): Record<string, string> => (portfolioBiz ? { 'x-daji-business': portfolioBiz } : {});
-const OWNER_SCOPED = ['/api/legal/staff-terms/report', '/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras', '/api/docs', '/api/cash', '/api/site-reports'];
+const OWNER_SCOPED = ['/api/legal/staff-terms/report', '/api/tasks', '/api/projects', '/api/staff', '/api/accounting', '/api/books', '/api/media', '/api/ask', '/api/desk', '/api/cameras', '/api/docs', '/api/cash', '/api/site-reports', '/api/whatsapp'];
 
 export interface ApiOptions { method?: string; body?: unknown; headers?: Record<string, string>; raw?: BodyInit }
 
