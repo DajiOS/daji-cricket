@@ -1,5 +1,7 @@
 # Store release for the phone apps, run by hand from the Actions tab. Builds the chosen app(s) for the App Store and Google Play on EAS
 # and sends each finished build to TestFlight and the Play internal testing track (eas.json, submit profiles).
+# The builds run on EAS without waiting, so this run going green does not mean the store took them: check the submission on expo.dev,
+# or send the finished build again with build_id, which waits for the store's answer.
 # Needs the EXPO_TOKEN repository secret, and the Apple and Google credentials saved in expo.dev (docs/APP_REVIEW.md, section 4).
 name: Store release
 on:
@@ -41,7 +43,7 @@ jobs:
         if: inputs.build_id != ''
         env:
           APP_VARIANT: ${{ inputs.app }}
-        run: eas submit --platform ${{ inputs.platform }} --id ${{ inputs.build_id }} --profile production-${{ inputs.app }} --non-interactive --no-wait
+        run: eas submit --platform ${{ inputs.platform }} --id ${{ inputs.build_id }} --profile production-${{ inputs.app }} --non-interactive # waits for the store's answer, so a refused upload fails this run
       - name: Customer app
         if: inputs.build_id == '' && inputs.app != 'admin'
         continue-on-error: true # a failed store upload must not stop the admin build
