@@ -7,6 +7,7 @@ import { download, go, inr, post, patch, sendFile, toPaise, todayISO, fmtDay, us
 import { useSession } from '../App';
 import { Chip, DateInput, Field, Load, Modal, PageHead, Stat, Table, Tabs, useToast, type Tone } from '../ui';
 import { Panel, SectionTabs, errText, sectionOf } from '../parts/admin/common';
+import { SiteReportDialog } from '../parts/club/TaskWork';
 
 type Phase = 'planning' | 'active' | 'on_hold' | 'completed';
 interface Figures { budgetPaise: number; committedPaise: number; receivedPaise: number; measuredPaise: number; billedPaise: number; approvedBillsPaise: number; paidPaise: number; outstandingPaise: number; retentionHeldPaise: number; remainingBudgetPaise: number; overBudget: boolean }
@@ -528,11 +529,12 @@ function SiteTab({ p, onChanged }: { p: Project; onChanged: () => void }) {
   const [day, setDay] = useState(todayISO());
   const [data, err, reload, status] = useApi<SiteData>(`/api/construction/projects/${enc(p.id)}/site?date=${day}`);
   const [raising, setRaising] = useState(false);
+  const [writing, setWriting] = useState(false);
   const setDefect = async (id: string, s: string) => { try { await patch(`/api/construction/defects/${enc(id)}`, { status: s }); reload(); onChanged(); } catch (e) { toast(errText(e)); } };
   return (
     <Load data={data} error={err} status={status} retry={reload}>
       {(d) => (<div className="stack">
-        <Panel title="Daily site report" note="The same report as Work › Tasks: the team's notes for the day and the jobs behind them. Notes are written there." actions={<span className="row" style={{ gap: 6 }}><DateInput aria-label="Report day" value={day} max={todayISO()} onChange={(e) => setDay(e.target.value || todayISO())} /><button className="btn ghost sm" onClick={() => go('/tasks')}>Write a note</button></span>}>
+        <Panel title="Daily site report" note="The same report as Work › Tasks: the team's notes for the day and the jobs behind them. Notes written here are filed under this project and the day shown." actions={<span className="row" style={{ gap: 6 }}><DateInput aria-label="Report day" value={day} max={todayISO()} onChange={(e) => setDay(e.target.value || todayISO())} /><button className="btn ghost sm" onClick={() => setWriting(true)}>Write a note</button></span>}>
           <SiteDay r={d.report} />
         </Panel>
         <Panel title="Jobs" note="The project's jobs on Work › Tasks, closed there with camera proof." actions={<button className="btn ghost sm" onClick={() => go('/tasks')}>Open Tasks</button>}>
@@ -555,6 +557,7 @@ function SiteTab({ p, onChanged }: { p: Project; onChanged: () => void }) {
           <Panel title="Goods received lately">{d.receipts.length ? d.receipts.map((g) => <div key={g.id} className="small"><b>{g.grnNo}</b> · {fmtDay(g.date)} · {g.poNo}</div>) : <p className="hint">Nothing received yet.</p>}</Panel>
           <Panel title="Subcontractors">{d.subcontractors.length ? d.subcontractors.map((s) => <div key={s.id} className="small"><b>{s.name}</b> · {s.orders} work order{s.orders === 1 ? '' : 's'}</div>) : <p className="hint">No work orders yet.</p>}</Panel>
         </div>
+        {writing && <SiteReportDialog projects={[]} fixed={{ projectId: p.id, projectName: p.name, date: day }} onClose={() => { setWriting(false); reload(); }} />}
         {raising && <RaiseDefect projectId={p.id} onClose={() => setRaising(false)} onDone={() => { setRaising(false); reload(); onChanged(); }} />}
       </div>)}
     </Load>
