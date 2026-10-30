@@ -32,6 +32,7 @@ import { RemindersScreen } from './src/RemindersScreen';
 import { CardsScreen } from './src/CardsScreen';
 import { CashScreen } from './src/CashScreen';
 import { CombinedScreen } from './src/CombinedScreen';
+import { ConstructionScreen } from './src/ConstructionScreen';
 import { SettingsScreen } from './src/SettingsScreen';
 import { Avatar, Btn, Chip, Icon, type IconName, ListCard, ListRow, Loading, Steps, s, refreshStyles } from './src/ui';
 import { Appearance } from './src/photo';
@@ -55,7 +56,7 @@ import { Lang, isLang, rememberLang, savedLang, translator, useLang, type UiLang
 //   owner        the same, plus Promo codes, Team, Booking controls, Staff pay and Compliance under More
 //   super admin  the same as the owner, working inside the owner chosen under More, plus Refunds and Software costs
 type Tab = 'home' | 'book' | 'me' | 'live' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'more' | 'signin' | 'auctions' | 'fantasy';
-type More = null | 'accounts' | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings' | 'cash' | 'combined';
+type More = null | 'accounts' | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings' | 'cash' | 'combined' | 'construction';
 
 const TAB_ICON: Record<string, IconName> = { home: 'home', book: 'calendar', me: 'receipt', live: 'radio', ask: 'sparkles', profile: 'person-circle', bookings: 'calendar', tasks: 'checkbox', more: 'grid', signin: 'log-in' };
 /** The bar of tabs along the bottom: an icon over each name; the open tab is filled green. */
@@ -132,6 +133,7 @@ function AppInner({ theme }: { theme: Mode }) {
       const a = v.action;
       if (a.screen === 'tasks') { setTaskDraft({ title: v.title ?? '', n: Date.now() }); setTab('tasks'); }
       else if (a.screen === 'cash' && user.role !== 'customer') { setCashSpend(Date.now()); setTab('more'); setMore('cash'); }
+      else if (a.screen === 'construction' && user.role !== 'customer') { setTab('more'); setMore('construction'); }
       else if (a.screen === 'book' || a.screen === 'live') setTab(a.screen);
       // hosted tournaments are a customer screen; on the staff app the link opens the assistant instead
       else if (a.screen === 'auctions' && user.role === 'customer') setTab('auctions');
@@ -200,6 +202,8 @@ function AppInner({ theme }: { theme: Mode }) {
   const perm = (p: string) => user.role !== 'staff' || (user.permissions ?? []).includes(p);
   const bookingsOk = perm('manage_bookings') || perm('verify_payments') || perm('record_payments');
   const accountsOk = perm('manage_accounting') || perm('view_reports');
+  // the same rule as the server (construction.ts seesConstruction): the owner, or staff who run jobs, keep the books or see reports
+  const constructionOk = perm('manage_tasks') || perm('manage_accounting') || perm('view_reports');
   const boss = user.role === 'owner' || user.role === 'super_admin';
   const deskKey = `${viewOwner ?? 'self'}:${biz ?? 'home'}`; // a different owner or business reloads the screen
   // the assistant's tab shows the name this person picked, exactly as given; a long one is cut to fit the bar
@@ -230,6 +234,7 @@ function AppInner({ theme }: { theme: Mode }) {
       else if (more === 'cards' && perm('view_customers')) body = <CardsScreen key={deskKey} />;
       else if (more === 'cash' && (boss || perm('manage_tasks'))) body = <CashScreen key={`${deskKey}:${cashSpend}`} user={user} startSpend={cashSpend || undefined} />;
       else if (more === 'combined' && user.role === 'owner') body = <CombinedScreen key={deskKey} />;
+      else if (more === 'construction' && constructionOk) body = <ConstructionScreen key={deskKey} user={user} />;
       else if (more === 'settings' && boss) body = <SettingsScreen user={user} />;
       else if (more === 'academy' && perm('manage_academy')) body = <AcademyScreen key={deskKey} />;
       else if (more === 'matches' && perm('manage_matches')) body = <MatchesScreen key={deskKey} />;
@@ -259,6 +264,9 @@ function AppInner({ theme }: { theme: Mode }) {
             boss && ['people-outline', 'Team', 'People and what they may do', 'team'],
             boss && ['options-outline', 'Booking controls', '', 'platform'],
             boss && ['settings-outline', 'Settings', 'Booking rules, contact and UPI', 'settings'],
+          ]} onPick={setMore} />
+          <MenuGroup title="Construction" rows={[
+            constructionOk && ['construct-outline', 'Construction projects', 'Orders, goods received, measured work, defects', 'construction'],
           ]} onPick={setMore} />
           <MenuGroup title="People" rows={[
             perm('send_broadcasts') && ['logo-whatsapp', 'WhatsApp reminders', '', 'reminders'],

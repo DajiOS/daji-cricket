@@ -18,7 +18,6 @@ export interface RegisterRoute {
 }
 
 const R = (row: number, section: string, label: string, route: string, to: string | null, finding: Finding, note?: string): RegisterRoute => ({ row, section, label, route, to, finding, note });
-const CONSTRUCTION = 'Construction projects are a separate Daji Admin package with their own server and data. They are not in this repository, so the desk cannot open them yet.';
 
 export const REGISTER: RegisterRoute[] = [
   R(1, 'Today', 'Today Command Center', '/today', '/', 'MATCHES'),
@@ -68,12 +67,12 @@ export const REGISTER: RegisterRoute[] = [
   R(45, 'Revenue & Accounting', 'Books', '/finance/books', '/accounting/journals', 'MATCHES'),
   R(46, 'Revenue & Accounting', 'GST', '/finance/gst', '/accounting/gst', 'MATCHES'),
   R(47, 'Revenue & Accounting', 'Month End', '/finance/month-end', '/close', 'MATCHES'),
-  R(48, 'Construction', 'Construction Projects', '/construction', null, 'NOT APPLICABLE', CONSTRUCTION),
-  R(49, 'Construction', 'Project: Plan', '/construction/:id/plan', null, 'NOT APPLICABLE', CONSTRUCTION),
-  R(50, 'Construction', 'Project: Commercial', '/construction/:id/commercial', null, 'NOT APPLICABLE', CONSTRUCTION),
-  R(51, 'Construction', 'Project: Site', '/construction/:id/site', null, 'NOT APPLICABLE', CONSTRUCTION),
-  R(52, 'Construction', 'Project: Plans & Documents', '/construction/:id/documents', null, 'NOT APPLICABLE', CONSTRUCTION),
-  R(53, 'Construction', 'Project: Finance', '/construction/:id/finance', null, 'NOT APPLICABLE', CONSTRUCTION),
+  R(48, 'Construction', 'Construction Projects', '/construction', '/construction', 'MATCHES', 'Built inside Daji Admin on the same project record as Work › Tasks. The separate construction package was never deployed and is retired.'),
+  R(49, 'Construction', 'Project: Plan', '/construction/:id/plan', '/construction/:id/plan', 'MATCHES'),
+  R(50, 'Construction', 'Project: Commercial', '/construction/:id/commercial', '/construction/:id/commercial', 'MATCHES'),
+  R(51, 'Construction', 'Project: Site', '/construction/:id/site', '/construction/:id/site', 'MATCHES', 'Jobs, the daily site report (the same report as Work › Tasks, with proof photo counts), defects, goods received and subcontractors.'),
+  R(52, 'Construction', 'Project: Plans & Documents', '/construction/:id/documents', '/construction/:id/documents', 'MATCHES'),
+  R(53, 'Construction', 'Project: Finance', '/construction/:id/finance', '/construction/:id/finance', 'MATCHES'),
   R(54, 'Work', 'Tasks', '/work/tasks', '/tasks', 'MATCHES'),
   R(55, 'Work', 'Approvals', '/work/approvals', '/approvals', 'MATCHES'),
   R(56, 'Work', 'Exceptions', '/work/exceptions', '/bookings/review', 'PARTIAL', 'Bookings the server flagged for review. Other modules show their own exceptions on their pages.'),
@@ -83,7 +82,7 @@ export const REGISTER: RegisterRoute[] = [
   R(60, 'Reports', 'Customers', '/reports/customers', '/contacts', 'PARTIAL', 'The directory has the play counts, last played and paid totals, with a CSV download. There is no separate customer report.'),
   R(61, 'Reports', 'Finance', '/reports/finance', '/accounting/reports', 'MATCHES'),
   R(62, 'Reports', 'Academy', '/reports/academy', '/academy/fees', 'PARTIAL', 'Fees collected and due per month. There is no separate academy report.'),
-  R(63, 'Reports', 'Construction', '/reports/construction', null, 'NOT APPLICABLE', CONSTRUCTION),
+  R(63, 'Reports', 'Construction', '/reports/construction', '/construction', 'PARTIAL', 'The construction portfolio is the report: budget, committed, billed, paid and retention held per project. There is no separate download yet.'),
   R(64, 'Reports', 'Compliance Register', '/compliance', '/compliance', 'MATCHES'),
   R(65, 'Reports', 'Renewals', '/compliance/renewals', '/compliance/renewals', 'MATCHES'),
   R(66, 'Reports', 'Compliance Incidents', '/compliance/incidents', null, 'MISSING', 'The server has no incident record.'),

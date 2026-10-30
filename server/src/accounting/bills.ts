@@ -261,6 +261,13 @@ function billBody(ownerId: string, raw: unknown) {
   return { vendorId: vendorId!, billNo: billNo ?? null, billDate: billDate!, dueDate: dueDate!, amount: amount!, categoryId: categoryId ?? null, notes: notes ?? null };
 }
 
+/** Checks a module adds for the bills it is linked to (construction.ts: a bill on an order keeps the order's supplier and stays within
+ *  its total). Run when a draft or rejected bill is edited, sent again or removed; `next` is null for a removal. Each throws to refuse. */
+export type BillGuard = (ownerId: string, billId: string, next: { vendorId: string; amountPaise: number } | null) => void;
+const guards: BillGuard[] = [];
+export const guardBills = (g: BillGuard): void => { guards.push(g); };
+const checkGuards = (ownerId: string, billId: string, next: { vendorId: string; amountPaise: number } | null) => { for (const g of guards) g(ownerId, billId, next); };
+
 export function createBill(ownerId: string, actor: Actor, raw: unknown): BillOut {
   const b = billBody(ownerId, raw);
   if (b.billNo && one('SELECT 1 FROM acct_bills WHERE owner_id = ? AND vendor_id = ? AND lower(bill_no) = lower(?) AND deleted_at IS NULL', ownerId, b.vendorId, b.billNo)) throw conflict('BILL_EXISTS', 'This vendor already has a bill with that number');
@@ -277,6 +284,7 @@ export function updateBill(ownerId: string, actor: Actor, id: string, raw: unkno
   const src = (raw ?? {}) as Record<string, unknown>;
   const b = billBody(ownerId, { vendorId: cur.vendor_id, billNo: cur.bill_no, billDate: cur.bill_date, dueDate: cur.due_date, amountPaise: cur.amount_paise, categoryId: cur.category_id, notes: cur.notes, ...Object.fromEntries(Object.entries(src).map(([k, v]) => [k, v === '' ? null : v])) });
   if (b.billNo && one('SELECT 1 FROM acct_bills WHERE owner_id = ? AND vendor_id = ? AND lower(bill_no) = lower(?) AND id <> ? AND deleted_at IS NULL', ownerId, b.vendorId, b.billNo, id)) throw conflict('BILL_EXISTS', 'This vendor already has a bill with that number');
+  checkGuards(ownerId, id, { vendorId: b.vendorId, amountPaise: b.amount });
   // an edited rejected bill goes back to draft so it is submitted again on purpose
   run(`UPDATE acct_bills SET vendor_id = ?, bill_no = ?, bill_date = ?, due_date = ?, amount_paise = ?, category_id = ?, notes = ?, status = 'draft', reject_reason = NULL, updated_at = ?, updated_by = ? WHERE id = ?`,
     b.vendorId, b.billNo, b.billDate, b.dueDate, b.amount, b.categoryId, b.notes, now(), actor.id, id);
@@ -287,6 +295,7 @@ export function updateBill(ownerId: string, actor: Actor, id: string, raw: unkno
 export function deleteBill(ownerId: string, actor: Actor, id: string): void {
   const cur = billRow(ownerId, id);
   if (cur.status !== 'draft' && cur.status !== 'rejected') throw conflict('BILL_LOCKED', 'Only draft or rejected bills can be deleted');
+  checkGuards(ownerId, id, null);
   run('UPDATE acct_bills SET deleted_at = ?, deleted_by = ? WHERE id = ?', now(), actor.id, id);
   audit(actor, 'bill.delete', 'acct_bill', id, { vendorId: cur.vendor_id, amountPaise: cur.amount_paise }, ownerId);
 }
@@ -301,7 +310,8 @@ const subject = (b: BillRow): Subject => ({ title: `${b.vendor_name}${b.bill_no 
 
 export function submitBill(ownerId: string, actor: Actor, id: string): BillOut {
   return tx(() => {
-    move(ownerId, id, ['draft', 'rejected'], 'Only a draft or rejected bill can be submitted');
+    const cur = move(ownerId, id, ['draft', 'rejected'], 'Only a draft or rejected bill can be submitted');
+    checkGuards(ownerId, id, { vendorId: cur.vendor_id, amountPaise: cur.amount_paise });
     const t = now();
     run("UPDATE acct_bills SET status = 'pending_approval', submitted_at = ?, submitted_by = ?, decided_at = NULL, decided_by = NULL, reject_reason = NULL, updated_at = ?, updated_by = ? WHERE id = ?", t, actor.id, t, actor.id, id);
     audit(actor, 'bill.submit', 'acct_bill', id, null, ownerId);
