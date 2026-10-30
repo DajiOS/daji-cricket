@@ -33,10 +33,18 @@ export async function takeCardPhoto(): Promise<{ uri: string } | null> {
 
 /**
  * A reference picture for a job: from the gallery (a WhatsApp picture, a drawing, a screenshot of a quote). It is never proof, so
- * the gallery is fine here. The system photo picker needs no photo permission. Re-saved as a JPEG at a size well under the limit.
+ * the gallery is fine here. The system photo picker needs no photo permission. On an iPhone a HEIC picture is handed over as a
+ * JPEG (the compatible representation). Anything the server would refuse (not a JPEG, PNG or WebP, or over 10 MB) is turned
+ * away here with a plain message, before it is sent.
  */
 export async function pickReferencePhoto(): Promise<{ uri: string; name: string } | null> {
-  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.7 });
-  if (r.canceled || !r.assets[0]) return null;
-  return { uri: r.assets[0].uri, name: r.assets[0].fileName ?? 'reference.jpg' };
+  const r = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'], allowsEditing: false, quality: 0.7,
+    preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+  });
+  const a = r.canceled ? null : r.assets[0];
+  if (!a) return null;
+  if (a.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(a.mimeType)) throw new Error('Pick a JPEG, PNG or WebP picture.');
+  if (a.fileSize && a.fileSize > 10 * 1024 * 1024) throw new Error('That picture is over 10 MB. Pick a smaller one.');
+  return { uri: a.uri, name: a.fileName ?? 'reference.jpg' };
 }

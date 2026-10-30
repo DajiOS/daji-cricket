@@ -16,7 +16,7 @@ import { nameKey } from '../matches.ts';
 
 export type Intent =
   | 'help' | 'pnl' | 'revenue' | 'expenses' | 'profit' | 'collections' | 'account_balance' | 'balance_sheet' | 'gst' | 'uncategorised'
-  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'fantasy' | 'server' | 'branches' | 'cash' | 'site_report' | 'whatsapp' | 'network' | 'unknown';
+  | 'bookings' | 'upcoming' | 'outstanding' | 'awaiting' | 'no_shows' | 'cancellations' | 'utilisation' | 'credits' | 'refunds' | 'customers' | 'approvals_waiting' | 'approvals_why' | 'approvals_report' | 'compliance' | 'waitlist' | 'checkins' | 'fixtures' | 'auctions' | 'sheet' | 'player_stats' | 'fantasy' | 'server' | 'branches' | 'cash' | 'site_report' | 'whatsapp' | 'network' | 'construction' | 'unknown';
 
 export interface Detail { label: string; text: string }
 export interface Period { from: string; to: string; label: string }
@@ -34,8 +34,9 @@ export interface Built {
 
 const RULES: [Intent, RegExp][] = [
   ['whatsapp', /\bwhats ?app\b|\bwhatsapp inbox\b|\bmessages? (from|sent by) the (team|supervisor)\b/],
-  ['site_report', /\b(site reports?|daily reports?|daily site|day on (the )?site|what happened (on|at) (the )?site|requests? (waiting )?in (the )?inbox|jobs? (waiting|to) sign off)\b/],
+  ['site_report', /\b(site reports?|daily reports?|daily site|day on (the )?site|what happened (on|at) (the )?site)\b/],
   ['cash', /\b(cash in hand|cash balance|cash float|cash advances?|petty cash|supervisor('?s)? cash|wallet|cash (he|she|they|i) (holds?|has|have)|cash count)\b/],
+  ['construction', /\b(construction|boq|bill of quantities|purchase orders?|work orders?|ra bills?|running account bills?|measurements?|defects?|drawings?|retention|subcontractors?|goods received|grns?|project budgets?|site budget)\b/],
   ['branches', /\bbranch(es)?\b|\bprojects?\b.*\b(office|house)\b|\b(office|house)\b.*\bprojects?\b|which projects/],
   ['fantasy', /\bfantasy\b|\bdream ?11\b/],
   ['player_stats', /\b(top|most|leading|highest|best)\b.*\b(runs?|run.?scorers?|scorers?|wickets?|wicket.?takers?|catch(es)?|batters?|batsm[ae]n|bowlers?|fielders?)\b|\b(player|career|batting|bowling|cricket) (stats|statistics|records?|averages?)\b|\b(stats|record|average) (for|of)\b|\bhow many (runs|wickets|catches)\b|\bleader ?boards?\b/],
@@ -73,7 +74,7 @@ const RULES: [Intent, RegExp][] = [
 ];
 
 const ON_BOOKS = /on (the )?books|booked (ahead|in advance)|in the pipeline/;
-const PRIORITY: Intent[] = ['help', 'whatsapp', 'site_report', 'cash', 'branches', 'server', 'network', 'auctions', 'fantasy', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
+const PRIORITY: Intent[] = ['help', 'whatsapp', 'site_report', 'cash', 'construction', 'branches', 'server', 'network', 'auctions', 'fantasy', 'player_stats', 'waitlist', 'checkins', 'approvals_why', 'approvals_report', 'approvals_waiting', 'sheet', 'compliance', 'balance_sheet', 'pnl', 'awaiting', 'outstanding', 'refunds', 'credits', 'no_shows', 'cancellations', 'utilisation', 'gst', 'uncategorised', 'account_balance', 'profit', 'expenses', 'collections', 'revenue', 'fixtures', 'upcoming', 'customers', 'bookings'];
 
 /** Lower-case and tidy. Email addresses are dropped first, so "asha@example.com" is not mistaken for the word "example". */
 const normalise = (q: string): string => q.toLowerCase().replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/g, ' ').replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
@@ -148,7 +149,7 @@ function focusRows<Row extends { name: string }>(question: string, rows: Row[]):
 
 const NAMES: Record<Intent, string> = {
   help: 'Help', pnl: 'Profit and loss', revenue: 'Revenue', expenses: 'Expenses', profit: 'Profit', collections: 'Money received', account_balance: 'Account balances', balance_sheet: 'Balance sheet',
-  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', fantasy: 'Fantasy cricket', sheet: 'Shared spreadsheet', server: 'Server status', branches: 'Branches and projects', cash: 'Supervisor cash', site_report: 'Daily site report', whatsapp: 'WhatsApp inbox', network: 'Cricket network', auctions: 'Auction tournaments', no_shows: 'No-shows',
+  gst: 'GST', uncategorised: 'Uncategorised transactions', bookings: 'Bookings', upcoming: 'Upcoming sessions', outstanding: 'Money owed', awaiting: 'Payments to verify', approvals_waiting: 'Approvals waiting', approvals_why: 'Why you can or cannot sign', approvals_report: 'Approvals decided', compliance: 'Compliance register', waitlist: 'Waitlist', checkins: 'Check-ins at the ground', fixtures: 'Tournament fixtures', player_stats: 'Player records', fantasy: 'Fantasy cricket', sheet: 'Shared spreadsheet', server: 'Server status', branches: 'Branches and projects', cash: 'Supervisor cash', construction: 'Construction projects', site_report: 'Daily site report', whatsapp: 'WhatsApp inbox', network: 'Cricket network', auctions: 'Auction tournaments', no_shows: 'No-shows',
   cancellations: 'Cancellations', utilisation: 'Utilisation', credits: 'Account credit', refunds: 'Refunds', customers: 'Customers', unknown: 'Not understood',
 };
 
@@ -183,6 +184,7 @@ export function answerBuiltin(input: AskInput): Built {
   if (intent === 'player_stats') return playerStatsAnswer(ctx, question, base);
   if (intent === 'fantasy') return fantasyAnswer(ctx, base);
   if (intent === 'branches') return branchesAnswer(ctx, base);
+  if (intent === 'construction') return constructionAnswer(ctx, base);
   if (intent === 'cash') return cashAnswer(ctx, base);
   if (intent === 'whatsapp') return whatsappAnswer(ctx, base);
   if (intent === 'site_report') return siteReportAnswer(ctx, question, base);
@@ -740,4 +742,27 @@ function networkAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Par
   return base('network', bits.join(' '), {
     details: n.tournaments.slice(0, 8).map((t) => ({ label: t.name, text: `${t.status} · ${t.myRole === 'organiser' ? 'you organise it' : `organised by ${t.organiser}`} · ${niceDay(t.from)} to ${niceDay(t.to)} · ${count(t.teams, 'team')}, ${count(t.grounds, 'ground')} · ${t.confirmed} of ${count(t.fixtures, 'fixture')} confirmed, ${t.verified} verified` })),
   });
+}
+
+/**
+ * Construction projects (construction.ts): each project's phase, what waits for approval, open defects and overdue milestones,
+ * and for people allowed to see money its budget, committed, billed and paid figures. Read-only, behind the same walls as the desk.
+ */
+function constructionAnswer(ctx: T.Ctx, base: (i: Intent, answer: string, extra?: Partial<Built>) => Built): Built {
+  const c = T.construction(ctx);
+  if (!c.available) return base('construction', c.why!);
+  if (!c.projects!.length) return base('construction', 'There are no construction projects in this business that you can see.');
+  const PHASE: Record<string, string> = { planning: 'planning', active: 'under way', on_hold: 'on hold', completed: 'completed' };
+  const details = c.projects!.map((p) => ({
+    label: `${p.name} (${p.code})`,
+    text: [`${PHASE[p.phase] ?? p.phase}${p.branch ? `, ${p.branch}` : ''}${p.targetEndDate ? `, due ${p.targetEndDate}` : ''}`,
+      ...(p.money ? [`budget ${R(p.money.budgetPaise)}, committed ${R(p.money.committedPaise)}${p.money.overBudget ? ' (over budget)' : ''}, billed ${R(p.money.billedPaise)}, paid ${R(p.money.paidPaise)}${p.money.retentionHeldPaise ? `, retention held ${R(p.money.retentionHeldPaise)}` : ''}`] : []),
+      p.ordersWaitingForApproval ? `${count(p.ordersWaitingForApproval, 'order')} waiting for approval` : 'no orders waiting',
+      p.openDefects ? count(p.openDefects, 'open defect') : 'no open defects',
+      ...(p.milestonesOverdue ? [count(p.milestonesOverdue, 'overdue milestone')] : []),
+      `${p.jobsDone} of ${count(p.jobs, 'job')} done`,
+    ].join('; ') + '.',
+  }));
+  const waiting = c.projects!.reduce((n, p) => n + p.ordersWaitingForApproval, 0);
+  return base('construction', `${count(c.projects!.length, 'construction project')}; ${count(waiting, 'order')} waiting for approval.`, { details, notes: c.moneyShown ? [] : ['Money figures are not shown to you.'] });
 }

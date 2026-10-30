@@ -63,6 +63,7 @@ async function endpoints(): Promise<Ep[]> {
     { name: 'contact photo', table: "biz_cards WHERE image_mime IS NOT NULL", send: (b, t = owner) => up('POST', `/api/staff/cards/${card.body.id}/image`, t, b) },
     { name: 'software invoice file', table: 'sw_invoices WHERE file_name IS NOT NULL', send: (b, t = admin) => up('POST', `/api/admin/billing/invoices/${inv.body.id}/file?filename=i.png`, t, b) },
     { name: 'task photo', table: 'task_photos', send: (b, t = owner) => up('POST', `/api/tasks/${task.body.id}/photos`, t, b) },
+    { name: 'task reference', table: 'task_refs', send: (b, t = owner) => up('POST', `/api/tasks/${task.body.id}/references?name=r.png`, t, b) },
   ];
 }
 

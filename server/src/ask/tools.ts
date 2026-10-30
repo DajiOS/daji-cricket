@@ -26,6 +26,7 @@ import { listWallets } from '../cashbook.ts';
 import { inboxForAsk } from '../wainbox.ts';
 import { siteReport as siteDay } from '../taskwork.ts';
 import { networkFacts } from '../netTournaments.ts';
+import { portfolio as constructionPortfolio } from '../construction.ts';
 import type { Config } from '../config.ts';
 
 // The questions Ask AI can put to the software. Every tool calls the same functions as the Reports tab, so an answer
@@ -285,7 +286,7 @@ export function jobs(ctx: Ctx, a: Range) {
   const overdue = many<{ title: string; due_date: string }>(`SELECT title, due_date FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ? ${seen} ORDER BY due_date LIMIT 10`, ctx.ownerId, today, ...f.params);
   return {
     today,
-    open: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open'"),
+    open: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND (intake_state IS NULL OR intake_state <> 'new')"),
     overdue: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date < ?", today),
     dueInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'open' AND due_date BETWEEN ? AND ?", a.from, a.to),
     doneInPeriod: n("SELECT COUNT(*) n FROM tasks WHERE owner_id = ? AND status = 'done' AND completed_at >= ? AND completed_at < ?", istMidnight(a.from), istMidnight(addDays(a.to, 1))),
@@ -334,6 +335,23 @@ export function branches(ctx: Ctx) {
     }));
   const list = listAreas(ctx.user, ctx.ownerId).items;
   return { today, branches: list.map((a) => ({ name: a.name, restricted: a.restricted, projects: projects(a.id) })), notInABranch: projects(null) };
+}
+
+/**
+ * Construction (construction.ts): every construction project the asker may see (branch walls apply), with its phase, dates,
+ * orders waiting for approval, open defects, overdue milestones and jobs. Money (budget, committed, billed, paid, retention)
+ * only for people allowed to see revenue; others get quantities and counts and are told the money is withheld.
+ */
+export function construction(ctx: Ctx) {
+  let p;
+  try { p = constructionPortfolio(ctx.user, ctx.ownerId); } catch { return { available: false, why: 'You do not have access to construction projects.' }; }
+  return { available: true, moneyShown: p.seesMoney, projects: p.items.map((i) => ({
+    name: i.name, code: i.code, branch: i.areaName, site: i.site, phase: i.phase, startDate: i.startDate, targetEndDate: i.targetEndDate, archived: i.archived,
+    ordersWaitingForApproval: i.counts.ordersWaiting, orders: i.counts.orders, openDefects: i.counts.openDefects, drawings: i.counts.drawings,
+    jobs: i.counts.jobs, jobsDone: i.counts.jobsDone, milestonesOverdue: i.counts.milestonesOverdue,
+    money: i.figures ? { budgetPaise: i.figures.budgetPaise, committedPaise: i.figures.committedPaise, remainingBudgetPaise: i.figures.remainingBudgetPaise, overBudget: i.figures.overBudget,
+      receivedPaise: i.figures.receivedPaise, measuredPaise: i.figures.measuredPaise, billedPaise: i.figures.billedPaise, paidPaise: i.figures.paidPaise, outstandingPaise: i.figures.outstandingPaise, retentionHeldPaise: i.figures.retentionHeldPaise } : null,
+  })) };
 }
 
 /**
