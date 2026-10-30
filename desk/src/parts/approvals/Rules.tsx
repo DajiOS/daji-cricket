@@ -19,6 +19,7 @@ const ABOUT: Record<string, string> = {
   waiver: 'All or part of an academy fee that a student no longer has to pay.',
   expense: 'Money out entered by hand in the books, such as cash spent at the ground. Bank imports are not held.',
   cash: 'Spends from cash a team member holds for the business (Work › Cash). They count against the cash in hand at once and are confirmed when signed. Not posted to the books.',
+  purchase_order: 'Supply and work orders raised on a construction project (Construction › Commercial). Someone other than the person who raised it signs. Nothing is paid here: bills against the order go through Bills.',
 };
 // What the builder shows for each kind: the empty state, the first and last step of the try-it chain, and the amount's name.
 const WORDS: Record<string, { none: string; start: string; end: string; amount: string }> = {
@@ -29,6 +30,7 @@ const WORDS: Record<string, { none: string; start: string; end: string; amount: 
   waiver: { none: 'No sign-off. A fee is waived as soon as it is asked for.', start: 'Someone asks to waive a fee', end: 'Fee waived', amount: 'Amount waived' },
   expense: { none: 'No sign-off. Money out is recorded as soon as it is entered.', start: 'Someone enters the expense', end: 'Recorded in the books', amount: 'Expense amount' },
   cash: { none: 'No sign-off. A cash spend is confirmed as soon as it is entered.', start: 'Someone spends cash they hold', end: 'Confirmed in the cash record', amount: 'Amount spent' },
+  purchase_order: { none: 'No sign-off. An order is approved as soon as it is sent.', start: 'Someone raises the order', end: 'Order approved', amount: 'Order total' },
 };
 const whoKey = (w: Who) => (w.type === 'role' || w.type === 'person' ? `${w.type}:${w.value}` : w.type);
 const whoFrom = (k: string): Who => (k.startsWith('role:') ? { type: 'role', value: k.slice(5) } : k.startsWith('person:') ? { type: 'person', value: k.slice(7) } : { type: k as 'owner' | 'anyone' });
