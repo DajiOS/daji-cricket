@@ -39,7 +39,8 @@ import { Appearance } from './src/photo';
 import * as SecureStore from 'expo-secure-store';
 import { Intro } from './src/Intro';
 import { registerForPush, unregisterPush, onNotificationTap } from './src/push';
-import { C, inr, mode, niceDate, setMode, tint, type Mode } from './src/theme';
+import { C, inr, mode, niceDate, setMode, type Mode } from './src/theme';
+import { TabBar } from './src/TabBar';
 import { ADMIN_APP } from './src/variant';
 import { useWake } from './src/fresh';
 import { lockOn, setLockOn, useLock } from './src/lock';
@@ -58,25 +59,6 @@ import { Lang, isLang, rememberLang, savedLang, translator, useLang, type UiLang
 type Tab = 'home' | 'book' | 'me' | 'live' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'more' | 'signin' | 'auctions' | 'fantasy';
 type More = null | 'accounts' | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings' | 'cash' | 'combined' | 'construction';
 
-const TAB_ICON: Record<string, IconName> = { home: 'home', book: 'calendar', me: 'receipt', live: 'radio', ask: 'sparkles', profile: 'person-circle', bookings: 'calendar', tasks: 'checkbox', more: 'grid', signin: 'log-in' };
-/** The bar of tabs along the bottom: an icon over each name; the open tab is filled green. */
-function TabBar({ tabs, on, onPick, bottom }: { tabs: [string, string][]; on: string; onPick: (id: string) => void; bottom: number }) {
-  return (
-    <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.bar, paddingHorizontal: 6, paddingTop: 8, paddingBottom: Math.max(12, bottom) }}>
-      {tabs.map(([id, name]) => {
-        const sel = on === id, icon = TAB_ICON[id] ?? 'ellipse';
-        return (
-          <Pressable key={id} accessibilityRole="tab" accessibilityState={{ selected: sel }} accessibilityLabel={name} onPress={() => onPick(id)} style={{ flex: 1, alignItems: 'center', gap: 3 }}>
-            <View style={{ paddingVertical: 4, paddingHorizontal: 14, borderRadius: 999, backgroundColor: sel ? tint(C.onBg, 0.14) : 'transparent' }}>
-              <Icon name={(sel ? icon : `${icon}-outline`) as IconName} size={22} color={sel ? C.onBg : C.headMuted} />
-            </View>
-            <Text numberOfLines={1} style={{ color: sel ? C.onBg : C.headMuted, fontSize: 11, fontWeight: sel ? '800' : '600' }}>{name}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
 
 function AppInner({ theme }: { theme: Mode }) {
   const insets = useSafeAreaInsets(); // Android draws behind the system bars now, so the tab bar clears the gesture or button bar itself

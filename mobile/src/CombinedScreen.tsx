@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { api, ApiError } from './api';
-import { Avatar, Badge, Btn, Chip, Icon, KV, Loading, Section, Segmented, Stat, Stats, s, todayIST } from './ui';
+import { Avatar, Badge, Btn, Chip, Glow, Icon, KV, Loading, Section, Segmented, s, todayIST } from './ui';
 import { C, inr, niceDate } from './theme';
 
 // All my businesses (server/src/combined.ts): the businesses the owner marked "Mine", side by side, with their branches. It only
@@ -93,12 +93,26 @@ export function CombinedScreen() {
       {!v ? (err ? null : <Loading />) : <>
         {t && <>
           <Section>Together, {niceDate(v.filters.from)} to {niceDate(v.filters.to)}</Section>
-          <Stats>
-            <Stat label="Revenue in the books" value={partValue(t.books, (x) => inr(x.revenuePaise))} foot={t.booksNote ?? undefined} />
-            <Stat label="Expenses in the books" value={partValue(t.books, (x) => inr(x.expensesPaise))} />
-            <Stat label="Cash spent" value={partValue(t.cash, (x) => inr(x.spentConfirmedPaise))} foot={partFoot(t.cash, t.cash.value?.spentWaitingPaise ? `${inr(t.cash.value.spentWaitingPaise)} waiting` : 'Not in the books yet')} />
-            <Stat label="Open jobs" value={partValue(t.tasks, (x) => String(x.open))} foot={partFoot(t.tasks, t.tasks.value ? `${t.tasks.value.overdue} late` : undefined)} tone={t.tasks.value?.overdue ? 'danger' : undefined} />
-          </Stats>
+          <View style={{ borderRadius: 30, overflow: 'hidden', backgroundColor: C.ink, padding: 20, marginBottom: 14, shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 6 }}>
+            <Glow color="#D9A94A" size={260} top={-130} right={-100} opacity={0.5} />
+            <Glow color="#9B7BF7" size={200} bottom={-120} left={-80} opacity={0.3} />
+            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '700' }}>Revenue in the books</Text>
+            <Text adjustsFontSizeToFit numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 44, fontWeight: '800', letterSpacing: -2, marginTop: 4 }}>{partValue(t.books, (x) => inr(x.revenuePaise))}</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' }}>Expenses {partValue(t.books, (x) => inr(x.expensesPaise))}</Text>
+            {!!t.booksNote && <Text style={{ color: 'rgba(255,255,255,0.62)', fontSize: 12 }}>{t.booksNote}</Text>}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+              {([
+                ['Cash spent', partValue(t.cash, (x) => inr(x.spentConfirmedPaise)), partFoot(t.cash, t.cash.value?.spentWaitingPaise ? `${inr(t.cash.value.spentWaitingPaise)} waiting` : 'Not in the books yet'), false],
+                ['Open jobs', partValue(t.tasks, (x) => String(x.open)), partFoot(t.tasks, t.tasks.value ? `${t.tasks.value.overdue} late` : undefined), !!t.tasks.value?.overdue],
+              ] as [string, string, string | undefined, boolean][]).map(([label, value, foot, hot]) => (
+                <View key={label} style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 18, padding: 12 }}>
+                  <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '600' }}>{label}</Text>
+                  <Text adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.6} style={{ color: hot ? '#F0796E' : '#FFFFFF', fontSize: 20, fontWeight: '800', letterSpacing: -0.4, marginTop: 4 }}>{value}</Text>
+                  {!!foot && <Text numberOfLines={2} style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, marginTop: 2 }}>{foot}</Text>}
+                </View>
+              ))}
+            </View>
+          </View>
           {t.leftOut.length > 0 && <Text style={s.err}>Not available just now, so left out: {t.leftOut.join('; ')}.</Text>}
           {!narrowed && !!t.cash.value && (!!t.cash.value.handedOutPaise || !!t.cash.value.returnedPaise) && <Text style={[s.muted, { marginBottom: 4 }]}>{moves(t.cash.value)}{t.cash.partial ? ' (partial)' : ''}: your own money moving, not spending.</Text>}
           <Section>Each business</Section>
