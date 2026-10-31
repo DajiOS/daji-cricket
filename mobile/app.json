@@ -2,7 +2,7 @@
   "expo": {
     "name": "Daji Cricket Ground",
     "slug": "daji-cricket-ground",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0a0c0b",
