@@ -46,9 +46,12 @@ jobs:
           working-directory: mobile
       - name: Publish to production
         if: env.HAS_EXPO == 'true' && github.event_name == 'push'
+        # eas update does not read the env blocks of eas.json build profiles, so each update gets the same
+        # EXPO_PUBLIC_APP_ENV / EXPO_PUBLIC_API_URL its build profile has. Without them the app refuses to connect (envGuard.ts).
         run: |
-          APP_VARIANT=customer eas update --branch production-customer --message "${{ github.event.head_commit.message }}" --non-interactive
-          APP_VARIANT=admin eas update --branch production-admin --message "${{ github.event.head_commit.message }}" --non-interactive
+          export LIVE="EXPO_PUBLIC_APP_ENV=live EXPO_PUBLIC_API_URL=https://api.dajicricket.com"
+          env $LIVE APP_VARIANT=customer eas update --branch production-customer --message "${{ github.event.head_commit.message }}" --non-interactive
+          env $LIVE APP_VARIANT=admin eas update --branch production-admin --message "${{ github.event.head_commit.message }}" --non-interactive
           # the installable test builds (preview-customer / preview-admin profiles) listen on their own channels, so they get main too
-          APP_VARIANT=customer eas update --branch preview-customer --message "${{ github.event.head_commit.message }}" --non-interactive
-          APP_VARIANT=admin eas update --branch preview-admin --message "${{ github.event.head_commit.message }}" --non-interactive
+          EXPO_PUBLIC_APP_ENV=test APP_VARIANT=customer eas update --branch preview-customer --message "${{ github.event.head_commit.message }}" --non-interactive
+          EXPO_PUBLIC_APP_ENV=test APP_VARIANT=admin eas update --branch preview-admin --message "${{ github.event.head_commit.message }}" --non-interactive
