@@ -11,6 +11,8 @@ import { rel, ev } from './rel.ts';
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const OTHER = ['ak' + 'ea', 'ho' + 'tel'];
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage', '.expo']);
+// The server's runtime data folder (git-ignored) holds uploaded files named by random ids, which can contain the letters by chance. It is data, not Daji code.
+const RUNTIME_DATA = resolve(ROOT, 'server', 'data');
 const TEXT = /\.(ts|tsx|js|mjs|cjs|json|css|html|md|sql|csv|txt|yml|yaml|sh|svg|webmanifest|env|example)$/i;
 let h: Harness;
 before(async () => { h = await startHarness(); });
@@ -18,7 +20,7 @@ after(async () => { await h.close(); });
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(join(dir, e.name), out); } else out.push(join(dir, e.name));
+    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name) && join(dir, e.name) !== RUNTIME_DATA) walk(join(dir, e.name), out); } else out.push(join(dir, e.name));
   }
   return out;
 }

@@ -17,6 +17,10 @@ const h = await startHarness({ DATA_DIR: join(out, 'data') });
 const g = (await grounds(h))[0]!;
 const cust = await h.login('customer'), staff = await h.login('staff1'), owner = await h.login('owner1');
 const log: Record<string, unknown> = {};
+// A release with prices on enquiry turned on refuses online bookings, so the month is played with it off and the business's own setting is put back before the copy is written.
+const admin = await h.login('admin');
+const enquiry = one<{ value: string }>("SELECT value FROM settings WHERE key = 'pricesOnEnquiry'");
+if (enquiry) await h.put('/api/admin/settings', { pricesOnEnquiry: false }, admin);
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('fixture picture')]);
 
 // paid in full, three different days
@@ -42,6 +46,7 @@ const up = await fetch(`${h.url}/api/media?kind=gallery&filename=fixture.png`, {
 const att = await fetch(`${h.url}/api/accounting/attachments?entity=transaction&id=${tx.body.id}&filename=r.png`, { method: 'POST', headers: { authorization: `Bearer ${owner}`, 'content-type': 'application/octet-stream' }, body: PNG });
 advance(30 * MIN);
 await runSweeps(h.cfg);
+if (enquiry) await h.put('/api/admin/settings', { pricesOnEnquiry: JSON.parse(enquiry.value) }, admin);
 
 log.statuses = { c1: c1.status, c2: c2.status, c3: c3.status, held: held.status, upi: upi.status, sub: sub.status, walk: walk.status, tx: tx.status, media: up.status, attachment: att.status };
 const tables = (db().prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as { name: string }[]).map((t) => t.name);
