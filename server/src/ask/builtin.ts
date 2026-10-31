@@ -89,6 +89,8 @@ export function classify(question: string): { intent: Intent; matched: Intent[] 
   // "payments waiting for approval" means the UPI proofs, not the Approvals page
   const paymentTalk = /payments?|upi|proof|screenshot/.test(t) && !/\b(bills?|pay ?roll|pay ?run|sign.?offs?)\b/.test(t);
   const intent = PRIORITY.find((i) => matched.includes(i) && !(i === 'approvals_waiting' && paymentTalk && matched.includes('awaiting')))!;
+  // the word "auction" names the auction tournament, so it wins over branch or network wording ("which branch is running the auction")
+  if ((intent === 'branches' || intent === 'network') && matched.includes('auctions') && /\bauctions?\b/.test(t)) return { intent: 'auctions', matched };
   return { intent, matched };
 }
 

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useApi, post, inr, fmtDay, fmtDateTime, can, go } from '../lib';
 import { useSession } from '../App';
-import { ErrorBox, Loading, useToast } from '../ui';
+import { ErrorBox, Field, Loading, useToast } from '../ui';
 import { timeRange, errText, type Booking } from '../parts/dash/common';
 import type { Bill } from '../parts/bills/common';
 const BillsTable = lazy(() => import('./ApprovalsList'));
@@ -211,7 +211,7 @@ function Board({ start }: { start: Kind | 'all' }) {
               <span className="dap-rule">{cur.req ? cur.req.rule : RULE[cur.k]}</span>
               {cur.req && !cur.req.canSign && cur.req.whyNot && <span className="muted" style={{ fontSize: 13 }}>{cur.req.whyNot}.</span>}
               {canDecide(cur) ? (<>
-                <div className="field" style={{ margin: 0 }}><label htmlFor="apNote">Note</label><textarea id="apNote" rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></div>
+                <Field label="Note" full><textarea id="apNote" className="inp" rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
                 <div className="dap-acts">
                   <button type="button" className="dap-yes" disabled={busy} onClick={() => decide(cur, true)}>Approve</button>
                   {canSendBack(cur) && <button type="button" className="dap-no" disabled={busy} onClick={() => decide(cur, false)}>Send back</button>}

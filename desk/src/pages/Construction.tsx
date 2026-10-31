@@ -143,14 +143,14 @@ function Overview({ p, onChanged }: { p: Project; onChanged: () => void }) {
         <Stat label="Jobs done" value={`${p.counts.jobsDone} of ${p.counts.jobs}`} foot="From Work › Tasks" meter={p.counts.jobs ? (p.counts.jobsDone * 100) / p.counts.jobs : undefined} />
         <Stat label="Milestones" value={p.counts.milestones} foot={p.counts.milestonesOverdue ? `${p.counts.milestonesOverdue} overdue` : 'None overdue'} />
         <Stat label="Orders" value={p.counts.orders} foot={p.counts.ordersWaiting ? `${p.counts.ordersWaiting} waiting for approval` : 'None waiting'} />
-        <Stat label="Open defects" value={p.counts.openDefects} foot={`${p.counts.drawings} current drawing${p.counts.drawings === 1 ? '' : 's'}`} />
+        <Stat label="Open defects" value={p.counts.openDefects} foot={p.counts.openDefects ? 'Listed on the Site tab' : 'None open'} />
       </div>
       {f && (
         <div className="grid g4">
           <Stat label="Budget (BOQ)" value={inr(f.budgetPaise)} foot={f.overBudget ? 'Over budget' : `${inr(f.remainingBudgetPaise)} not committed`} />
           <Stat label="Committed" value={inr(f.committedPaise)} meter={f.budgetPaise ? (f.committedPaise * 100) / f.budgetPaise : undefined} foot="Approved orders, before tax" />
           <Stat label="Billed" value={inr(f.billedPaise)} foot={`${inr(f.outstandingPaise)} approved and unpaid`} />
-          <Stat label="Paid" value={inr(f.paidPaise)} foot={f.retentionHeldPaise ? `${inr(f.retentionHeldPaise)} retention held` : 'No retention held'} />
+          <Stat label="Paid" value={inr(f.paidPaise)} foot={`Of ${inr(f.billedPaise)} billed`} />
         </div>)}
       <Panel title="Project details" actions={p.canManage ? <button className="btn sm" onClick={() => setEditing(true)}>Change</button> : undefined}>
         <div className="stack">
@@ -208,7 +208,7 @@ function PlanTab({ p }: { p: Project }) {
             { head: 'Milestone', cell: (m) => <b>{m.title}</b> },
             { head: 'Due', cell: (m) => (m.dueDate ? fmtDay(m.dueDate) : '—') },
             { head: 'Jobs', num: true, cell: (m) => `${m.jobsDone} of ${m.jobs}` },
-            { head: '', cell: (m) => (m.done ? <Chip tone="good">Done</Chip> : m.overdue ? <Chip tone="bad">Overdue</Chip> : <Chip>Open</Chip>) },
+            { head: 'State', cell: (m) => (m.done ? <Chip tone="good">Done</Chip> : m.overdue ? <Chip tone="bad">Overdue</Chip> : <Chip>Open</Chip>) },
           ]} />
         </Panel>
         {item && <BoqForm projectId={p.id} item={item === 'new' ? null : item} onClose={() => setItem(null)} onDone={() => { setItem(null); reload(); }} />}
@@ -258,7 +258,7 @@ function Commercial({ p, onChanged }: { p: Project; onChanged: () => void }) {
             { head: 'Supplier', cell: (o) => o.vendorName },
             { head: 'State', cell: (o) => <Chip tone={PO[o.status][0]}>{PO[o.status][1]}</Chip> },
             { head: 'Done', num: true, cell: (o) => `${o.progress.receivedPct}%` },
-            { head: 'Total', num: true, cell: (o) => money(o.totalPaise) },
+            { head: 'Total, with tax', num: true, cell: (o) => money(o.totalPaise) },
           ]} />}
         </Load>
       </div>
@@ -534,7 +534,7 @@ function SiteTab({ p, onChanged }: { p: Project; onChanged: () => void }) {
   return (
     <Load data={data} error={err} status={status} retry={reload}>
       {(d) => (<div className="stack">
-        <Panel title="Daily site report" note="The same report as Work › Tasks: the team's notes for the day and the jobs behind them. Notes written here are filed under this project and the day shown." actions={<span className="row" style={{ gap: 6 }}><DateInput aria-label="Report day" value={day} max={todayISO()} onChange={(e) => setDay(e.target.value || todayISO())} /><button className="btn ghost sm" onClick={() => setWriting(true)}>Write a note</button></span>}>
+        <Panel title="Daily site report" note="The same report as Work › Tasks: the team's notes for the day and the jobs behind them. Notes written here are filed under this project and the day shown." actions={<span className="row" style={{ gap: 6 }}><DateInput className="inp" style={{ width: 170 }} aria-label="Report day" value={day} max={todayISO()} onChange={(e) => setDay(e.target.value || todayISO())} /><button className="btn ghost sm" onClick={() => setWriting(true)}>Write a note</button></span>}>
           <SiteDay r={d.report} />
         </Panel>
         <Panel title="Jobs" note="The project's jobs on Work › Tasks, closed there with camera proof." actions={<button className="btn ghost sm" onClick={() => go('/tasks')}>Open Tasks</button>}>
@@ -542,7 +542,7 @@ function SiteTab({ p, onChanged }: { p: Project; onChanged: () => void }) {
             { head: 'Job', cell: (j) => <b>{j.title}</b> },
             { head: 'Who', cell: (j) => j.assignedName ?? 'Anyone' },
             { head: 'Due', cell: (j) => (j.dueDate ? fmtDay(j.dueDate) : '—') },
-            { head: '', cell: (j) => (j.status === 'done' ? <Chip tone="good">Done</Chip> : j.overdue ? <Chip tone="bad">Overdue</Chip> : <Chip>Open</Chip>) },
+            { head: 'State', cell: (j) => (j.status === 'done' ? <Chip tone="good">Done</Chip> : j.overdue ? <Chip tone="bad">Overdue</Chip> : <Chip>Open</Chip>) },
           ]} />
         </Panel>
         <Panel title="Defects" actions={p.canManage ? <button className="btn primary sm" onClick={() => setRaising(true)}>Raise a defect</button> : undefined}>
@@ -550,7 +550,8 @@ function SiteTab({ p, onChanged }: { p: Project; onChanged: () => void }) {
             { head: 'Defect', cell: (x) => <span><b>{x.title}</b>{x.location ? <span className="muted small"> · {x.location}</span> : null}</span> },
             { head: 'Severity', cell: (x) => <Chip tone={x.severity === 'critical' ? 'bad' : x.severity === 'major' ? 'warn' : 'mute'}>{x.severity}</Chip> },
             { head: 'Who fixes', cell: (x) => x.vendorName ?? '—' },
-            { head: 'State', cell: (x) => (p.canManage && x.status !== 'closed' ? <span className="row" style={{ gap: 4 }}>{x.status === 'open' && <button className="btn ghost sm" onClick={() => setDefect(x.id, 'fixed')}>Mark fixed</button>}<button className="btn ghost sm" onClick={() => setDefect(x.id, 'closed')}>Close</button></span> : <Chip tone={x.status === 'closed' ? 'good' : 'warn'}>{x.status}</Chip>) },
+            { head: 'State', cell: (x) => <Chip tone={x.status === 'closed' ? 'good' : x.status === 'fixed' ? 'info' : 'warn'}>{x.status}</Chip> },
+            { head: '', cell: (x) => (p.canManage && x.status !== 'closed' ? <span className="row" style={{ gap: 4 }}>{x.status === 'open' && <button className="btn ghost sm" onClick={() => setDefect(x.id, 'fixed')}>Mark fixed</button>}<button className="btn ghost sm" onClick={() => setDefect(x.id, 'closed')}>Close</button></span> : null) },
           ]} />
         </Panel>
         <div className="grid g2">
@@ -630,9 +631,9 @@ function FinanceTab({ p }: { p: Project }) {
           <Table rows={d.orders} rowKey={(o) => o.id} empty="No orders yet." cols={[
             { head: 'Order', cell: (o) => <b>{o.poNo}</b> },
             { head: 'Supplier', cell: (o) => o.vendorName },
-            { head: 'Ordered', num: true, cell: (o) => money(o.subtotalPaise) },
+            { head: 'Ordered, before tax', num: true, cell: (o) => money(o.subtotalPaise) },
             { head: 'Done', num: true, cell: (o) => money(o.kind === 'work' ? o.progress.measuredPaise : o.progress.receivedPaise) },
-            { head: 'Billed', num: true, cell: (o) => money(o.progress.billedPaise) },
+            { head: 'Billed, with tax', num: true, cell: (o) => money(o.progress.billedPaise) },
             { head: 'Paid', num: true, cell: (o) => money(o.progress.paidPaise) },
           ]} />
         </Panel>

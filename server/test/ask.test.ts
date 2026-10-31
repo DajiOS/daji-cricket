@@ -99,6 +99,16 @@ test('questions are sorted into the right topic', () => {
   for (const [q, want] of cases) assert.equal(classify(q).intent, want, q);
 });
 
+test('the word "auction" keeps auction questions on auctions, even next to branch or network wording', () => {
+  assert.equal(classify('which branch is running the auction').intent, 'auctions');
+  assert.equal(classify('network tournament auction').intent, 'auctions');
+  assert.equal(classify('who has paid the auction deposit').intent, 'auctions');
+  // without the word, branch and network questions stay where they were
+  assert.equal(classify('which branch has the most projects').intent, 'branches');
+  assert.equal(classify('network tournament settlements').intent, 'network');
+  assert.equal(classify('squads in the cricket network').intent, 'network');
+});
+
 test('a ground is recognised by a word that belongs to it alone', () => {
   const list = [{ id: 'g1', name: 'Daji Main Turf' }, { id: 'g2', name: 'Daji Practice Nets' }, { id: 'g3', name: 'Daji Box Turf' }];
   assert.equal(groundIn('bookings at the nets', list)?.id, 'g2');
