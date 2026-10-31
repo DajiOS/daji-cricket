@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import { Btn, Chip, Field, NameFields, splitName, s, DateField } from './ui';
 import { inr } from './theme';

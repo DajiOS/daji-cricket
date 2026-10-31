@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { Booking, MatchRow, User } from './types';
 import { Avatar, Badge, Btn, Icon, type IconName, SectionHead, s } from './ui';

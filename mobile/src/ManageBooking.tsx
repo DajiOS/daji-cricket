@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { Booking, BookingOption, DepositView, HoldResponse, RescheduleOutcome, ReschedulePreview, RescheduleStatus } from './types';
 import { Btn, DateField, Field, KV, Loading, s } from './ui';

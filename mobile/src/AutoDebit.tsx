@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from './Text';
 import { WebView } from 'react-native-webview';
 import { api } from './api';
 import { CHECKOUT_ORIGINS, isAllowedCheckoutUrl, parseCheckoutMessage } from './checkoutGuard';

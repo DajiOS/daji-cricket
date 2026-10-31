@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { api, ApiError } from './api';
 import { Avatar, Badge, Btn, Chip, Glow, Icon, KV, Loading, Section, Segmented, s, todayIST } from './ui';
 import { C, inr, niceDate } from './theme';
@@ -97,7 +98,7 @@ export function CombinedScreen() {
             <Glow color="#D9A94A" size={260} top={-130} right={-100} opacity={0.5} />
             <Glow color="#9B7BF7" size={200} bottom={-120} left={-80} opacity={0.3} />
             <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '700' }}>Revenue in the books</Text>
-            <Text adjustsFontSizeToFit numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 44, fontWeight: '800', letterSpacing: -2, marginTop: 4 }}>{partValue(t.books, (x) => inr(x.revenuePaise))}</Text>
+            <Text adjustsFontSizeToFit numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 44, fontWeight: '800', letterSpacing: -1, marginTop: 4 }}>{partValue(t.books, (x) => inr(x.revenuePaise))}</Text>
             <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' }}>Expenses {partValue(t.books, (x) => inr(x.expensesPaise))}</Text>
             {!!t.booksNote && <Text style={{ color: 'rgba(255,255,255,0.62)', fontSize: 12 }}>{t.booksNote}</Text>}
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>

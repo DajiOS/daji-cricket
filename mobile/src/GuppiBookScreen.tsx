@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Text, TextInput } from './Text';
 import { api } from './api';
 import type { Booking, HoldResponse, PaymentInstructions } from './types';
 import { Btn, Chip, GuppiMark, s } from './ui';

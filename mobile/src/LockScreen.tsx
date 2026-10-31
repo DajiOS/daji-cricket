@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Image, View } from 'react-native';
+import { Text } from './Text';
 import { biometricName, unlock } from './lock';
 import { Btn, s } from './ui';
 import { C } from './theme';

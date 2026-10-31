@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { TeamMember } from './types';
 import { Avatar, Badge, Btn, Chip, Field, Icon, ListCard, Loading, s, NameFields } from './ui';

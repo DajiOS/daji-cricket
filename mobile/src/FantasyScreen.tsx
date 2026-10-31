@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import { BackBar, Badge, Btn, Chip, Field, KV, Loading, Section, s } from './ui';
 import { C } from './theme';

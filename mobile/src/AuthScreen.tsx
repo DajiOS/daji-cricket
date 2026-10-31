@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { api, setToken } from './api';
 import type { User } from './types';
 import { Btn, Field, PhoneField, s, NameFields, splitName } from './ui';

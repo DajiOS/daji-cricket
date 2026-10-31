@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Platform, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { User } from './types';
 import { Btn, Section, s } from './ui';

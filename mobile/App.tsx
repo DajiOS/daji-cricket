@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { Text } from './src/Text';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, loadToken, serverSignOut, setBusiness, setToken, setViewOwner } from './src/api';
@@ -41,6 +42,7 @@ import { Intro } from './src/Intro';
 import { registerForPush, unregisterPush, onNotificationTap } from './src/push';
 import { C, inr, mode, niceDate, setMode, type Mode } from './src/theme';
 import { TabBar } from './src/TabBar';
+import { loadFonts } from './src/fonts';
 import { ADMIN_APP } from './src/variant';
 import { useWake } from './src/fresh';
 import { lockOn, setLockOn, useLock } from './src/lock';
@@ -322,7 +324,7 @@ export default function App() {
   const [intro, setIntro] = useState(true);
   const [ready, setReady] = useState(false);
   const [lang, setLangState] = useState<UiLang>('en');
-  useEffect(() => { (async () => { try { const v = await SecureStore.getItemAsync(THEME_KEY); if (v === 'light' || v === 'dark') { setMode(v); refreshStyles(); setM(v); } } catch { /* keep light */ } setLangState(await savedLang()); setReady(true); })(); }, []);
+  useEffect(() => { (async () => { try { const v = await SecureStore.getItemAsync(THEME_KEY); if (v === 'light' || v === 'dark') { setMode(v); refreshStyles(); setM(v); } } catch { /* keep light */ } setLangState(await savedLang()); await loadFonts(); setReady(true); })(); }, []);
   const setLang = useCallback((l: UiLang) => { setLangState(l); rememberLang(l); }, []);
   const flip = () => { const next: Mode = m === 'dark' ? 'light' : 'dark'; setMode(next); refreshStyles(); setM(next); SecureStore.setItemAsync(THEME_KEY, next).catch(() => {}); };
   if (!ready) return <View style={{ flex: 1, backgroundColor: C.bg }} />;

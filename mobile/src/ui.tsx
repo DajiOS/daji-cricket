@@ -1,14 +1,17 @@
 import React from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { Text, TextInput } from './Text';
 import { Ionicons } from '@expo/vector-icons';
 import { C, HUES, mode, tint } from './theme';
 import { API_URL } from './api';
+import { fontsReady } from './fonts';
+import { glyphFor } from './icons';
 
 const build = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   pad: { padding: 18, paddingBottom: 40 },
   eyebrow: { color: C.onBg, fontSize: 11.5, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 },
-  h1: { color: C.head, fontSize: 34, fontWeight: '800', letterSpacing: -1.2, marginBottom: 6 },
+  h1: { color: C.head, fontSize: 34, fontWeight: '800', letterSpacing: -0.7, marginBottom: 6 },
   h2: { color: C.text, fontSize: 17, fontWeight: '700', letterSpacing: -0.2, marginBottom: 10 },
   text: { color: C.text, fontSize: 15 },
   muted: { color: C.muted, fontSize: 13, lineHeight: 19 },
@@ -194,8 +197,12 @@ export function MonthBar({ month, onChange, max }: { month: string; onChange: (m
 }
 
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
-/** One of the app's line icons (Ionicons, shipped inside the app, so nothing is fetched). */
-export const Icon = ({ name, size = 20, color }: { name: IconName; size?: number; color?: string }) => <Ionicons name={name} size={size} color={color ?? C.text} />;
+/** One of the app's icons: Phosphor (see icons.ts), or the built-in Ionicons for a name not mapped yet. Both ship inside the app. */
+export const Icon = ({ name, size = 20, color }: { name: IconName; size?: number; color?: string }) => {
+  const g = fontsReady ? glyphFor(name) : null;
+  if (!g) return <Ionicons name={name} size={size} color={color ?? C.text} />;
+  return <Text allowFontScaling={false} style={{ fontFamily: g.fill ? 'Phosphor-Fill' : 'Phosphor', fontSize: size, lineHeight: size, width: size, height: size, textAlign: 'center', color: color ?? C.text, includeFontPadding: false }}>{g.char}</Text>;
+};
 
 /** Tabs inside a screen, drawn as one segmented bar; the open one is filled green. A long set scrolls sideways. */
 export function Segmented<T extends string>({ items, value, onChange }: { items: [T, string][]; value: T; onChange: (v: T) => void }) {
@@ -257,7 +264,7 @@ export const StatTile = ({ icon, value, label, tone, onPress }: { icon: IconName
   return (
     <Pressable accessibilityRole="button" disabled={!onPress} onPress={onPress} style={({ pressed }) => [s.card, { flexBasis: '30%', flexGrow: 1, padding: 14, marginBottom: 0, opacity: pressed ? 0.75 : 1 }]}>
       <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: tint(col, 0.16), alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={16} color={col} /></View>
-      <Text style={{ color: C.text, fontSize: 30, fontWeight: '800', letterSpacing: -1, marginTop: 12 }}>{value}</Text>
+      <Text style={{ color: C.text, fontSize: 30, fontWeight: '800', letterSpacing: -0.5, marginTop: 12 }}>{value}</Text>
       <Text numberOfLines={2} style={[s.muted, { fontSize: 12, lineHeight: 15, marginTop: 2 }]}>{label}</Text>
     </Pressable>
   );
@@ -266,7 +273,7 @@ export const StatTile = ({ icon, value, label, tone, onPress }: { icon: IconName
 /** A section title with an optional link on the right ("See all"). */
 export const SectionHead = ({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) => (
   <View style={[s.row, { marginTop: 14, marginBottom: 6 }]}>
-    <Text style={{ color: C.head, fontSize: 21, fontWeight: '800', letterSpacing: -0.6 }}>{title}</Text>
+    <Text style={{ color: C.head, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 }}>{title}</Text>
     {!!action && <Pressable accessibilityRole="button" onPress={onAction}><Text style={{ color: C.gold, fontSize: 13, fontWeight: '700' }}>{action}</Text></Pressable>}
   </View>
 );

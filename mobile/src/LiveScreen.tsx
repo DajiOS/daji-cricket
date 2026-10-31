@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View, Pressable } from 'react-native';
+import { RefreshControl, ScrollView, View, Pressable } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { Innings, MatchRow, Scorecard } from './types';
 import { BackBar, Badge, Icon, Loading, SectionHead, Segmented, s } from './ui';

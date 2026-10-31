@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, View, useWindowDimensions } from 'react-native';
+import { Text } from './Text';
 import { mode } from './theme';
 
 // The opening film, matching the website: thin green arcs, three short lines that rise into place with one word in green,

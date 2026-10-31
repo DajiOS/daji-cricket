@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { User } from './types';
 import { Btn, Chip, Field, s } from './ui';

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Switch, Text, View } from 'react-native';
+import { Switch, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { HoldResponse } from './types';
 import { Badge, Btn, Chip, s } from './ui';

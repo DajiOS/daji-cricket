@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { ProgressCard, Student } from './types';
 import { Badge, Btn, Chip, Field, KV, Loading, Section, s, NameFields, DateField } from './ui';

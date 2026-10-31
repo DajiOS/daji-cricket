@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, RefreshControl, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { Image, RefreshControl, ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { StaffBooking, Task, User, MatchRow } from './types';
 import { ActionGrid, ActionTile, Avatar, Badge, Glow, Icon, type IconName, SectionHead, s } from './ui';
@@ -69,7 +70,7 @@ export function HomeScreen({ user, aiName, go }: { user: User; aiName: string; g
           {live != null && live > 0 && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(240,121,110,0.22)', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#F0796E' }} /><Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{live} live</Text></View>}
         </View>
         {bookingsOk ? (<Pressable accessibilityRole="button" onPress={() => go('bookings')}>
-          <Text style={{ color: '#FFFFFF', fontSize: 64, fontWeight: '800', letterSpacing: -3, marginTop: 6 }}>{today ? String(today.bookings.length) : '–'}</Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 64, fontWeight: '800', letterSpacing: -1.5, marginTop: 6 }}>{today ? String(today.bookings.length) : '–'}</Text>
           <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: '600', marginTop: -6 }}>{today?.bookings.length === 1 ? 'booking' : 'bookings'} at {user.businessName || 'Daji Cricket Ground'}</Text>
         </Pressable>) : <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '800', marginTop: 10 }}>{user.businessName || 'Daji Cricket Ground'}</Text>}
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
