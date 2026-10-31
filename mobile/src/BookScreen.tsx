@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { AppConfig, Availability, Ball, Ground, HoldQuote, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
 import { Btn, Chip, Field, GuppiMark, Icon, type IconName, KV, Loading, MonthBar, Segmented, Steps, s } from './ui';
@@ -21,12 +22,12 @@ const hm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slic
 function Hero() {
   const pic = useGroundPhoto(); const t = useT();
   return (
-    <View style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: '#123D24', padding: 20, paddingTop: 64, marginBottom: 4 }}>
+    <View style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: '#1A1E1C', padding: 20, paddingTop: 64, marginBottom: 4 }}>
       {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
-      <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: pic ? 'rgba(6,22,13,.52)' : 'transparent' }} />
+      <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: pic ? 'rgba(8,10,9,.52)' : 'transparent' }} />
       <View style={{ zIndex: 1 }}>
         <Text style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, fontWeight: '700', marginBottom: 6 }}>Daji Cricket Ground · Surat</Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 34, lineHeight: 38, fontWeight: '800', letterSpacing: -0.8 }}>Play.{'\n'}Practice.{'\n'}<Text style={{ color: C.onBg }}>Grow.</Text></Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 34, lineHeight: 38, fontWeight: '800', letterSpacing: -0.8 }}>Play.{'\n'}Practice.{'\n'}<Text style={{ color: '#D9C08A' }}>Grow.</Text></Text>
         <Text style={{ color: 'rgba(255,255,255,.88)', fontSize: 14, lineHeight: 20, marginTop: 8 }}>{t('book.hero')}</Text>
       </View>
     </View>
@@ -58,7 +59,7 @@ function GroundCard({ g, on, onPress }: { g: Ground; on: boolean; onPress: () =>
       <View style={{ height: 120, backgroundColor: '#1B4A2E' }}>
         {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
         <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: on ? C.strong : 'rgba(255,255,255,0.92)', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}>
-          <Text style={{ color: on ? C.onStrong : '#1C7A3E', fontSize: 11, fontWeight: '800' }}>{on ? t('book.selected') : t('book.available')}</Text>
+          <Text style={{ color: on ? C.onStrong : '#1E8A4C', fontSize: 11, fontWeight: '800' }}>{on ? t('book.selected') : t('book.available')}</Text>
         </View>
       </View>
       <View style={{ padding: 12 }}>

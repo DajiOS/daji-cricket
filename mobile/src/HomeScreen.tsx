@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, RefreshControl, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { Image, RefreshControl, ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import type { StaffBooking, Task, User, MatchRow } from './types';
-import { ActionTile, Avatar, Badge, Icon, type IconName, SectionHead, StatTile, s } from './ui';
+import { ActionGrid, ActionTile, Avatar, Badge, Icon, type IconName, RoundBtn, SectionHead, s } from './ui';
 import { C, niceDate } from './theme';
 import { useGroundPhoto } from './photo';
 
@@ -42,46 +43,68 @@ export function HomeScreen({ user, aiName, go }: { user: User; aiName: string; g
     ...(perm('manage_bookings') ? [['albums-outline', 'Multi-day', 'block'] as [IconName, string, HomeGo]] : []),
     ['sparkles-outline', aiName.length > 10 ? `${aiName.slice(0, 9)}…` : aiName, 'ask'],
   ];
+  const today_ = niceDate(new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10));
+  const mini = (icon: IconName, value: string, label: string, to: HomeGo, hot?: boolean) => (
+    <Pressable key={label} accessibilityRole="button" onPress={() => go(to)} style={({ pressed }) => ({ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 22, padding: 14, opacity: pressed ? 0.75 : 1 })}>
+      <Icon name={icon} size={16} color={hot ? '#F28C38' : 'rgba(255,255,255,0.7)'} />
+      <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '600', letterSpacing: -0.6, marginTop: 6 }}>{value}</Text>
+      <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '600' }}>{label}</Text>
+    </Pressable>
+  );
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <View style={[s.row, { marginBottom: 12 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-          <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 112, height: 38 }} />
+      <View style={[s.row, { marginBottom: 18 }]}>
+        <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 104, height: 36 }} />
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          {perm('manage_bookings') && <RoundBtn icon="calendar-outline" label="Bookings" onPress={() => go('bookings')} />}
+          <RoundBtn icon="sparkles-outline" label={aiName} onPress={() => go('ask')} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Your profile" onPress={() => go('profile')}><Avatar name={user.name} url={user.avatarUrl} size={46} /></Pressable>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Your profile" onPress={() => go('profile')}><Avatar name={user.name} url={user.avatarUrl} size={40} /></Pressable>
       </View>
+      <Text style={[s.muted, { fontSize: 14, fontWeight: '600' }]}>{greeting()}</Text>
+      <Text style={[s.h1, { marginBottom: 18 }]}>{first}</Text>
 
-      <View style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: '#123D24', minHeight: 150, justifyContent: 'flex-end', padding: 18, marginBottom: 14 }}>
+      <View style={{ borderRadius: 32, overflow: 'hidden', backgroundColor: C.ink, padding: 22, marginBottom: 22 }}>
         {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: pic ? 'rgba(6,22,13,.5)' : 'transparent' }]} />
-        <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '800', letterSpacing: -0.4 }}>{greeting()}, {first}</Text>
-        <Text style={{ color: 'rgba(255,255,255,.88)', fontSize: 14, marginTop: 2 }}>{user.businessName || 'Daji Cricket Ground'} · {niceDate(new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10))}</Text>
+        {!!pic && <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,12,11,.72)' }]} />}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '500' }}>Today, {today_}</Text>
+          {live != null && live > 0 && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(240,121,110,0.22)', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#F0796E' }} /><Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{live} live</Text></View>}
+        </View>
+        {bookingsOk ? (<Pressable accessibilityRole="button" onPress={() => go('bookings')}>
+          <Text style={{ color: '#FFFFFF', fontSize: 60, fontWeight: '600', letterSpacing: -1.5, marginTop: 6 }}>{today ? String(today.bookings.length) : '–'}</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: '600', marginTop: -6 }}>{today?.bookings.length === 1 ? 'booking' : 'bookings'} at {user.businessName || 'Daji Cricket Ground'}</Text>
+        </Pressable>) : <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '800', marginTop: 10 }}>{user.businessName || 'Daji Cricket Ground'}</Text>}
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+          {bookingsOk && mini('card', today ? String(today.awaitingVerification) : '–', 'Payments to check', 'payments', !!today?.awaitingVerification)}
+          {mini('checkbox', tasks == null ? '–' : String(tasks), 'Open tasks', 'tasks')}
+        </View>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-        {bookingsOk && <StatTile icon="calendar-outline" value={today ? String(today.bookings.length) : '–'} label="Bookings today" onPress={() => go('bookings')} />}
-        {bookingsOk && <StatTile icon="card-outline" value={today ? String(today.awaitingVerification) : '–'} label="Payments to check" tone={today?.awaitingVerification ? 'warn' : undefined} onPress={() => go('payments')} />}
-        {live != null && live > 0 ? <StatTile icon="radio-outline" value={String(live)} label="Live now" tone="danger" onPress={() => go('matches')} />
-          : <StatTile icon="checkbox-outline" value={tasks == null ? '–' : String(tasks)} label="Open tasks" onPress={() => go('tasks')} />}
-      </View>
-
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+      <ActionGrid>
         {actions.slice(0, 8).map(([icon, label, to]) => <ActionTile key={to} icon={icon} label={label} onPress={() => go(to)} />)}
-      </View>
+      </ActionGrid>
 
       {bookingsOk && (<>
-        <SectionHead title="Coming up today" action="See all" onAction={() => go('bookings')} />
-        {today === null ? null : !upcoming.length ? <Text style={[s.muted, { marginBottom: 12 }]}>Nothing more booked today.</Text> : upcoming.map((b) => (
-          <Pressable key={b.id} accessibilityRole="button" onPress={() => go('bookings')} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 10 }]}>
-            <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: C.soft, alignItems: 'center', justifyContent: 'center' }}><Icon name="time-outline" size={20} color={C.gold} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.text, { fontWeight: '700' }]} numberOfLines={1}>{b.customerName}</Text>
-              <Text style={s.muted} numberOfLines={1}>{b.groundName}{b.formatLabel ? ` · ${b.formatLabel}` : ''}</Text>
-              <Text style={[s.muted, { fontSize: 12 }]}>{hhmm(b.startAt)} – {hhmm(b.endAt)}</Text>
-            </View>
-            <Badge tone={b.approval === 'pending' ? 'gold' : b.balancePaise > 0 ? 'warn' : 'ok'} label={b.approval === 'pending' ? 'Approve' : b.balancePaise > 0 ? 'Balance due' : 'Confirmed'} />
-          </Pressable>
-        ))}
+        <SectionHead title="Coming up" action="See all" onAction={() => go('bookings')} />
+        {today === null ? null : !upcoming.length ? <View style={s.card}><Text style={s.muted}>Nothing more booked today.</Text></View> : (
+          <View style={[s.card, { paddingVertical: 6 }]}>
+            {upcoming.map((b, i) => (
+              <Pressable key={b.id} accessibilityRole="button" onPress={() => go('bookings')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, borderBottomWidth: i === upcoming.length - 1 ? 0 : StyleSheet.hairlineWidth, borderBottomColor: C.line, opacity: pressed ? 0.7 : 1 })}>
+                <View style={{ width: 54 }}>
+                  <Text style={{ color: C.text, fontSize: 17, fontWeight: '600', letterSpacing: -0.4 }}>{hhmm(b.startAt)}</Text>
+                  <Text style={[s.muted, { fontSize: 12 }]}>{hhmm(b.endAt)}</Text>
+                </View>
+                <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: b.approval === 'pending' ? C.gold : b.balancePaise > 0 ? C.warn : C.ok }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.text, { fontWeight: '700' }]} numberOfLines={1}>{b.customerName}</Text>
+                  <Text style={[s.muted, { fontSize: 12.5 }]} numberOfLines={1}>{b.groundName}{b.formatLabel ? ` · ${b.formatLabel}` : ''}</Text>
+                </View>
+                <Badge tone={b.approval === 'pending' ? 'gold' : b.balancePaise > 0 ? 'warn' : 'ok'} label={b.approval === 'pending' ? 'Approve' : b.balancePaise > 0 ? 'Balance due' : 'Confirmed'} />
+              </Pressable>
+            ))}
+          </View>
+        )}
       </>)}
     </ScrollView>
   );

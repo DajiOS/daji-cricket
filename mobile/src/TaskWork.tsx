@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Linking, Pressable, Text, View } from 'react-native';
+import { Image, Linking, Pressable, View } from 'react-native';
+import { Text } from './Text';
 import { api, authImage, upload } from './api';
 import { pickReferencePhoto } from './camera';
 import type { Task, TaskRef, User } from './types';

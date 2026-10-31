@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Text } from './Text';
 import { api, authImage, upload } from './api';
 import { takeCardPhoto } from './camera';
 import { BackBar, Badge, Btn, Chip, DateField, Field, Loading, Segmented, Stat, Stats, s, todayIST } from './ui';

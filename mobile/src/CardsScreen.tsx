@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Image, Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Text } from './Text';
 import { api, authImage, upload } from './api';
 import { takeCardPhoto } from './camera';
 import { Btn, Field, Loading, NameFields, s } from './ui';

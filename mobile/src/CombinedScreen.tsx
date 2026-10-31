@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { api, ApiError } from './api';
-import { Badge, Btn, Chip, KV, Loading, Section, Segmented, Stat, Stats, s, todayIST } from './ui';
+import { Avatar, Badge, Btn, Chip, Icon, KV, Loading, Section, Segmented, s, todayIST } from './ui';
 import { C, inr, niceDate } from './theme';
 
 // All my businesses (server/src/combined.ts): the businesses the owner marked "Mine", side by side, with their branches. It only
@@ -50,6 +51,7 @@ export function CombinedScreen() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState(PAGE);
+  const [howOpen, setHowOpen] = useState(false);
   // each request has a number; an answer to an older one (the owner tapped another filter meanwhile) is thrown away
   const seq = useRef(0);
   const load = useCallback(async () => {
@@ -70,7 +72,7 @@ export function CombinedScreen() {
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
       <Text style={s.eyebrow}>Owner</Text><Text style={s.h1}>All my businesses</Text>
-      <Text style={[s.muted, { marginBottom: 12 }]}>A combined view of the businesses you marked as yours. Each keeps its own books; nothing can be changed here.</Text>
+      <Text style={[s.muted, { marginBottom: 14 }]}>The businesses you marked as yours, together. Read only: each keeps its own books.</Text>
       <Segmented items={[['month', 'This month'], ['last', 'Last month'], ['year', 'This year']]} value={period} onChange={setPeriod} />
       {opts && opts.businesses.length > 1 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 8 }}>
@@ -92,18 +94,34 @@ export function CombinedScreen() {
       {!v ? (err ? null : <Loading />) : <>
         {t && <>
           <Section>Together, {niceDate(v.filters.from)} to {niceDate(v.filters.to)}</Section>
-          <Stats>
-            <Stat label="Revenue in the books" value={partValue(t.books, (x) => inr(x.revenuePaise))} foot={t.booksNote ?? undefined} />
-            <Stat label="Expenses in the books" value={partValue(t.books, (x) => inr(x.expensesPaise))} />
-            <Stat label="Cash spent" value={partValue(t.cash, (x) => inr(x.spentConfirmedPaise))} foot={partFoot(t.cash, t.cash.value?.spentWaitingPaise ? `${inr(t.cash.value.spentWaitingPaise)} waiting` : 'Not in the books yet')} />
-            <Stat label="Open jobs" value={partValue(t.tasks, (x) => String(x.open))} foot={partFoot(t.tasks, t.tasks.value ? `${t.tasks.value.overdue} late` : undefined)} tone={t.tasks.value?.overdue ? 'danger' : undefined} />
-          </Stats>
+          <View style={{ borderRadius: 32, overflow: 'hidden', backgroundColor: C.ink, padding: 22, marginBottom: 14 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '700' }}>Revenue in the books</Text>
+            <Text adjustsFontSizeToFit numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 42, fontWeight: '600', letterSpacing: -1, marginTop: 4 }}>{partValue(t.books, (x) => inr(x.revenuePaise))}</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' }}>Expenses {partValue(t.books, (x) => inr(x.expensesPaise))}</Text>
+            {!!t.booksNote && <Text style={{ color: 'rgba(255,255,255,0.62)', fontSize: 12 }}>{t.booksNote}</Text>}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+              {([
+                ['Cash spent', partValue(t.cash, (x) => inr(x.spentConfirmedPaise)), partFoot(t.cash, t.cash.value?.spentWaitingPaise ? `${inr(t.cash.value.spentWaitingPaise)} waiting` : 'Not in the books yet'), false],
+                ['Open jobs', partValue(t.tasks, (x) => String(x.open)), partFoot(t.tasks, t.tasks.value ? `${t.tasks.value.overdue} late` : undefined), !!t.tasks.value?.overdue],
+              ] as [string, string, string | undefined, boolean][]).map(([label, value, foot, hot]) => (
+                <View key={label} style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 22, padding: 14 }}>
+                  <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '600' }}>{label}</Text>
+                  <Text adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.6} style={{ color: hot ? '#F28C38' : '#FFFFFF', fontSize: 20, fontWeight: '600', letterSpacing: -0.4, marginTop: 4 }}>{value}</Text>
+                  {!!foot && <Text numberOfLines={2} style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, marginTop: 2 }}>{foot}</Text>}
+                </View>
+              ))}
+            </View>
+          </View>
           {t.leftOut.length > 0 && <Text style={s.err}>Not available just now, so left out: {t.leftOut.join('; ')}.</Text>}
-          {!narrowed && !!t.cash.value && (!!t.cash.value.handedOutPaise || !!t.cash.value.returnedPaise) && <Text style={s.muted}>{moves(t.cash.value)}{t.cash.partial ? ' (partial)' : ''}: your own money moving, not spending.</Text>}
+          {!narrowed && !!t.cash.value && (!!t.cash.value.handedOutPaise || !!t.cash.value.returnedPaise) && <Text style={[s.muted, { marginBottom: 4 }]}>{moves(t.cash.value)}{t.cash.partial ? ' (partial)' : ''}: your own money moving, not spending.</Text>}
+          <Section>Each business</Section>
         </>}
         {v.businesses.map((b) => (
           <View key={b.id} style={s.card}>
-            <View style={[s.row, { marginBottom: 6 }]}><Text style={[s.text, { fontWeight: '700' }]}>{b.name}</Text>{b.status !== 'ok' && <Badge tone="danger" label={NA} />}</View>
+            <View style={[s.row, { marginBottom: 6, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}><Avatar name={b.name} size={34} /><Text style={[s.text, { fontWeight: '700', fontSize: 16, flex: 1 }]} numberOfLines={1}>{b.name}</Text></View>
+              {b.status !== 'ok' && <Badge tone="danger" label={NA} />}
+            </View>
             <KV k="Revenue" v={show(b.books, (x) => inr(x.revenuePaise))} />
             <KV k="Expenses" v={show(b.books, (x) => inr(x.expensesPaise))} />
             <KV k="Cash spent" v={show(b.cash, (x) => `${inr(x.spentConfirmedPaise)}${x.spentWaitingPaise ? ` + ${inr(x.spentWaitingPaise)} waiting` : ''}`)} />
@@ -125,7 +143,10 @@ export function CombinedScreen() {
             {l.status === 'waiting' && <View style={{ marginTop: 6 }}><Badge tone="warn" label="Waiting for sign-off" /></View>}
           </View>))}
         {v.lines.length > shown && <Btn kind="outline" label={`Show ${Math.min(PAGE, v.lines.length - shown)} more`} onPress={() => setShown((n) => n + PAGE)} />}
-        {v.notes.map((n) => <Text key={n} style={[s.muted, { marginTop: 6 }]}>{n}</Text>)}
+        {v.notes.length > 0 && <Pressable accessibilityRole="button" accessibilityState={{ expanded: howOpen }} onPress={() => setHowOpen(!howOpen)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, paddingVertical: 6 }}>
+          <Icon name="information-circle-outline" size={18} color={C.muted} /><Text style={[s.muted, { fontWeight: '600', flex: 1 }]}>How this is counted</Text><Icon name={howOpen ? 'chevron-up' : 'chevron-down'} size={16} color={C.muted} />
+        </Pressable>}
+        {howOpen && v.notes.map((n) => <Text key={n} style={[s.muted, { marginTop: 6, fontSize: 12.5 }]}>{n}</Text>)}
       </>}
     </ScrollView>
   );

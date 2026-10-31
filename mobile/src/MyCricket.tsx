@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { Text } from './Text';
 import { api } from './api';
 import { Btn, KV, s } from './ui';
 import { C } from './theme';

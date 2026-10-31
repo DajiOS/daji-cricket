@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Text } from './Text';
 import { api, authImage, upload } from './api';
 import { takeProofPhoto } from './camera';
 import type { Task, TaskRepeat, TeamMember, User } from './types';

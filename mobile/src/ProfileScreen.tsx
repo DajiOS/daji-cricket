@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { Text } from './Text';
 import { api, setToken, upload } from './api';
 import { pickProfilePhoto } from './camera';
 import type { User } from './types';

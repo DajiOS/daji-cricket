@@ -1,8 +1,12 @@
 export type Mode = 'dark' | 'light';
-// The Daji board look: deep forest green behind everything, cream cards, gold for the main button. gold is the accent inside cards (the name is kept so every
-// screen keeps working), strong / onStrong are the main button, soft is a quiet fill. head / headMuted / onBg are for words drawn straight on the green.
-const DARK = { bg: '#0A1D13', panel: '#12291C', soft: '#1A3525', line: '#24432F', text: '#EEF3EE', muted: '#A9BBAF', gold: '#E3C27A', goldDark: '#C9A24B', danger: '#F07A6E', ok: '#6FD495', warn: '#F2B544', strong: '#D4AF5A', onStrong: '#18200F', head: '#FFFFFF', headMuted: 'rgba(255,255,255,0.72)', onBg: '#E3C27A', bar: '#081A10' };
-const LIGHT = { bg: '#0E2A1B', panel: '#FBF9F3', soft: '#EFEBDD', line: '#E5E0CF', text: '#15231A', muted: '#748379', gold: '#2E9A58', goldDark: '#1C6B3C', danger: '#C93A32', ok: '#1C8A45', warn: '#A86400', strong: '#D4AF5A', onStrong: '#18200F', head: '#FFFFFF', headMuted: 'rgba(255,255,255,0.72)', onBg: '#E3C27A', bar: '#081A10' };
+// The Daji look: a soft grey page (light) or near-black page (dark), white or charcoal rounded cards, black (light) / white (dark)
+// main buttons and one orange accent. No green behind anything: green is only the "ok" colour. gold is the accent for icons and links
+// (the name is kept so every screen keeps working), strong / onStrong are the main button, soft is a quiet fill, ink is the dark
+// highlight card. head / headMuted / onBg are for words drawn straight on the page.
+const DARK = { bg: '#0E0F11', panel: '#1A1B1E', soft: '#24262A', line: '#2C2E33', text: '#F3F3F4', muted: '#9A9CA3', gold: '#F28C38', goldDark: '#D9711F', danger: '#F07A6E', ok: '#5CC98A', warn: '#F2B544', strong: '#F3F3F4', onStrong: '#111214', head: '#FFFFFF', headMuted: '#8D9097', onBg: '#F28C38', bar: '#1A1B1E', ink: '#000000' };
+const LIGHT = { bg: '#E8E9EC', panel: '#FFFFFF', soft: '#F1F2F4', line: '#E6E7EA', text: '#17181B', muted: '#85888F', gold: '#E0742A', goldDark: '#C25E18', danger: '#D9483F', ok: '#22985A', warn: '#B87100', strong: '#17181B', onStrong: '#FFFFFF', head: '#17181B', headMuted: '#7D8087', onBg: '#E0742A', bar: '#FFFFFF', ink: '#17181B' };
+/** Bright colours for icon tiles, so a grid of actions is easy to tell apart. They read on both the dark and the light page. */
+export const HUES = ['#D9A94A', '#4C9BF5', '#9B7BF7', '#2BB5A0', '#F0796E', '#E26BB0', '#5CC98A', '#F2B544'];
 /** The colours in use. The object is changed in place when the theme changes, and the app is drawn again, so every screen reads the new values. */
 export const C: typeof DARK = { ...LIGHT };
 export let mode: Mode = 'light';
