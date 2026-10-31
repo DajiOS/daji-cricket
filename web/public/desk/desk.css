@@ -989,6 +989,15 @@ select.inp.kproj-sel { width: auto; min-width: 200px; }
 .tlist { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .knext { font-size: 12px; color: var(--muted); }
 
+/* Reports › All my businesses (pages/Combined.tsx): the owner's read-only view across the businesses marked "Mine". */
+.combined-banner { border-left: 4px solid var(--gold); background: var(--surface2); }
+.combined-filters { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.combined-dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 10px; }
+.combined-dl dt { color: var(--muted); }
+.combined-dl dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; color: var(--strong); }
+.combined-notes { padding-left: 18px; }
+@media (max-width: 520px) { .combined-filters { grid-template-columns: 1fr 1fr; } }
+
 /* Dashboard and Bookings */
 .warnText { color: var(--warn); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .3px; }

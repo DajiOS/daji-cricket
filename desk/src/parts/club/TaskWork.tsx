@@ -1,7 +1,7 @@
 // The tasks upgrade: who is on the job (helpers), its next action, accepting and signing off, references kept apart from proof,
 // the job's history, the requests inbox, raising a request, and the daily site report.
 import { useEffect, useRef, useState } from 'react';
-import { Field, Modal, useToast, DateInput } from '../../ui';
+import { Chip, Field, Modal, useToast, DateInput } from '../../ui';
 import { download, fetchBlob, fmtDateTime, post, sendFile, todayISO as today, useApi } from '../../lib';
 import { Select, errMsg } from './common';
 import type { Project, Task, TaskRef } from './taskTypes';
@@ -230,10 +230,13 @@ interface SiteReport {
   proofPhotos: number; references: number;
 }
 
-/** The day on a site, from the jobs themselves, plus each person's note: how many worked, what was done, any problems. */
-export function SiteReportDialog({ projects, onClose }: { projects: Project[]; onClose: () => void }) {
+/**
+ * The day on a site, from the jobs themselves, plus each person's note: how many worked, what was done, any problems.
+ * Opened from a construction project (`fixed`), it starts on that project and day and the project cannot be switched, so a note lands where it was written from.
+ */
+export function SiteReportDialog({ projects, onClose, fixed }: { projects: Project[]; onClose: () => void; fixed?: { projectId: string; projectName: string; date: string } }) {
   const toast = useToast();
-  const [date, setDate] = useState(today()); const [proj, setProj] = useState('');
+  const [date, setDate] = useState(fixed?.date ?? today()); const [proj, setProj] = useState(fixed?.projectId ?? '');
   const [r, err, reload] = useApi<SiteReport>(`/api/site-reports?date=${date}${proj ? `&projectId=${encodeURIComponent(proj)}` : ''}`, [date, proj]);
   const mine = r?.notes.find((n) => n.mine);
   const [f, setF] = useState({ workers: '', body: '', issues: '' });
@@ -248,9 +251,11 @@ export function SiteReportDialog({ projects, onClose }: { projects: Project[]; o
     <Modal title="Daily site report" onClose={onClose} wide>
       <div className="row" style={{ gap: 8 }}>
         <DateInput className="inp" style={{ width: 170 }} aria-label="Day" value={date} max={today()} onChange={(e: any) => setDate(e.target.value || today())} />
-        <select className="inp" style={{ width: 220 }} aria-label="Site" value={proj} onChange={(e) => setProj(e.target.value)}>
-          <option value="">Whole business</option>{projects.filter((p) => p.status === 'active').map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        {fixed ? <Chip>{fixed.projectName}</Chip> : (
+          <select className="inp" style={{ width: 220 }} aria-label="Site" value={proj} onChange={(e) => setProj(e.target.value)}>
+            <option value="">Whole business</option>{projects.filter((p) => p.status === 'active').map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
       </div>
       {err && <p className="err">{err}</p>}
       {r && (

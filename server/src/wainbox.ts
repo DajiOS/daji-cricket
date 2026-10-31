@@ -387,9 +387,10 @@ export async function fetchWaitingMedia(cfg: Config, f: MediaFetch = fetch as un
       if (!buf.length) { fail('The file was empty'); continue; }
       if (buf.length > MAX_MEDIA_BYTES) { fail(`The file is larger than ${MAX_MEDIA_BYTES / 1024 / 1024} MB`, true); continue; }
       const digest = createHash('sha256').update(buf).digest('hex');
-      const want = (info.sha256 ?? m.media_sha256 ?? '').toLowerCase();
-      // WhatsApp gives the checksum in hex or base64 depending on where it is read; either must match
-      if (want && want !== digest && want !== createHash('sha256').update(buf).digest('base64').toLowerCase()) { fail('The file did not match its checksum'); continue; }
+      const want = (info.sha256 ?? m.media_sha256 ?? '').trim();
+      // WhatsApp gives the checksum in hex or base64 depending on where it is read. Hex ignores case; base64 does not, so it
+      // must match exactly
+      if (want && !(/^[0-9a-f]{64}$/i.test(want) ? want.toLowerCase() === digest : want === createHash('sha256').update(buf).digest('base64'))) { fail('The file did not match its checksum'); continue; }
       try { await gateUpload(buf, 'whatsapp_media', SYSTEM, m.owner_id); } catch (e) {
         if (e instanceof HttpError && e.status === 422) { run("UPDATE wa_messages SET media_tries = ?, media_state = 'rejected', media_error = ? WHERE id = ?", tried, 'The file did not pass the virus check, so it was not kept.', m.id); out.rejected++; continue; }
         fail(e instanceof HttpError ? e.message : 'The virus check could not run'); continue;
@@ -437,11 +438,14 @@ function recordTitle(kind: LinkKind, id: string): string | null {
 }
 
 const liveLinks = (messageId: string) => many<LinkRow>('SELECT * FROM wa_links WHERE message_id = ? AND unlinked_at IS NULL ORDER BY linked_at', messageId);
-/** A message is visible when it is not filed, or when at least one record it is filed against is visible. */
+/**
+ * A message on no record is for everyone who may use the inbox. A message on records (a filed message, or a reply that
+ * carries its records) is seen only by someone who may see every one of them: words about a restricted job stay
+ * restricted even when the same message is also filed on an open one. The owner sees everything.
+ */
 function visible(u: UserRow, m: MsgRow, links = liveLinks(m.id)): boolean {
   if (isBoss(u, m.owner_id)) return true;
-  if (m.state === 'filed' && links.length) return links.some((l) => maySeeRecord(u, m.owner_id, l.kind, l.record_id));
-  return true;
+  return links.every((l) => maySeeRecord(u, m.owner_id, l.kind, l.record_id));
 }
 
 const nameOf = (id: string | null): string | null => (id ? one<{ name: string }>('SELECT name FROM users WHERE id = ?', id)?.name ?? null : null);
@@ -570,7 +574,7 @@ export function linkedTo(u: UserRow, ownerId: string, kind: string, recordId: st
   if (!maySeeRecord(u, ownerId, kind, recordId)) throw notFound('Not found');
   const rows = many<MsgRow>(`SELECT m.* FROM wa_messages m JOIN wa_links l ON l.message_id = m.id AND l.unlinked_at IS NULL
                              WHERE l.owner_id = ? AND l.kind = ? AND l.record_id = ? ORDER BY m.sent_at, m.rowid`, ownerId, kind, recordId);
-  return { items: rows.map((m) => out(u, m)) };
+  return { items: rows.filter((m) => visible(u, m)).map((m) => out(u, m)) };
 }
 
 // ---- review actions
@@ -675,8 +679,11 @@ export async function requestFromMessage(dataDir: string, u: UserRow, ownerId: s
   const src = (body && typeof body === 'object' && !Array.isArray(body) ? body : {}) as Record<string, unknown>;
   // one request per message, whoever presses: a second manager gets the request already made. Everything from here to the
   // insert below runs without a pause, so two presses at the same moment cannot both get past this check.
-  const key = `wa:${m.wamid}`.slice(0, 80);
-  const already = () => one<{ id: string; title: string }>('SELECT id, title FROM tasks WHERE owner_id = ? AND intake_key = ? ORDER BY created_at LIMIT 1', ownerId, key);
+  // the key is a hash of the whole WhatsApp id, so two ids that differ only near the end never share a request
+  const key = `wa:${createHash('sha256').update(m.wamid).digest('hex')}`;
+  const already = () => one<{ id: string; title: string }>(`SELECT t.id, t.title FROM tasks t WHERE t.owner_id = ? AND (t.intake_key = ?
+      OR t.id IN (SELECT record_id FROM wa_links WHERE message_id = ? AND kind = 'task' AND why = 'A request made from this message'))
+    ORDER BY t.created_at LIMIT 1`, ownerId, key, m.id);
   const made = already();
   if (made) {
     if (!maySeeRecord(u, ownerId, 'task', made.id)) throw conflict('REQUEST_MADE', 'A request was already made from this message');

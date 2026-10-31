@@ -31,6 +31,7 @@ import { remindersRoutes } from './routes/reminders.ts';
 import { sheetsRoutes } from './routes/sheets.ts';
 import { areaRoutes } from './routes/areas.ts';
 import { cashRoutes } from './routes/cash.ts';
+import { combinedRoutes } from './routes/combined.ts';
 import { waInboxRoutes } from './routes/wainbox.ts';
 import { networkRoutes } from './routes/network.ts';
 import { constructionRoutes } from './routes/construction.ts';
@@ -67,6 +68,7 @@ export function buildRouter(): Router {
   sheetsRoutes(r);
   areaRoutes(r);
   cashRoutes(r);
+  combinedRoutes(r);
   waInboxRoutes(r);
   networkRoutes(r);
   constructionRoutes(r);

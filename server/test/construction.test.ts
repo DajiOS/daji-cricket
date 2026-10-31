@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 import { startHarness, type Harness } from './helpers.ts';
 import { many, one, run } from '../src/db.ts';
 import { lineAmount, taxOn } from '../src/construction.ts';
+import { addDays, istDate } from '../src/time.ts';
+import { now } from '../src/clock.ts';
 
 let h: Harness;
 before(async () => { h = await startHarness(); });
@@ -450,4 +452,12 @@ test('a request still in the Tasks inbox is not a job on Construction for anyone
   assert.deepEqual(s.report, viaTasks, 'one report, two views');
   // someone without manage_tasks sees only their own note, as on Work › Tasks
   assert.deepEqual((await call('GET', `/api/construction/projects/${w.project}/site`, reports.token)).body.report.notes, []);
+  // "Write a note" on the Site tab sends the project and the day being viewed: a note for yesterday lands on yesterday, on this project only
+  const yesterday = addDays(istDate(now()), -1);
+  assert.equal((await call('POST', '/api/site-reports', w.site, { date: yesterday, projectId: w.project, workers: 4, body: 'Curing the slab' })).status, 200);
+  const back = (await call('GET', `/api/construction/projects/${w.project}/site?date=${yesterday}`, w.owner)).body.report;
+  assert.equal(back.date, yesterday);
+  assert.deepEqual(back.notes.map((n: any) => n.body), ['Curing the slab']);
+  assert.ok(!(await call('GET', `/api/construction/projects/${w.project}/site`, w.owner)).body.report.notes.some((n: any) => n.body === 'Curing the slab'), 'not on today');
+  assert.ok(!(await call('GET', `/api/site-reports?date=${yesterday}`, w.owner)).body.notes.some((n: any) => n.body === 'Curing the slab'), 'not under the whole business');
 });

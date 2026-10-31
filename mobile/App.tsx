@@ -31,6 +31,7 @@ import { CostsScreen } from './src/CostsScreen';
 import { RemindersScreen } from './src/RemindersScreen';
 import { CardsScreen } from './src/CardsScreen';
 import { CashScreen } from './src/CashScreen';
+import { CombinedScreen } from './src/CombinedScreen';
 import { ConstructionScreen } from './src/ConstructionScreen';
 import { SettingsScreen } from './src/SettingsScreen';
 import { Avatar, Btn, Chip, Icon, type IconName, ListCard, ListRow, Loading, Steps, s, refreshStyles } from './src/ui';
@@ -55,7 +56,7 @@ import { Lang, isLang, rememberLang, savedLang, translator, useLang, type UiLang
 //   owner        the same, plus Promo codes, Team, Booking controls, Staff pay and Compliance under More
 //   super admin  the same as the owner, working inside the owner chosen under More, plus Refunds and Software costs
 type Tab = 'home' | 'book' | 'me' | 'live' | 'ask' | 'profile' | 'bookings' | 'tasks' | 'more' | 'signin' | 'auctions' | 'fantasy';
-type More = null | 'accounts' | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings' | 'cash' | 'construction';
+type More = null | 'accounts' | 'promo' | 'team' | 'platform' | 'profile' | 'academy' | 'matches' | 'desk' | 'payroll' | 'compliance' | 'refunds' | 'costs' | 'reminders' | 'cards' | 'settings' | 'cash' | 'combined' | 'construction';
 
 const TAB_ICON: Record<string, IconName> = { home: 'home', book: 'calendar', me: 'receipt', live: 'radio', ask: 'sparkles', profile: 'person-circle', bookings: 'calendar', tasks: 'checkbox', more: 'grid', signin: 'log-in' };
 /** The bar of tabs along the bottom: an icon over each name; the open tab is filled green. */
@@ -232,6 +233,7 @@ function AppInner({ theme }: { theme: Mode }) {
       else if (more === 'reminders' && perm('send_broadcasts')) body = <RemindersScreen key={deskKey} />;
       else if (more === 'cards' && perm('view_customers')) body = <CardsScreen key={deskKey} />;
       else if (more === 'cash' && (boss || perm('manage_tasks'))) body = <CashScreen key={`${deskKey}:${cashSpend}`} user={user} startSpend={cashSpend || undefined} />;
+      else if (more === 'combined' && user.role === 'owner') body = <CombinedScreen key={deskKey} />;
       else if (more === 'construction' && constructionOk) body = <ConstructionScreen key={deskKey} user={user} />;
       else if (more === 'settings' && boss) body = <SettingsScreen user={user} />;
       else if (more === 'academy' && perm('manage_academy')) body = <AcademyScreen key={deskKey} />;
@@ -271,6 +273,7 @@ function AppInner({ theme }: { theme: Mode }) {
             perm('view_customers') && ['id-card-outline', 'Business cards', '', 'cards'],
           ]} onPick={setMore} />
           <MenuGroup title="Money" rows={[
+            user.role === 'owner' && ['albums-outline', 'All my businesses', 'Your businesses side by side, read-only', 'combined'],
             accountsOk && ['wallet-outline', 'Books', 'Accounts, money in and out', 'accounts'],
             (boss || perm('manage_tasks')) && ['card-outline', 'Cash', boss ? 'Cash your team holds, spends to sign' : 'Cash you hold, spends and receipts', 'cash'],
             boss && ['cash-outline', 'Staff pay and attendance', '', 'payroll'],
