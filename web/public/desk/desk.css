@@ -637,7 +637,8 @@ html[data-theme="dark"] .dorbit-core { color: var(--on-strong); } html[data-them
 .dap-chev b { font-weight: 600; } .dap-chev span { font-size: 13px; }
 .dap-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 .dap-board-wrap { flex: 999 1 560px; min-width: 0; overflow-x: auto; }
-.dap-board { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 10px; min-width: 780px; }
+/* narrow enough that all five stages fit beside an open card on a 1366 px screen; below that the board scrolls sideways */
+.dap-board { display: grid; grid-template-columns: repeat(5, minmax(116px, 1fr)); gap: 10px; min-width: 630px; }
 .dap-col { display: flex; flex-direction: column; gap: 8px; min-height: 300px; padding: 10px; border-radius: 16px; }
 .dap-who { font-size: 12px; font-weight: 600; }
 .dap-card { text-align: left; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; background: var(--surface); border: 1px solid var(--line); color: var(--fg); cursor: pointer; }
