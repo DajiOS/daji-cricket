@@ -31,8 +31,8 @@ export function Intro({ onDone }: { onDone: () => void }) {
   if (!on) return null;
 
   const dark = mode === 'dark';
-  const bg = dark ? '#07100C' : '#F3F6F4', fg = dark ? '#E9F1EC' : '#14231B', ac = dark ? '#5FD68A' : '#1C7A3E';
-  const line = dark ? 'rgba(95,214,138,.28)' : 'rgba(28,122,62,.26)', chip = dark ? '#15221C' : '#E3ECE6', scr = dark ? '#0B1511' : '#FFFFFF';
+  const bg = dark ? '#0B0D0C' : '#F5F4F0', fg = dark ? '#F2EFE8' : '#17191A', ac = dark ? '#D9C08A' : '#8A6C22';
+  const line = dark ? 'rgba(217,192,138,.28)' : 'rgba(138,108,34,.26)', chip = dark ? '#1E2321' : '#EFEDE7', scr = dark ? '#151918' : '#FFFFFF';
   const u = Math.min(W, H) / 100;
 
   const arcIn = ease((t - 100) / 2600), arcOut = 1 - clamp((t - 8200) / 900);

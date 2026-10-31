@@ -39,7 +39,7 @@ import { Appearance } from './src/photo';
 import * as SecureStore from 'expo-secure-store';
 import { Intro } from './src/Intro';
 import { registerForPush, unregisterPush, onNotificationTap } from './src/push';
-import { C, inr, mode, niceDate, setMode, type Mode } from './src/theme';
+import { C, inr, mode, niceDate, setMode, tint, type Mode } from './src/theme';
 import { ADMIN_APP } from './src/variant';
 import { useWake } from './src/fresh';
 import { lockOn, setLockOn, useLock } from './src/lock';
@@ -62,12 +62,12 @@ const TAB_ICON: Record<string, IconName> = { home: 'home', book: 'calendar', me:
 /** The bar of tabs along the bottom: an icon over each name; the open tab is filled green. */
 function TabBar({ tabs, on, onPick, bottom }: { tabs: [string, string][]; on: string; onPick: (id: string) => void; bottom: number }) {
   return (
-    <View style={{ flexDirection: 'row', borderTopColor: 'rgba(255,255,255,0.08)', borderTopWidth: 1, backgroundColor: C.bar, paddingHorizontal: 6, paddingTop: 8, paddingBottom: Math.max(12, bottom) }}>
+    <View style={{ flexDirection: 'row', borderTopColor: C.line, borderTopWidth: 1, backgroundColor: C.bar, paddingHorizontal: 6, paddingTop: 8, paddingBottom: Math.max(12, bottom) }}>
       {tabs.map(([id, name]) => {
         const sel = on === id, icon = TAB_ICON[id] ?? 'ellipse';
         return (
           <Pressable key={id} accessibilityRole="tab" accessibilityState={{ selected: sel }} accessibilityLabel={name} onPress={() => onPick(id)} style={{ flex: 1, alignItems: 'center', gap: 3 }}>
-            <View style={{ paddingVertical: 4, paddingHorizontal: 14, borderRadius: 999, backgroundColor: sel ? 'rgba(227,194,122,0.14)' : 'transparent' }}>
+            <View style={{ paddingVertical: 4, paddingHorizontal: 14, borderRadius: 999, backgroundColor: sel ? tint(C.onBg, 0.14) : 'transparent' }}>
               <Icon name={(sel ? icon : `${icon}-outline`) as IconName} size={22} color={sel ? C.onBg : C.headMuted} />
             </View>
             <Text numberOfLines={1} style={{ color: sel ? C.onBg : C.headMuted, fontSize: 11, fontWeight: sel ? '800' : '600' }}>{name}</Text>
@@ -172,13 +172,13 @@ function AppInner({ theme }: { theme: Mode }) {
   const signOut = useCallback(async () => { await unregisterPush(); await serverSignOut(); await setToken(null); await setLockOn(false); setViewOwner(null); setBusiness(null); setUser(null); setHold(null); setDone(null); setMore(null); setTab('home'); }, []);
 
   if (user === undefined) return <View style={s.screen}><Loading /></View>;
-  if (user === null && ADMIN_APP) return <><StatusBar style="light" /><AuthScreen admin onUser={setUser} /></>;
+  if (user === null && ADMIN_APP) return <><StatusBar style={mode === 'light' ? 'dark' : 'light'} /><AuthScreen admin onUser={setUser} /></>;
   if (user === null) {
     // Guests open straight on the booking page and only sign in when they hold a slot or open their own pages.
     const ask = () => setSignin(true);
     return (
       <View style={s.screen}>
-        <StatusBar style="light" />
+        <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
         <View style={{ flex: 1, display: signin || tab !== 'book' ? 'none' : 'flex' }}><BookScreen onHold={() => {}} onNeedSignIn={ask} /></View>
         {!signin && tab === 'live' && <LiveScreen />}
         {!signin && tab === 'home' && <CustomerHome user={null} aiName="" go={(to) => { if (to === 'book' || to === 'live') setTab(to); else ask(); }} />}
@@ -190,7 +190,7 @@ function AppInner({ theme }: { theme: Mode }) {
   if (ADMIN_APP === (user.role === 'customer')) {
     return (
       <View style={[s.screen, s.pad, { paddingTop: 90 }]}>
-        <StatusBar style="light" />
+        <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
         <Text style={s.eyebrow}>{ADMIN_APP ? 'Daji Admin' : 'Daji Cricket Ground'}</Text>
         <Text style={s.h1}>{ADMIN_APP ? 'This app is for the ground team' : 'Please use the Daji Admin app'}</Text>
         <Text style={[s.muted, { marginBottom: 18 }]}>{ADMIN_APP ? 'Your account is a customer account. Book and manage your games in the Daji Cricket Ground app.' : 'Your account belongs to the ground team. Sign in to the Daji Admin app to work with bookings, tasks and accounts.'}</Text>
@@ -314,7 +314,7 @@ function AppInner({ theme }: { theme: Mode }) {
     : [['home', 'Home'], ...(bookingsOk ? [['bookings', 'Bookings'] as [Tab, string]] : []), ['tasks', 'Tasks'], ['ask', aiTab], ['more', 'More']];
   return (
     <View style={s.screen}>
-      <StatusBar style="light" />
+      <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
       {!!voiceNote && <Pressable onPress={() => setVoiceNote('')} style={{ backgroundColor: C.soft, paddingTop: insets.top + 8, paddingBottom: 10, paddingHorizontal: 16 }}><Text style={s.text}>{voiceNote}</Text></Pressable>}
       <View key={wake} style={{ flex: 1 }}>{body}</View>
       {!hold && <TabBar tabs={tabs} on={customer && (tab === 'book' || tab === 'auctions' || tab === 'fantasy') ? 'home' : tab} onPick={(id) => { setDone(null); setMore(null); setTab(id as Tab); }} bottom={insets.bottom} />}
@@ -343,7 +343,7 @@ export default function App() {
   useEffect(() => { (async () => { try { const v = await SecureStore.getItemAsync(THEME_KEY); if (v === 'light' || v === 'dark') { setMode(v); refreshStyles(); setM(v); } } catch { /* keep light */ } setLangState(await savedLang()); setReady(true); })(); }, []);
   const setLang = useCallback((l: UiLang) => { setLangState(l); rememberLang(l); }, []);
   const flip = () => { const next: Mode = m === 'dark' ? 'light' : 'dark'; setMode(next); refreshStyles(); setM(next); SecureStore.setItemAsync(THEME_KEY, next).catch(() => {}); };
-  if (!ready) return <View style={{ flex: 1, backgroundColor: '#0E2A1B' }} />;
+  if (!ready) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
   return (
     <SafeAreaProvider>
       <Appearance.Provider value={{ mode: m, flip }}>

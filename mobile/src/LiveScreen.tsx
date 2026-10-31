@@ -63,7 +63,7 @@ function ScoreBoard({ sc }: { sc: Scorecard }) {
   const m = sc.match, cur = sc.innings[sc.innings.length - 1], first = sc.innings[0];
   const live = m.status === 'live';
   return (
-    <View style={{ backgroundColor: '#0F3A22', borderRadius: 18, padding: 16, marginBottom: 14 }}>
+    <View style={{ backgroundColor: '#1A1E1C', borderRadius: 18, padding: 16, marginBottom: 14 }}>
       <View style={[s.row, { paddingVertical: 0 }]}>
         <Text style={{ color: 'rgba(255,255,255,.8)', fontSize: 12, fontWeight: '600', flex: 1 }} numberOfLines={1}>{m.title} · {m.overs} overs</Text>
         <View style={{ backgroundColor: live ? '#E5484D' : 'rgba(255,255,255,.18)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 10 }}><Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{live ? 'LIVE' : 'Result'}</Text></View>

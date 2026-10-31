@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Image, RefreshControl, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { api } from './api';
 import type { StaffBooking, Task, User, MatchRow } from './types';
-import { ActionTile, Avatar, Badge, Icon, type IconName, SectionHead, StatTile, s } from './ui';
-import { C, niceDate } from './theme';
+import { ActionGrid, ActionTile, Avatar, Badge, type IconName, SectionHead, StatTile, s } from './ui';
+import { C, niceDate, tint } from './theme';
 import { useGroundPhoto } from './photo';
 
 const hhmm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
@@ -51,9 +51,9 @@ export function HomeScreen({ user, aiName, go }: { user: User; aiName: string; g
         <Pressable accessibilityRole="button" accessibilityLabel="Your profile" onPress={() => go('profile')}><Avatar name={user.name} url={user.avatarUrl} size={40} /></Pressable>
       </View>
 
-      <View style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: '#123D24', minHeight: 150, justifyContent: 'flex-end', padding: 18, marginBottom: 14 }}>
+      <View style={{ borderRadius: 22, overflow: 'hidden', backgroundColor: '#1A1E1C', minHeight: 160, justifyContent: 'flex-end', padding: 18, marginBottom: 14 }}>
         {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: pic ? 'rgba(6,22,13,.5)' : 'transparent' }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: pic ? 'rgba(8,10,9,.5)' : 'transparent' }]} />
         <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '800', letterSpacing: -0.4 }}>{greeting()}, {first}</Text>
         <Text style={{ color: 'rgba(255,255,255,.88)', fontSize: 14, marginTop: 2 }}>{user.businessName || 'Daji Cricket Ground'} · {niceDate(new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10))}</Text>
       </View>
@@ -65,19 +65,19 @@ export function HomeScreen({ user, aiName, go }: { user: User; aiName: string; g
           : <StatTile icon="checkbox-outline" value={tasks == null ? '–' : String(tasks)} label="Open tasks" onPress={() => go('tasks')} />}
       </View>
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+      <ActionGrid>
         {actions.slice(0, 8).map(([icon, label, to]) => <ActionTile key={to} icon={icon} label={label} onPress={() => go(to)} />)}
-      </View>
+      </ActionGrid>
 
       {bookingsOk && (<>
         <SectionHead title="Coming up today" action="See all" onAction={() => go('bookings')} />
         {today === null ? null : !upcoming.length ? <Text style={[s.muted, { marginBottom: 12 }]}>Nothing more booked today.</Text> : upcoming.map((b) => (
           <Pressable key={b.id} accessibilityRole="button" onPress={() => go('bookings')} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 10 }]}>
-            <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: C.soft, alignItems: 'center', justifyContent: 'center' }}><Icon name="time-outline" size={20} color={C.gold} /></View>
+            <View style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: tint(C.gold, 0.12), alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.gold, fontSize: 15, fontWeight: '800' }}>{hhmm(b.startAt)}</Text></View>
             <View style={{ flex: 1 }}>
               <Text style={[s.text, { fontWeight: '700' }]} numberOfLines={1}>{b.customerName}</Text>
               <Text style={s.muted} numberOfLines={1}>{b.groundName}{b.formatLabel ? ` · ${b.formatLabel}` : ''}</Text>
-              <Text style={[s.muted, { fontSize: 12 }]}>{hhmm(b.startAt)} – {hhmm(b.endAt)}</Text>
+              <Text style={[s.muted, { fontSize: 12 }]}>Until {hhmm(b.endAt)}</Text>
             </View>
             <Badge tone={b.approval === 'pending' ? 'gold' : b.balancePaise > 0 ? 'warn' : 'ok'} label={b.approval === 'pending' ? 'Approve' : b.balancePaise > 0 ? 'Balance due' : 'Confirmed'} />
           </Pressable>

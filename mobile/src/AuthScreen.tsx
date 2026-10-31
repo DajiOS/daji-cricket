@@ -29,9 +29,9 @@ export function AuthScreen({ onUser, admin, onBack, note }: { onUser: (u: User) 
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-        <View style={{ height: 250, backgroundColor: '#0F3A22', justifyContent: 'flex-end', padding: 18, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, overflow: 'hidden', marginBottom: 18 }}>
+        <View style={{ height: 250, backgroundColor: '#1A1E1C', justifyContent: 'flex-end', padding: 18, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, overflow: 'hidden', marginBottom: 18 }}>
           {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: pic ? 'rgba(6,22,13,.55)' : 'transparent' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: pic ? 'rgba(8,10,9,.55)' : 'transparent' }]} />
           <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 220, height: 76, marginLeft: -6 }} />
           <Text style={{ color: 'rgba(255,255,255,.9)', fontSize: 13, fontWeight: '700', letterSpacing: 2, marginTop: 6 }}>{admin ? 'DAJI ADMIN' : 'PLAY · PRACTICE · GROW'}</Text>
         </View>

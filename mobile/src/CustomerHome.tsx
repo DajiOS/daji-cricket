@@ -3,7 +3,7 @@ import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } 
 import { api } from './api';
 import type { Booking, MatchRow, User } from './types';
 import { Avatar, Badge, Btn, Icon, type IconName, SectionHead, s } from './ui';
-import { C, inr, niceDate } from './theme';
+import { C, inr, niceDate, tint } from './theme';
 import { useGroundPhoto } from './photo';
 import { UI_LANGUAGES, UI_LANGUAGE_NAMES, useLang, type T } from './lang';
 
@@ -116,7 +116,7 @@ export function CustomerHome({ user, aiName, go }: { user: User | null; aiName: 
       {!user && (<View accessibilityRole="radiogroup" accessibilityLabel={t('common.language')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
         {UI_LANGUAGES.map((l) => (
           <Pressable key={l} accessibilityRole="radio" accessibilityState={{ selected: lang === l }} onPress={() => setLang(l)}
-            style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: lang === l ? C.gold : 'rgba(227,194,122,0.28)', backgroundColor: lang === l ? 'rgba(227,194,122,0.16)' : 'transparent' }}>
+            style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: lang === l ? C.gold : tint(C.gold, 0.28), backgroundColor: lang === l ? tint(C.gold, 0.16) : 'transparent' }}>
             <Text style={{ color: C.head, fontSize: 15, fontWeight: lang === l ? '800' : '600' }}>{UI_LANGUAGE_NAMES[l]}</Text>
           </Pressable>
         ))}
@@ -129,4 +129,4 @@ export function CustomerHome({ user, aiName, go }: { user: User | null; aiName: 
     </ScrollView>
   );
 }
-const tileStyle = () => ({ flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(227,194,122,0.28)', borderWidth: 1, borderRadius: 16, padding: 14 });
+const tileStyle = () => ({ flex: 1, backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 16, padding: 14 });

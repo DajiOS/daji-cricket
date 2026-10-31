@@ -1,8 +1,9 @@
 export type Mode = 'dark' | 'light';
-// The Daji board look: deep forest green behind everything, cream cards, gold for the main button. gold is the accent inside cards (the name is kept so every
-// screen keeps working), strong / onStrong are the main button, soft is a quiet fill. head / headMuted / onBg are for words drawn straight on the green.
-const DARK = { bg: '#0A1D13', panel: '#12291C', soft: '#1A3525', line: '#24432F', text: '#EEF3EE', muted: '#A9BBAF', gold: '#E3C27A', goldDark: '#C9A24B', danger: '#F07A6E', ok: '#6FD495', warn: '#F2B544', strong: '#D4AF5A', onStrong: '#18200F', head: '#FFFFFF', headMuted: 'rgba(255,255,255,0.72)', onBg: '#E3C27A', bar: '#081A10' };
-const LIGHT = { bg: '#0E2A1B', panel: '#FBF9F3', soft: '#EFEBDD', line: '#E5E0CF', text: '#15231A', muted: '#748379', gold: '#2E9A58', goldDark: '#1C6B3C', danger: '#C93A32', ok: '#1C8A45', warn: '#A86400', strong: '#D4AF5A', onStrong: '#18200F', head: '#FFFFFF', headMuted: 'rgba(255,255,255,0.72)', onBg: '#E3C27A', bar: '#081A10' };
+// The Daji look, matched to the desk: a near-black (dark) or warm off-white (light) page, plain cards, and one gold accent. No green
+// behind anything: green is only the "ok" colour. gold is the accent for icons and links (the name is kept so every screen keeps
+// working), strong / onStrong are the main button, soft is a quiet fill. head / headMuted / onBg are for words drawn straight on the page.
+const DARK = { bg: '#0B0D0C', panel: '#151918', soft: '#1E2321', line: '#272D2A', text: '#F2EFE8', muted: '#9BA19D', gold: '#D9C08A', goldDark: '#B89A5C', danger: '#F07A6E', ok: '#5CC98A', warn: '#F2B544', strong: '#D9C08A', onStrong: '#17140C', head: '#FFFFFF', headMuted: '#8F9692', onBg: '#D9C08A', bar: '#111413' };
+const LIGHT = { bg: '#F5F4F0', panel: '#FFFFFF', soft: '#EFEDE7', line: '#E5E2DA', text: '#17191A', muted: '#6B716E', gold: '#8A6C22', goldDark: '#6E561B', danger: '#C93A32', ok: '#1E8A4C', warn: '#A86400', strong: '#17191A', onStrong: '#FFFFFF', head: '#111312', headMuted: '#757B78', onBg: '#8A6C22', bar: '#FFFFFF' };
 /** The colours in use. The object is changed in place when the theme changes, and the app is drawn again, so every screen reads the new values. */
 export const C: typeof DARK = { ...LIGHT };
 export let mode: Mode = 'light';
