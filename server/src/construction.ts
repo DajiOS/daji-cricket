@@ -259,6 +259,21 @@ CREATE TABLE construction_docs (
 CREATE INDEX ix_construction_docs_project ON construction_docs(project_id, kind, current);
 `);
 
+// What a project file is about, read from the file when it is added (drawingRead.ts) and correctable on the project:
+// its type (Architectural, Structural, Invoice, Contract…) and the vendor or consultant it is from. One row per document.
+registerSchema('construction-2', `
+CREATE TABLE construction_doc_meta (
+  doc_id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL,
+  category TEXT NOT NULL,
+  party TEXT,
+  read_from TEXT NOT NULL CHECK (read_from IN ('ai','text','name','none','person')),
+  updated_at INTEGER NOT NULL,
+  updated_by TEXT
+);
+CREATE INDEX ix_construction_doc_meta_owner ON construction_doc_meta(owner_id, category);
+`);
+
 // ------------------------------------------------------------------ access
 
 /** Who works on construction: the owner, and team members who run jobs, keep the books or see the reports. */
@@ -1107,12 +1122,14 @@ export function updateDefect(u: UserRow, ownerId: string, id: string, body: unkn
 
 // ------------------------------------------------------------------ plans and documents
 
-interface CDocRow { doc_id: string; project_id: string; kind: 'drawing' | 'document'; title: string; drawing_no: string | null; revision: string | null; current: number; linked_at: number; linked_by: string | null; name: string; mime: string; bytes: number }
-const cdocOut = (d: CDocRow) => ({ docId: d.doc_id, kind: d.kind, title: d.title, drawingNo: d.drawing_no, revision: d.revision, current: !!d.current, fileName: d.name, mime: d.mime, bytes: d.bytes, linkedByName: nameOf(d.linked_by), linkedAt: d.linked_at });
+interface CDocRow { doc_id: string; project_id: string; kind: 'drawing' | 'document'; title: string; drawing_no: string | null; revision: string | null; current: number; linked_at: number; linked_by: string | null; name: string; mime: string; bytes: number; category: string | null; party: string | null; read_from: string | null }
+const cdocOut = (d: CDocRow) => ({ docId: d.doc_id, kind: d.kind, title: d.title, drawingNo: d.drawing_no, revision: d.revision, current: !!d.current, fileName: d.name, mime: d.mime, bytes: d.bytes, linkedByName: nameOf(d.linked_by), linkedAt: d.linked_at,
+  category: d.category ?? (d.kind === 'drawing' ? 'Other drawing' : 'Other document'), party: d.party, readFrom: d.read_from ?? 'person' });
 
 export function listProjectDocs(u: UserRow, ownerId: string, projectId: string) {
   cproject(u, ownerId, projectId);
-  return { items: many<CDocRow>(`SELECT c.*, d.name, d.mime, d.bytes FROM construction_docs c JOIN docs d ON d.id = c.doc_id
+  return { categories: DOC_CATEGORIES, items: many<CDocRow>(`SELECT c.*, d.name, d.mime, d.bytes, m.category, m.party, m.read_from FROM construction_docs c JOIN docs d ON d.id = c.doc_id
+      LEFT JOIN construction_doc_meta m ON m.doc_id = c.doc_id
       WHERE c.project_id = ? AND d.deleted_at IS NULL ORDER BY c.kind DESC, c.current DESC, COALESCE(c.drawing_no, c.title), c.linked_at DESC`, projectId).map(cdocOut) };
 }
 
@@ -1139,6 +1156,97 @@ export function linkProjectDoc(u: UserRow, ownerId: string, projectId: string, b
       docId!, projectId, ownerId, kind, title ?? d.name, no, revision ?? null, now(), u.id);
   });
   audit(actorOf(u), 'construction.doc', 'project', projectId, { docId, kind, drawingNo: no, revision: revision ?? null }, ownerId);
+  return listProjectDocs(u, ownerId, projectId);
+}
+
+/** The types a project file is sorted under. Drawings by discipline; other documents by what they are. */
+export const DOC_CATEGORIES = {
+  drawing: ['Architectural', 'Structural', 'Electrical', 'Plumbing', 'Mechanical', 'Fire', 'Civil', 'Interior', 'Landscape', 'Other drawing'],
+  document: ['Invoice', 'Quotation', 'Purchase order', 'Contract', 'BOQ', 'Permit or approval', 'Report or test', 'Letter', 'Photo', 'Other document'],
+} as const;
+const allCategories: readonly string[] = [...DOC_CATEGORIES.drawing, ...DOC_CATEGORIES.document];
+export const fitCategory = (kind: 'drawing' | 'document', c: string | null | undefined): string => {
+  const hit = c ? allCategories.find((x) => x.toLowerCase() === c.trim().toLowerCase()) : undefined;
+  return hit && (DOC_CATEGORIES[kind] as readonly string[]).includes(hit) ? hit : kind === 'drawing' ? 'Other drawing' : 'Other document';
+};
+
+/** Marks the newest revision of each drawing number on a project as the current one, the rest as replaced. */
+function settleCurrent(projectId: string, drawingNo: string | null): void {
+  if (!drawingNo) return;
+  run("UPDATE construction_docs SET current = 0 WHERE project_id = ? AND kind = 'drawing' AND drawing_no = ?", projectId, drawingNo);
+  run(`UPDATE construction_docs SET current = 1 WHERE rowid = (SELECT rowid FROM construction_docs WHERE project_id = ? AND kind = 'drawing' AND drawing_no = ?
+      ORDER BY linked_at DESC, rowid DESC LIMIT 1)`, projectId, drawingNo);
+}
+function saveMeta(ownerId: string, docId: string, category: string, party: string | null, from: string, by: string | null): void {
+  run(`INSERT INTO construction_doc_meta(doc_id, owner_id, category, party, read_from, updated_at, updated_by) VALUES (?,?,?,?,?,?,?)
+      ON CONFLICT(doc_id) DO UPDATE SET category = excluded.category, party = excluded.party, read_from = excluded.read_from, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    docId, ownerId, category, party, from, now(), by);
+}
+
+const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9#]+/g, ' ').trim();
+/** Which of the business's construction projects a file names: its project code (strongest), its name, or its site address.
+ *  The file stays on the project it was added to unless that project is not named and exactly one other project is. */
+export function projectNamedIn(u: UserRow, ownerId: string, projectId: string, text: string, fileName: string): { projectId: string; name: string; because: string } | null {
+  const hay = ` ${words(`${fileName}\n${text}`)} `;
+  const projects = many<{ id: string; name: string; area_id: string | null; code: string; site: string | null }>(
+    `SELECT p.id, p.name, p.area_id, c.code, c.site FROM projects p JOIN construction_projects c ON c.project_id = p.id WHERE p.owner_id = ? AND p.status = 'active'`, ownerId)
+    .filter((p) => canSeeArea(u, ownerId, p.area_id));
+  const score = (p: { name: string; code: string; site: string | null }): [number, string] => {
+    if (words(p.code).length >= 3 && hay.includes(` ${words(p.code)} `)) return [3, `it names the project code ${p.code}`];
+    if (words(p.name).length >= 5 && hay.includes(` ${words(p.name)} `)) return [2, `it names ${p.name}`];
+    if (p.site && words(p.site).length >= 8 && hay.includes(` ${words(p.site)} `)) return [1, `it names the site ${p.site}`];
+    return [0, ''];
+  };
+  if (score(projects.find((p) => p.id === projectId) ?? { name: '', code: '', site: null })[0] > 0) return null;
+  const named = projects.filter((p) => p.id !== projectId).map((p) => ({ p, s: score(p) })).filter((x) => x.s[0] >= 2);
+  const best = Math.max(0, ...named.map((x) => x.s[0]));
+  const top = named.filter((x) => x.s[0] === best);
+  return top.length === 1 ? { projectId: top[0]!.p.id, name: top[0]!.p.name, because: top[0]!.s[1] } : null;
+}
+
+/** Puts a newly added file on a project with what was read from it (drawingRead.ts): kind, number, revision, title, type, vendor,
+ *  and on the project it names when that is another project. Returns the project it went to and what was read. */
+export function placeProjectFile(u: UserRow, ownerId: string, projectId: string, docId: string, fileName: string, text: string,
+  read: { kind: 'drawing' | 'document'; drawingNo: string | null; revision: string | null; title: string | null; category: string | null; party: string | null; from: string }) {
+  cproject(u, ownerId, projectId); need(runsSite(u), 'manage_tasks');
+  const moved = projectNamedIn(u, ownerId, projectId, text, fileName);
+  const target = moved?.projectId ?? projectId;
+  cproject(u, ownerId, target);
+  const kind = read.kind === 'drawing' && read.drawingNo ? 'drawing' : 'document';
+  linkProjectDoc(u, ownerId, target, { docId, kind, title: read.title ?? undefined, drawingNo: kind === 'drawing' ? read.drawingNo : undefined, revision: kind === 'drawing' ? read.revision ?? undefined : undefined });
+  saveMeta(ownerId, docId, fitCategory(kind, read.category), read.party, read.from, u.id);
+  if (moved) audit(actorOf(u), 'construction.doc_routed', 'project', target, { docId, addedOn: projectId, because: moved.because }, ownerId);
+  return { docId, projectId: target, projectName: moved?.name ?? null, movedBecause: moved?.because ?? null, kind, drawingNo: kind === 'drawing' ? read.drawingNo : null, revision: kind === 'drawing' ? read.revision : null, category: fitCategory(kind, read.category), party: read.party, readFrom: read.from };
+}
+
+/** Corrects what was read from a project file: drawing or document, number, revision, title, type, vendor, or the project it is on. */
+export function updateProjectDoc(u: UserRow, ownerId: string, projectId: string, docId: string, body: unknown) {
+  cproject(u, ownerId, projectId); need(runsSite(u), 'manage_tasks');
+  const row = one<CDocRow>('SELECT * FROM construction_docs WHERE doc_id = ? AND project_id = ?', docId, projectId);
+  if (!row) throw notFound('Document not found');
+  const v = new Validator(body);
+  const kind = v.oneOf('kind', ['drawing', 'document'] as const) ?? row.kind;
+  const title = v.str('title', { max: 200 }) ?? row.title;
+  const drawingNo = kind === 'drawing' ? (v.str('drawingNo', { max: 40 }) ?? row.drawing_no)?.toUpperCase() ?? null : null;
+  const revision = kind === 'drawing' ? (v.has('revision') ? v.str('revision', { max: 10 }) ?? null : row.revision) : null;
+  const category = v.str('category', { max: 40 });
+  const party = v.has('party') ? v.str('party', { max: 120 }) ?? null : undefined;
+  const to = v.str('projectId', { max: 60 }) ?? projectId;
+  if (kind === 'drawing' && !drawingNo) v.fail('drawingNo', 'A drawing needs its number');
+  v.done();
+  if (to !== projectId) cproject(u, ownerId, to);
+  if (to !== projectId && one('SELECT 1 FROM construction_docs WHERE doc_id = ? AND project_id = ?', docId, to)) throw conflict('ALREADY_LINKED', 'This document is already on that project');
+  if (kind === 'drawing' && one("SELECT 1 FROM construction_docs WHERE project_id = ? AND kind = 'drawing' AND drawing_no = ? AND COALESCE(revision, '') = ? AND doc_id <> ?", to, drawingNo!, revision ?? '', docId))
+    throw conflict('REVISION_EXISTS', `Drawing ${drawingNo} revision ${revision ?? '(none)'} is already on the project`);
+  const meta = one<{ category: string; party: string | null }>('SELECT category, party FROM construction_doc_meta WHERE doc_id = ?', docId);
+  tx(() => {
+    run('UPDATE construction_docs SET project_id = ?, kind = ?, title = ?, drawing_no = ?, revision = ? WHERE doc_id = ? AND project_id = ?', to, kind, title, drawingNo, revision ?? null, docId, projectId);
+    settleCurrent(projectId, row.drawing_no); settleCurrent(to, drawingNo);
+    if (kind === 'document') run('UPDATE construction_docs SET current = 1 WHERE doc_id = ? AND project_id = ?', docId, to);
+    saveMeta(ownerId, docId, fitCategory(kind, category ?? meta?.category), party === undefined ? meta?.party ?? null : party, 'person', u.id);
+  });
+  audit(actorOf(u), 'construction.doc_edit', 'project', to, { docId, from: { projectId, kind: row.kind, drawingNo: row.drawing_no, revision: row.revision, title: row.title, category: meta?.category ?? null, party: meta?.party ?? null },
+    to: { projectId: to, kind, drawingNo, revision, title, category: fitCategory(kind, category ?? meta?.category), party: party === undefined ? meta?.party ?? null : party } }, ownerId);
   return listProjectDocs(u, ownerId, projectId);
 }
 
