@@ -7,7 +7,7 @@ const MAP: Record<string, string> = {
   card: 'credit-card', car: 'car', cash: 'money', checkbox: 'check-square', 'checkmark-circle': 'check-circle', checkmark: 'check',
   'chevron-back': 'caret-left', 'chevron-down': 'caret-down', 'chevron-forward': 'caret-right', 'chevron-forward-circle': 'caret-circle-right',
   'chevron-up': 'caret-up', code: 'code', construct: 'hammer', contrast: 'circle-half', create: 'pencil-simple', document: 'file-text',
-  ellipse: 'circle', 'finger-print': 'fingerprint', grid: 'squares-four', home: 'house', 'id-card': 'identification-card', image: 'image',
+  ellipse: 'circle', chatbubble: 'chat-circle', videocam: 'video-camera', 'finger-print': 'fingerprint', grid: 'squares-four', home: 'house', 'id-card': 'identification-card', image: 'image',
   images: 'images', 'information-circle': 'info', key: 'key', language: 'translate', link: 'link', 'lock-closed': 'lock', 'log-in': 'sign-in',
   'log-out': 'sign-out', 'logo-whatsapp': 'whatsapp-logo', mic: 'microphone', open: 'arrow-square-out', options: 'sliders-horizontal',
   people: 'users-three', 'person-circle': 'user-circle', person: 'user', podium: 'ranking', power: 'power', pricetag: 'tag', radio: 'broadcast',

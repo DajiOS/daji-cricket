@@ -143,9 +143,11 @@ export const GuppiMark = ({ size = 36 }: { size?: number }) => {
 
 /** The person's picture, or their initials on a soft gold disc. */
 const initials = (name: string) => { const p = name.trim().split(/\s+/).filter(Boolean); return ((p[0]?.[0] ?? '?') + (p.length > 1 ? p[p.length - 1]![0] : '')).toUpperCase(); };
+/** A steady colour for a name, so each person keeps the same colour everywhere. */
+export const hueOf = (name: string) => HUES[[...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 9973, 7) % HUES.length]!;
 export const Avatar = ({ name, url, size = 40 }: { name: string; url?: string | null; size?: number }) => (
-  <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: tint(C.gold, 0.18), alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-    {url ? <Image source={{ uri: /^(https?:|data:)/.test(url) ? url : API_URL + url }} style={{ width: size, height: size }} /> : <Text style={{ color: C.gold, fontWeight: '700', fontSize: size * 0.38 }}>{initials(name)}</Text>}
+  <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: tint(hueOf(name), 0.2), alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+    {url ? <Image source={{ uri: /^(https?:|data:)/.test(url) ? url : API_URL + url }} style={{ width: size, height: size }} /> : <Text style={{ color: hueOf(name), fontWeight: '800', fontSize: size * 0.36 }}>{initials(name)}</Text>}
   </View>
 );
 
