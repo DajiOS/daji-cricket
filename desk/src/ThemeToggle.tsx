@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Colour themes: the club look (forest green and champagne, the default), Cricket green and the starter kit's ten palettes, each in light and dark. The choice is remembered on this device
+// Colour themes: the soft look (warm grey and orange, the default, as on the phone app), the club look (forest green and champagne), Cricket green and the starter kit's ten palettes, each in light and dark. The choice is remembered on this device
 // and desk.html applies it before the first paint, so the page never flashes the wrong colours.
 const MODE_KEY = 'daji.desk.theme';
 const PAL_KEY = 'daji.desk.pal';
 
 /** key, name, then the swatch colours: light background, light strong, dark background, dark surface, accent. */
 export const PALETTES = [
+  { key: 'soft', name: 'Soft: warm grey & orange', l: '#EEEDEA', ls: '#E0742A', d: '#0E0F11', ds: '#1A1B1E', acc: '#F28C38' },
   { key: 'club', name: 'Club: forest & champagne', l: '#F3F1EA', ls: '#0F2A1F', d: '#07110D', ds: '#12201A', acc: '#D9C08A' },
   { key: 'field', name: 'Cricket green', l: '#F3F6F4', ls: '#1C7A3E', d: '#0A1310', ds: '#111C18', acc: '#2EA45A' },
   { key: 'forest', name: 'Forest & brass', l: '#F5F2EC', ls: '#14241F', d: '#0E1916', ds: '#16231F', acc: '#C9A66B' },
@@ -24,7 +25,7 @@ type Mode = 'light' | 'dark';
 
 const root = document.documentElement;
 const readMode = (): Mode => (root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-const readPal = (): string => { const p = root.getAttribute('data-pal'); return PALETTES.some((x) => x.key === p) ? p! : 'club'; };
+const readPal = (): string => { const p = root.getAttribute('data-pal'); return PALETTES.some((x) => x.key === p) ? p! : 'soft'; };
 const save = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private window: the choice lasts until the page closes */ } };
 
 /** The colour dot at the far right of the top bar. It opens the colour theme menu: light or dark, then one of ten palettes. */
