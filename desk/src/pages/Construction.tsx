@@ -581,6 +581,13 @@ function RaiseDefect({ projectId, onClose, onDone }: { projectId: string; onClos
   );
 }
 
+/** A drawing number and revision read from a file name: "A-101 rev B.pdf", "A-101_RevB.pdf", "A-101 B.pdf" or "A-101.pdf". Null when the name has no drawing number. */
+export function drawingFromName(name: string): { drawingNo: string; revision: string } | null {
+  const base = name.replace(/\.[^.]+$/, '').trim();
+  const m = /^([A-Za-z]{1,4}[-_ ]?\d{1,5}(?:[.-]\d{1,3})?)(?:[\s_-]+(?:rev(?:ision)?[\s_.-]*)?([A-Za-z0-9]{1,3}))?(?:[\s_-].*)?$/i.exec(base);
+  if (!m) return null;
+  return { drawingNo: m[1]!.toUpperCase().replace(/[_ ]/, '-'), revision: (m[2] ?? '').toUpperCase() };
+}
 interface CDoc { docId: string; kind: 'drawing' | 'document'; title: string; drawingNo: string | null; revision: string | null; current: boolean; fileName: string; linkedByName: string | null; linkedAt: number }
 function DocsTab({ p }: { p: Project }) {
   const toast = useToast();
@@ -588,11 +595,26 @@ function DocsTab({ p }: { p: Project }) {
   const [kind, setKind] = useState<'drawing' | 'document'>('drawing');
   const [drawingNo, setDrawingNo] = useState('');
   const [revision, setRevision] = useState('');
-  const upload = async (f: File | undefined) => {
-    if (!f) return;
-    if (kind === 'drawing' && !drawingNo.trim()) return toast('Type the drawing number first.');
-    const q = new URLSearchParams({ filename: f.name, kind, ...(kind === 'drawing' ? { drawingNo: drawingNo.trim(), revision: revision.trim() } : {}) });
-    try { await sendFile(`/api/construction/projects/${enc(p.id)}/documents?${q}`, f, { 'content-type': f.type || 'application/octet-stream' }); toast('Added to the project'); setDrawingNo(''); setRevision(''); reload(); } catch (e) { toast(errText(e)); }
+  const [busy, setBusy] = useState('');
+  // Several files can be picked at once. A single drawing uses the number and revision typed above; with several, each
+  // drawing's number and revision are read from its file name ("A-101 rev B.pdf", "A-101_B.pdf", "A-101.pdf").
+  const upload = async (list: FileList | null) => {
+    const files = Array.from(list ?? []);
+    if (!files.length) return;
+    const typed = kind === 'drawing' && files.length === 1 && drawingNo.trim() ? { drawingNo: drawingNo.trim(), revision: revision.trim() } : null;
+    const jobs = files.map((f) => ({ f, meta: kind === 'document' ? {} : typed ?? drawingFromName(f.name) }));
+    const unread = jobs.filter((j) => j.meta === null).map((j) => j.f.name);
+    if (kind === 'drawing' && files.length === 1 && unread.length) return toast('Type the drawing number first, or name the file like "A-101 rev B.pdf".');
+    let added = 0; const failed: string[] = [];
+    for (const [i, j] of jobs.filter((x) => x.meta !== null).entries()) {
+      setBusy(`Adding ${i + 1} of ${jobs.length - unread.length}…`);
+      const q = new URLSearchParams({ filename: j.f.name, kind, ...(j.meta as Record<string, string>) });
+      try { await sendFile(`/api/construction/projects/${enc(p.id)}/documents?${q}`, j.f, { 'content-type': j.f.type || 'application/octet-stream' }); added++; } catch (e) { failed.push(`${j.f.name}: ${errText(e)}`); }
+    }
+    setBusy('');
+    if (added) { setDrawingNo(''); setRevision(''); reload(); }
+    const parts = [added ? `${added} added to the project` : '', unread.length ? `No drawing number in the name of ${unread.join(', ')}; add ${unread.length === 1 ? 'it' : 'them'} one at a time` : '', ...failed];
+    toast(parts.filter(Boolean).join('. ') || 'Nothing was added.');
   };
   return (
     <>
@@ -601,7 +623,8 @@ function DocsTab({ p }: { p: Project }) {
           <div className="stack">
             <Tabs label="Kind" value={kind} onChange={setKind} items={[['drawing', 'Drawing'], ['document', 'Document']]} />
             {kind === 'drawing' && <div className="grid g2"><Field label="Drawing number"><input className="inp" maxLength={40} value={drawingNo} onChange={(e) => setDrawingNo(e.target.value)} placeholder="A-101" /></Field><Field label="Revision"><input className="inp" maxLength={10} value={revision} onChange={(e) => setRevision(e.target.value)} placeholder="B" /></Field></div>}
-            <label className="btn primary sm" style={{ alignSelf: 'flex-start' }}>Choose the file<input type="file" hidden onChange={(e) => void upload(e.target.files?.[0])} /></label>
+            <label className="btn primary sm" style={{ alignSelf: 'flex-start' }} aria-disabled={!!busy}>{busy || 'Choose files'}<input type="file" multiple hidden disabled={!!busy} onChange={(e) => { void upload(e.target.files); e.target.value = ''; }} /></label>
+            {kind === 'drawing' && <p className="muted small" style={{ margin: 0 }}>For one drawing, type its number and revision above. For several at once, leave them empty and name each file with its number and revision, like A-101 rev B.pdf.</p>}
           </div>
         </Panel>)}
       <Panel title="Plans & Documents">
