@@ -38,6 +38,15 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+      - name: Show which branch each app channel serves
+        # read-only: an installed app asks for its channel; if a channel points at the wrong branch, published updates never reach phones
+        if: env.HAS_EXPO == 'true' && github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          for ch in production-admin production-customer preview-admin preview-customer; do
+            echo "== channel $ch"; eas channel:view "$ch" --non-interactive || true
+          done
+          eas update:list --branch production-admin --non-interactive --limit 3 || true
       - name: Publish a preview update
         if: env.HAS_EXPO == 'true' && github.event_name == 'pull_request'
         uses: expo/expo-github-action/preview@v8
@@ -50,6 +59,11 @@ jobs:
         # EXPO_PUBLIC_APP_ENV / EXPO_PUBLIC_API_URL its build profile has. Without them the app refuses to connect (envGuard.ts).
         # --clear-cache: Metro caches the inlined EXPO_PUBLIC_ values, so without it a later branch can reuse an earlier branch's settings.
         run: |
+          # each installed app asks its channel; the channel must point at the branch of the same name or no update reaches any phone
+          # (until Oct 2026 none of the four channels pointed at a branch, so every published update was ignored)
+          for ch in production-customer production-admin preview-customer preview-admin; do
+            eas channel:edit "$ch" --branch "$ch" --non-interactive
+          done
           export LIVE="EXPO_PUBLIC_APP_ENV=live EXPO_PUBLIC_API_URL=https://api.dajicricket.com"
           env $LIVE APP_VARIANT=customer eas update --branch production-customer --message "${{ github.event.head_commit.message }}" --non-interactive --clear-cache
           env $LIVE APP_VARIANT=admin eas update --branch production-admin --message "${{ github.event.head_commit.message }}" --non-interactive --clear-cache
