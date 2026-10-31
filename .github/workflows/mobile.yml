@@ -38,6 +38,15 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+      - name: Show which branch each app channel serves
+        # read-only: an installed app asks for its channel; if a channel points at the wrong branch, published updates never reach phones
+        if: env.HAS_EXPO == 'true'
+        continue-on-error: true
+        run: |
+          for ch in production-admin production-customer preview-admin preview-customer; do
+            echo "== channel $ch"; eas channel:view "$ch" --non-interactive || true
+          done
+          eas update:list --branch production-admin --non-interactive --limit 3 || true
       - name: Publish a preview update
         if: env.HAS_EXPO == 'true' && github.event_name == 'pull_request'
         uses: expo/expo-github-action/preview@v8
