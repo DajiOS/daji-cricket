@@ -107,7 +107,8 @@ rel('REL-MIG-001', 'forward migration of a real old database: every old row is u
   assert.equal(m.code, 0, m.out + m.err);
   const res = JSON.parse(m.out);
   assert.equal(res.integrity, 'ok'); assert.equal(res.foreignKeyViolations, 0);
-  assert.ok(res.appliedNow.length >= 5, `modules applied: ${res.appliedNow}`);
+  // a release can add a single module (this one adds network-tournaments-2), so at least one must apply, none of them already in the old database
+  assert.ok(res.appliedNow.length >= 1, `modules applied: ${res.appliedNow}`);
   assert.ok(res.appliedNow.every((id: string) => !oldIds.includes(id)));
 
   // nothing that existed was changed: every old table, restricted to its old columns, hashes the same
