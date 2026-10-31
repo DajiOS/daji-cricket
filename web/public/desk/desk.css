@@ -1776,3 +1776,106 @@ html[data-pal="club"] .dside { background: linear-gradient(180deg, #0B1D15 0%, #
 html[data-pal="club"] .dside-item.on { background: linear-gradient(135deg, #E2CB97 0%, #C9AD72 100%); color: #10231A; box-shadow: 0 8px 22px -12px rgba(217,192,138,.55); }
 html[data-pal="club"] .dside-sub.on { color: #F1E3BF; background: rgba(217,192,138,.10); box-shadow: inset 2px 0 0 #D9C08A; }
 @media (min-width: 901px) { html[data-pal="club"] .dapp { background: linear-gradient(90deg, #06110C 236px, transparent 236px); } }
+
+/* The soft look (Oct 2026), the default palette: a warm light-grey page, a floating white sidebar with the open section filled orange,
+   white rounded cards without borders, a pill search box and round icon buttons in the top bar, Plus Jakarta Sans. The same colours as the phone app.
+   data-pal="soft" in light and dark. Sorts after zz-look.css and zzz-club.css, so it settles the shapes for this palette only. */
+html[data-pal="soft"] {
+  --bg:#EEEDEA; --surface:#FFFFFF; --surface2:#F6F5F3; --soft:#F3F2EF; --soft2:#FDEEE3; --line:#E7E5E1; --line2:#F0EEEA;
+  --ink:#17181B; --ink2:#3A3C42; --muted:#7A7C83; --link:#C85F18; --strong:#17181B; --on-strong:#FFFFFF;
+  --deep:#17181B; --rail:#FFFFFF; --accent:#E0742A; color-scheme: light;
+  --sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; --serif: var(--sans);
+  --radius: 22px; --radius-sm: 14px;
+  --shadow: 0 1px 2px rgba(20, 20, 24, .04), 0 10px 30px -18px rgba(20, 20, 24, .18);
+  --side-bg:#FFFFFF; --side-ink:#3A3C42; --side-hover:#F3F2EF; --on-accent:#FFFFFF;
+}
+html[data-pal="soft"][data-theme="dark"] {
+  --bg:#0E0F11; --surface:#1A1B1E; --surface2:#16171A; --soft:#232428; --soft2:#2E2219; --line:#2A2B30; --line2:#222327;
+  --ink:#F3F3F4; --ink2:#C9CACE; --muted:#8E9097; --link:#F6A15E; --strong:#F3F3F4; --on-strong:#111214;
+  --deep:#0A0B0C; --rail:#1A1B1E; --accent:#F28C38; color-scheme: dark;
+  --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 30px -18px rgba(0,0,0,.6);
+  --side-bg:#1A1B1E; --side-ink:#C9CACE; --side-hover:#232428; --on-accent:#141414;
+}
+html[data-pal="soft"] body { background: var(--bg); }
+html[data-pal="soft"] h1 { font-weight: 700; letter-spacing: -.02em; }
+html[data-pal="soft"] .eyebrow { color: var(--accent); }
+
+/* ---------- shell: a floating white sidebar ---------- */
+html[data-pal="soft"] .dapp, html[data-pal="soft"][data-theme="dark"] .dapp { background: none; }
+html[data-pal="soft"] .dside, html[data-pal="soft"][data-theme="dark"] .dside {
+  background: var(--side-bg); color: var(--side-ink); color-scheme: inherit; box-shadow: var(--shadow); padding: 20px 14px 14px; }
+@media (min-width: 901px) {
+  html[data-pal="soft"] .dside { flex-basis: 248px; width: 248px; top: 14px; height: calc(100vh - 28px); margin: 14px 0 14px 14px; border-radius: 28px; }
+}
+html[data-pal="soft"] .dside :focus-visible { outline-color: var(--accent); }
+html[data-pal="soft"] .dside-brand { border-bottom: 0; padding-bottom: 8px; }
+html[data-pal="soft"] .dside-word { color: var(--ink); }
+html[data-pal="soft"] .dside-name { color: var(--accent); }
+html[data-pal="soft"] .dside-tag { color: var(--muted); }
+html[data-pal="soft"] .dside-items { gap: 4px; }
+html[data-pal="soft"] .dside-item { min-height: 46px; border-radius: 14px; color: var(--side-ink); font-weight: 500; }
+html[data-pal="soft"] .dside-item:hover { background: var(--side-hover); color: var(--ink); }
+html[data-pal="soft"] .dside-item.on, html[data-pal="soft"][data-theme="dark"] .dside-item.on {
+  background: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--accent) 80%, transparent); }
+html[data-pal="soft"] .dside-n { background: var(--ink); color: var(--surface); }
+html[data-pal="soft"] .dside-item.on .dside-n { background: var(--on-accent); color: var(--accent); }
+html[data-pal="soft"] .dside-subs { padding-left: 44px; }
+html[data-pal="soft"] .dside-sub { color: var(--muted); border-radius: 10px; }
+html[data-pal="soft"] .dside-sub:hover { color: var(--ink); background: var(--side-hover); }
+html[data-pal="soft"] .dside-sub.on { color: var(--ink); background: var(--soft); box-shadow: none; font-weight: 600; }
+html[data-pal="soft"] .dside-foot { border-top: 1px solid var(--line2); }
+
+/* ---------- shell: top bar with a pill search and round buttons ---------- */
+html[data-pal="soft"] .dtop { background: transparent; border-bottom: 0; padding-top: 22px; padding-bottom: 6px; }
+html[data-pal="soft"] .dtop .dsearch-btn, html[data-pal="soft"] .dtop .dsearch label { height: 46px; border-radius: 999px; border: 0; background: var(--surface); box-shadow: var(--shadow); padding: 0 18px; }
+html[data-pal="soft"] .dsearch-btn kbd { border: 0; background: var(--soft); border-radius: 999px; padding: 2px 8px; }
+html[data-pal="soft"] .dround { width: 46px; height: 46px; border: 0; background: var(--surface); box-shadow: var(--shadow); color: var(--ink); }
+html[data-pal="soft"] .dround:hover { background: var(--soft); }
+html[data-pal="soft"] .dbell-n { background: var(--accent); border-color: var(--bg); }
+html[data-pal="soft"] .dtop .gpick .gpick-btn { height: 46px; border: 0; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow); padding: 0 18px; }
+html[data-pal="soft"] .duser { height: 46px; border-radius: 999px; padding: 0 12px 0 4px; background: var(--surface); box-shadow: var(--shadow); }
+html[data-pal="soft"] .duser:hover { background: var(--soft); }
+html[data-pal="soft"] .duser-av { background: var(--accent); color: var(--on-accent); }
+html[data-pal="soft"] .duser-pop { border: 0; border-radius: 22px; }
+html[data-pal="soft"] .dcontent { padding-top: 18px !important; }
+
+/* ---------- cards and controls: white, rounded, no hard borders ---------- */
+html[data-pal="soft"] .card, html[data-pal="soft"] .dcard, html[data-pal="soft"] .xpanel, html[data-pal="soft"] .xstat, html[data-pal="soft"] .state {
+  border-color: transparent; border-radius: var(--radius); box-shadow: var(--shadow); }
+html[data-pal="soft"] .xpanel { padding: 22px; }
+html[data-pal="soft"] .btn { border-radius: 999px; }
+html[data-pal="soft"] .btn.sm { border-radius: 999px; }
+html[data-pal="soft"] .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+html[data-pal="soft"] .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); border-color: color-mix(in srgb, var(--accent) 88%, #000); }
+html[data-pal="soft"] .inp, html[data-pal="soft"] select.inp, html[data-pal="soft"] textarea.inp { border-radius: 14px; background: var(--surface2); }
+html[data-pal="soft"] .inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+html[data-pal="soft"] .seg { border-radius: 999px; background: var(--soft); }
+html[data-pal="soft"] .seg button { border-radius: 999px; }
+html[data-pal="soft"] .seg button.on { background: var(--ink); color: var(--surface); }
+html[data-pal="soft"] .dchip { border-radius: 999px; }
+html[data-pal="soft"] .dchip.on, html[data-pal="soft"] .dchip[aria-selected="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+html[data-pal="soft"] .tbl th, html[data-pal="soft"] .xtbl th { background: var(--soft); }
+html[data-pal="soft"] .tbl th:first-child, html[data-pal="soft"] .xtbl th:first-child { border-radius: 12px 0 0 12px; }
+html[data-pal="soft"] .tbl th:last-child, html[data-pal="soft"] .xtbl th:last-child { border-radius: 0 12px 12px 0; }
+html[data-pal="soft"] .badge { border-radius: 999px; }
+
+/* ---------- Dashboard: soft round icon tiles, pill tabs, round quick actions ---------- */
+html[data-pal="soft"] .xstat { padding: 20px; gap: 16px; }
+html[data-pal="soft"] .xtile { width: 52px; height: 52px; border-radius: 50%; background: var(--soft) !important; color: var(--ink); }
+html[data-pal="soft"] .xstats > :first-child .xtile { background: var(--accent) !important; color: var(--on-accent); }
+html[data-pal="soft"] .xstat-txt b { font-size: 28px; letter-spacing: -.02em; }
+html[data-pal="soft"] a.xstat:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow); }
+html[data-pal="soft"] .xtabs { border-bottom: 0; gap: 6px; background: var(--soft); border-radius: 999px; padding: 4px; width: max-content; max-width: 100%; }
+html[data-pal="soft"] .xtabs button { border-bottom: 0; margin: 0; border-radius: 999px; padding: 8px 14px; }
+html[data-pal="soft"] .xtabs button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+html[data-pal="soft"] .xact { border: 0; border-radius: 999px; background: var(--soft2); color: var(--link); }
+/* the Quick actions panel is grey (set on the page), so its tiles are white with the icon in a tinted circle */
+html[data-pal="soft"] .xquick a, html[data-pal="soft"] .xquick button { border: 0; background: var(--surface); border-radius: 20px; min-height: 104px; box-shadow: var(--shadow); }
+html[data-pal="soft"] .xquick a:hover, html[data-pal="soft"] .xquick button:hover { background: var(--surface); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow); }
+html[data-pal="soft"] .xquick svg { box-sizing: content-box; padding: 10px; border-radius: 50%; background: var(--soft2); color: var(--accent); }
+html[data-pal="soft"] .xask { border-radius: 18px; }
+html[data-pal="soft"] .xask-form input { border-radius: 999px; }
+html[data-pal="soft"] .xask-form button { border-radius: 50%; width: 44px; background: var(--accent); color: var(--on-accent); }
+html[data-pal="soft"] .xprompts button { border: 0; background: var(--soft); border-radius: 999px; }
+html[data-pal="soft"] .xalerts { background: var(--surface); }
+html[data-pal="soft"] .xdot.next, html[data-pal="soft"] .xdot.wait { color: var(--accent); }
