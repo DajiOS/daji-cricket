@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Switch, View } from 
 import { Text, TextInput } from './Text';
 import { api } from './api';
 import type { TeamMember } from './types';
-import { Avatar, BackBar, Btn, Chip, Field, Glow, Icon, type IconName, ListCard, Loading, s, Section, NameFields, hueOf } from './ui';
+import { Avatar, BackBar, Btn, Chip, Field, Icon, type IconName, ListCard, Loading, s, Section, NameFields, RoundBtn } from './ui';
 import { C, HUES, formatPhone, tint } from './theme';
 
 const PRESET_LABEL: Record<string, string> = { admin: 'Admin', general_manager: 'General manager', coach: 'Coach', front_desk: 'Front desk', accountant: 'Accountant' };
@@ -30,7 +30,7 @@ const QuickAction = ({ icon, label, onPress, on, danger }: { icon: IconName; lab
 );
 const SumTile = ({ n, label, hue }: { n: string; label: string; hue: number }) => (
   <View style={[s.card, { flex: 1, padding: 14, marginBottom: 0 }]}>
-    <Text style={{ color: HUES[hue], fontSize: 26, fontWeight: '800', letterSpacing: -0.5 }}>{n}</Text>
+    <Text style={{ color: HUES[hue], fontSize: 26, fontWeight: '600', letterSpacing: -0.5 }}>{n}</Text>
     <Text style={[s.muted, { fontSize: 12 }]}>{label}</Text>
   </View>
 );
@@ -104,10 +104,9 @@ export function TeamScreen() {
     return (
       <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} keyboardShouldPersistTaps="handled">
         <BackBar title="Team" onBack={() => setOpen('')} />
-        <View style={{ borderRadius: 30, overflow: 'hidden', backgroundColor: C.ink, padding: 22, alignItems: 'center', marginBottom: 16 }}>
-          <Glow color={hueOf(sel.name)} size={280} top={-170} left={40} opacity={0.55} />
+        <View style={{ borderRadius: 32, overflow: 'hidden', backgroundColor: C.ink, padding: 22, alignItems: 'center', marginBottom: 16 }}>
           <View style={{ opacity: off ? 0.5 : 1 }}><Avatar name={sel.name} size={84} /></View>
-          <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '800', letterSpacing: -0.4, marginTop: 12 }}>{sel.name}</Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '600', letterSpacing: -0.4, marginTop: 12 }}>{sel.name}</Text>
           <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, marginTop: 2 }}>{roleOf(sel)}</Text>
           <View style={{ flexDirection: 'row', gap: 6, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             <Pill on={!off} label={off ? 'Switched off' : 'Active'} tone={off ? '#F0796E' : '#5CC98A'} />
@@ -150,7 +149,7 @@ export function TeamScreen() {
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />} keyboardShouldPersistTaps="handled">
       <View style={[s.row, { paddingVertical: 0, marginBottom: 4 }]}>
         <Text style={[s.h1, { marginBottom: 0 }]}>Team</Text>
-        {!adding && <Pressable accessibilityRole="button" accessibilityLabel="Add a team member" onPress={() => { setAdding(true); setNote(''); }} style={({ pressed }) => ({ width: 46, height: 46, borderRadius: 23, backgroundColor: C.strong, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.94 : 1 }] })}><Icon name="add" size={24} color={C.onStrong} /></Pressable>}
+        {!adding && <RoundBtn dark icon="add" label="Add a team member" onPress={() => { setAdding(true); setNote(''); }} />}
       </View>
       <Text style={[s.muted, { marginBottom: 16 }]}>Prices, promo codes, the team and settings stay with you.</Text>
 
@@ -175,7 +174,7 @@ export function TeamScreen() {
       )}
 
       {people.length > 3 && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.soft, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.panel, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 13, marginBottom: 14 }}>
           <Icon name="search-outline" size={18} color={C.muted} />
           <TextInput value={search} onChangeText={setSearch} placeholder="Search the team" placeholderTextColor={C.muted} autoCapitalize="none" accessibilityLabel="Search the team" style={{ flex: 1, color: C.text, fontSize: 15, padding: 0 }} />
         </View>

@@ -11,13 +11,13 @@ const build = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   pad: { padding: 18, paddingBottom: 40 },
   eyebrow: { color: C.onBg, fontSize: 11.5, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 },
-  h1: { color: C.head, fontSize: 34, fontWeight: '800', letterSpacing: -0.7, marginBottom: 6 },
+  h1: { color: C.head, fontSize: 32, fontWeight: '600', letterSpacing: -0.8, lineHeight: 38, marginBottom: 6 },
   h2: { color: C.text, fontSize: 17, fontWeight: '700', letterSpacing: -0.2, marginBottom: 10 },
   text: { color: C.text, fontSize: 15 },
   muted: { color: C.muted, fontSize: 13, lineHeight: 19 },
   note: { color: C.headMuted, fontSize: 13, lineHeight: 19 },
   err: { color: C.danger, fontSize: 13, marginVertical: 6 },
-  card: { backgroundColor: C.panel, borderRadius: 24, padding: 18, marginBottom: 12, shadowColor: '#000000', shadowOpacity: mode === 'light' ? 0.06 : 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  card: { backgroundColor: C.panel, borderRadius: 28, padding: 18, marginBottom: 12, shadowColor: '#000000', shadowOpacity: mode === 'light' ? 0.04 : 0, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, gap: 10 },
   input: { backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 14, color: C.text, padding: 12, fontSize: 15, marginBottom: 12 },
 });
@@ -147,7 +147,7 @@ const initials = (name: string) => { const p = name.trim().split(/\s+/).filter(B
 export const hueOf = (name: string) => HUES[[...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 9973, 7) % HUES.length]!;
 export const Avatar = ({ name, url, size = 40 }: { name: string; url?: string | null; size?: number }) => (
   <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: tint(hueOf(name), 0.2), alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-    {url ? <Image source={{ uri: /^(https?:|data:)/.test(url) ? url : API_URL + url }} style={{ width: size, height: size }} /> : <Text style={{ color: hueOf(name), fontWeight: '800', fontSize: size * 0.36 }}>{initials(name)}</Text>}
+    {url ? <Image source={{ uri: /^(https?:|data:)/.test(url) ? url : API_URL + url }} style={{ width: size, height: size }} /> : <Text style={{ color: hueOf(name), fontWeight: '600', fontSize: size * 0.36 }}>{initials(name)}</Text>}
   </View>
 );
 
@@ -172,7 +172,7 @@ export function DateField({ label, value, onChange, placeholder }: { label: stri
 export const Stat = ({ label, value, foot, tone }: { label: string; value: string; foot?: string; tone?: 'danger' | 'ok' }) => (
   <View style={[s.card, { flexBasis: '47%', flexGrow: 1, marginBottom: 0, padding: 14 }]}>
     <Text style={[s.muted, { fontSize: 12, fontWeight: '600' }]}>{label}</Text>
-    <Text adjustsFontSizeToFit numberOfLines={1} style={[s.text, { fontSize: 22, fontWeight: '800', letterSpacing: -0.5, marginVertical: 4 }, tone ? { color: tone === 'danger' ? C.danger : C.ok } : null]}>{value}</Text>
+    <Text adjustsFontSizeToFit numberOfLines={1} style={[s.text, { fontSize: 22, fontWeight: '600', letterSpacing: -0.5, marginVertical: 4 }, tone ? { color: tone === 'danger' ? C.danger : C.ok } : null]}>{value}</Text>
     {!!foot && <Text style={[s.muted, { fontSize: 12 }]}>{foot}</Text>}
   </View>
 );
@@ -242,20 +242,19 @@ export function ListRow({ icon, title, sub, onPress, right, last, tone }: { icon
 export const ListCard = ({ children }: { children: React.ReactNode }) => <View style={[s.card, { padding: 0, overflow: 'hidden' }]}>{children}</View>;
 
 /** A button with an icon over its name. Always four to a row and all the same size (inside ActionGrid), so a short last row never stretches. */
-export const ActionTile = ({ icon, label, onPress, hue = 0 }: { icon: IconName; label: string; onPress: () => void; hue?: number }) => {
-  const col = HUES[hue % HUES.length]!;
-  return (
-    <View style={{ width: '25%', paddingHorizontal: 4, paddingVertical: 8 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => ({ alignItems: 'center', transform: [{ scale: pressed ? 0.94 : 1 }] })}>
-        <View style={{ width: 60, height: 60, borderRadius: 20, backgroundColor: tint(col, mode === 'light' ? 0.14 : 0.18), alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}><Icon name={icon} size={26} color={col} /></View>
-        <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: C.text, fontSize: 12.5, fontWeight: '600', textAlign: 'center' }}>{label}</Text>
-      </Pressable>
-    </View>
-  );
-};
-/** A soft round glow of colour behind a card's content (no gradient library needed, so it ships over the air). */
-export const Glow = ({ color, size, top, left, right, bottom, opacity = 0.35 }: { color: string; size: number; top?: number; left?: number; right?: number; bottom?: number; opacity?: number }) => (
-  <>{[1, 0.92, 0.84, 0.76, 0.68, 0.6, 0.52, 0.44, 0.36, 0.28].map((k) => <View key={k} pointerEvents="none" style={{ position: 'absolute', width: size * k, height: size * k, borderRadius: size, backgroundColor: color, opacity: opacity / 10, top: top !== undefined ? top + (size - size * k) / 2 : undefined, left: left !== undefined ? left + (size - size * k) / 2 : undefined, right: right !== undefined ? right + (size - size * k) / 2 : undefined, bottom: bottom !== undefined ? bottom + (size - size * k) / 2 : undefined }} />)}</>
+export const ActionTile = ({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void; hue?: number }) => (
+  <View style={{ width: '25%', paddingHorizontal: 4, paddingVertical: 8 }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => ({ alignItems: 'center', transform: [{ scale: pressed ? 0.94 : 1 }] })}>
+      <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: C.panel, alignItems: 'center', justifyContent: 'center', marginBottom: 8, shadowColor: '#000000', shadowOpacity: mode === 'light' ? 0.05 : 0, shadowRadius: 10, shadowOffset: { width: 0, height: 3 } }}><Icon name={icon} size={24} color={C.text} /></View>
+      <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: C.text, fontSize: 12.5, fontWeight: '500', textAlign: 'center' }}>{label}</Text>
+    </Pressable>
+  </View>
+);
+/** A round icon button (a white circle on the grey page), for the top of a screen: back, add, search, notifications. dark fills it black. */
+export const RoundBtn = ({ icon, onPress, label, dark, size = 46 }: { icon: IconName; onPress: () => void; label: string; dark?: boolean; size?: number }) => (
+  <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => ({ width: size, height: size, borderRadius: size / 2, backgroundColor: dark ? C.strong : C.panel, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.94 : 1 }] })}>
+    <Icon name={icon} size={size * 0.44} color={dark ? C.onStrong : C.text} />
+  </Pressable>
 );
 /** The grid that holds ActionTiles. */
 export const ActionGrid = ({ children }: { children: React.ReactNode }) => <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5, marginBottom: 4 }}>{children}</View>;
@@ -266,7 +265,7 @@ export const StatTile = ({ icon, value, label, tone, onPress }: { icon: IconName
   return (
     <Pressable accessibilityRole="button" disabled={!onPress} onPress={onPress} style={({ pressed }) => [s.card, { flexBasis: '30%', flexGrow: 1, padding: 14, marginBottom: 0, opacity: pressed ? 0.75 : 1 }]}>
       <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: tint(col, 0.16), alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={16} color={col} /></View>
-      <Text style={{ color: C.text, fontSize: 30, fontWeight: '800', letterSpacing: -0.5, marginTop: 12 }}>{value}</Text>
+      <Text style={{ color: C.text, fontSize: 30, fontWeight: '600', letterSpacing: -0.5, marginTop: 12 }}>{value}</Text>
       <Text numberOfLines={2} style={[s.muted, { fontSize: 12, lineHeight: 15, marginTop: 2 }]}>{label}</Text>
     </Pressable>
   );
@@ -275,15 +274,16 @@ export const StatTile = ({ icon, value, label, tone, onPress }: { icon: IconName
 /** A section title with an optional link on the right ("See all"). */
 export const SectionHead = ({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) => (
   <View style={[s.row, { marginTop: 14, marginBottom: 6 }]}>
-    <Text style={{ color: C.head, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 }}>{title}</Text>
+    <Text style={{ color: C.head, fontSize: 20, fontWeight: '600', letterSpacing: -0.3 }}>{title}</Text>
     {!!action && <Pressable accessibilityRole="button" onPress={onAction}><Text style={{ color: C.gold, fontSize: 13, fontWeight: '700' }}>{action}</Text></Pressable>}
   </View>
 );
 
-/** The top of an inner page: a back arrow and the page's name. */
-export const BackBar = ({ title, onBack }: { title: string; onBack: () => void }) => (
-  <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-    <Icon name="chevron-back" size={24} color={C.head} />
-    <Text style={{ color: C.head, fontSize: 20, fontWeight: '800' }}>{title}</Text>
-  </Pressable>
+/** The top of an inner page: a round back button and the page's name. */
+export const BackBar = ({ title, onBack, right }: { title: string; onBack: () => void; right?: React.ReactNode }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+    <RoundBtn icon="chevron-back" label="Back" onPress={onBack} size={44} />
+    <Text style={{ color: C.head, fontSize: 18, fontWeight: '600', flex: 1 }} numberOfLines={1}>{title}</Text>
+    {right}
+  </View>
 );

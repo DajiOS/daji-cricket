@@ -19,8 +19,8 @@ export async function loadFonts(): Promise<void> {
   try { await Font.loadAsync(FILES); fontsReady = true; } catch { fontsReady = false; }
 }
 
-/** The family for a weight: 400 regular, 500 medium, 600 semi-bold, 700 bold, 800 and up extra-bold. */
+/** The family for a weight: 400 regular, 500 medium, 600 semi-bold, 700 and up bold. The app's look is light, so nothing is drawn heavier than bold. */
 export function fontFor(weight?: string | number | null): string {
   const n = weight === 'bold' ? 700 : weight == null || weight === 'normal' ? 400 : Number(weight) || 400;
-  return n >= 800 ? 'Jakarta-800' : n >= 700 ? 'Jakarta-700' : n >= 600 ? 'Jakarta-600' : n >= 500 ? 'Jakarta-500' : 'Jakarta-400';
+  return n >= 700 ? 'Jakarta-700' : n >= 600 ? 'Jakarta-600' : n >= 500 ? 'Jakarta-500' : 'Jakarta-400';
 }

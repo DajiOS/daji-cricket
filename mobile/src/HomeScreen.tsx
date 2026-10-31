@@ -3,8 +3,8 @@ import { Image, RefreshControl, ScrollView, StyleSheet, View, Pressable } from '
 import { Text } from './Text';
 import { api } from './api';
 import type { StaffBooking, Task, User, MatchRow } from './types';
-import { ActionGrid, ActionTile, Avatar, Badge, Glow, Icon, type IconName, SectionHead, s } from './ui';
-import { C, HUES, niceDate } from './theme';
+import { ActionGrid, ActionTile, Avatar, Badge, Icon, type IconName, RoundBtn, SectionHead, s } from './ui';
+import { C, niceDate } from './theme';
 import { useGroundPhoto } from './photo';
 
 const hhmm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
@@ -45,9 +45,9 @@ export function HomeScreen({ user, aiName, go }: { user: User; aiName: string; g
   ];
   const today_ = niceDate(new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10));
   const mini = (icon: IconName, value: string, label: string, to: HomeGo, hot?: boolean) => (
-    <Pressable key={label} accessibilityRole="button" onPress={() => go(to)} style={({ pressed }) => ({ flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 18, padding: 12, opacity: pressed ? 0.75 : 1 })}>
-      <Icon name={icon} size={16} color={hot ? '#F2B544' : 'rgba(255,255,255,0.7)'} />
-      <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '800', letterSpacing: -0.6, marginTop: 6 }}>{value}</Text>
+    <Pressable key={label} accessibilityRole="button" onPress={() => go(to)} style={({ pressed }) => ({ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 22, padding: 14, opacity: pressed ? 0.75 : 1 })}>
+      <Icon name={icon} size={16} color={hot ? '#F28C38' : 'rgba(255,255,255,0.7)'} />
+      <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '600', letterSpacing: -0.6, marginTop: 6 }}>{value}</Text>
       <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '600' }}>{label}</Text>
     </Pressable>
   );
@@ -55,22 +55,24 @@ export function HomeScreen({ user, aiName, go }: { user: User; aiName: string; g
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
       <View style={[s.row, { marginBottom: 18 }]}>
         <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 104, height: 36 }} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Your profile" onPress={() => go('profile')}><Avatar name={user.name} url={user.avatarUrl} size={42} /></Pressable>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          {perm('manage_bookings') && <RoundBtn icon="calendar-outline" label="Bookings" onPress={() => go('bookings')} />}
+          <RoundBtn icon="sparkles-outline" label={aiName} onPress={() => go('ask')} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Your profile" onPress={() => go('profile')}><Avatar name={user.name} url={user.avatarUrl} size={46} /></Pressable>
+        </View>
       </View>
       <Text style={[s.muted, { fontSize: 14, fontWeight: '600' }]}>{greeting()}</Text>
       <Text style={[s.h1, { marginBottom: 18 }]}>{first}</Text>
 
-      <View style={{ borderRadius: 30, overflow: 'hidden', backgroundColor: C.ink, padding: 20, marginBottom: 22, shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 6 }}>
+      <View style={{ borderRadius: 32, overflow: 'hidden', backgroundColor: C.ink, padding: 22, marginBottom: 22 }}>
         {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
         {!!pic && <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,12,11,.72)' }]} />}
-        <Glow color="#D9A94A" size={260} top={-120} right={-90} opacity={0.5} />
-        <Glow color="#4C9BF5" size={200} bottom={-120} left={-70} opacity={0.3} />
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase' }}>Today · {today_}</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '500' }}>Today, {today_}</Text>
           {live != null && live > 0 && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(240,121,110,0.22)', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#F0796E' }} /><Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{live} live</Text></View>}
         </View>
         {bookingsOk ? (<Pressable accessibilityRole="button" onPress={() => go('bookings')}>
-          <Text style={{ color: '#FFFFFF', fontSize: 64, fontWeight: '800', letterSpacing: -1.5, marginTop: 6 }}>{today ? String(today.bookings.length) : '–'}</Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 60, fontWeight: '600', letterSpacing: -1.5, marginTop: 6 }}>{today ? String(today.bookings.length) : '–'}</Text>
           <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: '600', marginTop: -6 }}>{today?.bookings.length === 1 ? 'booking' : 'bookings'} at {user.businessName || 'Daji Cricket Ground'}</Text>
         </Pressable>) : <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '800', marginTop: 10 }}>{user.businessName || 'Daji Cricket Ground'}</Text>}
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
@@ -80,7 +82,7 @@ export function HomeScreen({ user, aiName, go }: { user: User; aiName: string; g
       </View>
 
       <ActionGrid>
-        {actions.slice(0, 8).map(([icon, label, to], i) => <ActionTile key={to} hue={i} icon={icon} label={label} onPress={() => go(to)} />)}
+        {actions.slice(0, 8).map(([icon, label, to]) => <ActionTile key={to} icon={icon} label={label} onPress={() => go(to)} />)}
       </ActionGrid>
 
       {bookingsOk && (<>
@@ -90,10 +92,10 @@ export function HomeScreen({ user, aiName, go }: { user: User; aiName: string; g
             {upcoming.map((b, i) => (
               <Pressable key={b.id} accessibilityRole="button" onPress={() => go('bookings')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, borderBottomWidth: i === upcoming.length - 1 ? 0 : StyleSheet.hairlineWidth, borderBottomColor: C.line, opacity: pressed ? 0.7 : 1 })}>
                 <View style={{ width: 54 }}>
-                  <Text style={{ color: C.text, fontSize: 17, fontWeight: '800', letterSpacing: -0.4 }}>{hhmm(b.startAt)}</Text>
+                  <Text style={{ color: C.text, fontSize: 17, fontWeight: '600', letterSpacing: -0.4 }}>{hhmm(b.startAt)}</Text>
                   <Text style={[s.muted, { fontSize: 12 }]}>{hhmm(b.endAt)}</Text>
                 </View>
-                <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: b.approval === 'pending' ? HUES[0] : b.balancePaise > 0 ? C.warn : C.ok }} />
+                <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: b.approval === 'pending' ? C.gold : b.balancePaise > 0 ? C.warn : C.ok }} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.text, { fontWeight: '700' }]} numberOfLines={1}>{b.customerName}</Text>
                   <Text style={[s.muted, { fontSize: 12.5 }]} numberOfLines={1}>{b.groundName}{b.formatLabel ? ` · ${b.formatLabel}` : ''}</Text>
