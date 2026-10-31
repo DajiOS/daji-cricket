@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { api, ApiError } from './api';
-import { Avatar, Badge, Btn, Chip, Icon, KV, Loading, Section, Segmented, s, todayIST } from './ui';
+import { Avatar, Badge, Btn, Chip, Icon, KV, Loading, Section, Segmented, s, todayIST, ScreenHead } from './ui';
 import { C, inr, niceDate } from './theme';
 
 // All my businesses (server/src/combined.ts): the businesses the owner marked "Mine", side by side, with their branches. It only
@@ -71,8 +71,7 @@ export function CombinedScreen() {
   const narrowed = !!area;
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Owner</Text><Text style={s.h1}>All my businesses</Text>
-      <Text style={[s.muted, { marginBottom: 14 }]}>The businesses you marked as yours, together. Read only: each keeps its own books.</Text>
+      <ScreenHead eyebrow="Owner" title="All my businesses" about="The businesses you marked as yours, together. Read only: each keeps its own books." />
       <Segmented items={[['month', 'This month'], ['last', 'Last month'], ['year', 'This year']]} value={period} onChange={setPeriod} />
       {opts && opts.businesses.length > 1 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 8 }}>

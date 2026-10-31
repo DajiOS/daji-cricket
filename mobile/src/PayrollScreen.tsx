@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { Badge, Btn, Chip, DateField, Field, Loading, MonthBar, Stat, Stats, monthName, s, todayIST } from './ui';
+import { Badge, Btn, Chip, DateField, Field, Loading, MonthBar, Stat, Stats, monthName, s, todayIST, ScreenHead } from './ui';
 import { C, inr } from './theme';
 
 const P = '/api/accounting/payroll';
@@ -47,8 +47,7 @@ export function PayrollScreen() {
   const sm = run?.summary;
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Money</Text><Text style={s.h1}>Staff pay</Text>
-      <Text style={s.muted}>Pay is worked out from attendance, advances and deductions. Finalise the month to lock it, then mark each salary paid. Marking paid records the payment in the books; it does not move money.</Text>
+      <ScreenHead eyebrow="Money" title="Staff pay" about="Pay is worked out from attendance, advances and deductions. Finalise the month to lock it, then mark each salary paid. Marking paid records the payment in the books; it does not move money." />
       <MonthBar month={month} onChange={setMonth} max={today.slice(0, 7)} />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok, marginBottom: 8 }]}>{note}</Text>}
 

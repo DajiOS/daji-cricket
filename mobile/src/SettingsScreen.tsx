@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { Btn, Chip, Field, Loading, s } from './ui';
+import { Btn, Chip, Field, Loading, s, ScreenHead } from './ui';
 import { C, inr } from './theme';
 import type { User } from './types';
 
@@ -58,8 +58,7 @@ export function SettingsScreen({ user }: { user: User }) {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Settings</Text><Text style={s.h1}>Booking rules</Text>
-      <Text style={s.muted}>How bookings are held, paid and cancelled on the website and the app. They apply to every booking. The opening and closing days, closed days and the Razorpay switch are under Booking controls.</Text>
+      <ScreenHead eyebrow="Settings" title="Booking rules" about="How bookings are held, paid and cancelled on the website and the app. They apply to every booking. The opening and closing days, closed days and the Razorpay switch are under Booking controls." />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok, marginVertical: 6 }]}>{note}</Text>}
       {!st ? (err ? null : <Loading />) : (<>
         <View style={[s.card, { marginTop: 14 }]}>

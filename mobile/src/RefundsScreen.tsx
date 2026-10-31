@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { Badge, Btn, Chip, Field, Loading, s } from './ui';
+import { Badge, Btn, Empty, Field, Loading, Segmented, s, ScreenHead } from './ui';
 import { C, inr } from './theme';
 
 interface Refund { id: string; bookingId: string; amountPaise: number; status: string; mode: 'gateway' | 'manual'; reference: string | null; reason: string | null; createdAt: number; completedAt: number | null; approvedAt: number | null; paymentMethod: string | null }
@@ -30,11 +30,10 @@ export function RefundsScreen() {
   };
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Money</Text><Text style={s.h1}>Refunds</Text>
-      <Text style={s.muted}>Nothing is paid back until you authorise it. Online refunds go back to the card or UPI within a minute of approval; UPI and cash refunds are then paid by staff and marked done.</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 10 }}>{VIEWS.map(([k, label]) => <Chip key={k} label={label} on={view === k} onPress={() => setView(k)} />)}</View>
+      <ScreenHead eyebrow="Money" title="Refunds" about="Nothing is paid back until you authorise it. Online refunds go back to the card or UPI within a minute of approval; UPI and cash refunds are then paid by staff and marked done." />
+      <Segmented items={VIEWS.map(([k, label]) => [k, label] as [typeof k, string])} value={view} onChange={setView} />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok, marginBottom: 8 }]}>{note}</Text>}
-      {items === null ? <Loading /> : !items.length ? <Text style={s.muted}>{view === 'awaiting' ? 'No refunds are waiting.' : 'Nothing here.'}</Text> : items.map((r) => (
+      {items === null ? <Loading /> : !items.length ? <Empty icon="return-down-back-outline" text={view === 'awaiting' ? 'No refunds are waiting.' : 'Nothing here.'} /> : items.map((r) => (
         <View key={r.id} style={s.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={[s.text, { fontWeight: '700', fontSize: 18 }]}>{inr(r.amountPaise)}</Text>

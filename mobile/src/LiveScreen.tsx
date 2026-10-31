@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, View, Pressable } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
 import type { Innings, MatchRow, Scorecard } from './types';
-import { BackBar, Badge, Icon, Loading, SectionHead, Segmented, s } from './ui';
+import { BackBar, Badge, Icon, Loading, RoundBtn, ScreenHead, SectionHead, Segmented, hueOf, s } from './ui';
 import { C, tint } from './theme';
 
 type PublicMatch = MatchRow & { summary: string };
@@ -24,8 +24,7 @@ export function LiveScreen() {
   const live = list?.filter((m) => m.status === 'live') ?? [], done = list?.filter((m) => m.status !== 'live') ?? [];
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Daji Cricket Ground</Text>
-      <Text style={s.h1}>Live score</Text>
+      <ScreenHead eyebrow="Daji Cricket Ground" title="Live score" right={<RoundBtn icon="refresh" label="Refresh" onPress={load} size={42} />} />
       {!!err && <Text style={s.err}>{err}</Text>}
       {list === null ? <Loading /> : !list.length ? (
         <View style={[s.card, { alignItems: 'center', paddingVertical: 28 }]}>
@@ -37,9 +36,12 @@ export function LiveScreen() {
         {live.map((m) => <LiveCard key={m.id} id={m.id} onOpen={() => setOpen(m.id)} />)}
         {done.length > 0 && <SectionHead title="Recent matches" />}
         {done.map((m) => (
-          <Pressable key={m.id} accessibilityRole="button" onPress={() => setOpen(m.id)} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+          <Pressable key={m.id} accessibilityRole="button" onPress={() => setOpen(m.id)} style={({ pressed }) => [s.card, { flexDirection: 'row', alignItems: 'center', gap: 14, transform: [{ scale: pressed ? 0.98 : 1 }] }]}>
+            <View style={{ width: 52, height: 40 }}>
+              {[m.teamA, m.teamB].map((tm, i) => <View key={i} style={{ position: 'absolute', left: i * 18, top: 0, width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: C.panel, backgroundColor: C.panel, overflow: 'hidden' }}><View style={{ flex: 1, backgroundColor: tint(hueOf(tm), 0.2), alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: hueOf(tm), fontWeight: '800', fontSize: 12 }}>{teamInitials(tm)}</Text></View></View>)}
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={[s.text, { fontWeight: '700' }]}>{m.teamA} vs {m.teamB}</Text>
+              <Text style={[s.text, { fontWeight: '700' }]} numberOfLines={1}>{m.teamA} vs {m.teamB}</Text>
               <Text style={s.muted}>{m.title} · {m.overs} overs</Text>
               {!!m.summary && <Text style={[s.muted, { marginTop: 2 }]}>{m.summary}</Text>}
               {!!m.result && <Text style={[s.muted, { color: C.gold, fontWeight: '600', marginTop: 2 }]}>{m.result}</Text>}
@@ -54,7 +56,7 @@ export function LiveScreen() {
 
 const teamInitials = (t: string) => t.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
 const Crest = ({ team }: { team: string }) => (
-  <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,.25)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+  <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(255,255,255,.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
     <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 17 }}>{teamInitials(team)}</Text>
   </View>
 );
@@ -64,9 +66,9 @@ function ScoreBoard({ sc }: { sc: Scorecard }) {
   const m = sc.match, cur = sc.innings[sc.innings.length - 1], first = sc.innings[0];
   const live = m.status === 'live';
   return (
-    <View style={{ backgroundColor: '#1A1E1C', borderRadius: 18, padding: 16, marginBottom: 14 }}>
+    <View style={{ backgroundColor: C.ink, borderRadius: 32, padding: 22, marginBottom: 14 }}>
       <View style={[s.row, { paddingVertical: 0 }]}>
-        <Text style={{ color: 'rgba(255,255,255,.8)', fontSize: 12, fontWeight: '600', flex: 1 }} numberOfLines={1}>{m.title} · {m.overs} overs</Text>
+        <Text style={{ color: 'rgba(255,255,255,.7)', fontSize: 13.5, fontWeight: '500', flex: 1 }} numberOfLines={1}>{m.title} · {m.overs} overs</Text>
         <View style={{ backgroundColor: live ? '#E5484D' : 'rgba(255,255,255,.18)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 10 }}><Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{live ? 'LIVE' : 'Result'}</Text></View>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginVertical: 12 }}>
@@ -76,15 +78,15 @@ function ScoreBoard({ sc }: { sc: Scorecard }) {
       </View>
       {cur ? (
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,.08)', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,.1)', borderRadius: 22, padding: 14, alignItems: 'center' }}>
             <Text style={{ color: 'rgba(255,255,255,.75)', fontSize: 12 }}>{cur.team}</Text>
-            <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '800' }}>{cur.runs}/{cur.wickets}</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 30, fontWeight: '600', letterSpacing: -0.8 }}>{cur.runs}/{cur.wickets}</Text>
             <Text style={{ color: 'rgba(255,255,255,.75)', fontSize: 12 }}>{cur.overs} overs</Text>
           </View>
           {cur.target != null ? (
-            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,.08)', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,.1)', borderRadius: 22, padding: 14, alignItems: 'center' }}>
               <Text style={{ color: 'rgba(255,255,255,.75)', fontSize: 12 }}>Target</Text>
-              <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '800' }}>{cur.target}</Text>
+              <Text style={{ color: '#FFFFFF', fontSize: 30, fontWeight: '600', letterSpacing: -0.8 }}>{cur.target}</Text>
               <Text style={{ color: 'rgba(255,255,255,.75)', fontSize: 12 }}>{first ? `${first.team} ${first.runs}/${first.wickets}` : ''}</Text>
             </View>
           ) : null}

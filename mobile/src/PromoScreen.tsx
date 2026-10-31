@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
 import type { Promo } from './types';
-import { Badge, Btn, Chip, Field, Loading, Section, s } from './ui';
+import { Badge, Btn, Chip, Field, Loading, Section, s, ScreenHead, Empty } from './ui';
 import { C, inr } from './theme';
 
 const describe = (p: Promo): string => (p.kind === 'percent' ? `${p.value}% off` : `${inr(p.value)} off`) + (p.usageLimit ? `  ·  ${p.used ?? 0} of ${p.usageLimit} used` : '');
@@ -34,7 +34,7 @@ export function PromoScreen() {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />} keyboardShouldPersistTaps="handled">
-      <Text style={s.eyebrow}>Owner</Text><Text style={s.h1}>Promo codes</Text>
+      <ScreenHead eyebrow="Owner" title="Promo codes" />
       <View style={[s.card, { marginTop: 10 }]}>
         <View style={{ flexDirection: 'row' }}><Chip label="Generate codes" on={auto} onPress={() => setAuto(true)} /><Chip label="My own code" on={!auto} onPress={() => setAuto(false)} /></View>
         {auto ? (<><Field label="Starts with" value={prefix} onChangeText={setPrefix} /><Field label="How many (up to 50)" value={count} onChangeText={setCount} keyboardType="numeric" /><Chip label={`${oneTime ? '✓ ' : ''}One time use each`} on={oneTime} onPress={() => setOneTime(!oneTime)} /></>) : <Field label="Code" value={code} onChangeText={setCode} />}
@@ -45,7 +45,7 @@ export function PromoScreen() {
         {fresh.map((c) => <Text key={c} selectable style={[s.text, { letterSpacing: 2, fontWeight: '700', marginTop: 4 }]}>{c}</Text>)}
       </View>
       <Section>Your codes</Section>
-      {items === null ? <Loading /> : !items.length ? <Text style={s.muted}>No promo codes yet.</Text> : items.map((p) => (
+      {items === null ? <Loading /> : !items.length ? <Empty icon="pricetag-outline" text="No promo codes yet." /> : items.map((p) => (
         <View key={p.id} style={s.card}>
           <View style={s.row}><Text selectable style={[s.text, { fontWeight: '700', letterSpacing: 1.5 }]}>{p.code}</Text><Badge tone={p.active ? 'ok' : 'muted'} label={p.active ? 'Active' : 'Off'} /></View>
           <Text style={s.muted}>{describe(p)}{p.label ? `  ·  ${p.label}` : ''}</Text>

@@ -3,8 +3,8 @@ import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from '
 import { Text } from './Text';
 import { api } from './api';
 import type { Booking, MatchRow, User } from './types';
-import { Avatar, Badge, Btn, Icon, type IconName, SectionHead, s } from './ui';
-import { C, inr, niceDate, tint } from './theme';
+import { ActionGrid, ActionTile, Avatar, Badge, Chip, Icon, type IconName, ListCard, ListRow, RoundBtn, SectionHead, s } from './ui';
+import { C, inr, niceDate } from './theme';
 import { useGroundPhoto } from './photo';
 import { UI_LANGUAGES, UI_LANGUAGE_NAMES, useLang, type T } from './lang';
 
@@ -36,98 +36,73 @@ export function CustomerHome({ user, aiName, go }: { user: User | null; aiName: 
   useEffect(() => { void load(); }, [load]);
 
   const first = user ? user.name.trim().split(/\s+/)[0] || user.name : '';
-  const tiles: [IconName, string, CustomerGo][] = [['calendar-outline', t('home.bookGround'), 'book'], ['baseball-outline', t('home.bookNets'), 'book'], ['school-outline', t('home.academy'), 'academy']];
+  const short = (x: string) => (x.length > 11 ? `${x.slice(0, 10)}…` : x);
+  const actions: [IconName, string, CustomerGo][] = [
+    ['calendar-outline', t('home.bookGround'), 'book'], ['baseball-outline', t('home.bookNets'), 'book'], ['school-outline', t('home.academy'), 'academy'],
+    ['radio-outline', t('home.liveScores'), 'live'],
+    ...(hosted ? [['trophy-outline', t('home.tournaments'), 'auctions'] as [IconName, string, CustomerGo]] : []),
+    ...(user ? [['podium-outline', t('home.fantasy'), 'fantasy'] as [IconName, string, CustomerGo], ['sparkles-outline', short(aiName), 'ask'] as [IconName, string, CustomerGo]] : []),
+  ];
+  const W = 'rgba(255,255,255,';
   return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 0 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.onBg} />}>
-      <View style={{ marginHorizontal: -18, paddingHorizontal: 18, paddingTop: 58, paddingBottom: 18, marginBottom: 14, overflow: 'hidden' }}>
-        {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={[StyleSheet.absoluteFill, { opacity: 0.35 }]} />}
-        <View style={[s.row, { alignItems: 'flex-start' }]}>
-          <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 104, height: 36 }} />
-          {user && <Pressable accessibilityRole="button" accessibilityLabel={t('home.yourProfile')} onPress={() => go('profile')}><Avatar name={user.name} url={user.avatarUrl} size={42} /></Pressable>}
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
+      <View style={[s.row, { marginBottom: 18 }]}>
+        <Image source={require('../assets/logo.png')} accessibilityLabel="Daji Cricket Ground" resizeMode="contain" style={{ width: 104, height: 36 }} />
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <RoundBtn icon="search-outline" label={t('home.search')} onPress={() => go('book')} />
+          {!!user && <RoundBtn icon="sparkles-outline" label={aiName} onPress={() => go('ask')} />}
+          {!!user && <Pressable accessibilityRole="button" accessibilityLabel={t('home.yourProfile')} onPress={() => go('profile')}><Avatar name={user.name} url={user.avatarUrl} size={46} /></Pressable>}
         </View>
-        <Text style={{ color: C.head, fontSize: 26, fontWeight: '800', letterSpacing: -0.4, marginTop: 14 }}>{greeting(t)}{first ? ',' : ''}</Text>
-        {!!first && <Text style={{ color: C.head, fontSize: 30, fontWeight: '800', letterSpacing: -0.6 }}>{first}</Text>}
-        <Text style={[s.note, { fontSize: 15, marginTop: 2 }]}>{t('home.ready')}</Text>
-        <Pressable accessibilityRole="search" onPress={() => go('book')} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.panel, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, marginTop: 16 }}>
-          <Icon name="search-outline" size={18} color={C.muted} />
-          <Text style={{ color: C.muted, fontSize: 15 }}>{t('home.search')}</Text>
-        </Pressable>
       </View>
+      <Text style={[s.muted, { fontSize: 14, fontWeight: '600' }]}>{greeting(t)}</Text>
+      <Text style={[s.h1, { marginBottom: 4 }]}>{first || 'Daji Cricket Ground'}</Text>
+      <Text style={[s.muted, { fontSize: 14.5, marginBottom: 18 }]}>{t('home.ready')}</Text>
 
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        {tiles.map(([icon, label, to]) => (
-          <Pressable key={label} accessibilityRole="button" onPress={() => go(to)} style={tileStyle()}>
-            <Icon name={icon} size={26} color={C.onBg} />
-            <Text style={{ color: C.head, fontSize: 13, fontWeight: '700', marginTop: 10 }}>{label}</Text>
+      <View style={{ borderRadius: 32, overflow: 'hidden', backgroundColor: C.ink, padding: 22, marginBottom: 22 }}>
+        {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
+        {!!pic && <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,12,11,.72)' }]} />}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: `${W}0.7)`, fontSize: 14, fontWeight: '500' }}>{user ? t('home.next') : t('home.today')}</Text>
+          {!!live && <Pressable accessibilityRole="button" onPress={() => go('live')} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(240,121,110,0.22)', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#F0796E' }} /><Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{t('home.liveBadge')}</Text></Pressable>}
+        </View>
+        {user && next ? (<Pressable accessibilityRole="button" onPress={() => go('me')}>
+          <Text style={{ color: '#FFFFFF', fontSize: 44, fontWeight: '600', letterSpacing: -1.2, marginTop: 8 }}>{hhmm(next.startAt)}</Text>
+          <Text style={{ color: `${W}0.85)`, fontSize: 16, fontWeight: '700' }} numberOfLines={1}>{next.groundName}</Text>
+          <Text style={{ color: `${W}0.62)`, fontSize: 13.5, marginTop: 2 }} numberOfLines={1}>{niceDate(next.date)} · {hhmm(next.startAt)} – {hhmm(next.endAt)}{next.balancePaise > 0 ? ` · ${t('home.atGround', { amount: inr(next.balancePaise) })}` : ''}</Text>
+          <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: `${W}0.12)`, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: next.status === 'confirmed' ? C.ok : C.gold }} />
+            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>{next.status === 'confirmed' ? t('status.confirmed') : t('status.waitingPayment')}</Text>
+          </View>
+        </Pressable>) : (<View>
+          <Text style={{ color: '#FFFFFF', fontSize: 19, fontWeight: '700', letterSpacing: -0.3, lineHeight: 25, marginTop: 10 }}>{user && next === undefined ? t('common.loading') : t('home.nothing')}</Text>
+        </View>)}
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+          {user && <Pressable accessibilityRole="button" onPress={() => go('me')} style={({ pressed }) => ({ flex: 1, backgroundColor: `${W}0.1)`, borderRadius: 22, padding: 14, opacity: pressed ? 0.75 : 1 })}>
+            <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '600', letterSpacing: -0.4 }} numberOfLines={1}>{t(upcoming === 1 ? 'home.countOne' : 'home.countMany', { n: upcoming })}</Text>
+            <Text numberOfLines={1} style={{ color: `${W}0.62)`, fontSize: 12, fontWeight: '600' }}>{t('home.upcoming')}</Text>
+          </Pressable>}
+          <Pressable accessibilityRole="button" onPress={() => go(user && next ? 'me' : 'book')} style={({ pressed }) => ({ flex: 1, backgroundColor: C.gold, borderRadius: 22, padding: 14, justifyContent: 'space-between', opacity: pressed ? 0.85 : 1 })}>
+            <Icon name={user && next ? 'arrow-forward' : 'calendar-outline'} size={18} color="#FFFFFF" />
+            <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700', marginTop: 10 }}>{user && next ? t('home.viewDetails') : t('home.bookSlot')}</Text>
           </Pressable>
-        ))}
+        </View>
       </View>
-      <Pressable accessibilityRole="button" onPress={() => go('live')} style={[tileStyle(), { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10, paddingVertical: 16 }]}>
-        <Icon name="radio-outline" size={26} color={C.onBg} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: C.head, fontSize: 15, fontWeight: '700' }}>{t('home.liveScores')}</Text>
-          <Text style={s.note} numberOfLines={1}>{live ? `${live.teamA} v ${live.teamB}${live.summary ? ` · ${live.summary}` : ''}` : t('home.liveNone')}</Text>
-        </View>
-        {live ? <Badge tone="danger" label={t('home.liveBadge')} /> : <Icon name="chevron-forward" size={18} color={C.headMuted} />}
-      </Pressable>
-      {hosted && <Pressable accessibilityRole="button" onPress={() => go('auctions')} style={[tileStyle(), { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10, paddingVertical: 16 }]}>
-        <Icon name="trophy-outline" size={26} color={C.onBg} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: C.head, fontSize: 15, fontWeight: '700' }}>{t('home.tournaments')}</Text>
-          <Text style={s.note} numberOfLines={1}>{t('home.tournamentsSub')}</Text>
-        </View>
-        <Icon name="chevron-forward" size={18} color={C.headMuted} />
-      </Pressable>}
-      {user && <Pressable accessibilityRole="button" onPress={() => go('fantasy')} style={[tileStyle(), { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10, paddingVertical: 16 }]}>
-        <Icon name="podium-outline" size={26} color={C.onBg} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: C.head, fontSize: 15, fontWeight: '700' }}>{t('home.fantasy')}</Text>
-          <Text style={s.note} numberOfLines={1}>{t('home.fantasySub')}</Text>
-        </View>
-        <Icon name="chevron-forward" size={18} color={C.headMuted} />
-      </Pressable>}
 
-      {user && (<>
-        <SectionHead title={t('home.today')} action={upcoming ? t('home.allBookings') : undefined} onAction={() => go('me')} />
-        <View style={[s.card, { padding: 0, overflow: 'hidden' }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 }}>
-            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: C.soft, alignItems: 'center', justifyContent: 'center' }}><Icon name="calendar-outline" size={20} color={C.gold} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.text, { fontWeight: '700' }]}>{t(upcoming === 1 ? 'home.countOne' : 'home.countMany', { n: upcoming })}</Text>
-              <Text style={s.muted}>{t('home.upcoming')}</Text>
-            </View>
-            {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={{ width: 92, height: 52, borderRadius: 10 }} />}
-          </View>
-          <View style={{ borderTopWidth: 1, borderTopColor: C.line, padding: 14 }}>
-            {next === undefined ? <Text style={s.muted}>{t('common.loading')}</Text> : next ? (<>
-              <Text style={s.muted}>{t('home.next')}</Text>
-              <Text style={[s.text, { fontWeight: '800', fontSize: 17, marginTop: 2 }]}>{next.groundName}</Text>
-              <Text style={s.muted}>{niceDate(next.date)} · {hhmm(next.startAt)} – {hhmm(next.endAt)}{next.balancePaise > 0 ? ` · ${t('home.atGround', { amount: inr(next.balancePaise) })}` : ''}</Text>
-              <View style={[s.row, { marginTop: 8 }]}>
-                <Badge tone={next.status === 'confirmed' ? 'ok' : 'warn'} label={next.status === 'confirmed' ? t('status.confirmed') : t('status.waitingPayment')} />
-                <Btn label={t('home.viewDetails')} onPress={() => go('me')} style={{ marginBottom: 0, paddingVertical: 9, backgroundColor: C.gold, borderColor: C.gold }} />
-              </View>
-            </>) : (<>
-              <Text style={s.muted}>{t('home.nothing')}</Text>
-              <Btn label={t('home.bookSlot')} onPress={() => go('book')} style={{ marginTop: 10, marginBottom: 0 }} />
-            </>)}
-          </View>
-        </View>
-      </>)}
+      <ActionGrid>
+        {actions.slice(0, 8).map(([icon, label, to], i) => <ActionTile key={`${to}${i}`} icon={icon} label={label} onPress={() => go(to)} />)}
+      </ActionGrid>
+
+      <SectionHead title={t('home.liveScores')} action={user && upcoming ? t('home.allBookings') : undefined} onAction={() => go('me')} />
+      <ListCard>
+        <ListRow icon="radio-outline" title={live ? `${live.teamA} v ${live.teamB}` : t('home.liveScores')} sub={live ? live.summary || t('home.liveBadge') : t('home.liveNone')} onPress={() => go('live')} right={live ? <Badge tone="danger" label={t('home.liveBadge')} /> : undefined} last={!hosted && !user} />
+        {hosted && <ListRow icon="trophy-outline" title={t('home.tournaments')} sub={t('home.tournamentsSub')} onPress={() => go('auctions')} last={!user} />}
+        {!!user && <ListRow icon="podium-outline" title={t('home.fantasy')} sub={t('home.fantasySub')} onPress={() => go('fantasy')} />}
+        {!!user && <ListRow icon="sparkles-outline" title={aiName} sub={t('home.askSub')} onPress={() => go('ask')} last />}
+      </ListCard>
+
       {!user && (<View accessibilityRole="radiogroup" accessibilityLabel={t('common.language')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-        {UI_LANGUAGES.map((l) => (
-          <Pressable key={l} accessibilityRole="radio" accessibilityState={{ selected: lang === l }} onPress={() => setLang(l)}
-            style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: lang === l ? C.gold : tint(C.gold, 0.28), backgroundColor: lang === l ? tint(C.gold, 0.16) : 'transparent' }}>
-            <Text style={{ color: C.head, fontSize: 15, fontWeight: lang === l ? '800' : '600' }}>{UI_LANGUAGE_NAMES[l]}</Text>
-          </Pressable>
-        ))}
+        {UI_LANGUAGES.map((l) => <Chip key={l} label={UI_LANGUAGE_NAMES[l]} on={lang === l} onPress={() => setLang(l)} />)}
       </View>)}
-      {!!user && <Pressable accessibilityRole="button" onPress={() => go('ask')} style={[tileStyle(), { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 0 }]}>
-        <Icon name="sparkles-outline" size={22} color={C.onBg} />
-        <View style={{ flex: 1 }}><Text style={{ color: C.head, fontSize: 15, fontWeight: '700' }}>{aiName}</Text><Text style={s.note}>{t('home.askSub')}</Text></View>
-        <Icon name="chevron-forward" size={18} color={C.headMuted} />
-      </Pressable>}
     </ScrollView>
   );
 }
-const tileStyle = () => ({ flex: 1, backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 16, padding: 14 });

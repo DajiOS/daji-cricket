@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { Avatar, BackBar, Badge, Btn, Chip, DateField, Field, Loading, Section, s, todayIST } from './ui';
+import { Avatar, BackBar, Badge, Btn, Chip, DateField, Field, Loading, Section, s, todayIST, Empty } from './ui';
 import { C, formatPhone, niceDate } from './theme';
 
 // Tournaments a customer hosts (server/src/auction.ts): teams are picked at a live player auction (players sign up with their
@@ -54,7 +54,7 @@ export function AuctionScreen({ aiName, onBack, openId }: { aiName: string; onBa
         {!!d.hosting.length && <><Section>You host</Section>{d.hosting.map(card)}</>}
         {!!mine.length && <><Section>You play or own a team</Section>{mine.map(card)}</>}
         <Section>Open now</Section>
-        {d.open.filter((a) => !a.youHost).length ? d.open.filter((a) => !a.youHost).map(card) : <Text style={s.muted}>No hosted tournaments are open right now.</Text>}
+        {d.open.filter((a) => !a.youHost).length ? d.open.filter((a) => !a.youHost).map(card) : <Empty icon="trophy-outline" text="No hosted tournaments are open right now." />}
       </>}
     </ScrollView>
   );

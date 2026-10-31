@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Linking, RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { Badge, Btn, Chip, Field, Loading, s } from './ui';
+import { Badge, Btn, Chip, Field, Loading, s, ScreenHead, Empty } from './ui';
 import { C, formatPhone } from './theme';
 
 type Kind = 'booking' | 'payment' | 'membership' | 'fixture';
@@ -36,12 +36,11 @@ export function RemindersScreen() {
   const tabs: [View_, string][] = [['pending', q?.counts.pending ? `To send (${q.counts.pending})` : 'To send'], ['all', 'All'], ['one', 'Send one'], ['history', 'Sent']];
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>People</Text><Text style={s.h1}>Reminders</Text>
-      <Text style={s.muted}>Open WhatsApp, press send in the chat, then come back and mark it sent. Change the wording of each message on the desk under WhatsApp reminders.</Text>
+      <ScreenHead eyebrow="People" title="Reminders" about="Open WhatsApp, press send in the chat, then come back and mark it sent. Change the wording of each message on the desk under WhatsApp reminders." />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginVertical: 10 }}>{tabs.map(([k, label]) => <Chip key={k} label={label} on={view === k} onPress={() => setView(k)} />)}</View>
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok, marginBottom: 8 }]}>{note}</Text>}
       {view === 'one' ? <SendOne templates={templates} onOpen={open} onLogged={(m) => { setNote(m); void load(); }} />
-        : view === 'history' ? (!hist ? <Loading /> : !hist.length ? <Text style={s.muted}>Nothing has been marked as sent yet.</Text> : hist.map((h) => (
+        : view === 'history' ? (!hist ? <Loading /> : !hist.length ? <Empty icon="alarm-outline" text="Nothing has been marked as sent yet." /> : hist.map((h) => (
           <View key={h.id} style={s.card}>
             <View style={s.row}><Text style={[s.text, { fontWeight: '700', flex: 1 }]}>{h.name}</Text><Badge label={LABEL[h.kind]} /></View>
             <Text style={s.muted}>{when(h.sentAt)}{h.sentBy ? `, by ${h.sentBy}` : ''}{h.phone ? `  ·  ${formatPhone(h.phone)}` : ''}</Text>

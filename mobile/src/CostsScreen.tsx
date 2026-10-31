@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { Badge, Btn, Chip, Loading, Stat, Stats, s, todayIST } from './ui';
+import { Badge, Btn, Chip, Loading, Stat, Stats, s, todayIST, ScreenHead, Empty } from './ui';
 import { C, MON, inr } from './theme';
 
 const CATS: Record<string, string> = { hosting: 'Hosting', domain: 'Domain', website: 'Website', payments: 'Payments', messaging: 'Messages', banking: 'Bank feeds', ai: 'AI', app: 'App stores', tools: 'Tools', other: 'Other' };
@@ -31,8 +31,7 @@ export function CostsScreen() {
   const open = inv.filter((i) => i.status !== 'paid');
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Money</Text><Text style={s.h1}>Software costs</Text>
-      <Text style={s.muted}>What the platform pays for hosting, messages, payments and other services. Add services and invoices on the desk under Platform.</Text>
+      <ScreenHead eyebrow="Money" title="Software costs" about="What the platform pays for hosting, messages, payments and other services. Add services and invoices on the desk under Platform." />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok, marginVertical: 6 }]}>{note}</Text>}
       {!d || !sm ? (err ? null : <Loading />) : (<>
         <View style={{ height: 12 }} />
@@ -57,7 +56,7 @@ export function CostsScreen() {
           <Chip label={open.length ? `Invoices (${open.length} open)` : 'Invoices'} on={tab === 'invoices'} onPress={() => setTab('invoices')} />
           <Chip label={`Services (${d.services.length})`} on={tab === 'services'} onPress={() => setTab('services')} />
         </View>
-        {tab === 'invoices' ? (!inv.length ? <Text style={s.muted}>No invoices yet.</Text> : inv.map((i) => (
+        {tab === 'invoices' ? (!inv.length ? <Empty icon="receipt-outline" text="No invoices yet." /> : inv.map((i) => (
           <View key={i.id} style={s.card}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={[s.text, { fontWeight: '700', flex: 1, marginRight: 8 }]}>{i.serviceName}</Text>
@@ -67,7 +66,7 @@ export function CostsScreen() {
             <View style={{ flexDirection: 'row', marginTop: 6 }}><Badge label={STATUS[i.status]?.[0] ?? i.status} tone={STATUS[i.status]?.[1] ?? 'muted'} /></View>
             {i.status !== 'paid' && <Btn kind="outline" label="Mark paid today" busy={working === i.id} onPress={() => paid(i)} style={{ marginTop: 8, marginBottom: 0 }} />}
           </View>
-        ))) : (!d.services.length ? <Text style={s.muted}>No services yet. Add the usual services on the desk.</Text> : d.services.map((v) => (
+        ))) : (!d.services.length ? <Empty icon="code-outline" text="No services yet. Add the usual services on the desk." /> : d.services.map((v) => (
           <View key={v.id} style={[s.card, v.active ? null : { opacity: 0.6 }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={[s.text, { fontWeight: '700', flex: 1, marginRight: 8 }]}>{v.name}</Text>

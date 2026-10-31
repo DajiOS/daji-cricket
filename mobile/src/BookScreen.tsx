@@ -3,9 +3,9 @@ import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
 import type { AppConfig, Availability, Ball, Ground, HoldQuote, HoldResponse, RateOption, RepeatFrequency, Slot } from './types';
-import { Btn, Chip, Field, GuppiMark, Icon, type IconName, KV, Loading, MonthBar, Segmented, Steps, s } from './ui';
+import { Btn, Chip, Field, GuppiMark, Icon, type IconName, KV, Loading, MonthBar, RoundBtn, Segmented, Steps, s } from './ui';
 import { useGroundPhoto } from './photo';
-import { C, inr, tint } from './theme';
+import { C, inr } from './theme';
 import { GuppiBookScreen } from './GuppiBookScreen';
 import { useT } from './lang';
 
@@ -18,54 +18,74 @@ const repeatNames = (t: ReturnType<typeof useT>): Record<RepeatFrequency, string
 const REPEATS: Record<RepeatFrequency, { word: string; def: number; max: number }> = { daily: { word: 'every day', def: 5, max: 60 }, weekly: { word: 'every week', def: 4, max: 52 }, monthly: { word: 'every month', def: 3, max: 12 }, yearly: { word: 'every year', def: 2, max: 3 } };
 const hm = (ms: number): string => new Date(ms + 330 * 60000).toISOString().slice(11, 16);
 
-/** The opening band: the ground's own photo (uploaded in the desk), or plain green when there is none. */
+/** The opening card: the ground's own photo (uploaded in the desk) under a dark wash, the same ink card as the home screens. */
 function Hero() {
   const pic = useGroundPhoto(); const t = useT();
   return (
-    <View style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: '#1A1E1C', padding: 20, paddingTop: 64, marginBottom: 4 }}>
+    <View style={{ borderRadius: 32, overflow: 'hidden', backgroundColor: C.ink, padding: 22, paddingTop: 26, marginBottom: 8 }}>
       {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
-      <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: pic ? 'rgba(8,10,9,.52)' : 'transparent' }} />
-      <View style={{ zIndex: 1 }}>
-        <Text style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, fontWeight: '700', marginBottom: 6 }}>Daji Cricket Ground · Surat</Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 34, lineHeight: 38, fontWeight: '800', letterSpacing: -0.8 }}>Play.{'\n'}Practice.{'\n'}<Text style={{ color: '#D9C08A' }}>Grow.</Text></Text>
-        <Text style={{ color: 'rgba(255,255,255,.88)', fontSize: 14, lineHeight: 20, marginTop: 8 }}>{t('book.hero')}</Text>
-      </View>
+      {!!pic && <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,12,11,.68)' }]} />}
+      <Text style={{ color: 'rgba(255,255,255,.7)', fontSize: 13, fontWeight: '600', marginBottom: 6 }}>Daji Cricket Ground · Surat</Text>
+      <Text style={{ color: '#FFFFFF', fontSize: 30, lineHeight: 34, fontWeight: '700', letterSpacing: -0.8 }}>Play. Practice.{'\n'}<Text style={{ color: C.gold }}>Grow.</Text></Text>
+      <Text style={{ color: 'rgba(255,255,255,.8)', fontSize: 13.5, lineHeight: 19, marginTop: 8 }}>{t('book.hero')}</Text>
     </View>
   );
 }
 /** One time or session to pick: its time and price on the left and whether it is free on the right; the chosen one is outlined in gold. */
-function SlotTile({ title, line, price, on, disabled, onPress }: { title: string; line?: string; price: string; on: boolean; disabled: boolean; wide?: boolean; onPress: () => void }) {
+function SlotTile({ title, line, price, on, disabled, wide, onPress }: { title: string; line?: string; price: string; on: boolean; disabled: boolean; wide?: boolean; onPress: () => void }) {
   const t = useT();
-  const pill = on ? [t('book.selected'), C.goldDark] : disabled ? [t('book.unavailable'), C.danger] : [t('book.available'), C.ok];
+  const pill = on ? null : disabled ? [t('book.unavailable'), C.danger] : [t('book.available'), C.ok];
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected: on, disabled }} disabled={disabled} onPress={onPress}
-      style={{ flexBasis: '100%', flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: on ? 2 : 1, borderColor: on ? C.strong : C.line, backgroundColor: on ? tint(C.strong, 0.12) : C.panel, paddingVertical: on ? 11 : 12, paddingHorizontal: on ? 13 : 14, opacity: disabled ? 0.6 : 1 }}>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: C.text, fontSize: 15, fontWeight: '700' }}>{title}{line ? <Text style={{ fontWeight: '500' }}>{`  ${line}`}</Text> : null}</Text>
-        <Text style={{ color: disabled ? C.muted : C.text, fontSize: 13, fontWeight: '700', marginTop: 2, textTransform: 'capitalize' }}>{price}</Text>
+      style={({ pressed }) => ({ flexBasis: wide ? '100%' : '47%', flexGrow: 1, borderRadius: 22, backgroundColor: on ? C.strong : C.panel, padding: 14, opacity: disabled ? 0.5 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <Text style={{ color: on ? C.onStrong : C.text, fontSize: wide ? 16 : 18, fontWeight: '700', letterSpacing: -0.3, flexShrink: 1 }} numberOfLines={1}>{title}</Text>
+        {on ? <Icon name="checkmark-circle" size={20} color={C.gold} /> : <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: pill![1] }} accessibilityLabel={pill![0]} />}
       </View>
-      <View style={{ backgroundColor: tint(pill[1]!, 0.14), borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}><Text style={{ color: pill[1], fontSize: 11, fontWeight: '800' }}>{pill[0]}</Text></View>
+      {!!line && <Text style={{ color: on ? C.onStrong : C.muted, opacity: on ? 0.75 : 1, fontSize: 13, marginTop: 2 }}>{line}</Text>}
+      <Text style={{ color: on ? C.onStrong : disabled ? C.muted : C.text, fontSize: 13, fontWeight: '600', marginTop: 6, textTransform: 'capitalize' }}>{price}</Text>
     </Pressable>
   );
 }
-const Label = ({ children }: { children: React.ReactNode }) => <Text style={{ color: C.head, fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>{children}</Text>;
+/** The next open days as a row of pills (day name over the date), with the full month a tap away. */
+function DayStrip({ open, value, onPick }: { open: string[]; value: string; onPick: (d: string) => void }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -18, marginBottom: 8 }} contentContainerStyle={{ paddingHorizontal: 18, gap: 8 }}>
+      {open.slice(0, 21).map((d) => {
+        const on = d === value; const dow = new Date(d + 'T00:00:00Z').getUTCDay();
+        return (
+          <Pressable key={d} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={d} onPress={() => onPick(d)}
+            style={({ pressed }) => ({ width: 58, height: 76, borderRadius: 22, backgroundColor: on ? C.strong : C.panel, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.95 : 1 }] })}>
+            <Text style={{ color: on ? C.onStrong : C.muted, fontSize: 12, fontWeight: '600', opacity: on ? 0.75 : 1 }}>{DOW[dow]}</Text>
+            <Text style={{ color: on ? C.onStrong : C.text, fontSize: 20, fontWeight: '700', letterSpacing: -0.4, marginTop: 2 }}>{Number(d.slice(8))}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+const Label = ({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, marginBottom: 10 }}>
+    <Text style={{ color: C.head, fontSize: 20, fontWeight: '600', letterSpacing: -0.3 }}>{children}</Text>{right}
+  </View>
+);
 
 const AMENITY_ICON: [RegExp, IconName][] = [[/flood|light/i, 'bulb-outline'], [/turf|wicket|pitch/i, 'grid-outline'], [/pavilion|seat|stand/i, 'home-outline'], [/park/i, 'car-outline'], [/wash|toilet|change/i, 'water-outline'], [/net/i, 'baseball-outline']];
 /** A ground as a photo card: its picture, name and place, a few amenities, and a pill when it is the one chosen. */
 function GroundCard({ g, on, onPress }: { g: Ground; on: boolean; onPress: () => void }) {
   const pic = useGroundPhoto(); const t = useT();
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: C.panel, borderWidth: 2, borderColor: on ? C.strong : 'transparent', marginBottom: 12 }}>
-      <View style={{ height: 120, backgroundColor: '#1B4A2E' }}>
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={({ pressed }) => ({ borderRadius: 28, overflow: 'hidden', backgroundColor: C.panel, borderWidth: 2, borderColor: on ? C.strong : 'transparent', marginBottom: 12, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+      <View style={{ height: 140, backgroundColor: C.ink }}>
         {!!pic && <Image source={{ uri: pic }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
         <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: on ? C.strong : 'rgba(255,255,255,0.92)', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 }}>
           <Text style={{ color: on ? C.onStrong : '#1E8A4C', fontSize: 11, fontWeight: '800' }}>{on ? t('book.selected') : t('book.available')}</Text>
         </View>
       </View>
-      <View style={{ padding: 12 }}>
+      <View style={{ padding: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: C.text, fontSize: 17, fontWeight: '800' }}>{g.name}</Text>
+            <Text style={{ color: C.text, fontSize: 18, fontWeight: '700', letterSpacing: -0.3 }}>{g.name}</Text>
             {!!g.city && <Text style={s.muted}>{g.city}</Text>}
           </View>
           <Icon name={on ? 'checkmark-circle' : 'chevron-forward-circle-outline'} size={26} color={on ? C.goldDark : C.muted} />
@@ -113,7 +133,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
   const t = useT(); const BALLS = balls_(t); const REPEAT_NAME = repeatNames(t);
   const [cfg, setCfg] = useState<AppConfig | null>(null);
   const [grounds, setGrounds] = useState<Ground[]>([]);
-  const [gid, setGid] = useState(''); const [date, setDate] = useState(istToday());
+  const [gid, setGid] = useState(''); const [date, setDate] = useState(istToday()); const [cal, setCal] = useState(false);
   const [av, setAv] = useState<Availability | null>(null);
   const [ball, setBall] = useState<Ball | null>(null);
   const [win, setWin] = useState<string | null>(null);                       // a fixed session: its rule id
@@ -271,8 +291,8 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       )}
       <Label>{t('book.chooseGround')}</Label>
       {grounds.map((g) => <GroundCard key={g.id} g={g} on={g.id === gid} onPress={() => setGid(g.id)} />)}
-      <Label>{t('book.day')}</Label>
-      <DayPicker open={days} value={date} onPick={setDate} />
+      <Label right={<RoundBtn icon={cal ? 'close' : 'calendar-outline'} label={cal ? 'Hide the month' : 'Show the whole month'} onPress={() => setCal(!cal)} size={40} />}>{t('book.day')}</Label>
+      {cal ? <DayPicker open={days} value={date} onPick={(d) => { setDate(d); setCal(false); }} /> : <DayStrip open={days} value={date} onPick={setDate} />}
       {weekly.size > 0 && <Text style={[s.note, { marginTop: -6, marginBottom: 6 }]}>{ground?.name ?? 'The ground'} is closed on {[...weekly].sort().map((n) => DOW_LONG[n]).join(' and ')}.</Text>}
 
       {av === null ? (err ? <Btn kind="outline" label={t('common.tryAgain')} onPress={() => void loadSlots()} /> : <Loading />) : av.closed ? <Text style={s.note}>{t('book.closedDay')}</Text> : hasRates ? (<>
@@ -280,13 +300,13 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
         <Segmented items={balls.map((b) => [b, BALLS[b]] as [Ball, string])} value={ball as Ball} onChange={(b) => { setBall(b); setWin(null); setHr(null); }} />
         {!ball ? <Text style={s.note}>{t('book.chooseBall')}</Text> : !opts.length ? <Text style={s.note}>{t('book.nothingForBall')}</Text> : (<>
           {fixed.length > 0 && <Label>{t('book.sessions')}</Label>}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             {fixed.map((o) => <SlotTile key={o.ruleId} wide title={o.label} line={`${o.time} – ${o.endTime}`} price={o.state === 'available' ? `${price(o.pricePaise)}${o.proRated ? ' · part session' : ''}` : o.state} on={win === o.ruleId} disabled={o.state !== 'available'} onPress={() => { setWin(o.ruleId); setHr(null); }} />)}
           </View>
           {hourly.map((o) => (
             <View key={o.ruleId}>
               <Text style={[s.note, { marginVertical: 6 }]}>{o.label}{enq ? '' : ` · ${inr(o.pricePaise)} per hour`} · up to {maxSlots} hours in a row</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {(o.slots ?? []).map((sl, i) => <SlotTile key={sl.start} title={sl.time} price={sl.state === 'available' ? price(sl.pricePaise) : sl.state} on={!!hr && hr.ruleId === o.ruleId && hr.idx.includes(i)} disabled={sl.state !== 'available'} onPress={() => toggleHour(o, i)} />)}
               </View>
             </View>
@@ -296,7 +316,7 @@ export function BookScreen({ onHold, onNeedSignIn }: { onHold: (h: HoldResponse)
       </>) : (<>
         <Label>{t('book.time')}</Label>
         <Text style={[s.note, { marginBottom: 10 }]}>{t('book.upTo', { n: maxSlots })}</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           {av.slots.map((sl) => <SlotTile key={sl.start} title={sl.time} price={sl.state === 'available' ? price(sl.pricePaise) : sl.state} on={pick.includes(sl.start)} disabled={sl.state !== 'available'} onPress={() => toggleSlot(sl)} />)}
           {!av.slots.length && <Text style={s.note}>{t('book.noSlots')}</Text>}
         </View>

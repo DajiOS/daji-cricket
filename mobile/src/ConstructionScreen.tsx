@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { BackBar, Badge, Btn, Chip, DateField, Field, Loading, Segmented, Stat, Stats, s, todayIST } from './ui';
+import { BackBar, Badge, Btn, Chip, DateField, Field, Loading, Segmented, Stat, Stats, s, todayIST, ScreenHead, Empty } from './ui';
 import { C, inr, niceDate } from './theme';
 import type { User } from './types';
 
@@ -47,10 +47,9 @@ export function ConstructionScreen({ user }: { user: User }) {
   if (open) return <ProjectView id={open} boss={user.role !== 'staff'} onBack={() => { setOpen(null); void load(); }} />;
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Construction</Text><Text style={s.h1}>Projects</Text>
-      <Text style={[s.muted, { marginBottom: 12 }]}>The same projects as Tasks, with their orders, site and drawings. Start a project and keep the BOQ and bills on the desk.</Text>
+      <ScreenHead eyebrow="Construction" title="Projects" about="The same projects as Tasks, with their orders, site and drawings. Start a project and keep the BOQ and bills on the desk." />
       {!!err && <Text style={s.err}>{err}</Text>}
-      {data === null ? (err ? null : <Loading />) : !data.items.length ? <Text style={s.muted}>No construction projects you can see.</Text> : data.items.map((p) => (
+      {data === null ? (err ? null : <Loading />) : !data.items.length ? <Empty icon="construct-outline" text="No construction projects you can see." /> : data.items.map((p) => (
         <Pressable key={p.id} accessibilityRole="button" onPress={() => setOpen(p.id)} style={s.card}>
           <View style={[s.row, { marginBottom: 4 }]}><Text style={[s.text, { fontWeight: '700', flex: 1 }]}>{p.name}</Text><Text style={s.muted}>{p.code}</Text></View>
           <Text style={s.muted}>{[PHASE[p.phase], p.areaName, p.targetEndDate ? `due ${niceDate(p.targetEndDate)}` : null].filter(Boolean).join(' · ')}</Text>
