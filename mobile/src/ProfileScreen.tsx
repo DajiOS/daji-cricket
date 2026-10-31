@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api, setToken, upload } from './api';
 import { pickProfilePhoto } from './camera';
 import type { User } from './types';
-import { Avatar, BackBar, Btn, Field, ListCard, ListRow, PhoneField, s, NameFields, splitName, splitPhone } from './ui';
+import { Avatar, BackBar, Btn, Field, Icon, ListCard, ListRow, PhoneField, RoundBtn, s, NameFields, splitName, splitPhone, ScreenHead } from './ui';
 import { useAppearance } from './photo';
 import { C, formatPhone } from './theme';
 import { biometricName, lockOn, setLockOn, unlock } from './lock';
@@ -84,14 +84,17 @@ export function ProfileScreen({ user, onUser, onSignOut }: { user: User; onUser:
   const lockName = bio === 'Face ID' || bio === 'Touch ID' ? bio : t('profile.fingerOrFace');
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} keyboardShouldPersistTaps="handled">
-      {page ? <BackBar title={PAGES[page]} onBack={() => go(null)} /> : <><Text style={s.eyebrow}>{ROLE[user.role] ?? user.role}</Text><Text style={s.h1}>{t('profile.title')}</Text></>}
+      {page ? <BackBar title={PAGES[page]} onBack={() => go(null)} /> : <ScreenHead title={t('profile.title')} right={<RoundBtn icon="create-outline" label={t('profile.edit')} onPress={() => go('edit')} size={42} />} />}
       {!page && (<>
-        <View style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 14 }]}>
-          <Avatar name={user.name} url={user.avatarUrl} size={60} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: C.text, fontSize: 18, fontWeight: '800' }}>{user.name}</Text>
-            {!!(user.email || user.phone) && <Text style={s.muted}>{user.email || formatPhone(user.phone)}</Text>}
-            <Text style={[s.muted, { color: C.gold, fontWeight: '600' }]}>{owner && user.businessName ? `${ROLE[user.role]} · ${user.businessName}` : ROLE[user.role] ?? user.role}</Text>
+        <View style={[s.card, { alignItems: 'center', paddingTop: 26, paddingBottom: 22 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('profile.choosePic')} onPress={pic} style={{ marginBottom: 12 }}>
+            <Avatar name={user.name} url={user.avatarUrl} size={92} />
+            <View style={{ position: 'absolute', right: -2, bottom: -2, width: 32, height: 32, borderRadius: 16, backgroundColor: C.strong, borderWidth: 3, borderColor: C.panel, alignItems: 'center', justifyContent: 'center' }}><Icon name="camera" size={14} color={C.onStrong} /></View>
+          </Pressable>
+          <Text style={{ color: C.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.4, textAlign: 'center' }}>{user.name}</Text>
+          {!!(user.email || user.phone) && <Text style={[s.muted, { marginTop: 2, textAlign: 'center' }]}>{user.email || formatPhone(user.phone)}</Text>}
+          <View style={{ marginTop: 10, backgroundColor: C.soft, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 }}>
+            <Text style={{ color: C.text, fontSize: 12.5, fontWeight: '600' }}>{owner && user.businessName ? `${ROLE[user.role]} · ${user.businessName}` : ROLE[user.role] ?? user.role}</Text>
           </View>
         </View>
         {msgs}

@@ -3,7 +3,7 @@ import { Image, Pressable, RefreshControl, ScrollView, View } from 'react-native
 import { Text } from './Text';
 import { api, authImage, upload } from './api';
 import { takeCardPhoto } from './camera';
-import { BackBar, Badge, Btn, Chip, DateField, Field, Loading, Segmented, Stat, Stats, s, todayIST } from './ui';
+import { BackBar, Badge, Btn, Chip, DateField, Empty, Field, Loading, RoundBtn, Segmented, Stat, Stats, s, todayIST, ScreenHead } from './ui';
 import { C, inr, niceDate } from './theme';
 import type { User } from './types';
 
@@ -41,11 +41,9 @@ export function CashScreen({ user, startSpend }: { user: User; startSpend?: numb
   if (holder && (!boss || open)) return <Wallet b={holder} boss={boss} startSpend={startSpend} onBack={boss ? () => { setOpen(null); void load(); } : undefined} onChanged={load} />;
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Money</Text><Text style={s.h1}>Cash</Text>
-      <Text style={[s.muted, { marginBottom: 12 }]}>Cash you hand to your team to spend for the business. You sign every spend. These records are not posted to the books.</Text>
-      <Btn label="Hand out cash" onPress={() => setGiving(true)} />
+      <ScreenHead eyebrow="Money" title="Cash" about="Cash you hand to your team to spend for the business. You sign every spend. These records are not posted to the books." right={<RoundBtn dark icon="add" label="Hand out cash" onPress={() => setGiving(true)} size={42} />} />
       {!!err && <Text style={s.err}>{err}</Text>}
-      {wallets === null ? (err ? null : <Loading />) : !wallets.length ? <Text style={s.muted}>No one holds cash yet.</Text> : wallets.map((w) => (
+      {wallets === null ? (err ? null : <Loading />) : !wallets.length ? <Empty icon="cash-outline" text="No one holds cash yet. Tap + to hand out cash." /> : wallets.map((w) => (
         <Pressable key={w.holderId} accessibilityRole="button" onPress={() => setOpen(w.holderId)} style={s.card}>
           <View style={[s.row, { marginBottom: 4 }]}><Text style={[s.text, { fontWeight: '700' }]}>{w.holderName}</Text><Text style={[s.text, { fontWeight: '700' }]}>{inr(w.expectedPaise)}</Text></View>
           <Text style={s.muted}>Should have in hand · {inr(w.confirmedPaise)} confirmed</Text>
@@ -89,7 +87,7 @@ function Wallet({ b, boss, startSpend, onBack, onChanged }: { b: Balance; boss: 
   const takeBack = async (e: Entry) => { try { await api(`/api/cash/expenses/${encodeURIComponent(e.id)}/withdraw`, { method: 'POST', body: {} }); changed('Taken back.'); } catch (x: any) { setErr(x.message); } };
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: onBack ? 0 : 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      {onBack ? <BackBar title={`${b.holderName ?? 'Team member'}'s cash`} onBack={onBack} /> : <><Text style={s.eyebrow}>Money</Text><Text style={s.h1}>Your cash</Text></>}
+      {onBack ? <BackBar title={`${b.holderName ?? 'Team member'}'s cash`} onBack={onBack} /> : <><ScreenHead eyebrow="Money" title="Your cash" /></>}
       <Stats>
         <Stat label="Should have in hand" value={inr(bal.expectedPaise)} foot={bal.spentWaitingPaise ? `${inr(bal.spentWaitingPaise)} not signed yet` : 'Every spend is signed'} />
         <Stat label="Confirmed" value={inr(bal.confirmedPaise)} foot="Signed spends only" />

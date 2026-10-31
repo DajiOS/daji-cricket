@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
 import type { Booking, BookingOption, DepositView, HoldResponse, RescheduleOutcome, ReschedulePreview, RescheduleStatus } from './types';
-import { Btn, DateField, Field, KV, Loading, s } from './ui';
+import { Btn, DateField, Field, KV, Loading, s, ScreenHead } from './ui';
 import { C, inr, MON } from './theme';
 
 // Change a booking's time and read its security deposit (iOS and Android). Everything shown comes from the server and is sent back to it: whether the booking may be moved and why not,
@@ -21,7 +21,7 @@ export function DepositScreen({ booking: b, onBack }: { booking: Booking; onBack
   useEffect(() => { api<{ deposit: DepositView }>(`/api/bookings/${b.id}/security-deposit`).then((r) => setD(r.deposit)).catch((e) => setErr(e.message)); }, [b.id]);
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>
-      <Text style={s.eyebrow}>Booking {b.ref}</Text><Text style={s.h1}>Security deposit</Text>
+      <ScreenHead eyebrow={`Booking ${b.ref}`} title="Security deposit" />
       <Text style={[s.muted, { marginBottom: 14 }]}>Your booking advance is part of the price of the booking. A security deposit is a separate amount the ground may hold against damage. It is returned to you, less anything kept with a reason you can see here.</Text>
       <View style={s.card} testID="deposit-booking"><KV k="Booking advance (part of the price)" v={inr(b.advancePaise ?? 0)} /><KV k="Paid towards the booking so far" v={inr(b.paidPaise)} /></View>
       {!!err && <Text style={s.err}>{err}</Text>}
@@ -83,7 +83,7 @@ export function RescheduleScreen({ booking: b, onBack, onPayDifference }: { book
   if (!st) return <View style={s.screen}>{err ? <View style={[s.pad, { paddingTop: 60 }]}><Text style={s.err}>{err}</Text><Btn kind="ghost" label="Back" onPress={onBack} /></View> : <Loading />}</View>;
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} keyboardShouldPersistTaps="handled">
-      <Text style={s.eyebrow}>Booking {b.ref}</Text><Text style={s.h1}>{st.askToMove ? 'Ask to move' : 'Change the time'}</Text>
+      <ScreenHead eyebrow={`Booking ${b.ref}`} title={st.askToMove ? 'Ask to move' : 'Change the time'} />
       <View style={s.card}>
         <KV k="Now" v={`${b.date.slice(8)} ${MON[Number(b.date.slice(5, 7)) - 1]}, ${hm(b.startAt)} – ${hm(b.endAt)}`} />
         {!st.askToMove && st.maxMoves != null && <KV k="Moves left" v={`${st.movesLeft} of ${st.maxMoves}`} />}{!st.askToMove && st.cutoffHours != null && <KV k="Allowed until" v={`${st.cutoffHours} hours before the start`} />}

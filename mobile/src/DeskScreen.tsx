@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { Badge, Chip, Loading, s } from './ui';
+import { Badge, Loading, Segmented, s, ScreenHead, Empty } from './ui';
 import { C, formatPhone, inr } from './theme';
 
 interface Row { id: string; title: string; sub?: string; right?: string; tag?: string; bad?: boolean }
@@ -51,14 +51,12 @@ export function DeskScreen() {
   const rows = data ? sec.rows(data) : [];
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Desk</Text><Text style={s.h1}>{sec.label}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
-        {SECTIONS.map((x) => <Chip key={x.id} label={x.label} on={x.id === sec.id} onPress={() => setSec(x)} />)}
-      </View>
+      <ScreenHead eyebrow="Desk" title={sec.label} />
+      <Segmented items={SECTIONS.map((x) => [x.id, x.label] as [string, string])} value={sec.id} onChange={(id) => setSec(SECTIONS.find((x) => x.id === id) ?? sec)} />
       {!!err && <Text style={s.err}>{err}</Text>}
       {!data ? (err ? null : <Loading />) : (<>
         {!!sec.head && !!sec.head(data) && <Text style={[s.muted, { marginBottom: 10 }]}>{sec.head(data)}</Text>}
-        {!rows.length && <Text style={s.muted}>Nothing here yet.</Text>}
+        {!rows.length && <Empty icon="albums-outline" text="Nothing here yet." />}
         {rows.map((r) => (
           <View key={r.id} style={s.card}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

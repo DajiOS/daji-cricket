@@ -37,9 +37,9 @@ export function Btn({ label, onPress, kind = 'primary', disabled, busy, style, s
   );
 }
 
-// A field draws its name inside its own box, so it reads the same on the green and inside a card.
-const fieldBox = (): ViewStyle => ({ backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6, marginBottom: 12 });
-const fieldLabel = () => ({ color: C.muted, fontSize: 11, fontWeight: '700' as const, marginBottom: 2 });
+// A field draws its name inside its own soft, borderless box, so it reads the same on the grey page and inside a white card.
+const fieldBox = (): ViewStyle => ({ backgroundColor: C.soft, borderRadius: 18, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8, marginBottom: 10 });
+const fieldLabel = () => ({ color: C.muted, fontSize: 11.5, fontWeight: '600' as const, marginBottom: 2 });
 export function Field({ label, style, ...rest }: { label: string } & TextInputProps) {
   const f = (StyleSheet.flatten(style) ?? {}) as { minHeight?: number; textAlignVertical?: 'top' };
   return (
@@ -90,8 +90,8 @@ export function NameFields({ value, onChange, firstLabel = 'First name', lastLab
 
 export function Chip({ label, on, onPress, disabled }: { label: string; on?: boolean; onPress?: () => void; disabled?: boolean }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected: !!on, disabled: !!disabled }} style={{ borderColor: on ? tint(C.gold, 0.55) : C.line, backgroundColor: on ? tint(C.gold, 0.16) : C.panel, borderWidth: 1, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14, marginRight: 8, marginBottom: 8, opacity: disabled ? 0.35 : 1 }}>
-      <Text style={{ color: on ? C.gold : C.text, fontSize: 13, fontWeight: on ? '700' : '500' }}>{label}</Text>
+    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected: !!on, disabled: !!disabled }} style={({ pressed }) => ({ backgroundColor: on ? C.strong : C.soft, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 16, marginRight: 8, marginBottom: 8, opacity: disabled ? 0.35 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] })}>
+      <Text style={{ color: on ? C.onStrong : C.text, fontSize: 13.5, fontWeight: on ? '600' : '500' }}>{label}</Text>
     </Pressable>
   );
 }
@@ -151,7 +151,15 @@ export const Avatar = ({ name, url, size = 40 }: { name: string; url?: string | 
   </View>
 );
 
-export const Section = ({ children }: { children: React.ReactNode }) => <Text style={[s.eyebrow, { color: C.headMuted, marginTop: 22, marginBottom: 8 }]}>{children}</Text>;
+export const Section = ({ children }: { children: React.ReactNode }) => <Text style={{ color: C.head, fontSize: 20, fontWeight: '600', letterSpacing: -0.3, marginTop: 22, marginBottom: 10 }}>{children}</Text>;
+
+/** An empty list: an icon in a soft circle and one line saying why nothing is there. */
+export const Empty = ({ icon, text }: { icon: IconName; text: string }) => (
+  <View style={[s.card, { alignItems: 'center', paddingVertical: 30 }]}>
+    <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: C.soft, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}><Icon name={icon} size={24} color={C.muted} /></View>
+    <Text style={[s.muted, { textAlign: 'center', maxWidth: 260 }]}>{text}</Text>
+  </View>
+);
 
 const showDate = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
 const isoDate = (txt: string): string => {
@@ -221,7 +229,7 @@ export function Segmented<T extends string>({ items, value, onChange }: { items:
       })}
     </View>
   );
-  return items.length > 4 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, flexGrow: 0 }}>{row}</ScrollView> : <View style={{ marginBottom: 12 }}>{row}</View>;
+  return items.length > 4 || items.reduce((n, [, l]) => n + l.length, 0) > 34 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, flexGrow: 0 }}>{row}</ScrollView> : <View style={{ marginBottom: 12 }}>{row}</View>;
 }
 
 /** A row in a settings-style list: an icon on a soft tile, a title, a line under it, and an arrow (or whatever goes on the right). */
@@ -285,5 +293,50 @@ export const BackBar = ({ title, onBack, right }: { title: string; onBack: () =>
     <RoundBtn icon="chevron-back" label="Back" onPress={onBack} size={44} />
     <Text style={{ color: C.head, fontSize: 18, fontWeight: '600', flex: 1 }} numberOfLines={1}>{title}</Text>
     {right}
+  </View>
+);
+
+/** The top of a main screen: a large title (with a small line over it), round buttons on the right, and the screen's explanation
+ *  folded behind an info button so the screen opens on its content. */
+export function ScreenHead({ eyebrow, title, right, about }: { eyebrow?: string; title: string; right?: React.ReactNode; about?: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          {!!eyebrow && <Text style={{ color: C.headMuted, fontSize: 13, fontWeight: '500', marginBottom: 2 }}>{eyebrow}</Text>}
+          <Text style={{ color: C.head, fontSize: 32, fontWeight: '700', letterSpacing: -0.9, lineHeight: 38 }}>{title}</Text>
+        </View>
+        {!!about && <RoundBtn icon={open ? 'close' : 'information-circle-outline'} label={open ? 'Hide the explanation' : 'What is this screen?'} onPress={() => setOpen(!open)} size={42} />}
+        {right}
+      </View>
+      {open && !!about && <View style={[s.card, { marginTop: 12, marginBottom: 0, padding: 16 }]}>{typeof about === 'string' ? <Text style={[s.muted, { fontSize: 13.5, lineHeight: 20 }]}>{about}</Text> : about}</View>}
+    </View>
+  );
+}
+
+/** A search box: a white pill with a magnifier. */
+export function SearchBox({ value, onChangeText, placeholder }: { value: string; onChangeText: (v: string) => void; placeholder: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.panel, borderRadius: 999, paddingHorizontal: 18, height: 50, marginBottom: 14 }}>
+      <Icon name="search" size={18} color={C.muted} />
+      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={C.muted} accessibilityLabel={placeholder} autoCapitalize="none" style={{ flex: 1, color: C.text, fontSize: 15, paddingVertical: 0 }} />
+      {!!value && <Pressable accessibilityRole="button" accessibilityLabel="Clear the search" onPress={() => onChangeText('')}><Icon name="close-circle" size={18} color={C.muted} /></Pressable>}
+    </View>
+  );
+}
+
+/** A small figure tile (a number in colour, what it counts under it), three or four to a row. */
+export const MiniStat = ({ n, label, hue, on, onPress }: { n: string; label: string; hue: number; on?: boolean; onPress?: () => void }) => (
+  <Pressable accessibilityRole="button" disabled={!onPress} onPress={onPress} accessibilityState={{ selected: !!on }} style={({ pressed }) => [s.card, { flex: 1, padding: 14, marginBottom: 0, backgroundColor: on ? C.strong : C.panel, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={{ color: on ? C.onStrong : HUES[hue % HUES.length], fontSize: 24, fontWeight: '600', letterSpacing: -0.5 }}>{n}</Text>
+    <Text numberOfLines={2} style={[s.muted, { fontSize: 12, lineHeight: 15 }, on ? { color: C.onStrong, opacity: 0.7 } : null]}>{label}</Text>
+  </Pressable>
+);
+
+/** A thin progress bar (done of total). */
+export const Progress = ({ done, total, color }: { done: number; total: number; color?: string }) => (
+  <View style={{ height: 6, borderRadius: 3, backgroundColor: C.soft, overflow: 'hidden' }}>
+    <View style={{ width: `${total ? Math.min(100, Math.round((done / total) * 100)) : 0}%`, height: 6, borderRadius: 3, backgroundColor: color ?? C.gold }} />
   </View>
 );

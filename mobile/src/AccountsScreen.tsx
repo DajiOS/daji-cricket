@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { KV, Loading, Section, s } from './ui';
+import { KV, Loading, Section, s, ScreenHead, Empty } from './ui';
 import { C, inr } from './theme';
 
 interface Period { month?: string; revenuePaise: number; expensesPaise: number; netProfitPaise: number }
@@ -17,9 +17,9 @@ export function AccountsScreen() {
   useEffect(() => { void load(); }, [load]);
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Accounting</Text><Text style={s.h1}>The books</Text>
+      <ScreenHead eyebrow="Accounting" title="The books" />
       {!!err && <Text style={s.err}>{err}</Text>}
-      {!o ? (err ? null : <Loading />) : o.empty ? <Text style={s.muted}>Nothing recorded yet. Bookings and payments appear here as they happen.</Text> : (<>
+      {!o ? (err ? null : <Loading />) : o.empty ? <Empty icon="wallet-outline" text="Nothing recorded yet. Bookings and payments appear here as they happen." /> : (<>
         <Block title="This month" p={o.thisMonth} /><Block title="Last month" p={o.lastMonth} /><Block title="Financial year so far" p={o.financialYearToDate} />
         <Section>Where things stand</Section>
         <View style={s.card}>

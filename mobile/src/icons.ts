@@ -13,10 +13,11 @@ const MAP: Record<string, string> = {
   people: 'users-three', 'person-circle': 'user-circle', person: 'user', podium: 'ranking', power: 'power', pricetag: 'tag', radio: 'broadcast',
   receipt: 'receipt', 'return-down-back': 'arrow-u-down-left', school: 'graduation-cap', search: 'magnifying-glass', send: 'paper-plane-tilt',
   settings: 'gear-six', 'shield-checkmark': 'shield-check', sparkles: 'sparkle', text: 'text-aa', time: 'clock', today: 'calendar-check',
-  trash: 'trash', trophy: 'trophy', wallet: 'wallet', water: 'drop',
+  trash: 'trash', trophy: 'trophy', wallet: 'wallet', water: 'drop', close: 'x', 'close-circle': 'x-circle', camera: 'camera', flag: 'flag',
+  repeat: 'repeat', alarm: 'alarm', 'list': 'list-checks', filter: 'funnel', refresh: 'arrows-clockwise', 'ellipsis-horizontal': 'dots-three',
 };
 // Plain names that are line icons in the old set too, so they stay in the line style.
-const LINE = new Set(['add', 'chevron-back', 'chevron-down', 'chevron-forward', 'chevron-up', 'checkmark', 'code', 'link', 'open', 'options', 'power', 'search', 'text', 'language', 'ellipse']);
+const LINE = new Set(['add', 'chevron-back', 'chevron-down', 'chevron-forward', 'chevron-up', 'checkmark', 'code', 'link', 'open', 'options', 'power', 'search', 'text', 'language', 'ellipse', 'close', 'ellipsis-horizontal', 'refresh']);
 
 /** The Phosphor character and style for an icon name, or null to use the built-in set. */
 export function glyphFor(name: string): { char: string; fill: boolean } | null {

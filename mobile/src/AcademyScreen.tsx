@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
 import type { ProgressCard, Student } from './types';
-import { Badge, Btn, Chip, Field, KV, Loading, Section, s, NameFields, DateField } from './ui';
+import { Badge, Btn, Chip, Field, KV, Loading, Section, Segmented, s, NameFields, DateField, ScreenHead, Empty } from './ui';
 import { C, formatPhone } from './theme';
 
 type Tab = 'attendance' | 'students' | 'progress';
@@ -16,8 +16,8 @@ export function AcademyScreen() {
   return (
     <View style={s.screen}>
       <View style={{ paddingTop: 60, paddingHorizontal: 18 }}>
-        <Text style={s.eyebrow}>MP13 Academy</Text><Text style={s.h1}>Academy</Text>
-        <View style={{ flexDirection: 'row' }}>{([['attendance', 'Attendance'], ['students', 'Students'], ['progress', 'Report cards']] as [Tab, string][]).map(([k, l]) => <Chip key={k} label={l} on={tab === k} onPress={() => setTab(k)} />)}</View>
+        <ScreenHead eyebrow="MP13 Academy" title="Academy" />
+        <Segmented items={[['attendance', 'Attendance'], ['students', 'Students'], ['progress', 'Report cards']] as [Tab, string][]} value={tab} onChange={setTab} />
       </View>
       {tab === 'attendance' ? <Attendance /> : tab === 'students' ? <Students /> : <Progress />}
     </View>
@@ -46,7 +46,7 @@ function Attendance() {
       <DateField label="Day" value={date} onChange={setDate} />
       <View style={{ flexDirection: 'row' }}><Chip label="All present" onPress={() => markAll(true)} /><Chip label="All absent" onPress={() => markAll(false)} /></View>
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
-      {rows === null ? <Loading /> : !rows.length ? <Text style={s.muted}>No active students for this day.</Text> : rows.map((r) => (
+      {rows === null ? <Loading /> : !rows.length ? <Empty icon="people-outline" text="No active students for this day." /> : rows.map((r) => (
         <View key={r.studentId} style={s.row}>
           <Text style={s.text}>{r.name}</Text>
           <View style={{ flexDirection: 'row' }}><Chip label="Present" on={r.present === true} onPress={() => set(r.studentId, true)} /><Chip label="Absent" on={r.present === false} onPress={() => set(r.studentId, false)} /></View>
@@ -89,7 +89,7 @@ function Students() {
         <Btn label="Save student" onPress={add} busy={busy} />
       </View>)}
       <Field label="Search" value={q} onChangeText={setQ} placeholder="Name" />
-      {items === null ? <Loading /> : !items.length ? <Text style={s.muted}>No students yet.</Text> : items.map((st) => (
+      {items === null ? <Loading /> : !items.length ? <Empty icon="school-outline" text="No students yet." /> : items.map((st) => (
         <View key={st.id} style={s.card}>
           <View style={s.row}><Text style={s.h2}>{st.name}</Text><View style={{ flexDirection: 'row' }}>{st.linked && <Badge tone="ok" label="Parent linked" />}{st.status === 'left' && <Badge label="Left" />}</View></View>
           <KV k="Batch" v={st.batch ?? '—'} /><KV k="Parent" v={`${st.guardianName}${st.guardianPhone ? ' · ' + formatPhone(st.guardianPhone) : ''}`} />

@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
 import type { PaymentRow, StaffBooking, User } from './types';
-import { Badge, Btn, Chip, Field, KV, Loading, Segmented, s } from './ui';
+import { Badge, Btn, Chip, Field, Icon, KV, Loading, MiniStat, RoundBtn, Segmented, s, ScreenHead } from './ui';
 import { C, formatPhone, inr, niceDate } from './theme';
 import { BlockForm } from './BlockForm';
 
@@ -42,17 +42,34 @@ export function StaffScreen({ user, start = 'today' }: { user: User; start?: Vie
   const card = (b: StaffBooking) => {
     const on = open === b.id, blk = b.block ?? null, money = (b.block ? b.block.paidPaise : b.paidPaise) > 0, balance = blk ? blk.balancePaise : b.balancePaise;
     return (
-      <View key={b.id} style={s.card}>
-        <View style={s.row}><Text style={[s.text, { fontWeight: '700' }]}>{blk ? `${niceDate(blk.fromDate)} – ${niceDate(blk.toDate)}  ·  ${blk.days} days` : `${hhmm(b.startAt)} – ${hhmm(b.endAt)}  ·  ${niceDate(b.date)}`}</Text><Text style={s.muted}>{b.ref}</Text></View>
-        <Text style={s.text}>{b.customerName}{b.customerPhone ? `  ·  ${formatPhone(b.customerPhone)}` : ''}</Text>
-        <Text style={[s.muted, { marginBottom: 6 }]}>{b.groundName}{blk ? `  ·  ${blk.tournament ? `Tournament: ${blk.tournament.name}  ·  ` : ''}Multi-day, ${hhmm(b.startAt)} – ${hhmm(b.endAt)} daily` : b.formatLabel ? `  ·  ${b.formatLabel}` : ''}</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+      <View key={b.id} style={[s.card, { paddingVertical: 14 }]}>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: on }} accessibilityLabel={`${b.customerName}, ${on ? 'close' : 'open actions'}`}
+          onPress={() => { setOpen(on ? '' : b.id); setMode(''); setAmount(balance > 0 ? String(balance / 100) : ''); setErr(''); }}
+          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, opacity: pressed ? 0.7 : 1 })}>
+          <View style={{ width: 54 }}>
+            <Text style={{ color: C.text, fontSize: 17, fontWeight: '600', letterSpacing: -0.4 }}>{blk ? niceDate(blk.fromDate) : hhmm(b.startAt)}</Text>
+            <Text style={[s.muted, { fontSize: 12 }]}>{blk ? `${blk.days} days` : hhmm(b.endAt)}</Text>
+          </View>
+          <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: b.approval === 'pending' ? C.gold : b.status === 'cancelled' || b.status === 'no_show' ? C.danger : balance > 0 ? C.warn : C.ok }} />
+          <View style={{ flex: 1 }}>
+            <Text style={[s.text, { fontWeight: '700' }]} numberOfLines={1}>{b.customerName}</Text>
+            <Text style={[s.muted, { fontSize: 12.5 }]} numberOfLines={1}>{view === 'today' || blk ? '' : `${niceDate(b.date)} · `}{b.groundName}{blk ? ` · ${blk.tournament ? `${blk.tournament.name} · ` : ''}${hhmm(b.startAt)} – ${hhmm(b.endAt)} daily` : b.formatLabel ? ` · ${b.formatLabel}` : ''}</Text>
+          </View>
+          <Icon name={on ? 'chevron-up' : 'chevron-down'} size={18} color={C.muted} />
+        </Pressable>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, marginLeft: 71 }}>
           <Badge tone={b.status === 'confirmed' ? 'ok' : b.status === 'cancelled' || b.status === 'no_show' ? 'danger' : 'muted'} label={b.status.replace('_', ' ')} />
           {b.approval === 'pending' && <Badge tone="gold" label="Needs approval" />}{b.needsReview && <Badge tone="danger" label="Review" />}{!!b.promoCode && <Badge label={b.promoCode} />}
           {balance > 0 && b.status === 'confirmed' && <Badge tone="gold" label={`Balance ${inr(balance)}`} />}
         </View>
-        <KV k="Total" v={inr(blk ? blk.totalPaise : b.totalPaise)} /><KV k="Paid" v={inr(blk ? blk.paidPaise : b.paidPaise)} />
-        <Btn kind="ghost" label={on ? 'Close' : 'Actions'} onPress={() => { setOpen(on ? '' : b.id); setMode(''); setAmount(balance > 0 ? String(balance / 100) : ''); setErr(''); }} />
+        {on && (<View style={{ marginTop: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+            {([['Total', inr(blk ? blk.totalPaise : b.totalPaise)], ['Paid', inr(blk ? blk.paidPaise : b.paidPaise)]] as const).map(([k, v]) => (
+              <View key={k} style={{ flex: 1, backgroundColor: C.soft, borderRadius: 18, padding: 12 }}><Text style={[s.muted, { fontSize: 12 }]}>{k}</Text><Text style={{ color: C.text, fontSize: 18, fontWeight: '600', letterSpacing: -0.3 }}>{v}</Text></View>
+            ))}
+          </View>
+          <Text style={[s.muted, { marginBottom: 8 }]}>{b.ref}{b.customerPhone ? `  ·  ${formatPhone(b.customerPhone)}` : ''}{blk ? '' : `  ·  ${niceDate(b.date)}`}</Text>
+        </View>)}
         {on && !mode && (<>
           {!blk && b.approval === 'pending' && b.status !== 'cancelled' && can(user, 'manage_bookings') && <Btn label="Approve booking" onPress={() => run(`/api/staff/bookings/${b.id}/approve`, {}, 'Approved.')} />}
           {b.status === 'confirmed' && balance > 0 && can(user, 'record_payments') && <Btn kind="outline" label="Record a payment" onPress={() => setMode('pay')} />}
@@ -88,16 +105,25 @@ export function StaffScreen({ user, start = 'today' }: { user: User; start?: Vie
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 58 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
       {user.readOnly && <View style={[s.card, { marginBottom: 10 }]} accessibilityRole="summary"><Text style={s.h2}>View-only account</Text><Text style={s.muted}>You can open and read everything your role allows. Changes are switched off.</Text></View>}
-      <Text style={s.eyebrow}>Bookings</Text><Text style={s.h1}>{view === 'today' ? 'Today' : view === 'upcoming' ? 'Coming up' : view === 'approvals' ? 'Waiting for approval' : view === 'block' ? 'Multi-day booking' : 'Payments to check'}</Text>
+      <ScreenHead eyebrow="Bookings" title={view === 'today' ? 'Today' : view === 'upcoming' ? 'Coming up' : view === 'approvals' ? 'Waiting for approval' : view === 'block' ? 'Multi-day booking' : 'Payments to check'}
+        right={can(user, 'manage_bookings') && view !== 'block' ? <RoundBtn dark icon="add" label="New multi-day booking" onPress={() => setView('block')} size={42} /> : undefined} />
       <Segmented items={tabs} value={view} onChange={setView} />
-      {view === 'today' && (counts.awaiting > 0 || counts.review > 0) && <Text style={[s.muted, { color: C.gold, marginBottom: 8 }]}>{counts.awaiting} payment{counts.awaiting === 1 ? '' : 's'} to check · {counts.review} to review</Text>}
+      {view === 'today' && books !== null && (
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+          <MiniStat n={String(books.length)} label="Bookings today" hue={0} />
+          <MiniStat n={String(counts.awaiting)} label="Payments to check" hue={1} onPress={counts.awaiting ? () => setView('payments') : undefined} />
+          <MiniStat n={String(counts.review)} label="To review" hue={4} />
+        </View>
+      )}
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
-      {view === 'block' ? <BlockForm onDone={(m) => { setNote(m); setView('upcoming'); }} /> : view === 'payments' ? (!pays.length ? <Text style={s.muted}>Nothing waiting. All UPI payments are checked.</Text> : pays.map((p) => (
+      {view === 'block' ? <BlockForm onDone={(m) => { setNote(m); setView('upcoming'); }} /> : view === 'payments' ? (!pays.length ? <View style={[s.card, { alignItems: 'center', paddingVertical: 28 }]}><Icon name="checkmark-circle-outline" size={28} color={C.ok} /><Text style={[s.muted, { marginTop: 8, textAlign: 'center' }]}>Nothing waiting. All UPI payments are checked.</Text></View> : pays.map((p) => (
         <View key={p.id} style={s.card}>
-          <KV k="Amount" v={inr(p.amountPaise)} bold /><KV k="UPI reference" v={p.reference ?? 'none'} /><KV k="For" v={p.purpose} />
+          <Text style={[s.muted, { fontSize: 12.5 }]}>{p.purpose}</Text>
+          <Text style={{ color: C.text, fontSize: 30, fontWeight: '600', letterSpacing: -0.8, marginBottom: 6 }}>{inr(p.amountPaise)}</Text>
+          <View style={{ backgroundColor: C.soft, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 10 }}><KV k="UPI reference" v={p.reference ?? 'none'} /></View>
           {can(user, 'verify_payments') && (<><Btn label="Money received" onPress={() => run(`/api/staff/payments/${p.id}/verify`, { approve: true }, 'Payment confirmed.')} /><Btn kind="outline" label="Not received" onPress={() => run(`/api/staff/payments/${p.id}/verify`, { approve: false, reason: 'Money not found in the account' }, 'Payment rejected.')} /></>)}
         </View>
-      ))) : books === null ? <Loading /> : !books.length ? <Text style={s.muted}>Nothing here.</Text> : books.map(card)}
+      ))) : books === null ? <Loading /> : !books.length ? <View style={[s.card, { alignItems: 'center', paddingVertical: 28 }]}><Icon name="calendar-outline" size={28} color={C.muted} /><Text style={[s.muted, { marginTop: 8 }]}>Nothing here.</Text></View> : books.map(card)}
     </ScrollView>
   );
 }

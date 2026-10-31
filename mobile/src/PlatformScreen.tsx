@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { Badge, Btn, Chip, Field, Loading, Section, s, DateField } from './ui';
+import { Badge, Btn, Chip, Field, Loading, Section, s, DateField, ScreenHead } from './ui';
 import { C, niceDate } from './theme';
 
 interface Settings { razorpayEnabled: boolean; bookingsOpenFrom: string; bookingsCloseFrom: string; autoDebitEnabled: boolean; autoDebitHoursBefore: number }
@@ -41,7 +41,7 @@ export function PlatformScreen() {
   if (!st) return <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>{err ? <Text style={s.err}>{err}</Text> : <Loading />}</ScrollView>;
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />} keyboardShouldPersistTaps="handled">
-      <Text style={s.eyebrow}>Platform</Text><Text style={s.h1}>Booking controls</Text>
+      <ScreenHead eyebrow="Platform" title="Booking controls" />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
       <Section>When customers can book</Section>
       <View style={s.card}>

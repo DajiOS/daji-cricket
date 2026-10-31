@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
 import type { AppConfig, Booking, Child, Dashboard, User } from './types';
-import { Badge, Btn, Chip, KV, Loading, Segmented, s } from './ui';
+import { Badge, Btn, Chip, KV, Loading, MiniStat, ScreenHead, SectionHead, Segmented, s } from './ui';
 import { AutoDebit } from './AutoDebit';
 import { Waitlist } from './Waitlist';
 import { MyTeamGames, TeamList } from './TeamList';
@@ -78,19 +78,33 @@ export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; us
   const maxM = Math.max(1, ...dash.byMonth.map((m) => m.spentPaise));
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>{t('me.eyebrow')}</Text>
-      <Text style={s.h1}>{t('me.title')}</Text>
+      <ScreenHead eyebrow={t('me.eyebrow')} title={t('me.title')} />
       {(kids.length > 0 || view === 'academy') && <Segmented items={[['ground', t('me.ground')], ['academy', t('me.academy')]]} value={view} onChange={setView} />}
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok }]}>{note}</Text>}
 
       {view === 'ground' && (<>
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+          <MiniStat n={String(dash.upcoming)} label={t('me.upcoming')} hue={0} on={show === 'upcoming'} onPress={() => setShow('upcoming')} />
+          <MiniStat n={String(dash.sessions)} label={t('me.sessions')} hue={2} />
+          <MiniStat n={dash.spentPaise >= 1000000 ? `₹${(dash.spentPaise / 10000000).toFixed(1)}L`.replace('.0L', 'L') : inr(dash.spentPaise)} label={t('me.spent')} hue={4} />
+        </View>
         <Segmented items={kinds(t).map(([k, name]) => [k, `${name} ${k === 'all' ? books.length : books.filter((b) => kindOf(b) === k).length}`] as [Kind, string])} value={show} onChange={setShow} />
         {confirm && (<View style={[s.card, { borderColor: C.gold }]}><Text style={s.text}>{confirm.message}</Text><View style={{ height: 12 }} /><Btn label={t('me.cancelThis')} onPress={doCancel} /><Btn kind="ghost" label={t('me.keep')} onPress={() => setConfirm(null)} /></View>)}
         {books.length === 0 ? <Text style={[s.note, { marginBottom: 14 }]}>{t('me.none')}</Text> : !shown.length && <Text style={[s.note, { marginBottom: 14 }]}>{t('me.empty')}</Text>}
         {shown.map((b) => (
           <View key={b.id} style={s.card}>
-            <View style={s.row}><Text style={[s.text, { fontWeight: '800', fontSize: 16, flex: 1 }]}>{b.groundName}</Text><Badge label={kindOf(b) === 'upcoming' && (b.status === 'confirmed' || (!!b.block && b.status !== 'held')) ? t('status.upcoming') : label(t, b.status)} tone={tone(b.block && kindOf(b) === 'upcoming' && b.status !== 'held' ? 'confirmed' : b.status)} /></View>
-            <Text style={s.text}>{b.block ? `${niceDate(b.block.fromDate)} – ${niceDate(b.block.toDate)}` : niceDate(b.date)} · {new Date(b.startAt + 330 * 60000).toISOString().slice(11, 16)} – {new Date(b.endAt + 330 * 60000).toISOString().slice(11, 16)}{b.block ? ` ${t('me.daily')}` : ''}</Text>
+            <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center', marginBottom: 8 }}>
+              <View style={{ width: 56, height: 60, borderRadius: 18, backgroundColor: kindOf(b) === 'upcoming' ? C.strong : C.soft, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: kindOf(b) === 'upcoming' ? C.onStrong : C.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5, lineHeight: 26 }}>{(b.block ? b.block.fromDate : b.date).slice(8, 10)}</Text>
+                <Text style={{ color: kindOf(b) === 'upcoming' ? C.onStrong : C.muted, opacity: 0.75, fontSize: 11.5, fontWeight: '600' }}>{MON[Number((b.block ? b.block.fromDate : b.date).slice(5, 7)) - 1]}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.text, { fontWeight: '700', fontSize: 16.5 }]} numberOfLines={1}>{b.groundName}</Text>
+                <Text style={[s.muted, { fontSize: 13 }]}>{niceDate(b.date)} · {new Date(b.startAt + 330 * 60000).toISOString().slice(11, 16)} – {new Date(b.endAt + 330 * 60000).toISOString().slice(11, 16)}</Text>
+              </View>
+              <Badge label={kindOf(b) === 'upcoming' && (b.status === 'confirmed' || (!!b.block && b.status !== 'held')) ? t('status.upcoming') : label(t, b.status)} tone={tone(b.block && kindOf(b) === 'upcoming' && b.status !== 'held' ? 'confirmed' : b.status)} />
+            </View>
+            {!!b.block && <Text style={s.text}>{`${niceDate(b.block.fromDate)} – ${niceDate(b.block.toDate)}`} · {new Date(b.startAt + 330 * 60000).toISOString().slice(11, 16)} – {new Date(b.endAt + 330 * 60000).toISOString().slice(11, 16)} {t('me.daily')}</Text>}
             <Text style={s.muted}>{b.block ? t('me.days', { n: b.block.days }) : t(b.slotCount > 1 ? 'me.slotMany' : 'me.slotOne', { n: b.slotCount })} · {inr(b.block ? b.block.totalPaise : b.totalPaise)} · {t('me.ref', { ref: b.ref })}</Text>
             {b.block ? <Text style={s.muted}>{t('me.multiDay')}</Text> : b.seriesId ? <Text style={s.muted}>{t('me.repeatDate', { n: (b.seriesIndex ?? 0) + 1 })}</Text> : null}
             {b.block ? (!b.block.cancelled && b.block.balancePaise > 0 && <Text style={s.muted}>{t('me.balance', { amount: inr(b.block.balancePaise) })}</Text>) : b.balancePaise > 0 && b.status === 'confirmed' && <Text style={s.muted}>{t('me.balance', { amount: inr(b.balancePaise) })}</Text>}
@@ -105,17 +119,16 @@ export function MeScreen({ onSignOut, user, start }: { onSignOut: () => void; us
         ))}
         <MyTeamGames />
         {flags.waitlist && <Waitlist onPay={setPayHold} />}
-        <Text style={[s.h2, { marginTop: 10, color: C.head }]}>{t('me.yourCricket')}</Text>
-        <View style={s.card}>
-          <KV k={t('me.spent')} v={inr(dash.spentPaise)} bold /><KV k={t('me.sessions')} v={String(dash.sessions)} /><KV k={t('me.upcoming')} v={String(dash.upcoming)} />
+        {(dash.paidAheadPaise > 0 || dash.creditPaise > 0 || !!dash.firstPlayed) && <SectionHead title={t('me.yourCricket')} />}
+        {(dash.paidAheadPaise > 0 || dash.creditPaise > 0 || !!dash.firstPlayed) && <View style={s.card}>
           {dash.paidAheadPaise > 0 && <KV k={t('me.paidAhead')} v={inr(dash.paidAheadPaise)} />}{dash.creditPaise > 0 && <KV k={t('me.credit')} v={inr(dash.creditPaise)} />}
           {dash.firstPlayed && <KV k={t('me.since')} v={niceDate(dash.firstPlayed)} />}
-        </View>
-        <Text style={[s.h2, { color: C.head }]}>{t('me.career')}</Text>
+        </View>}
+        <SectionHead title={t('me.career')} />
         <MyCricket />
-        <Text style={[s.h2, { color: C.head }]}>{t('me.last12')}</Text>
-        <View style={[s.card, { flexDirection: 'row', alignItems: 'flex-end', height: 120, gap: 4 }]}>
-          {dash.byMonth.map((m) => (<View key={m.month} style={{ flex: 1, alignItems: 'center' }}><View style={{ width: '100%', height: Math.max(2, (m.spentPaise / maxM) * 80), backgroundColor: C.gold, borderRadius: 2 }} /><Text style={{ color: C.muted, fontSize: 8, marginTop: 4 }}>{MON[Number(m.month.slice(5, 7)) - 1]}</Text></View>))}
+        <SectionHead title={t('me.last12')} />
+        <View style={[s.card, { flexDirection: 'row', alignItems: 'flex-end', height: 140, gap: 5 }]}>
+          {dash.byMonth.map((m) => (<View key={m.month} style={{ flex: 1, alignItems: 'center' }}><View style={{ width: '100%', height: Math.max(6, (m.spentPaise / maxM) * 92), backgroundColor: m.spentPaise === maxM ? C.gold : C.soft, borderRadius: 8 }} /><Text style={{ color: C.muted, fontSize: 8, marginTop: 4 }}>{MON[Number(m.month.slice(5, 7)) - 1]}</Text></View>))}
         </View>
         {dash.byGround.length > 0 && <View style={s.card}>{dash.byGround.map((g) => <KV key={g.groundId} k={t('me.groundSessions', { ground: g.groundName, n: g.sessions })} v={inr(g.spentPaise)} />)}</View>}
         <AutoDebit user={user} />

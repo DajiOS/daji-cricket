@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
 import type { MatchRow, Scorecard } from './types';
-import { Badge, Btn, Chip, Field, KV, Loading, Section, s } from './ui';
+import { Badge, Btn, Chip, Empty, Field, KV, Loading, RoundBtn, Section, s, ScreenHead } from './ui';
 import { C } from './theme';
 
 const OUTS = ['bowled', 'caught', 'lbw', 'run out', 'stumped', 'hit wicket', 'retired'];
@@ -27,16 +27,15 @@ export function MatchesScreen() {
   };
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Scoring</Text><Text style={s.h1}>Matches</Text>
+      <ScreenHead eyebrow="Scoring" title="Matches" right={<RoundBtn dark={!adding} icon={adding ? 'close' : 'add'} label={adding ? 'Close' : 'New match'} onPress={() => setAdding(!adding)} size={42} />} />
       {!!err && <Text style={s.err}>{err}</Text>}
-      <Btn kind="outline" label={adding ? 'Close' : 'New match'} onPress={() => setAdding(!adding)} />
       {adding && (<View style={s.card}>
         <Field label="Title" value={f.title} onChangeText={(v) => setF({ ...f, title: v })} autoCapitalize="words" placeholder="Sunday friendly" />
         <Field label="Team A" value={f.teamA} onChangeText={(v) => setF({ ...f, teamA: v })} autoCapitalize="words" /><Field label="Team B" value={f.teamB} onChangeText={(v) => setF({ ...f, teamB: v })} autoCapitalize="words" />
         <Field label="Overs" value={f.overs} onChangeText={(v) => setF({ ...f, overs: v })} keyboardType="number-pad" />
         <Btn label="Create and start scoring" onPress={create} busy={busy} />
       </View>)}
-      {list === null ? <Loading /> : !list.length ? <Text style={s.muted}>No matches yet.</Text> : list.map((m) => (
+      {list === null ? <Loading /> : !list.length ? <Empty icon="trophy-outline" text="No matches yet. Tap + to start one." /> : list.map((m) => (
         <View key={m.id} style={s.card}>
           <View style={s.row}><Text style={s.h2}>{m.title}</Text><Badge tone={m.status === 'live' ? 'gold' : m.status === 'completed' ? 'ok' : 'muted'} label={m.status} /></View>
           <Text style={s.muted}>{m.teamA} vs {m.teamB} · {m.overs} overs</Text>

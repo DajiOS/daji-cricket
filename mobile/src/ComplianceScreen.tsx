@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { api } from './api';
-import { Badge, Btn, Chip, Loading, s } from './ui';
+import { Badge, Btn, Chip, Loading, s, ScreenHead } from './ui';
 import { C } from './theme';
 
 interface Item { code: string; title: string; authority: string; rule: string; currentValue: string; reviewEveryDays: number; lastReviewedOn: string; nextReviewOn: string; status: 'ok' | 'soon' | 'due'; daysToReview: number }
@@ -40,8 +40,7 @@ export function ComplianceScreen() {
   const waiting = reg ? reg.alerts.filter((a) => a.status === 'new') : [];
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>Money</Text><Text style={s.h1}>Compliance</Text>
-      <Text style={s.muted}>The Indian rules this software enforces and when each was last checked. Before you mark a rule reviewed, look up the current rule on the official source and note any change on the desk.</Text>
+      <ScreenHead eyebrow="Money" title="Compliance" about="The Indian rules this software enforces and when each was last checked. Before you mark a rule reviewed, look up the current rule on the official source and note any change on the desk." />
       <View style={{ flexDirection: 'row', marginVertical: 10 }}>
         <Chip label={due ? `Rules (${due} overdue)` : 'Rules'} on={tab === 'rules'} onPress={() => setTab('rules')} />
         <Chip label={waiting.length ? `Law updates (${waiting.length})` : 'Law updates'} on={tab === 'updates'} onPress={() => setTab('updates')} />

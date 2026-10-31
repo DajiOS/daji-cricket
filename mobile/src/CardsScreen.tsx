@@ -3,7 +3,7 @@ import { Image, Linking, Pressable, RefreshControl, ScrollView, View } from 'rea
 import { Text } from './Text';
 import { api, authImage, upload } from './api';
 import { takeCardPhoto } from './camera';
-import { Btn, Field, Loading, NameFields, s } from './ui';
+import { Btn, Empty, Field, Loading, NameFields, s, ScreenHead } from './ui';
 import { C, formatPhone } from './theme';
 
 interface Card { id: string; name: string; title: string; company: string; phones: string[]; emails: string[]; website: string; address: string; notes: string; hasImage: boolean }
@@ -43,14 +43,13 @@ export function CardsScreen() {
   if (edit) return <Editor {...edit} onClose={() => setEdit(null)} onSaved={(m) => { setEdit(null); setNote(m); void load(); }} />;
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]} refreshControl={<RefreshControl refreshing={busy} onRefresh={load} tintColor={C.gold} />}>
-      <Text style={s.eyebrow}>People</Text><Text style={s.h1}>Business cards</Text>
-      <Text style={[s.muted, { marginBottom: 12 }]}>Photograph a card, check what was read, and save it. Card readers can mistake digits, so check before saving.</Text>
+      <ScreenHead eyebrow="People" title="Business cards" about="Photograph a card, check what was read, and save it. Card readers can mistake digits, so check before saving." />
       <Btn label={scanning ? 'Reading card…' : 'Scan a card'} busy={scanning} disabled={ocr === false} onPress={scan} />
-      <Btn kind="outline" label="Type in a contact" onPress={() => setEdit({})} />
+      <Btn kind="ghost" icon="create-outline" label="Type in a contact" onPress={() => setEdit({})} />
       {ocr === false && <Text style={[s.muted, { marginBottom: 8 }]}>Reading cards from photos is not switched on yet (the server needs an AI key). You can still type contacts in.</Text>}
       <Field label={`Saved contacts${total ? ` (${total})` : ''}`} value={q} onChangeText={setQ} placeholder="Search name, company, phone or email" />
       {!!err && <Text style={s.err}>{err}</Text>}{!!note && <Text style={[s.muted, { color: C.ok, marginBottom: 8 }]}>{note}</Text>}
-      {items === null ? <Loading /> : !items.length ? <Text style={s.muted}>{q.trim() ? 'No contact matches.' : 'No contacts yet. Scan a card to add the first.'}</Text> : items.map((c) => (
+      {items === null ? <Loading /> : !items.length ? <Empty icon="id-card-outline" text={q.trim() ? 'No contact matches.' : 'No contacts yet. Scan a card to add the first.'} /> : items.map((c) => (
         <Pressable key={c.id} onPress={() => setOpen(open === c.id ? '' : c.id)} style={s.card}>
           <Text style={[s.text, { fontWeight: '700' }]}>{c.name}</Text>
           {!!(c.title || c.company) && <Text style={s.muted}>{[c.title, c.company].filter(Boolean).join('  ·  ')}</Text>}
@@ -99,7 +98,7 @@ function Editor({ card, draft, photo, dup, onClose, onSaved }: Edit & { onClose:
   };
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { paddingTop: 60 }]}>
-      <Text style={s.eyebrow}>Business cards</Text><Text style={s.h1}>{card ? 'Edit contact' : 'New contact'}</Text>
+      <ScreenHead eyebrow="Business cards" title={card ? 'Edit contact' : 'New contact'} />
       {!!dup?.length && <Text style={[s.muted, { color: C.danger, marginBottom: 8 }]}>Already saved with the same phone or email: {dup.map((d) => d.name + (d.company ? ` (${d.company})` : '')).join(', ')}. Saving adds another entry.</Text>}
       {!!photo && <><Image source={{ uri: photo }} style={{ width: '100%', height: 200, borderRadius: 12, backgroundColor: C.line, marginBottom: 8 }} resizeMode="contain" /><Text style={[s.muted, { marginBottom: 10 }]}>Check the details below against the card before saving.</Text></>}
       <NameFields value={f.name} onChange={set('name')} />
